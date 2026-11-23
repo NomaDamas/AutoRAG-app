@@ -11,8 +11,8 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import { cn } from "../lib/cn";
-import { lastRunText, ruleTitle, runTone } from "../state/automations";
-import { MoreIcon, PencilIcon, TrashIcon, ZapIcon } from "./icons";
+import { relativeTime, ruleTitle, runTone } from "../state/automations";
+import { MoreIcon, NewChatIcon, ZapIcon } from "./icons";
 
 export interface AutomationRulesSectionProps {
 	readonly rules: readonly AutomationRule[];
@@ -52,6 +52,14 @@ function RuleRow({
 }): ReactElement {
 	const { t } = useTranslation();
 	const tone = runTone(rule.lastRun);
+	const run = rule.lastRun;
+	// Figma 593:2784: a 4px dot in the run's colour, then the run in muted words.
+	const runText =
+		run === null
+			? t("automations.inspector.notRun")
+			: tone === "ok"
+				? t("automations.inspector.ranOk", { time: relativeTime(run.startedAt) })
+				: t("automations.inspector.ranFail", { time: relativeTime(run.startedAt) });
 	const [open, setOpen] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
 	useEffect(() => {
@@ -84,23 +92,22 @@ function RuleRow({
 				onMenu(rule, { x: event.clientX, y: event.clientY });
 			}}
 		>
-			<span className="flex flex-none text-ink-body" aria-hidden="true">
+			<span className="flex flex-none text-accent-text" aria-hidden="true">
 				<ZapIcon size={14} />
 			</span>
 			<span className="flex min-w-0 flex-1 flex-col gap-2">
 				<span className="truncate text-meta font-medium leading-[16px] text-ink">{ruleTitle(rule)}</span>
-				<span
-					className={cn(
-						"truncate text-badge leading-[16px]",
-						tone === "ok" ? "text-accent-text" : tone === "fail" ? "text-error-orange-text" : "text-ink-muted",
-					)}
-				>
-					{lastRunText(rule)}
+				<span className="flex min-w-0 items-center gap-4" data-run-tone={tone}>
+					<span
+						className={cn("size-4 flex-none rounded-full", tone === "ok" ? "bg-[var(--ok-dot)]" : tone === "fail" ? "bg-danger-dot" : "bg-[var(--text-faint)]")}
+						aria-hidden="true"
+					/>
+					<span className="truncate text-badge leading-[16px] text-ink-muted">{runText}</span>
 				</span>
 			</span>
 			<button
 				type="button"
-				className="flex size-20 flex-none items-center justify-center rounded-5 border-0 bg-transparent p-0 text-ink-body cursor-pointer hover:bg-hover"
+				className={cn("flex size-20 flex-none items-center justify-center rounded-5 border-0 p-0 text-ink-body cursor-pointer hover:bg-hover", open ? "bg-hover" : "bg-transparent")}
 				aria-label={t("automations.inspector.more")}
 				title={t("automations.inspector.more")}
 				aria-haspopup="menu"
@@ -111,26 +118,25 @@ function RuleRow({
 			</button>
 			{open ? (
 				<div
-					className="menu absolute right-6 top-full z-30 mt-4 flex w-120 flex-col rounded-10 border border-border bg-window p-4 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+					className="menu absolute right-6 top-full z-30 mt-4 flex w-120 flex-col rounded-10 border border-border bg-window p-4 shadow-[0_6px_18px_rgba(0,0,0,0.16)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 					role="menu"
 					aria-label={ruleTitle(rule)}
 				>
 					<button
 						type="button"
 						role="menuitem"
-						className="menu__item flex h-icon-sm items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-sm text-ink whitespace-nowrap cursor-pointer hover:bg-hover"
+						className="menu__item flex h-28 items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-[13px] text-ink whitespace-nowrap cursor-pointer hover:bg-hover"
 						onClick={() => choose(onEdit)}
 					>
-						<PencilIcon size={13} />
+						<NewChatIcon size={13} />
 						{t("automations.inspector.menuEdit")}
 					</button>
 					<button
 						type="button"
 						role="menuitem"
-						className="menu__item flex h-icon-sm items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-sm text-danger-text whitespace-nowrap cursor-pointer hover:bg-hover"
+						className="menu__item flex h-28 items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-[13px] text-danger-text whitespace-nowrap cursor-pointer hover:bg-hover"
 						onClick={() => choose(onDelete)}
 					>
-						<TrashIcon size={13} />
 						{t("automations.inspector.menuDelete")}
 					</button>
 				</div>

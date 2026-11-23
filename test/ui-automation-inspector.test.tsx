@@ -183,7 +183,9 @@ describe("AutomationInspector", () => {
 		expect(text()).toContain(whatText(shown, { full: true }));
 		expect(text()).toContain("읽기만 함");
 		expect(host.querySelector("[data-run-row]")?.textContent).toContain("완료");
+		click(host.querySelector('[data-action="automation-more"]'));
 		click(button("수정"));
+		click(host.querySelector('[data-action="automation-more"]'));
 		click(button("삭제"));
 		expect(edits).toEqual([shown]);
 		expect(deletes).toEqual([shown]);
@@ -222,6 +224,7 @@ describe("AutomationInspector", () => {
 		act(() => root.render(<AutomationInspector rule={shown} onEdit={noop} onDelete={noop} />));
 		expect(text()).toContain(whenText(shown));
 		expect(text()).toContain("What Dazzi does");
+		click(host.querySelector('[data-action="automation-more"]'));
 		expect(button("Edit")).toBeDefined();
 		expect(button("Delete")).toBeDefined();
 		expect(text()).not.toMatch(/[가-힣]/);
@@ -253,8 +256,8 @@ describe("AutomationRulesSection", () => {
 		expect(section()?.querySelector(".section-title")?.textContent).toBe("자동화");
 		expect(host.querySelectorAll(".rule-row")).toHaveLength(2);
 		expect(text()).toContain(ruleTitle(first));
-		expect(text()).toContain(lastRunText(first));
-		expect(text()).toContain(lastRunText(second));
+		expect(text()).toContain("3분 전 실행 · 성공");
+		expect(text()).toContain("아직 실행되지 않음");
 	});
 
 	it("opens 수정하기 / 삭제하기 from a card's ⋯ button, and each runs once and closes the menu", () => {

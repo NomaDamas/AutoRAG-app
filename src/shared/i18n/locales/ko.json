@@ -558,7 +558,7 @@
     },
     "menu": {
       "preview": "훑어보기",
-      "edit": "AI 에이전트에서 수정",
+      "edit": "수정",
       "reveal": "자동화 탭에서 보기",
       "add": "AI 에이전트에서 새 규칙 추가…",
       "openFolder": "감시 폴더 열기",
@@ -597,13 +597,14 @@
       "draftRule": "자동화 규칙",
       "agentDoes": "AI가 「{{task}}」",
       "matches": "조건에 맞는 파일 {{count}}개",
-      "noMatches": "지금은 조건에 맞는 파일이 없습니다"
+      "noMatches": "지금은 조건에 맞는 파일이 없습니다",
+      "notRun": "아직 실행되지 않음"
     },
     "quickLook": {
       "when": "언제",
       "what": "하는 일",
       "folders": "대상 폴더",
-      "edit": "AI 에이전트에서 수정",
+      "edit": "수정",
       "close": "닫기",
       "ranFail": "{{time}} 실행 · {{reason}}"
     },
@@ -699,12 +700,15 @@
         "create": "새로 생기면",
         "update": "바뀌면",
         "createUpdate": "생기거나 바뀌면",
-        "delete": "지워지면"
+        "delete": "지워지면",
+        "other": "그 밖의 변화가 생기면"
       },
       "mode": {
         "read": "읽기만",
         "write": "파일 수정 허용"
-      }
+      },
+      "submitEdit": "수정하기",
+      "editTitle": "자동화 수정"
     },
     "templates": {
       "title": "추천 자동화",

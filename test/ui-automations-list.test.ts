@@ -73,7 +73,7 @@ describe("ruleMenuEntries", () => {
 
 	it("offers Quick Look, edit, add, and a danger delete on a rule", () => {
 		const entries = ruleMenuEntries({ rule: rule("a"), canOpenFolder: false });
-		expect(labels(entries)).toEqual(["quickLook:훑어보기", "-", "editRule:AI 에이전트에서 수정", "addRule:AI 에이전트에서 새 규칙 추가…", "-", "deleteRule:삭제"]);
+		expect(labels(entries)).toEqual(["quickLook:훑어보기", "-", "editRule:수정", "addRule:AI 에이전트에서 새 규칙 추가…", "-", "deleteRule:삭제"]);
 		const remove = entries.find((entry) => entry.kind === "item" && entry.action === "deleteRule");
 		expect(remove).toMatchObject({ tone: "danger" });
 	});
@@ -98,7 +98,7 @@ describe("ruleMenuEntries", () => {
 		expect(labels(ruleMenuEntries({ rule: rule("a"), canOpenFolder: false }))).toEqual([
 			"quickLook:Quick Look",
 			"-",
-			"editRule:Edit in AI Agent",
+			"editRule:Edit",
 			"addRule:Add a rule in AI Agent…",
 			"-",
 			"deleteRule:Delete",
@@ -121,6 +121,7 @@ describe("the automations store", () => {
 				return { snapshot: current, removal };
 			}),
 			create: vi.fn(async () => ({ snapshot: current, id: "new" })),
+			update: vi.fn(async () => current),
 			restore: vi.fn(async () => {
 				current = snapshot([rule("a"), rule("b")]);
 				return current;

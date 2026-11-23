@@ -558,7 +558,7 @@
     },
     "menu": {
       "preview": "Quick Look",
-      "edit": "Edit in AI Agent",
+      "edit": "Edit",
       "reveal": "Show in Automations",
       "add": "Add a rule in AI Agent…",
       "openFolder": "Open watched folder",
@@ -597,13 +597,14 @@
       "draftRule": "Automation rule",
       "agentDoes": "AI: “{{task}}”",
       "matches": "Files that match: {{count}}",
-      "noMatches": "No files match right now"
+      "noMatches": "No files match right now",
+      "notRun": "Not run yet"
     },
     "quickLook": {
       "when": "When",
       "what": "Does",
       "folders": "Folders",
-      "edit": "Edit in AI Agent",
+      "edit": "Edit",
       "close": "Close",
       "ranFail": "Ran {{time}} · {{reason}}"
     },
@@ -699,12 +700,15 @@
         "create": "arrive",
         "update": "change",
         "createUpdate": "arrive or change",
-        "delete": "are deleted"
+        "delete": "are deleted",
+        "other": "change in other ways"
       },
       "mode": {
         "read": "Read only",
         "write": "Can edit files"
-      }
+      },
+      "submitEdit": "Save Changes",
+      "editTitle": "Edit Automation"
     },
     "templates": {
       "title": "Suggested Automations",

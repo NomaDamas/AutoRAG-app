@@ -73,6 +73,8 @@ export interface AutomationsStore {
 	setDaemon(enabled: boolean): Promise<void>;
 	/** Write a new rule; resolves with the id it was given, or null when there is no bridge. */
 	create(draft: AutomationDraft): Promise<string | null>;
+	/** Rewrite rule `id`; resolves false when there is no bridge. */
+	update(id: string, draft: AutomationDraft): Promise<boolean>;
 	dispose(): void;
 }
 
@@ -160,6 +162,15 @@ export function createAutomationsStore(bridge: AutomationBridge | undefined): Au
 				const { snapshot, id } = await bridge.create(draft);
 				publish({ state: snapshot });
 				return id;
+			} catch (cause) {
+				throw new Error(ipcMessage(cause));
+			}
+		},
+		async update(id, draft) {
+			if (bridge === undefined) return false;
+			try {
+				publish({ state: await bridge.update(id, draft) });
+				return true;
 			} catch (cause) {
 				throw new Error(ipcMessage(cause));
 			}

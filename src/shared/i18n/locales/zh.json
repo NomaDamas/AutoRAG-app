@@ -558,7 +558,7 @@
     },
     "menu": {
       "preview": "快速查看",
-      "edit": "在 AI 智能体中编辑",
+      "edit": "编辑",
       "reveal": "在自动化标签页中显示",
       "add": "在 AI 智能体中添加新规则…",
       "openFolder": "打开监视文件夹",
@@ -597,13 +597,14 @@
       "draftRule": "自动化规则",
       "agentDoes": "AI：“{{task}}”",
       "matches": "符合条件的文件 {{count}} 个",
-      "noMatches": "目前没有符合条件的文件"
+      "noMatches": "目前没有符合条件的文件",
+      "notRun": "尚未运行"
     },
     "quickLook": {
       "when": "何时",
       "what": "执行",
       "folders": "目标文件夹",
-      "edit": "在 AI 智能体中编辑",
+      "edit": "编辑",
       "close": "关闭",
       "ranFail": "{{time}}运行 · {{reason}}"
     },
@@ -699,12 +700,15 @@
         "create": "新增",
         "update": "修改",
         "createUpdate": "新增或修改",
-        "delete": "删除"
+        "delete": "删除",
+        "other": "发生其他变化"
       },
       "mode": {
         "read": "仅读取",
         "write": "允许修改文件"
-      }
+      },
+      "submitEdit": "保存修改",
+      "editTitle": "编辑自动化"
     },
     "templates": {
       "title": "推荐的自动化",

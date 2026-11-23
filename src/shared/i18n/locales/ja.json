@@ -558,7 +558,7 @@
     },
     "menu": {
       "preview": "クイックルック",
-      "edit": "AI エージェントで編集",
+      "edit": "編集",
       "reveal": "自動化タブで表示",
       "add": "AI エージェントで新しいルールを追加…",
       "openFolder": "監視フォルダを開く",
@@ -597,13 +597,14 @@
       "draftRule": "自動化ルール",
       "agentDoes": "AIが「{{task}}」",
       "matches": "条件に合うファイル {{count}}件",
-      "noMatches": "今は条件に合うファイルがありません"
+      "noMatches": "今は条件に合うファイルがありません",
+      "notRun": "まだ実行されていません"
     },
     "quickLook": {
       "when": "いつ",
       "what": "すること",
       "folders": "対象フォルダ",
-      "edit": "AI エージェントで編集",
+      "edit": "編集",
       "close": "閉じる",
       "ranFail": "{{time}}に実行 · {{reason}}"
     },
@@ -699,12 +700,15 @@
         "create": "追加された",
         "update": "変更された",
         "createUpdate": "追加・変更された",
-        "delete": "削除された"
+        "delete": "削除された",
+        "other": "そのほかの変化があった"
       },
       "mode": {
         "read": "読み取りのみ",
         "write": "ファイルの変更を許可"
-      }
+      },
+      "submitEdit": "変更を保存",
+      "editTitle": "自動化を編集"
     },
     "templates": {
       "title": "おすすめの自動化",

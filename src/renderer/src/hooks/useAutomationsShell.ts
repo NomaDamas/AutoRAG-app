@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import { t } from "../../../shared/i18n/core";
 import type { AutomationsViewProps } from "../components/AutomationsView";
-import { addPrompt, editPrompt, ruleTitle } from "../state/automations";
+import { addPrompt, ruleTitle } from "../state/automations";
 import { ruleKeyAction } from "../state/automations-keys";
 import { ruleMenuEntries, stepRuleSelection, type AutomationsStore, type AutomationsView } from "../state/automations-store";
 import type { FinderMenuAction, FinderMenuEntry } from "../state/context-menu";
@@ -71,6 +71,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const rules = view.state.rules;
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [draft, setDraft] = useState<AutomationRule | null>(null);
+	// The rule 수정 put in the 새 자동화 card; null while the card makes a new one.
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
@@ -91,7 +93,14 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	}, []);
 	useEffect(() => clearUndoTimer, [clearUndoTimer]);
 
-	const edit = useCallback((rule: AutomationRule) => latest.current.openAiDraft(editPrompt(rule)), []);
+	// 수정 opens the rule in the 자동화 tab's card, wherever it was asked from (the list, the inspectors, Quick Look, a menu).
+	const edit = useCallback((rule: AutomationRule) => {
+		setMenuState(null);
+		setPreviewId(null);
+		setEditingId(rule.id);
+		setSelectedId(rule.id);
+		latest.current.showInList(rule.id);
+	}, []);
 	const add = useCallback(() => latest.current.openAiDraft(addPrompt()), []);
 
 	const askDelete = useCallback((rule: AutomationRule) => {
@@ -257,6 +266,21 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 				return false;
 			}
 		},
+		editing: byId(editingId),
+		onUpdate: async (id, next) => {
+			try {
+				const ok = await store.update(id, next);
+				if (ok) {
+					setEditingId(null);
+					setSelectedId(id);
+				}
+				return ok;
+			} catch (cause) {
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
+		onCancelEdit: () => setEditingId(null),
 		onDraftChange: (next) => {
 			setDraft(next);
 			// Making a rule takes the inspector over from the one picked.

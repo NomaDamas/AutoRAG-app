@@ -34,6 +34,8 @@ export interface AutomationService {
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
 	/** Add a rule with a fresh id; the file is put back as it was if the librarian then refuses it. */
 	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
+	/** Rewrite rule `id`'s folders, changes, files and action; everything else in its entry stays as written. */
+	update(id: string, draft: AutomationDraft): Promise<AutomationsSnapshot>;
 	/** Watch for changes; `onChange` fires only when something about the automations actually changed. Returns the stop function. */
 	start(onChange: (snapshot: AutomationsSnapshot) => void): () => void;
 }
@@ -350,6 +352,29 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 					throw new Error(snapshot.configError);
 				}
 				return { snapshot, id };
+			}),
+		update: (id, draft) =>
+			serialized(async () => {
+				const entries = await loadEntries({ required: true });
+				const index = entries.findIndex((entry) => entry.id === id);
+				if (index === -1) throw new Error(t("main.automations.errors.unknownRule", { id }));
+				const { include: _include, agent: _agent, run: _run, ...kept } = entries[index] as Record<string, unknown>;
+				const entry: Record<string, unknown> = {
+					...kept,
+					paths: [...draft.paths],
+					events: [...draft.events],
+					...(draft.include.length === 0 ? {} : { include: [...draft.include] }),
+					...(draft.agent === undefined ? { run: [...(draft.run ?? [])] } : { agent: { ...(isJsonObject(_agent) ? _agent : {}), profile: draft.agent.profile, task: draft.agent.task } }),
+				};
+				await saveEntries(entries.map((existing, at) => (at === index ? entry : existing)));
+				const snapshot = await freshSnapshot();
+				// A file the librarian refuses would stop every rule: put the old entry back.
+				if (snapshot.configError !== null) {
+					await saveEntries(entries);
+					await freshSnapshot();
+					throw new Error(snapshot.configError);
+				}
+				return snapshot;
 			}),
 		setDaemon: async (enabled) => {
 			const result = await deps.run(["automate", enabled ? "install" : "uninstall", "--json"]);

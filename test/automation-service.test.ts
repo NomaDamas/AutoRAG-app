@@ -596,6 +596,29 @@ describe("createAutomationService create", () => {
 	});
 });
 
+describe("createAutomationService update", () => {
+	it("rewrites what the card manages and keeps the rest of the entry as written", async () => {
+		const dir = await home();
+		const other = rule("other");
+		const target = rule("target", { futureOption: { keep: true }, exclude: ["**/tmp/**"] });
+		const file = await writeRules(dir, [other, target]);
+
+		await service(dir, fakeCli(dir)).update("target", { paths: ["/Users/me/Desktop"], events: ["update"], include: [], agent: { profile: "file-organizer", task: "정리해 줘" } });
+
+		const written = (JSON.parse(await readFile(file, "utf8")) as { automations: Record<string, unknown>[] }).automations;
+		expect(written[0]).toEqual(other);
+		expect(written[1]).toMatchObject({ id: "target", futureOption: { keep: true }, exclude: ["**/tmp/**"], paths: ["/Users/me/Desktop"], events: ["update"], agent: { profile: "file-organizer", task: "정리해 줘" } });
+		expect(written[1]).not.toHaveProperty("include");
+		expect(written[1]).not.toHaveProperty("run");
+	});
+
+	it("refuses an unknown id", async () => {
+		const dir = await home();
+		await writeRules(dir, [rule("a")]);
+		await expect(service(dir, fakeCli(dir)).update("gone", { paths: ["/x"], events: ["create"], include: [], run: ["x"] })).rejects.toThrow();
+	});
+});
+
 describe("createAutomationService restore", () => {
 	it("puts the entry back where it was", async () => {
 		const dir = await home();

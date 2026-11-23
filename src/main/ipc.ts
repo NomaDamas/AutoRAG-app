@@ -501,6 +501,7 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 	ipcMain.handle(AUTOMATION_CHANNELS.remove, (_event, id: unknown) => service.remove(requireNonEmptyString(id, "automation id")));
 	ipcMain.handle(AUTOMATION_CHANNELS.restore, (_event, removal: unknown) => service.restore(requireAutomationRemoval(removal)));
 	ipcMain.handle(AUTOMATION_CHANNELS.create, (_event, draft: unknown) => service.create(requireAutomationDraft(draft)));
+	ipcMain.handle(AUTOMATION_CHANNELS.update, (_event, id: unknown, draft: unknown) => service.update(requireNonEmptyString(id, "automation id"), requireAutomationDraft(draft)));
 	ipcMain.handle(AUTOMATION_CHANNELS.setDaemon, (_event, enabled: unknown) => {
 		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
 		return service.setDaemon(enabled);

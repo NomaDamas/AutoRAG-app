@@ -11,8 +11,8 @@ import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationsS
 import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { folderLabel, ruleTitle, runTone, whenText, type RunTone } from "../state/automations";
-import { CheckIcon, ChevronDownIcon, EyeIcon, FilePenIcon, FileTextIcon, FolderGlyph, ImageIcon, RefreshIcon } from "./icons";
+import { folderLabel, kindsText, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
+import { CheckIcon, ChevronDownIcon, EyeIcon, FilePenIcon, FolderGlyph } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface AutomationsViewProps {
@@ -25,6 +25,12 @@ export interface AutomationsViewProps {
 	readonly onAdd: () => void;
 	/** 만들기: write the rule; resolves true once it is in the rules file. */
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** The rule 수정 put in the card, or null while the card makes a new one. */
+	readonly editing?: AutomationRule | null;
+	/** 수정하기: rewrite the rule; resolves true once the rules file has it. */
+	readonly onUpdate?: ((id: string, draft: AutomationDraft) => Promise<boolean>) | undefined;
+	/** 취소 while editing: the card goes back to making a new rule. */
+	readonly onCancelEdit?: (() => void) | undefined;
 	/** The rule the 새 자동화 card would write, once the person has touched it; null when the card is untouched. */
 	readonly onDraftChange?: ((draft: AutomationRule | null) => void) | undefined;
 	readonly onPreview: (id: string) => void;
@@ -77,7 +83,6 @@ const FOLDER_ICONS = ["downloads", "desktop", "documents", "pictures"] as const;
 
 interface Template {
 	readonly id: "screenshot" | "pdf" | "refresh";
-	readonly icon: ReactNode;
 	readonly folder: (typeof FOLDER_ICONS)[number];
 	readonly kind: KindId;
 	readonly event: EventId;
@@ -87,9 +92,9 @@ interface Template {
 }
 
 const TEMPLATES: readonly Template[] = [
-	{ id: "screenshot", icon: <ImageIcon />, folder: "desktop", kind: "image", event: "create", mode: "write" },
-	{ id: "pdf", icon: <FileTextIcon />, folder: "downloads", kind: "pdf", event: "create", mode: "write" },
-	{ id: "refresh", icon: <RefreshIcon size={14} />, folder: "documents", kind: "all", event: "createUpdate", mode: "read", run: ["autorag", "refresh"] },
+	{ id: "screenshot", folder: "desktop", kind: "image", event: "create", mode: "write" },
+	{ id: "pdf", folder: "downloads", kind: "pdf", event: "create", mode: "write" },
+	{ id: "refresh", folder: "documents", kind: "all", event: "createUpdate", mode: "read", run: ["autorag", "refresh"] },
 ];
 
 interface ChipOption<T extends string> {
@@ -191,15 +196,15 @@ function standardFolders(locations: readonly FsLocation[]): readonly ChipOption<
 }
 
 /** The card's choices as the rule they would make, so the inspector can say it in the rules' own sentence. */
-function draftRule(folder: string, kind: KindId, event: EventId, task: string, mode: ModeId, run: readonly string[] | null): AutomationRule {
+function draftRule(draft: AutomationDraft): AutomationRule {
 	return {
 		id: "draft",
-		paths: [folder],
-		events: EVENTS[event],
-		include: KIND_GLOBS[kind],
+		paths: draft.paths,
+		events: draft.events,
+		include: draft.include,
 		exclude: [],
-		run: run ?? [],
-		...(run === null ? { agent: { profile: PROFILES[mode], task } } : {}),
+		run: draft.run ?? [],
+		...(draft.agent === undefined ? {} : { agent: draft.agent }),
 		appendFiles: true,
 		debounceMs: 0,
 		timeoutMs: 0,
@@ -207,13 +212,29 @@ function draftRule(folder: string, kind: KindId, event: EventId, task: string, m
 	};
 }
 
+const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && [...a].sort().join("\n") === [...b].sort().join("\n");
+
+/** The chip a rule's files or changes fit, or null when they are a set the card does not offer (kept as written). */
+function kindOf(include: readonly string[]): KindId | null {
+	return (Object.keys(KIND_GLOBS) as KindId[]).find((kind) => sameList(KIND_GLOBS[kind], include)) ?? null;
+}
+function eventOf(events: readonly AutomationEventType[]): EventId | null {
+	return (Object.keys(EVENTS) as EventId[]).find((event) => sameList(EVENTS[event], events)) ?? null;
+}
+
 function NewAutomationCard({
 	onCreate,
+	onUpdate,
+	onCancelEdit,
 	onDraftChange,
+	editing,
 	filled,
 }: {
 	readonly onCreate: AutomationsViewProps["onCreate"];
+	readonly onUpdate: AutomationsViewProps["onUpdate"];
+	readonly onCancelEdit: AutomationsViewProps["onCancelEdit"];
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
+	readonly editing: AutomationRule | null;
 	readonly filled: { readonly template: Template; readonly at: number } | null;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -224,9 +245,14 @@ function NewAutomationCard({
 	const [task, setTask] = useState("");
 	const [mode, setMode] = useState<ModeId>("read");
 	const [run, setRun] = useState<readonly string[] | null>(null);
+	// What a rule being edited has that the chips cannot say; kept as written until its chip is changed.
+	const [customInclude, setCustomInclude] = useState<readonly string[] | null>(null);
+	const [customEvents, setCustomEvents] = useState<readonly AutomationEventType[] | null>(null);
+	const [customProfile, setCustomProfile] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	// The inspector speaks about the card only once the person has started on it.
 	const [touched, setTouched] = useState(false);
+	const cardRef = useRef<HTMLDivElement>(null);
 	const taskRef = useRef<HTMLTextAreaElement>(null);
 
 	useEffect(() => {
@@ -242,10 +268,21 @@ function NewAutomationCard({
 			live = false;
 		};
 	}, []);
-	const folders = standardFolders(locations);
+	const standard = standardFolders(locations);
 	const pathOf = (kindOfFolder: (typeof FOLDER_ICONS)[number]): string | null => locations.find((location) => location.icon === kindOfFolder && location.available)?.path ?? null;
 	// 다운로드 until the person picks another; a folder the OS does not have is never offered.
-	const chosenFolder = folder ?? folders[0]?.value ?? null;
+	const chosenFolder = folder ?? standard[0]?.value ?? null;
+	// A rule being edited may watch a folder that is not one of the standard ones: it is offered too.
+	const folders = chosenFolder === null || standard.some((option) => option.value === chosenFolder) ? standard : [...standard, { value: chosenFolder, label: folderLabel(chosenFolder), icon: <FolderGlyph size={13} /> }];
+
+	const reset = (): void => {
+		setTask("");
+		setRun(null);
+		setCustomInclude(null);
+		setCustomEvents(null);
+		setCustomProfile(null);
+		setTouched(false);
+	};
 
 	// A 추천 자동화 row fills the card, once per click.
 	useEffect(() => {
@@ -257,37 +294,63 @@ function NewAutomationCard({
 		setMode(template.mode);
 		setTask(t(`automations.templates.${template.id}.task`));
 		setRun(template.run ?? null);
+		setCustomInclude(null);
+		setCustomEvents(null);
+		setCustomProfile(null);
 		setTouched(true);
 		taskRef.current?.focus();
 		// The locations are read once; the template is what changes.
 	}, [filled]);
 
-	const canCreate = !busy && chosenFolder !== null && task.trim().length > 0;
+	// 수정 on a rule: the card takes the rule in, and 만들기 becomes 수정하기.
+	useEffect(() => {
+		if (editing === null) {
+			reset();
+			return;
+		}
+		const matchedKind = kindOf(editing.include);
+		const matchedEvent = eventOf(editing.events);
+		const profile = editing.agent?.profile ?? null;
+		setFolder(editing.paths[0] ?? null);
+		setKind(matchedKind ?? "all");
+		setCustomInclude(matchedKind === null ? editing.include : null);
+		setEvent(matchedEvent ?? "create");
+		setCustomEvents(matchedEvent === null ? editing.events : null);
+		setMode(profile === PROFILES.write ? "write" : "read");
+		setCustomProfile(profile !== null && profile !== PROFILES.read && profile !== PROFILES.write ? profile : null);
+		setTask(editing.agent?.task ?? whatText(editing, { full: true }));
+		setRun(editing.agent === undefined ? editing.run : null);
+		setTouched(true);
+		cardRef.current?.scrollIntoView?.({ block: "nearest" });
+		taskRef.current?.focus();
+	}, [editing?.id]);
+
+	const draft: AutomationDraft | null =
+		chosenFolder === null
+			? null
+			: {
+					paths: editing !== null && editing.paths.length > 1 && editing.paths[0] === chosenFolder ? editing.paths : [chosenFolder],
+					events: customEvents ?? EVENTS[event],
+					include: customInclude ?? KIND_GLOBS[kind],
+					...(run === null ? { agent: { profile: customProfile ?? PROFILES[mode], task: task.trim() } } : { run }),
+				};
+	const canSubmit = !busy && draft !== null && task.trim().length > 0;
 
 	useEffect(() => {
-		onDraftChange?.(touched && chosenFolder !== null ? draftRule(chosenFolder, kind, event, task.trim(), mode, run) : null);
-	}, [touched, chosenFolder, kind, event, task, mode, run]);
+		onDraftChange?.(touched && draft !== null ? draftRule(draft) : null);
+	}, [touched, JSON.stringify(draft)]);
 	useEffect(() => () => onDraftChange?.(null), []);
-	const touch = <T,>(set: (value: T) => void) => (value: T): void => {
+	const touch = <T,>(set: (value: T) => void, clear?: () => void) => (value: T): void => {
 		set(value);
+		clear?.();
 		setTouched(true);
 	};
-	const create = async (): Promise<void> => {
-		if (!canCreate || chosenFolder === null) return;
+	const submit = async (): Promise<void> => {
+		if (!canSubmit || draft === null) return;
 		setBusy(true);
-		const draft: AutomationDraft = {
-			paths: [chosenFolder],
-			events: EVENTS[event],
-			include: KIND_GLOBS[kind],
-			...(run === null ? { agent: { profile: PROFILES[mode], task: task.trim() } } : { run }),
-		};
-		const ok = await onCreate(draft);
+		const ok = editing === null ? await onCreate(draft) : onUpdate === undefined ? false : await onUpdate(editing.id, draft);
 		setBusy(false);
-		if (ok) {
-			setTask("");
-			setRun(null);
-			setTouched(false);
-		}
+		if (ok && editing === null) reset();
 	};
 
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
@@ -307,14 +370,30 @@ function NewAutomationCard({
 				onChange={touch(setFolder)}
 			/>
 		),
-		kind: <ChipSelect value={kind} options={kinds} label={t("automations.create.kindLabel")} testId="automation-new-kind" onChange={touch(setKind)} />,
-		event: <ChipSelect value={event} options={events} label={t("automations.create.eventLabel")} testId="automation-new-event" onChange={touch(setEvent)} />,
+		kind: (
+			<ChipSelect
+				value={customInclude === null ? kind : null}
+				options={kinds}
+				label={customInclude === null ? t("automations.create.kindLabel") : t("automations.kinds.noun", { kinds: kindsText(customInclude) })}
+				testId="automation-new-kind"
+				onChange={touch(setKind, () => setCustomInclude(null))}
+			/>
+		),
+		event: (
+			<ChipSelect
+				value={customEvents === null ? event : null}
+				options={events}
+				label={customEvents === null ? t("automations.create.eventLabel") : t("automations.create.event.other")}
+				testId="automation-new-event"
+				onChange={touch(setEvent, () => setCustomEvents(null))}
+			/>
+		),
 	};
 	// The sentence's word order is the language's: the chips sit where its {{folder}}, {{kind}} and {{event}} are.
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
 
 	return (
-		<div className="flex flex-col gap-8 rounded-[14px] border-[0.5px] border-divider bg-window p-14" data-testid="automation-new">
+		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] border-[0.5px] bg-window p-14", editing === null ? "border-divider" : "border-accent")} data-testid="automation-new" data-editing={editing?.id}>
 			<span className="text-badge font-medium leading-[14px] text-ink-body">{t("automations.create.when")}</span>
 			<div className="flex flex-wrap items-center gap-6 rounded-10 bg-chrome px-10 py-8" data-testid="automation-new-when">
 				{sentence.map((part, index) =>
@@ -336,21 +415,33 @@ function NewAutomationCard({
 				onChange={(change) => {
 					setTask(change.target.value);
 					setTouched(true);
-					// Typing over a program template's words makes it an instruction for the agent.
+					// Typing over a program's words makes it an instruction for the agent.
 					setRun(null);
 				}}
 			/>
 			<div className="flex items-center gap-6">
-				{run === null ? <ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode)} /> : null}
+				{run === null ? (
+					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
+				) : null}
 				<span className="flex-1" />
+				{editing === null ? null : (
+					<button
+						type="button"
+						data-action="automation-cancel-edit"
+						className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
+						onClick={() => onCancelEdit?.()}
+					>
+						{t("common.cancel")}
+					</button>
+				)}
 				<button
 					type="button"
-					data-action="automation-create"
-					disabled={!canCreate}
+					data-action={editing === null ? "automation-create" : "automation-update"}
+					disabled={!canSubmit}
 					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
-					onClick={() => void create()}
+					onClick={() => void submit()}
 				>
-					{busy ? t("automations.daemon.busy") : t("automations.create.submit")}
+					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : t("automations.create.submitEdit")}
 				</button>
 			</div>
 		</div>
@@ -456,7 +547,7 @@ function BackgroundLine({
 	);
 }
 
-export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onCreate, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
 	const broken = state.configError !== null;
@@ -484,8 +575,8 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 						</div>
 					) : !state.ready ? null : (
 						<>
-							<Section title={t("automations.create.title")}>
-								<NewAutomationCard onCreate={onCreate} onDraftChange={onDraftChange} filled={filled} />
+							<Section title={editing === null ? t("automations.create.title") : t("automations.create.editTitle")}>
+								<NewAutomationCard onCreate={onCreate} onUpdate={onUpdate} onCancelEdit={onCancelEdit} onDraftChange={onDraftChange} editing={editing} filled={filled} />
 							</Section>
 							{state.rules.length === 0 ? null : (
 								<Section title={t("automations.mine")}>
@@ -497,19 +588,17 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 								</Section>
 							)}
 							<Section title={t("automations.templates.title")}>
-								<div className="flex flex-col [&>button+button]:border-t-[0.5px] [&>button+button]:border-divider">
+								{/* Figma 611:4016: the same rounded list as 내 자동화, a title and its sentence per row. */}
+								<div className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>button+button]:border-t-[0.5px] [&>button+button]:border-divider">
 									{TEMPLATES.map((template) => (
 										<button
 											key={template.id}
 											type="button"
 											data-template={template.id}
-											className="flex flex-col items-start gap-px border-0 bg-transparent px-10 py-9 text-left cursor-pointer rounded-6 hover:bg-hover"
+											className="flex flex-col items-start gap-px border-0 bg-window px-12 py-10 text-left cursor-pointer hover:bg-hover-row"
 											onClick={() => setFilled({ template, at: Date.now() })}
 										>
-											<span className="flex items-center gap-6 text-ink">
-												{template.icon}
-												<span className="text-[13px] font-medium leading-[20px]">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-											</span>
+											<span className="text-[13px] font-medium leading-[20px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
 											<span className="text-meta leading-[18px] text-ink-muted">{t(`automations.templates.${template.id}.desc` as LocaleKey)}</span>
 										</button>
 									))}

@@ -68,6 +68,7 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 			return { snapshot: current, removal: { entry: { id }, index: removedIndex } };
 		},
 		create: async () => ({ snapshot: current, id: "new-rule" }),
+		update: async () => current,
 		restore: async () => {
 			const next = [...current.rules];
 			if (removed !== undefined) next.splice(removedIndex, 0, removed);
@@ -144,19 +145,29 @@ describe("selection and keys", () => {
 });
 
 describe("editing and adding open an AI Chat draft, never a sent question", () => {
-	it("Enter and double click draft the edit for that rule, in the interface language", async () => {
+	it("Enter and double click open the rule in the 새 자동화 card, not an AI draft, and 취소 lets it go", async () => {
 		const h = await mount([rule("downloads-pdf-summary")]);
 		press("ArrowDown");
 		press("Enter");
-		expect(h.deps.openAiDraft).toHaveBeenCalledTimes(1);
-		const draft = h.deps.openAiDraft.mock.calls[0]?.[0] as string;
-		expect(draft).toContain("downloads-pdf-summary");
-		expect(draft).toContain("다운로드에 PDF 파일이 새로 생기면");
-		expect(draft.endsWith(": ")).toBe(true);
-
-		await setAppLanguage("en");
+		expect(h.deps.openAiDraft).not.toHaveBeenCalled();
+		expect(h.shell().props.editing?.id).toBe("downloads-pdf-summary");
+		expect(h.deps.showInList).toHaveBeenCalledWith("downloads-pdf-summary");
+		act(() => h.shell().props.onCancelEdit?.());
+		expect(h.shell().props.editing).toBeNull();
 		act(() => h.shell().props.onEdit("downloads-pdf-summary"));
-		expect(h.deps.openAiDraft.mock.calls[1]?.[0]).toBe("Edit this automation rule — downloads-pdf-summary (PDF files are created in Downloads). What to change: ");
+		expect(h.shell().props.editing?.id).toBe("downloads-pdf-summary");
+	});
+
+	it("수정하기 rewrites the rule and leaves the card", async () => {
+		const h = await mount([rule("a")]);
+		const update = vi.spyOn(h.bridge, "update");
+		act(() => h.shell().props.onEdit("a"));
+		const draft = { paths: ["/Users/jeffrey/Desktop"], events: ["create" as const], include: [], agent: { profile: "file-triage", task: "요약" } };
+		await act(async () => {
+			await h.shell().props.onUpdate?.("a", draft);
+		});
+		expect(update).toHaveBeenCalledWith("a", draft);
+		expect(h.shell().props.editing).toBeNull();
 	});
 
 	it("adding drafts the creation request", async () => {
@@ -169,6 +180,7 @@ describe("editing and adding open an AI Chat draft, never a sent question", () =
 		const h = await mount([rule("a")]);
 		act(() => h.shell().props.onEdit("gone"));
 		expect(h.deps.openAiDraft).not.toHaveBeenCalled();
+		expect(h.shell().props.editing).toBeNull();
 	});
 });
 
@@ -188,13 +200,14 @@ describe("Quick Look", () => {
 		expect(h.shell().preview).toBeNull();
 	});
 
-	it("editing from Quick Look closes it and opens the draft", async () => {
+	it("editing from Quick Look closes it and opens the rule in the card", async () => {
 		const h = await mount([rule("a")]);
 		press("ArrowDown");
 		press(" ");
 		act(() => h.shell().editFromPreview());
 		expect(h.shell().preview).toBeNull();
-		expect(h.deps.openAiDraft).toHaveBeenCalledTimes(1);
+		expect(h.shell().props.editing?.id).toBe("a");
+		expect(h.deps.openAiDraft).not.toHaveBeenCalled();
 	});
 });
 

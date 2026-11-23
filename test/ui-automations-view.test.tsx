@@ -248,6 +248,39 @@ describe("AutomationsView empty and error states", () => {
 	});
 });
 
+describe("AutomationsView editing a rule in the card", () => {
+	it("takes the rule into the card, says 자동화 수정 and 수정하기, and saves it with its id", async () => {
+		const editing = rule("pdf", { run: [], agent: { profile: "file-organizer", task: "메모로 남겨 줘" }, paths: ["/Users/jeffrey/Desktop"], include: ["**/*.pdf"], events: ["create", "update"] });
+		const onUpdate = vi.fn(async () => true);
+		render(props({ editing, onUpdate }));
+		await settle();
+		expect(host.querySelector("h2")?.textContent).toBe("자동화 수정");
+		expect(host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')?.value).toBe("메모로 남겨 줘");
+		const save = host.querySelector<HTMLButtonElement>('[data-action="automation-update"]');
+		expect(save?.textContent).toBe("수정하기");
+		await act(async () => {
+			save?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(onUpdate).toHaveBeenCalledWith("pdf", { paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "메모로 남겨 줘" } });
+	});
+
+	it("keeps files and changes the chips cannot say, and offers 취소", async () => {
+		const editing = rule("odd", { run: [], agent: { profile: "file-triage", task: "t" }, include: ["**/*.hwp"], events: ["create", "update", "delete"] });
+		const onUpdate = vi.fn(async () => true);
+		const onCancelEdit = vi.fn();
+		render(props({ editing, onUpdate, onCancelEdit }));
+		await settle();
+		await act(async () => {
+			host.querySelector('[data-action="automation-update"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(onUpdate).toHaveBeenCalledWith("odd", expect.objectContaining({ include: ["**/*.hwp"], events: ["create", "update", "delete"] }));
+		act(() => host.querySelector('[data-action="automation-cancel-edit"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onCancelEdit).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("AutomationsView 새 자동화 card", () => {
 	const create = (): HTMLButtonElement | null => host.querySelector('[data-action="automation-create"]');
 	const task = (): HTMLTextAreaElement => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')!;

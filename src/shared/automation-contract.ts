@@ -13,6 +13,7 @@ export const AUTOMATION_CHANNELS = {
 	restore: "automations:restore",
 	setDaemon: "automations:setDaemon",
 	create: "automations:create",
+	update: "automations:update",
 	changed: "automations:changed",
 } as const;
 
@@ -123,6 +124,8 @@ export interface AutomationBridge {
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
 	/** Add a rule; `id` is the one it was given. Rejected when the librarian would refuse the file it leaves. */
 	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
+	/** Rewrite rule `id` from the card; the fields the card does not manage stay as written. */
+	update(id: string, draft: AutomationDraft): Promise<AutomationsSnapshot>;
 	/** Pushed whenever the rules file, a run log, or the daemon changes, whoever changed it. */
 	onChange(listener: (snapshot: AutomationsSnapshot) => void): () => void;
 }
