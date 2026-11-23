@@ -415,14 +415,19 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   are left out, and the run keeps the machine awake) → `ready` (Figma 162:1308:
   the Dazzi logo with a green check badge, "파일을 다 읽었어요", one "시작하기"
   button at the same height as the folder screen's; Enter presses it) → `tour` → `signin`.
-  "시작하기" on `ready` plays the reveal of `design-mockups/finish-reveal/v5v7-hybrid.html`
-  (`first-run/reveal.tsx`, clock in `first-run/reveal-timing.ts`: the mockup's `T` at
-  `SPEED` 1.2, about 4.8 s): the copy blurs out, the sunflower settles in the middle as the
-  stage dims to dusk with a warm glow, "Dazzi" is imprinted under it, a light sweeps the
-  sunflower, both lift away in a bloom, and the Finder pulls into focus with sidebar,
-  toolbar and panes arriving in turn; the tour then starts on its first step without the
-  welcome cinema. Reduced motion keeps the plain rise. The Finder is laid out for the tour
-  and its blurred first frame prepared while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
+  "시작하기" on `ready` plays the Arc/Dia-inspired liquid-glass reveal
+  (`first-run/reveal.tsx`, WebGL GLSL shader & Canvas 2D fallback in
+  `first-run/reveal-shader.ts`, 4-act clock in `first-run/reveal-timing.ts`, 4.7 s total
+  with tour hand-off at 4.25 s): the copy dissolves while the sunflower glides to center
+  and the stage darkens to obsidian; a premultiplied-alpha WebGL shader blooms a breathing
+  sunlight-gold and crystal-ice liquid-glass orb behind the sunflower (mirroring Dazzi's
+  prismatic glass icon tile); "Dazzi" cascades in letter-by-letter with a 3D spring tilt
+  and blur settle while a silk light sweeps the sunflower; then a simplex-warped organic
+  aperture melts outward from behind the Dazzi mark with a warm golden-ice Fresnel rim so
+  the live Finder pulls into crisp focus (sidebar, toolbar, and panes arriving in turn)
+  before handing off directly to the tour's first step without the welcome cinema. Reduced
+  motion keeps the plain rise. The Finder is laid out for the tour and its blurred first
+  frame prepared while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
   button: tapping it fades the title and description out, the progress bar glides
   below, and a 16×16 Minesweeper with 40 hidden sunflowers (`dazzi-mark.png`) in
   place of mines fades in (`first-run/MineGame.tsx`, rules in
