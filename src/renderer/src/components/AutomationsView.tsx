@@ -898,7 +898,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 					onContextMenu(null, { x: event.clientX, y: event.clientY });
 				}}
 			>
-				{/* Narrower than a file tab's list, the page is cut on the right as the list is, not squeezed. */}
+				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
 				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-56">
 				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (

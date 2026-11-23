@@ -97,21 +97,6 @@ export function listGridTemplate(state: ListColumnsState): string {
 }
 
 /**
- * The narrowest the list's tracks can be (px): the name track at its frozen width or its 180px floor, plus every
- * visible column. A file tab narrower than this cuts its list on the right instead of squeezing it, and the tabs
- * that are not file lists (자동화, AI 에이전트) cut at the same width (`--pane-min-width`).
- */
-export function listMinWidth(state: ListColumnsState): number {
-	let total = state.widths.name ?? NAME_DEFAULT;
-	for (const option of LIST_COLUMN_OPTIONS) {
-		if (option.key === "name") continue;
-		if (!state.visible[option.key]) continue;
-		total += option.key === "index" ? INDEX_WIDTH : (state.widths[option.key] ?? DEFAULT_WIDTHS[option.key]);
-	}
-	return total;
-}
-
-/**
  * Total fixed track width when the name track is frozen (px), null while the
  * name column is still fluid. The list uses it to widen beyond the pane and
  * scroll horizontally, like the reference's `.view { overflow: auto }`.

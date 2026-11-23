@@ -61,7 +61,7 @@ import { inspectorEntryFor } from "./state/inspector-target";
 import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
 import { ruleNamesNow, ruleTitle, setRuleNames } from "./state/automations";
 import { isFilesystemPath, watchSetFor } from "./state/live";
-import { listMinWidth, loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
+import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
@@ -1024,7 +1024,7 @@ export function App(): ReactElement {
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 					/>
-					<div className="flex min-h-0 flex-1" style={{ "--pane-min-width": `${listMinWidth(listColumns)}px` } as CSSProperties}>
+					<div className="flex min-h-0 flex-1" style={{ "--pane-min-width": `calc((100vw - ${sidebarWidth + inspectorWidth}px) / 2)` } as CSSProperties}>
 						<WorkspaceView
 							workspace={workspace}
 							draggingTabId={draggingTabId}
@@ -1062,7 +1062,7 @@ export function App(): ReactElement {
 												if (paneId !== undefined) setWorkspace((current) => focusPane(current, paneId));
 											}}
 										>
-											{/* Narrower than a file tab's list, the chat is cut on the right as the list is, not squeezed. */}
+											{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the chat is cut on the right instead of squeezed. */}
 											<div className="flex min-h-0 flex-1 flex-col min-w-(--pane-min-width)">
 											<AiSearchPanel
 												ref={(handle) => {
