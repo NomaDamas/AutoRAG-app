@@ -486,8 +486,10 @@ html[data-appearance="dark"] {
     --bg-window: #1E1E20;
     --bg-sidebar: rgba(44,44,46,0.92);
     --bg-chrome: #2C2C2E;
-    --bg-subtle: #242426;
-    --bg-subtle-alt: #202022;
+    /* Dark: the cards on the window (settings groups, 추천 자동화) are lifted about 8 steps over --bg-window;
+       at #242426 / #202022 they were 2-6 steps off and read as the same grey. */
+    --bg-subtle: #2A2A2D;
+    --bg-subtle-alt: #27272A;
     --index-map-done: #EF9F27;
     --index-map-partial: #FAC775;
     --index-map-pending: #3A3A3D;
