@@ -1389,6 +1389,8 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "자동화를 끄지 못했습니다: {{reason}}",
+        "daemonOnFailed": "자동화를 켜지 못했습니다: {{reason}}",
         "unreadable": "자동화 규칙 파일을 읽을 수 없습니다: {{reason}}",
         "unknownRule": "‘{{id}}’ 규칙을 찾을 수 없습니다.",
         "cliFailed": "자동화 상태를 확인하지 못했습니다: {{reason}}",

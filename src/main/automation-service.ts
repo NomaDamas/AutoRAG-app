@@ -126,9 +126,37 @@ export function runLibrarianCli(command: string, args: readonly string[], env: N
 	return launched.promise;
 }
 
+/**
+ * What a failed CLI run said, without the parts nobody can read. `--json` answers {"ok": false, "error": "..."}: the
+ * error alone is the reason. A Windows program (schtasks) answers in the console's code page (CP949 on a Korean PC)
+ * and the CLI decodes it as UTF-8, so its words arrive as U+FFFD and look-alikes; a word with one in it is dropped
+ * rather than shown as noise.
+ */
+export function readableCliText(raw: string): string {
+	let text = raw;
+	const last = raw
+		.split("\n")
+		.map((row) => row.trim())
+		.filter((row) => row.length > 0)
+		.at(-1);
+	if (last !== undefined) {
+		try {
+			const parsed: unknown = JSON.parse(last);
+			if (isJsonObject(parsed) && typeof parsed.error === "string" && parsed.error.trim().length > 0) text = parsed.error;
+		} catch {
+			// Not JSON: the text is shown as it is.
+		}
+	}
+	return text
+		.split(/\s+/u)
+		.filter((word) => !word.includes("\uFFFD"))
+		.join(" ")
+		.trim();
+}
+
 /** One line saying why a CLI run failed, short enough to show in the window. */
 export function cliFailureReason(result: AutomationCliResult, limit = 300): string {
-	const detail = (result.stderr.trim() || result.stdout.trim()).replaceAll(/\s+/gu, " ");
+	const detail = readableCliText(result.stderr.trim() || result.stdout.trim()).replaceAll(/\s+/gu, " ");
 	return `exit ${result.code}${detail.length === 0 ? "" : `: ${detail.slice(0, limit)}`}`;
 }
 
@@ -408,7 +436,7 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 			}),
 		setDaemon: async (enabled) => {
 			const result = await deps.run(["automate", enabled ? "install" : "uninstall", "--json"]);
-			if (result.code !== 0) throw new Error(t("main.automations.errors.cliFailed", { reason: cliFailureReason(result) }));
+			if (result.code !== 0) throw new Error(t(enabled ? "main.automations.errors.daemonOnFailed" : "main.automations.errors.daemonOffFailed", { reason: cliFailureReason(result) }));
 			return freshSnapshot();
 		},
 		start: (onChange) => {

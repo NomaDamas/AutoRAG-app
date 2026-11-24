@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	cliFailureReason,
+	readableCliText,
 	createAutomationService,
 	librarianCommand,
 	LibrarianCliMissingError,
@@ -476,6 +477,23 @@ describe("createAutomationService snapshot", () => {
 	});
 });
 
+describe("readableCliText", () => {
+	it("shows the error of a --json answer alone", () => {
+		expect(readableCliText('{"ok":false,"error":"no such rule"}')).toBe("no such rule");
+	});
+
+	it("drops the words a Windows console wrote in another code page (U+FFFD) instead of showing noise", () => {
+		const raw = JSON.stringify({ ok: false, error: "schtasks /Create /TN AutoRAG-Automate /F failed (exit 1): \uFFFD\uFFFD\uFFFD\uFFFD: \uFFFD\u00BF\uFFFD\uFFFD\uFFFD\uFFFD." });
+		const text = readableCliText(raw);
+		expect(text).toBe("schtasks /Create /TN AutoRAG-Automate /F failed (exit 1):");
+		expect(text).not.toContain("\uFFFD");
+	});
+
+	it("leaves plain text as it is", () => {
+		expect(readableCliText("exit 2: bad flag")).toBe("exit 2: bad flag");
+	});
+});
+
 describe("createAutomationService remove", () => {
 	it("takes one rule out, keeping every other entry byte for byte", async () => {
 		const dir = await home();
@@ -701,7 +719,7 @@ describe("createAutomationService setDaemon", () => {
 			run: async () => ({ code: 3, stdout: "", stderr }),
 		});
 
-		const message = t("main.automations.errors.cliFailed", { reason: cliFailureReason({ code: 3, stdout: "", stderr }) });
+		const message = t("main.automations.errors.daemonOnFailed", { reason: cliFailureReason({ code: 3, stdout: "", stderr }) });
 		await expect(cli.setDaemon(true)).rejects.toThrow(message);
 		// The window gets the start of what the CLI said, not all 400 characters of it.
 		expect(message).toContain("x".repeat(300));

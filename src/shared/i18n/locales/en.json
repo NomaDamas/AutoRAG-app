@@ -1389,6 +1389,8 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "Could not turn automations off: {{reason}}",
+        "daemonOnFailed": "Could not turn automations on: {{reason}}",
         "unreadable": "Cannot read the automation rules file: {{reason}}",
         "unknownRule": "No rule named “{{id}}”.",
         "cliFailed": "Could not check the automations: {{reason}}",

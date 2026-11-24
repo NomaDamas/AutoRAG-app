@@ -1389,6 +1389,8 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "无法关闭自动化：{{reason}}",
+        "daemonOnFailed": "无法开启自动化：{{reason}}",
         "unreadable": "无法读取自动化规则文件：{{reason}}",
         "unknownRule": "找不到规则“{{id}}”。",
         "cliFailed": "无法检查自动化状态：{{reason}}",

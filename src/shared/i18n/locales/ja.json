@@ -1389,6 +1389,8 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "自動化をオフにできませんでした: {{reason}}",
+        "daemonOnFailed": "自動化をオンにできませんでした: {{reason}}",
         "unreadable": "自動化ルールファイルを読み込めません: {{reason}}",
         "unknownRule": "ルール「{{id}}」が見つかりません。",
         "cliFailed": "自動化の状態を確認できませんでした: {{reason}}",
