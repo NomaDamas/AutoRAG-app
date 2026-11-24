@@ -44,13 +44,14 @@ const fingerprint = (path) => (existsSync(path) ? createHash("sha256").update(re
 const REAL_STORES = [join(REAL_HOME, ".wombat", "catalog.sqlite3"), join(REAL_HOME, ".autorag", "config.json")];
 const before = REAL_STORES.map(fingerprint);
 
-const wombatBinary = process.env.WOMBAT_BINARY ?? "wombat";
-const version = spawnSync(wombatBinary, ["--version"], { encoding: "utf8" });
+const rawWombat = process.env.WOMBAT_BINARY ?? "wombat";
+const resolvedWombat = rawWombat.includes("/") ? resolve(rawWombat) : spawnSync("which", [rawWombat], { encoding: "utf8" }).stdout.trim() || rawWombat;
+const version = spawnSync(resolvedWombat, ["--version"], { encoding: "utf8" });
 if (version.status !== 0) {
-	console.error(`wombat is not runnable (${wombatBinary}); set WOMBAT_BINARY`);
+	console.error(`wombat is not runnable (${rawWombat}); set WOMBAT_BINARY`);
 	process.exit(2);
 }
-console.log(`using ${version.stdout.trim()} at ${wombatBinary}`);
+console.log(`using ${version.stdout.trim()} at ${resolvedWombat}`);
 
 const root = mkdtempSync(join(tmpdir(), "autorag-qa-ai-sessions-"));
 const home = join(root, "home");
@@ -60,9 +61,11 @@ const claudeRoot = join(root, "sessions", "claude");
 const codexRoot = join(root, "sessions", "codex");
 const configPath = join(root, "config.json");
 const userData = join(root, "user-data");
-for (const dir of [home, workspace, join(workspace, "docs"), claudeRoot, codexRoot, join(home, ".cache", "minsync")]) mkdirSync(dir, { recursive: true });
-const realModels = join(REAL_HOME, ".cache", "minsync", "models");
-if (existsSync(realModels)) symlinkSync(realModels, join(home, ".cache", "minsync", "models"));
+for (const dir of [home, workspace, join(workspace, "docs"), claudeRoot, codexRoot, join(home, ".cache", "im-not-llm")]) mkdirSync(dir, { recursive: true });
+const realModels = process.env.INL_CACHE_DIR?.trim() || join(REAL_HOME, ".cache", "im-not-llm", "models");
+if (existsSync(realModels)) symlinkSync(realModels, join(home, ".cache", "im-not-llm", "models"));
+const realServe = join(REAL_HOME, ".cache", "im-not-llm", "serve");
+if (existsSync(realServe)) symlinkSync(realServe, join(home, ".cache", "im-not-llm", "serve"));
 
 // Refuse to start if anything this run will write could land in the real home.
 for (const path of [home, workspace, dataDir, claudeRoot, codexRoot, configPath, userData]) {
@@ -120,15 +123,16 @@ const env = {
 	AUTORAG_CONFIG: configPath,
 	WOMBAT_DATA_DIR: dataDir,
 	WOMBAT_CONFIG: join(root, "wombat.toml"),
-	MINSYNC_SERVER: "off",
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
 	PATH: `${join(root, "bin")}:/usr/bin:/bin:${process.env.WOMBAT_PATH_EXTRA ?? ""}`,
 };
 mkdirSync(join(root, "bin"), { recursive: true });
-symlinkSync(resolve(wombatBinary), join(root, "bin", "wombat"));
+symlinkSync(resolvedWombat, join(root, "bin", "wombat"));
 const minsync = spawnSync("which", ["minsync"], { encoding: "utf8" }).stdout.trim();
 if (minsync.length > 0) symlinkSync(minsync, join(root, "bin", "minsync"));
 else console.log("minsync is not on PATH; the sync will report it");
+const inl = spawnSync("which", ["inl"], { encoding: "utf8" }).stdout.trim();
+if (inl.length > 0) symlinkSync(inl, join(root, "bin", "inl"));
 
 let app;
 try {
@@ -261,7 +265,7 @@ try {
 	keywordOnly.minSync = { ...keywordOnly.minSync, embedder: { id: "none" } };
 	writeFileSync(configPath, `${JSON.stringify(keywordOnly, null, 2)}\n`);
 	await sleep(500);
-	const direct = spawnSync(wombatBinary, ["--data-dir", dataDir, "search", "--mode", "keyword", "--json", "ingress timeout"], { encoding: "utf8", env: { ...process.env, ...env } });
+	const direct = spawnSync(resolvedWombat, ["--data-dir", dataDir, "search", "--mode", "keyword", "--json", "ingress timeout"], { encoding: "utf8", env: { ...process.env, ...env } });
 	check("SPLADE keyword search answers on its own", direct.status === 0 && /read timeout/.test(direct.stdout), direct.stdout.slice(0, 120));
 } finally {
 	await app?.close().catch(() => undefined);
