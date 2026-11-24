@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon, WarningIcon } from "./icons";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -811,49 +811,26 @@ function AllRuns({ rules, history, onOpen }: { readonly rules: readonly Automati
 	);
 }
 
-function BackgroundLine({
-	state,
-	busy,
-	onSetDaemon,
-}: {
-	readonly state: AutomationsSnapshot;
-	readonly busy: boolean;
-	readonly onSetDaemon: (enabled: boolean) => void;
-}): ReactElement {
+/**
+ * The background service runs the rules, so while it is off none of them runs. That is the only time it needs
+ * saying: a banner over the page with 켜기, and nothing at all while it runs or its state cannot be read.
+ */
+function DaemonOffBanner({ busy, onTurnOn }: { readonly busy: boolean; readonly onTurnOn: () => void }): ReactElement {
 	const { t } = useTranslation();
-	const daemon = state.daemon;
-	// A registered service that is not running (crashed, or stopped by the OS) is off for the user's purposes.
-	const running = daemon?.running === true;
 	return (
-		<footer
-			data-daemon
-			className="pathbar flex h-24 flex-none items-center gap-8 border-t border-border bg-chrome pl-8 pr-12 text-badge text-ink-body"
-		>
-			{daemon === null ? (
-				<span className="inline-flex items-center gap-6 text-ink-muted">
-					<StatusDot token="--text-faint" />
-					{t("automations.daemon.unknown")}
-				</span>
-			) : (
-				<span className="inline-flex items-center gap-6 text-ink-muted">
-					<StatusDot token={running ? "--ok-dot" : "--text-faint"} />
-					{running ? t("automations.daemon.on") : t("automations.daemon.off")}
-				</span>
-			)}
-			<span className="text-ink-faint" aria-hidden="true">·</span>
-			<span className="text-ink-muted">{t("automations.daemon.count", { count: state.rules.length })}</span>
-			<span className="flex-1" />
-			{daemon === null ? null : (
-				<button
-					type="button"
-					disabled={busy}
-					className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer disabled:text-ink-muted disabled:cursor-default"
-					onClick={() => onSetDaemon(!running)}
-				>
-					{busy ? t("automations.daemon.busy") : running ? t("automations.daemon.turnOff") : t("automations.daemon.turnOn")}
-				</button>
-			)}
-		</footer>
+		<div role="status" data-daemon className="flex items-center gap-10 rounded-12 bg-warn-bg px-14 py-10 text-meta leading-[18px] text-warn-text">
+			<WarningIcon className="flex-none" aria-hidden="true" />
+			<span className="min-w-0 flex-1">{t("automations.daemon.offBanner")}</span>
+			<button
+				type="button"
+				disabled={busy}
+				data-action="automation-daemon-on"
+				className="inline-flex h-28 flex-none items-center rounded-6 border-0 bg-window px-10 text-meta font-medium text-ink cursor-pointer hover:opacity-80 disabled:cursor-default disabled:opacity-50"
+				onClick={onTurnOn}
+			>
+				{busy ? t("automations.daemon.busy") : t("automations.daemon.turnOn")}
+			</button>
+		</div>
 	);
 }
 
@@ -903,6 +880,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							{t("automations.errors.statusHint")}
 						</NoticeCard>
 					)}
+					{state.rules.length > 0 && state.daemon !== null && state.daemon.running !== true ? <DaemonOffBanner busy={daemonBusy} onTurnOn={() => onSetDaemon(true)} /> : null}
 					{broken ? (
 						<div className="flex flex-col items-center gap-8 px-16 py-32 text-center">
 							<strong className="text-body font-semibold text-ink">{t("automations.errors.config")}</strong>
@@ -1023,7 +1001,6 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				</div>
 				</div>
 			</div>
-			{state.rules.length === 0 && state.daemon === null ? null : <BackgroundLine state={state} busy={daemonBusy} onSetDaemon={onSetDaemon} />}
 		</section>
 	);
 }

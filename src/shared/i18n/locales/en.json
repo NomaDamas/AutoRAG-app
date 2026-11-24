@@ -554,6 +554,7 @@
     "daemon": {
       "on": "Running in the background",
       "off": "Off · rules are not running",
+      "offBanner": "Automations are off, so no rules run.",
       "unknown": "Cannot tell whether the background service is running",
       "turnOn": "Turn on",
       "turnOff": "Turn off",

@@ -161,7 +161,7 @@ async function english() {
 		const tones = await page.$$eval('[role="row"][data-rule-id] [data-run-tone]', (dots) => dots.map((dot) => dot.getAttribute("data-run-tone")));
 		check("status dots: ok, ok, fail", JSON.stringify(tones) === '["ok","ok","fail"]', JSON.stringify(tones));
 		const service = await text(page, "[data-daemon]");
-		check("the service line says rules are not running and counts them", service.includes("Off · rules are not running") && service.includes("Rules: 3") && service.includes("Turn on"), service);
+		check("the off banner says no rule runs and offers Turn on", service.includes("Automations are off, so no rules run.") && service.includes("Turn on"), service);
 		await page.screenshot({ path: join(EVIDENCE, "01-list-en.png") });
 
 		// 3. Selection, inspector, keys, Quick Look.

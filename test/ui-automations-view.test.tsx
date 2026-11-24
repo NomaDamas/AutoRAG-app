@@ -145,16 +145,6 @@ describe("AutomationsView list", () => {
 		render(props());
 		expect(rows().map((row) => text(row.querySelector("[data-rule-last-run]")))).toEqual(["3분 전 · 성공", "19시간 전 · 실패", "아직 실행되지 않음"]);
 	});
-
-	it("counts its rules in a wording that reads right for one and for many", async () => {
-		await setAppLanguage("en");
-		const footerText = (rules: readonly AutomationRule[]): string => {
-			render(props({ state: state(rules) }));
-			return host.querySelector("[data-daemon]")?.textContent ?? "";
-		};
-		expect(footerText([rule("a")])).toContain("Rules: 1");
-		expect(footerText([rule("a"), rule("b"), rule("c")])).toContain("Rules: 3");
-	});
 });
 
 describe("AutomationsView interaction", () => {
@@ -184,48 +174,40 @@ describe("AutomationsView interaction", () => {
 	});
 });
 
-describe("AutomationsView background service line", () => {
-	const bar = (): HTMLElement | null => host.querySelector("[data-daemon]");
+describe("AutomationsView background service banner", () => {
+	const banner = (): HTMLElement | null => host.querySelector("[data-daemon]");
 
-	it("says rules are running and counts them, and offers to turn the service off", () => {
-		const p = props();
-		render(p);
-		expect(text(bar())).toContain("백그라운드에서 실행 중");
-		expect(text(bar())).toContain("규칙 3개");
-		act(() => bar()?.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		expect(p.onSetDaemon).toHaveBeenCalledWith(false);
+	it("says nothing while the service runs", () => {
+		render(props());
+		expect(banner()).toBeNull();
 	});
 
-	it("says nothing runs when the service is off, and offers to turn it on", () => {
+	it("says no rule runs while the service is off, and turns it on from the banner", () => {
 		const p = props({ state: state([rule("a")], { daemon: { platform: "darwin", installed: false, running: false } }) });
 		render(p);
-		expect(text(bar())).toContain("꺼짐 · 규칙이 실행되지 않습니다");
-		expect(bar()?.querySelector("button")?.textContent).toBe("켜기");
-		act(() => bar()?.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(text(banner())).toContain("자동화가 꺼져 있어 규칙이 실행되지 않습니다.");
+		expect(banner()?.querySelector("button")?.textContent).toBe("켜기");
+		act(() => banner()?.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(p.onSetDaemon).toHaveBeenCalledWith(true);
 	});
 
-	it("turns a registered but stopped service on again instead of calling it off", () => {
+	it("treats a registered but stopped service as off", () => {
 		render(props({ state: state([rule("a")], { daemon: { platform: "darwin", installed: true, running: false } }) }));
-		expect(text(bar())).toContain("꺼짐");
+		expect(banner()).not.toBeNull();
 	});
 
-	it("disables the switch while it is being changed", () => {
-		render(props({ daemonBusy: true }));
-		const button = bar()?.querySelector("button");
+	it("disables 켜기 while the service is being changed", () => {
+		render(props({ daemonBusy: true, state: state([rule("a")], { daemon: { platform: "darwin", installed: false, running: false } }) }));
+		const button = banner()?.querySelector("button");
 		expect(button?.disabled).toBe(true);
 		expect(button?.textContent).toBe("처리 중…");
 	});
 
-	it("does not claim either state while the daemon is unknown", () => {
+	it("shows no banner while the service's state is unknown, or when there are no rules to run", () => {
 		render(props({ state: state([rule("a")], { daemon: null }) }));
-		expect(text(bar())).toContain("백그라운드 실행 상태를 확인할 수 없습니다");
-		expect(bar()?.querySelector("button")).toBeNull();
-	});
-
-	it("shows no service line at all for a user with no rules file, where there is nothing to run", () => {
-		render(props({ state: state([], { daemon: null }) }));
-		expect(bar()).toBeNull();
+		expect(banner()).toBeNull();
+		render(props({ state: state([], { daemon: { platform: "darwin", installed: false, running: false } }) }));
+		expect(banner()).toBeNull();
 		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
 	});
 });
