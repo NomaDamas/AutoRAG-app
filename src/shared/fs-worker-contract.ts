@@ -108,6 +108,8 @@ export interface FsWorkerConfig {
 	readonly userDataDir: string;
 	/** Playwright points the first tab here. Absent in normal runs. */
 	readonly qaRoot?: string;
+	/** Unpackaged dev fixture home (`make onboarding-skip-index`), scoping places and dupey scans to a small sandbox home. */
+	readonly homeDir?: string;
 	/** Windows known folders as Electron resolves them (OneDrive can redirect them). */
 	readonly knownFolders?: KnownFolders;
 }

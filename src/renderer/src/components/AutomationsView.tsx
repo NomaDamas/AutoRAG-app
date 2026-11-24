@@ -177,7 +177,7 @@ export function AutomationsView({
 	const broken = state.configError !== null;
 	const empty = state.ready && !broken && state.rules.length === 0;
 	return (
-		<section className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
+		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			<div
 				role="rowgroup"
 				data-columns
@@ -214,7 +214,7 @@ export function AutomationsView({
 					<div className="mx-auto flex max-w-[420px] flex-col items-center gap-8 px-16 py-32 text-center">
 						<strong className="text-body font-semibold text-ink">{t("automations.empty.title")}</strong>
 						<p className="m-0 text-meta leading-body text-ink-muted">{t("automations.empty.body")}</p>
-						<button type="button" className="linear-btn" onClick={onAdd}>
+						<button type="button" className="linear-btn" data-action="automation-add" onClick={onAdd}>
 							{t("automations.empty.add")}
 						</button>
 					</div>

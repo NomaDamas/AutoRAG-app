@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import type { AutoRAGAgentOptions, RetrievalOptions, SearchDocumentsResponse } from "@autorag/librarian";
-import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, ImageContent, Model } from "@earendil-works/pi-ai";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode } from "../shared/interaction-contract";
 import type { AgentInteraction } from "./agent-interaction";
@@ -95,6 +95,7 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 	readonly #sessionDir: string | undefined;
 	readonly #userRequests: UserRequestSink;
 	#runtime: Runtime | undefined;
+	#images: readonly ImageContent[] = [];
 	readonly #contextListeners = new Set<(event: ContextEvent) => void>();
 	/** Stops watching the bound session's context; a replaced session is watched afresh. */
 	#unwatchContext: (() => void) | undefined;
@@ -183,6 +184,7 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 			// In a conversation the librarian assumes its terminal hook already logged the question, and builds no
 			// prompt of its own for a follow-up, so both are done here before it runs.
 			await this.#deliverAttachments();
+			await this.#deliverImages();
 			this.#userRequests.record(text);
 		}
 		return super.searchDocuments(query, options);
@@ -197,6 +199,25 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 		const session = this.#runtime?.runtime.session;
 		if (context === "" || session === undefined || !session.messages.some((message) => message.role === "assistant")) return;
 		await session.sendCustomMessage({ customType: "dazzi.attachments", content: [{ type: "text", text: context }], display: false }, { triggerTurn: false });
+	}
+
+	/** The pictures of the next question (pasted or attached image files); [] clears them. */
+	setAttachmentImages(images: readonly ImageContent[]): void {
+		this.#images = images;
+	}
+
+	/**
+	 * The pictures go into the conversation as a message of their own, ahead of the question, for the first question as
+	 * well as a follow-up (the librarian's prompts are text). A model that takes no images never sees them: they are
+	 * left out, not replaced by a note.
+	 */
+	async #deliverImages(): Promise<void> {
+		const images = this.#images;
+		this.#images = [];
+		const session = this.#runtime?.runtime.session;
+		if (images.length === 0 || session === undefined || session.model?.input.includes("image") !== true) return;
+		const note = { type: "text" as const, text: "The user pasted or attached the image(s) below with their next message." };
+		await session.sendCustomMessage({ customType: "dazzi.images", content: [note, ...images], display: false }, { triggerTurn: false });
 	}
 
 	/** Calls `listener` once per run, when the run takes the local track (see {@link watchLocalTrack}); returns the stop function. */

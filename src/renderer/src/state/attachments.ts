@@ -194,6 +194,14 @@ function finderEntries(json: string): readonly ChatAttachment[] {
 	});
 }
 
+/** Image types the page draws as a picture. */
+const THUMBNAIL_FILE = /\.(?:png|jpe?g|gif|webp|bmp|avif)$/iu;
+
+/** Whether an attachment is an image file the composer and the conversation show as a picture. */
+export function isThumbnailAttachment(attachment: ChatAttachment): boolean {
+	return attachment.kind === "file" && THUMBNAIL_FILE.test(attachment.name);
+}
+
 /** Append `added` after `current`, keeping the first attachment for each path or URL. */
 export function mergeAttachments(
 	current: readonly ChatAttachment[],

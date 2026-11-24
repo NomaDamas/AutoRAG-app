@@ -62,9 +62,9 @@ export function SettingsPageHead({ title, description, note }: { readonly title:
 }
 
 /** A setting as the redesigned pages draw it (Figma 403:8746): a 14px medium name over a 12px line, the control at the right, 64px a row. */
-export function PlainRow({ name, hint, children }: { readonly name: string; readonly hint: string; readonly children: ReactNode }): ReactElement {
+export function PlainRow({ name, hint, anchor, children }: { readonly name: string; readonly hint: string; readonly anchor?: string; readonly children: ReactNode }): ReactElement {
 	return (
-		<div className="settings-plain-row">
+		<div className="settings-plain-row" data-settings-row={anchor}>
 			<div className="settings-plain-text">
 				<span className="settings-plain-name">{name}</span>
 				<small>{hint}</small>
@@ -92,9 +92,10 @@ export function PlainDivider(): ReactElement {
 	return <hr className="plain-section-divider" />;
 }
 
-export function Section({ title, description, children }: { readonly title?: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
+/** `anchor` names the section for coach marks (`data-settings-section`). */
+export function Section({ title, description, anchor, children }: { readonly title?: string; readonly description?: string; readonly anchor?: string; readonly children: ReactNode }): ReactElement {
 	return (
-		<section className="settings-section">
+		<section className="settings-section" data-settings-section={anchor}>
 			{title !== undefined ? <div className="linear-section-title">{title}</div> : null}
 			{description !== undefined ? <p className="linear-section-desc">{description}</p> : null}
 			{children}
@@ -102,9 +103,10 @@ export function Section({ title, description, children }: { readonly title?: str
 	);
 }
 
-export function Row({ name, hint, children, stack = false }: { readonly name: string; readonly hint?: string; readonly children?: ReactNode; readonly stack?: boolean }): ReactElement {
+/** `anchor` names the row for coach marks (`data-settings-row`). */
+export function Row({ name, hint, anchor, children, stack = false }: { readonly name: string; readonly hint?: string; readonly anchor?: string; readonly children?: ReactNode; readonly stack?: boolean }): ReactElement {
 	return (
-		<div className={`linear-row${stack ? " is-stack" : ""}`}>
+		<div className={`linear-row${stack ? " is-stack" : ""}`} data-settings-row={anchor}>
 			<div className="linear-row-label">
 				<span className="linear-row-name">{name}</span>
 				{hint === undefined ? null : <small>{hint}</small>}

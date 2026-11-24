@@ -185,7 +185,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	const searchLibrarian: LibrarianClient = createLibrarianClient(librarianDeps);
 	const places =
 		deps.places ??
-		createPlaces(process.platform === "win32" && config.knownFolders !== undefined ? { knownFolders: config.knownFolders } : {});
+		createPlaces({
+			...(config.homeDir === undefined ? {} : { homeDir: config.homeDir }),
+			...(process.platform === "win32" && config.knownFolders !== undefined ? { knownFolders: config.knownFolders } : {}),
+		});
 	// On macOS/Linux `fsearch-cli` needs nothing from `@autorag/librarian`, so running it straight in the worker avoids
 	// both the librarian cold-load at startup and any thread hop; Windows Everything stays on `librarian`.
 	const directFileNameSearch =
@@ -216,6 +219,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		fileNameSearch,
 		recents: createRecentsStore({ directory: join(config.userDataDir, "recents") }),
 		trashStore: createTrashStore({ directory: join(config.userDataDir, "trash") }),
+		...(config.homeDir === undefined ? {} : { homeDir: config.homeDir }),
 		...(config.qaRoot === undefined ? {} : { qaRoot: config.qaRoot }),
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;

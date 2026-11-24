@@ -375,7 +375,9 @@ describe("the inspector chat view", () => {
 			{ kind: "file", id: "/work/photo.jpg", name: "photo.jpg" },
 		]);
 		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("선택한 항목에 대해 묻기");
-		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(2);
+		// The PDF is a name card; the photo is shown as the picture itself.
+		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(1);
+		expect(host.querySelectorAll(".inspector-chat-composer [data-attachment-thumb]")).toHaveLength(1);
 		render([]);
 		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이어서 묻기");
 	});
@@ -592,6 +594,9 @@ describe("the inspector chat while a run streams", () => {
 			expect(host.querySelector('[role="dialog"]')?.textContent).toContain("어느 보고서를 요약할까요?");
 			const pick = [...host.querySelectorAll<HTMLElement>('[role="radio"]')].find((node) => node.textContent?.includes("4분기"));
 			act(() => pick?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			expect(answers).toEqual([]);
+			const send = [...host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((node) => node.textContent?.trim() === "보내기");
+			act(() => send?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			expect(answers).toEqual([["req-1", { kind: "question", answers: [{ kind: "selection", selections: ["4분기"] }] }]]);
 		} finally {
 			Reflect.deleteProperty(window, "autorag");
