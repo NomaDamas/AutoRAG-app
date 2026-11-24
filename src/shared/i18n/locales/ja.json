@@ -691,6 +691,7 @@
     "mine": "マイ自動化",
     "create": {
       "new": "+ 新しい自動化",
+      "headButton": "新しい自動化",
       "title": "新しい自動化",
       "when": "いつ",
       "task": "Dazziがすること",

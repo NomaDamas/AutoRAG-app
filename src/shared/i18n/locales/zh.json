@@ -691,6 +691,7 @@
     "mine": "我的自动化",
     "create": {
       "new": "+ 新建自动化",
+      "headButton": "新建自动化",
       "title": "新建自动化",
       "when": "何时",
       "task": "Dazzi 要做的事",

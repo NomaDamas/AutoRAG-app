@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, WarningIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon, WarningIcon, ZapIcon } from "./icons";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -849,6 +849,42 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 	}, [detail?.id, tab]);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
+			{/* The AI 에이전트 tab's head: the mark and the name on the left, the two places centred, + 새 자동화 on the right. */}
+			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab px-12 select-none" data-automations-head>
+				<span className="flex min-w-0 items-center gap-8">
+					<span className="grid flex-none place-items-center text-accent">
+						<ZapIcon size={14} />
+					</span>
+					<strong className="truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.automations")}</strong>
+				</span>
+				{detail === null && !broken && state.ready ? (
+					<Segmented
+						value={tab}
+						options={[
+							{ value: "mine", label: t("automations.tabs.rules") },
+							{ value: "all", label: t("automations.tabs.all") },
+						]}
+						onChange={setTab}
+					/>
+				) : (
+					<span />
+				)}
+				<span className="flex justify-end">
+					<button
+						type="button"
+						data-action="automation-composer-open"
+						className="inline-flex h-28 flex-none items-center gap-4 rounded-6 border-0 bg-transparent px-8 text-meta font-medium text-ink-muted cursor-pointer hover:bg-hover hover:text-ink"
+						onClick={() => {
+							if (detail !== null) onCancelEdit?.();
+							setTab("mine");
+							setComposerOpen(true);
+						}}
+					>
+						<TabPlusIcon size={14} />
+						{t("automations.create.headButton")}
+					</button>
+				</span>
+			</div>
 			<div
 				ref={scrollRef}
 				data-rules-body
@@ -859,7 +895,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-56">
+				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-28">
 				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
 						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
@@ -894,29 +930,6 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 						/>
 					) : (
 						<>
-							{/* Figma 641:13493: the page's name and + 새 자동화 on one line, the two places under it. */}
-							<div className="flex items-center gap-12">
-								<h1 className="m-0 min-w-0 flex-1 truncate text-[18px] font-medium leading-[22px] text-ink">{t("places.automations")}</h1>
-								<button
-									type="button"
-									data-action="automation-composer-open"
-									className="inline-flex h-32 flex-none items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer hover:opacity-80"
-									onClick={() => {
-										setTab("mine");
-										setComposerOpen(true);
-									}}
-								>
-									{t("automations.create.new")}
-								</button>
-							</div>
-							<Segmented
-								value={tab}
-								options={[
-									{ value: "mine", label: t("automations.tabs.rules") },
-									{ value: "all", label: t("automations.tabs.all") },
-								]}
-								onChange={setTab}
-							/>
 							{tab === "all" ? (
 								<AllRuns rules={state.rules} history={history} onOpen={open} />
 							) : (

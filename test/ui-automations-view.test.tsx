@@ -139,7 +139,7 @@ describe("AutomationsView list", () => {
 		await setAppLanguage("en");
 		render(props());
 		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations 3", "Suggested Automations"]);
-		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("+ New automation");
+		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation");
 		expect([...host.querySelectorAll('[data-automation-tabs] [role="tab"]')].map((tab) => tab.textContent)).toEqual(["Automations", "All runs"]);
 	});
 

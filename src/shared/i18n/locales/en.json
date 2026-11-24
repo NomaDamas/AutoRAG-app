@@ -691,6 +691,7 @@
     "mine": "My Automations",
     "create": {
       "new": "+ New automation",
+      "headButton": "New automation",
       "title": "New Automation",
       "when": "When",
       "task": "What Dazzi does",

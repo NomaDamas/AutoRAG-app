@@ -691,6 +691,7 @@
     "mine": "내 자동화",
     "create": {
       "new": "+ 새 자동화",
+      "headButton": "새 자동화",
       "title": "새 자동화",
       "when": "언제",
       "task": "Dazzi가 할 일",
