@@ -252,7 +252,21 @@ describe("AutomationsView empty and error states", () => {
 	it("shows a read failure beside the rules it kept", () => {
 		render(props({ state: state([rule("a")], { error: "자동화 상태를 확인하지 못했습니다: boom" }) }));
 		expect(rows()).toHaveLength(1);
+		// The reason stays behind 자세히 보기; the card says what happened and offers 다시 확인 and AI로 해결하기.
+		expect(text(host)).toContain("자동화 상태를 확인하지 못했습니다");
+		expect(text(host)).not.toContain("boom");
+		expect(text(host)).toContain("AI로 해결하기");
+		const details = [...host.querySelectorAll("button")].find((button) => button.textContent === "자세히 보기");
+		click(details);
 		expect(text(host)).toContain("자동화 상태를 확인하지 못했습니다: boom");
+	});
+
+	it("reads the status again from the failure card's 다시 확인", () => {
+		const onRetryStatus = vi.fn();
+		render(props({ state: state([rule("a")], { error: "자동화 상태를 확인하지 못했습니다: boom" }), onRetryStatus }));
+		const retry = [...host.querySelectorAll("button")].find((button) => button.textContent === "다시 확인");
+		click(retry);
+		expect(onRetryStatus).toHaveBeenCalledTimes(1);
 	});
 });
 

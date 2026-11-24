@@ -17,7 +17,10 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { startErrorFix } from "../hooks/useErrorFix";
+import { ErrorDetails } from "./ErrorDetails";
+import { NoticeCard } from "./primitives/NoticeCard";
 import { StatusDot } from "./primitives/StatusDot";
 import { Switch } from "./primitives/Switch";
 
@@ -886,14 +889,19 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-56">
 				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
-						<div role="alert" className="flex items-start gap-12 rounded-8 bg-error-orange-bg px-12 py-8 text-meta text-error-orange-text">
-							<p className="m-0 min-w-0 flex-1 [overflow-wrap:anywhere]">{state.error}</p>
-							{onRetryStatus === undefined ? null : (
-								<button type="button" data-action="retry-status" className="flex-none cursor-pointer border-0 bg-transparent p-0 font-medium text-[length:inherit] text-error-orange-text underline" onClick={onRetryStatus}>
-									{t("automations.errors.retry")}
-								</button>
-							)}
-						</div>
+						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
+						<NoticeCard
+							role="alert"
+							tone="error"
+							title={t("automations.errors.statusTitle")}
+							footer={<ErrorDetails message={state.error} className="mt-0" quiet />}
+							actions={[
+								{ label: t("appError.fixAction"), primary: true, icon: <SparklesIcon />, onClick: () => startErrorFix(state.error ?? "", onRetryStatus, "automations") },
+								...(onRetryStatus === undefined ? [] : [{ label: t("automations.errors.retry"), onClick: onRetryStatus }]),
+							]}
+						>
+							{t("automations.errors.statusHint")}
+						</NoticeCard>
 					)}
 					{broken ? (
 						<div className="flex flex-col items-center gap-8 px-16 py-32 text-center">

@@ -280,7 +280,10 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 
 export function errorFixPrompt(input: { readonly message: string; readonly surface: ErrorFixSurface; readonly language: ReplyLanguage }): string {
 	const message = input.message.length > MAX_MESSAGE_CHARS ? `${input.message.slice(0, MAX_MESSAGE_CHARS)}…` : input.message;
-	const where = input.surface === "ai-search" ? "AI Agent (the chat that answers questions from the person's own documents)" : input.surface;
+	const where =
+		input.surface === "ai-search"
+			? "AI Agent (the chat that answers questions from the person's own documents)"
+			: "the Automations tab (rules that run an AI task when files change; the app asks the librarian CLI for their status with `autorag automate status --json`, reads the rules file ~/.autorag/automations.json, and the background service logs to ~/.autorag/automations/daemon.log)";
 	return [
 		"You are the repair helper of Dazzi, a desktop app that searches a person's own documents and data sources with AI.",
 		`The person just saw this error in ${where}:`,

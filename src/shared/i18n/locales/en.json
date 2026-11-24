@@ -546,6 +546,8 @@
     },
     "errors": {
       "config": "The rules file cannot be read",
+      "statusTitle": "Couldn't check the automations",
+      "statusHint": "Check again in a moment, or let the AI agent find the cause and fix it.",
       "retry": "Check again",
         "configHint": "Fix the rule in AI Agent or edit the file by hand."
     },
