@@ -16,7 +16,7 @@ import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationRu
 import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, type RunTone } from "../state/automations";
+import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
 import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 import { Switch } from "./primitives/Switch";
@@ -553,8 +553,9 @@ function RuleRow({
 			}}
 		>
 			<RunDot tone={tone} />
-			<div role="gridcell" className="flex min-w-0 flex-1 flex-col">
+			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-px">
 				<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
+				<span className="truncate text-meta leading-[16px] text-ink-muted">{whenText(rule)}</span>
 			</div>
 			<span data-rule-last-run className={cn("flex-none text-meta leading-[16px]", tone === "fail" ? "text-error-orange-text" : "text-ink-muted")}>
 				{run === null ? t("automations.inspector.notRun") : `${relativeTime(run.startedAt)} · ${tone === "ok" ? t("automations.detail.ok") : t("automations.detail.failed")}`}
@@ -909,7 +910,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							<Segmented
 								value={tab}
 								options={[
-									{ value: "mine", label: t("automations.mine") },
+									{ value: "mine", label: t("automations.tabs.rules") },
 									{ value: "all", label: t("automations.tabs.all") },
 								]}
 								onChange={setTab}
@@ -961,7 +962,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 											<button
 												type="button"
 												data-action="automation-composer-open"
-												className="relative flex w-full items-center gap-8 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-left text-[13px] text-ink-muted cursor-pointer hover:text-ink"
+												className="relative flex w-full items-center gap-8 rounded-12 border border-accent bg-window px-14 py-12 text-left text-[13px] font-medium text-accent-text cursor-pointer hover:opacity-80"
 												onClick={() => setComposerOpen(true)}
 											>
 												<TabPlusIcon size={16} />
