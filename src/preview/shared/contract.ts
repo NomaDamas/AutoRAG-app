@@ -25,6 +25,8 @@ export const PREVIEW_CHANNELS = {
 	closed: "preview:closed",
 	/** Main -> Finder: move the Finder selection (arrow keys pressed in the preview). */
 	navigate: "preview:navigate",
+	/** Main -> Finder: Quick Look's edit (pen) button was pressed; close Quick Look and open this file in an editor tab. */
+	openEdit: "preview:open-edit",
 	/** Main -> preview window: render this file. */
 	load: "preview:load",
 	/** Main -> preview window: drop the content so media stops. */
@@ -409,7 +411,7 @@ export type CertificatePreview =
 	| { readonly kind: "container"; readonly container: "pkcs12" | "keychain"; readonly recognized: boolean }
 	| { readonly kind: "unreadable"; readonly reason: "empty" | "notCertificate" };
 
-export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal";
+export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal" | "edit";
 
 export type NavigateDelta = 1 | -1;
 
@@ -436,6 +438,7 @@ export interface PreviewBridge {
 	prefetch(file: PreviewPrefetch): void;
 	onClosed(listener: () => void): () => void;
 	onNavigate(listener: (delta: NavigateDelta) => void): () => void;
+	onOpenEdit(listener: (path: string) => void): () => void;
 }
 
 /** Exposed to the Quick Look window as `window.quickLook`. */
@@ -677,7 +680,7 @@ export function isQuickLookReady(value: unknown): value is QuickLookReady {
 }
 
 export function isQuickLookAction(value: unknown): value is QuickLookAction {
-	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen" || value === "reveal";
+	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen" || value === "reveal" || value === "edit";
 }
 
 export function isNavigateDelta(value: unknown): value is NavigateDelta {

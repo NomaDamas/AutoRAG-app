@@ -1,4 +1,5 @@
 import { realpath } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, extname, isAbsolute, join, resolve } from "node:path";
 import {
 	createBashToolDefinition,
@@ -14,6 +15,7 @@ import type { AgentProfile } from "@autorag/librarian/profiles";
 import { describeMarks, type DocumentEditMode, type DocumentEditRequest } from "../../../preview/shared/annotation";
 import { isSecretKey } from "../../autorag-config-service";
 import { CREDENTIAL_NAME, inside, normalizeFencePath } from "../path-fence";
+import { createWriteGate, type WriteGate, type WriteJudge } from "../write-gate";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 
 const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
@@ -34,6 +36,8 @@ export interface DocumentEditProfileInput {
 	readonly env: NodeJS.ProcessEnv;
 	readonly platform?: NodeJS.Platform;
 	readonly cancelled?: () => boolean;
+	readonly homeDir?: string;
+	readonly writeJudge?: WriteJudge;
 }
 
 /**
@@ -113,14 +117,32 @@ function documentEditTools(input: DocumentEditProfileInput): readonly ToolDefini
 		const bash = createBashToolDefinition(cwd, {
 			spawnHook: (context) => ({ ...context, env: Object.fromEntries(Object.entries({ ...context.env, ...input.env }).filter(([key]) => !isSecretKey(key))) }),
 		});
+		let gatePromise: Promise<WriteGate> | undefined;
+		const getGate = () => {
+			gatePromise ??= Promise.all([targetReal, scratchReal]).then(([resolvedTarget, resolvedScratch]) =>
+				createWriteGate({
+					cwd,
+					homeDir: input.homeDir ?? homedir(),
+					managedPaths: [...new Set([target, resolvedTarget, scratch, resolvedScratch])],
+					allowEnvVars: false,
+					judge: input.writeJudge,
+				}),
+			);
+			return gatePromise;
+		};
 		tools.push(
 			guarded(bash, async (params) => {
-				const command = normalizeFencePath(typeof params.command === "string" ? params.command : "", platform);
+				const rawCommand = typeof params.command === "string" ? params.command : "";
+				const command = normalizeFencePath(rawCommand, platform);
 				const agentPaths = [await agentDirReal, agentDir].map((path) => normalizeFencePath(path, platform));
 				const skillPaths = [await skillsDirReal, skillsDir].map((path) => normalizeFencePath(path, platform));
 				const withoutSkills = skillPaths.reduce((text, path) => text.split(path).join(""), command);
 				if (/\b(?:auth|models|mcp|mcp-auth)\.json\b/u.test(command) || agentPaths.some((path) => withoutSkills.includes(path))) {
 					throw new Error("Refused: Dazzi's internal sign-in and credential files are off limits.");
+				}
+				const verdict = await (await getGate()).check({ command: rawCommand });
+				if (!verdict.allowed) {
+					throw new Error(verdict.reason ?? `Refused: only ${target} may be changed.`);
 				}
 			}) as unknown as ToolDefinition,
 		);
@@ -142,8 +164,8 @@ function systemPrompt(input: DocumentEditProfileInput): string {
 					"- Prefer tools already on the machine (unzip/zip, python3). Do not install anything.",
 				];
 	return [
-		"You are Dazzi's document editor. The person looked at one document in Dazzi's Quick Look preview, drew marks on it (pen strokes, boxes, underlines), and wrote what should change.",
-		`Always write your final reply in ${LANGUAGE_NAME[input.language]}.`,
+		"You are Dazzi's document editor. The person opened one document in Dazzi's editor, optionally drew marks on it (pen strokes, boxes, underlines) or selected text, and wrote what should change.",
+		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${LANGUAGE_NAME[input.language]}.`,
 		"",
 		"## Rules",
 		`- The document is ${input.path}. It is the only file you may change; edit it in place. Never create, rename, move or delete other files outside the scratch folder ${input.scratchDir}.`,

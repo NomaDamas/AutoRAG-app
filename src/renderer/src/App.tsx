@@ -14,6 +14,8 @@ import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
+import { DocumentEditorAiSidebar } from "./components/DocumentEditorAiSidebar";
+import { DocumentEditorSidebarProvider } from "./components/DocumentEditorSidebarContext";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
@@ -64,7 +66,7 @@ import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
-import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
+import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { windowColumns } from "./state/window-layout";
 import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
@@ -656,14 +658,20 @@ export function App(): ReactElement {
 	}, [prefetchPath, prefetchMtime, prefetchSize]);
 
 	const moveSelectionBy = finder?.moveSelectionBy;
+	const openDocumentEditor = finder?.openDocumentEditor;
 	useEffect(() => {
 		const offClosed = autorag.preview.onClosed(() => setPreview(null));
 		const offNavigate = autorag.preview.onNavigate((delta) => moveSelectionBy?.(delta));
+		const offOpenEdit = autorag.preview.onOpenEdit?.((filePath) => {
+			setPreview(null);
+			openDocumentEditor?.(filePath);
+		});
 		return () => {
 			offClosed();
 			offNavigate();
+			offOpenEdit?.();
 		};
-	}, [moveSelectionBy]);
+	}, [moveSelectionBy, openDocumentEditor]);
 
 	useEffect(() => {
 		const applySettings = (settings: AppSettings): void => {
@@ -868,6 +876,7 @@ export function App(): ReactElement {
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
 	});
+	const editedDocPath = editorFilePathOf(path);
 	const toolbarTitle =
 		path === SETTINGS_PATH
 			? t("settings.title")
@@ -875,12 +884,13 @@ export function App(): ReactElement {
 				? t("places.automations")
 				: aiTabActive
 					? t("places.aiSearch")
-					: finder?.searching === true
-						? t("finderComponents.searchToolbarTitle")
-						: finder?.inTrashLocation === true
-							? t("places.trash")
-							: isTagPath(path) ? tagNameOf(path) : basename(path);
-
+					: editedDocPath !== null
+						? basename(editedDocPath)
+						: finder?.searching === true
+							? t("finderComponents.searchToolbarTitle")
+							: finder?.inTrashLocation === true
+								? t("places.trash")
+								: isTagPath(path) ? tagNameOf(path) : basename(path);
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
 		hovered: aiNavDropHover,
@@ -915,6 +925,7 @@ export function App(): ReactElement {
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
 		<SettingsAssistantContext value={settingsAssistant}>
+		<DocumentEditorSidebarProvider onOpenRightSidebar={() => setInspectorVisible(true)}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
@@ -1077,7 +1088,7 @@ export function App(): ReactElement {
 						/>
 					</div>
 				</div>
-				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null ? "window" : "subtle"}>
+				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null || editedDocPath !== null ? "window" : "subtle"}>
 						{settingsAssistantDock !== null ? (
 							<SettingsAssistantSlot dock={settingsAssistantDock} />
 						) : settingsOpen ? (
@@ -1085,6 +1096,8 @@ export function App(): ReactElement {
 							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
+						) : editedDocPath !== null ? (
+							<DocumentEditorAiSidebar filePath={editedDocPath} />
 						) : (
 							<Inspector
 								entry={inspectorEntry}
@@ -1319,6 +1332,7 @@ export function App(): ReactElement {
 			/>
 		) : null}
 		<Tutorials enabled={tutorialsAllowed && !firstRun} triggers={tutorialTriggers} onEffect={runTutorialEffect} />
+		</DocumentEditorSidebarProvider>
 		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>

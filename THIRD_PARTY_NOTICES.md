@@ -250,3 +250,9 @@ as a separate program it starts with command-line arguments.
 | Ovis remote pairing, device registry, and AccessGate patterns (`src/main/remote/{private-state,devices,auth,gate}.ts`) | MIT | devswha — https://github.com/devswha/ovis |
 | Project Nayuki QR Code generator (Level M byte-mode port in `src/renderer/src/components/settings/QrCode.tsx`) | MIT | Copyright (c) Project Nayuki — https://github.com/nayuki/QR-Code-generator |
 | Tutorial practice photo (`src/main/demo-assets/reference-photo.jpg`, downscaled) | Public domain | NASA, "Buzz Aldrin and the U.S. flag, Apollo 11" (AS11-40-5875) — https://images.nasa.gov/details/as11-40-5875 |
+
+## Document editor
+
+| Component | License | Source |
+|---|---|---|
+| Tiptap (`@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/markdown`, `@tiptap/extension-table`, `@tiptap/extension-task-list`, `@tiptap/extension-task-item`, `@tiptap/extension-placeholder`) | MIT | Tiptap GmbH — https://github.com/ueberdosis/tiptap |

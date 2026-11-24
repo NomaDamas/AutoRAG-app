@@ -8,6 +8,7 @@ import { revealTarget, type ScrollRequest } from "./list-reveal";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type CompressFormat, type OpenWithApplication } from "../../../shared/actions-contract";
 import type { QuickLookTarget } from "../../../preview/shared/contract";
+import { documentEditorSurface } from "../../../shared/document-editor-contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -100,6 +101,7 @@ import {
 	exitVirtualTab,
 	goBack,
 	goForward,
+	isDocumentEditorTabPath,
 	isVirtualTabPath,
 	navigateTab,
 	openAiSearchTab,
@@ -122,6 +124,7 @@ import {
 	focusTab,
 	focusAiSearchInWorkspace,
 	openOrSelectAutomationsInWorkspace,
+	openOrSelectDocumentEditorInWorkspace,
 	openOrSelectFolderInWorkspace,
 	openOrSelectSettingsInWorkspace,
 	reopenClosedTab as reopenClosedWorkspaceTab,
@@ -360,6 +363,8 @@ export interface FinderController {
 	focusAiSearch(): void;
 	/** `dazzi <folder>`: focus the tab already showing the folder, else open a new tab on it. */
 	openFolder(path: string): void;
+	/** Open an editable file inside Dazzi's Document Editor tab (Option/Alt+click or Quick Look edit handoff). */
+	openDocumentEditor(path: string): void;
 	/** A filename search from a Settings / AI Search tab returns that tab to its folder. */
 	leaveVirtualTab(): void;
 	back(): void;
@@ -2328,6 +2333,7 @@ export function useFinderController(
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
+					documentEditor: isDocumentEditorTabPath(current.path),
 				};
 			}),
 		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.
@@ -2407,11 +2413,24 @@ export function useFinderController(
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
 	const openFolder = useLatestCallback((path: string) => updateWorkspace((workspace) => openOrSelectFolderInWorkspace(workspace, path)));
+	const openDocumentEditor = useLatestCallback((filePath: string) => {
+		const ext = fileExtension(filePath);
+		if (documentEditorSurface(ext) === null) {
+			showToast(t("documentEditor.unsupportedFile", { name: basename(filePath) }));
+			return;
+		}
+		updateWorkspace((workspace) => openOrSelectDocumentEditorInWorkspace(workspace, filePath));
+	});
 	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
 	const sortBy = useLatestCallback((key: SortKey) => setTabsState((state) => setActiveTabSort(state, cycleSort(activeTab(state).sort, key))));
 	const focusFinder = useLatestCallback(() => setZone("finder"));
 	const clickRow = useLatestCallback((entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 		setZone("finder");
+		if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && entry.kind === "file") {
+			event.preventDefault();
+			openDocumentEditor(entry.path);
+			return;
+		}
 		patchSelection(
 			applyRowClick(selection, entry.path, orderedKeys, {
 				meta: event.metaKey || event.ctrlKey,
@@ -2421,6 +2440,11 @@ export function useFinderController(
 	});
 	const clickColumnRow = useLatestCallback((pane: number, entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 		setZone("finder");
+		if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && entry.kind === "file") {
+			event.preventDefault();
+			openDocumentEditor(entry.path);
+			return;
+		}
 		if (event.metaKey || event.ctrlKey || event.shiftKey) {
 			// Multi-select stays inside one pane and closes the panes after it.
 			const paneKeys = (paneEntries[pane] ?? []).map((candidate) => candidate.path);
@@ -2541,6 +2565,7 @@ export function useFinderController(
 		openAiSearch,
 		focusAiSearch,
 		openFolder,
+		openDocumentEditor,
 		leaveVirtualTab,
 		back,
 		forward,

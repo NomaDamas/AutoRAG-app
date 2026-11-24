@@ -148,6 +148,52 @@ describe("document-edit service", () => {
 		expect(results.join("\n")).toContain("Refused");
 	});
 
+	it("fences package-mode bash writes strictly to the target file and scratchDir", async () => {
+		const registration = register();
+		const docxPath = join(docsDir, "budget.docx");
+		const other = join(docsDir, "other.txt");
+		await writeFile(docxPath, "dummy-docx-bytes");
+		await writeFile(other, "untouched\n", "utf8");
+		const results: string[] = [];
+		registration.setResponses([
+			fauxAssistantMessage([
+				fauxToolCall("bash", { i: "다른 파일 덮어쓰기 시도", command: `echo hacked > "${other}"` }),
+				fauxToolCall("bash", { i: "다른 파일 삭제 시도", command: `rm -f "${other}"` }),
+			]),
+			(ctx) => {
+				for (const message of ctx.messages) if (message.role === "toolResult") results.push(JSON.stringify(message.content));
+				return fauxAssistantMessage("거부됨");
+			},
+		]);
+		await service(registration).start("run-pkg-fence", request(docxPath, "수정해줘"), io());
+		expect(await readFile(other, "utf8")).toBe("untouched\n");
+		expect(results.join("\n")).toMatch(/Refused|unavailable/i);
+	});
+
+	it("allows package-mode bash writes inside scratchDir and target when writeJudge approves", async () => {
+		const registration = register();
+		const docxPath = join(docsDir, "budget.docx");
+		await writeFile(docxPath, "before-bytes");
+		const svc = createDocumentEditService({
+			resolveModel: async () => ({ model: registration.getModel() }),
+			agentDir,
+			env: { ...process.env },
+			language: () => "ko",
+			backupDir,
+			writeJudge: async (_state, questions) => ({
+				verdicts: questions.map((q) => ({ id: q.id ?? "", type: "noul", answer: 0.01, confidence: 0.99, escalate: false }) as never),
+			}),
+		});
+		cleanups.push(() => svc.dispose());
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("bash", { i: "임시 파일 생성 후 대상 교체", command: `printf 'after-bytes' > out.bin && cp out.bin "${docxPath}"` })),
+			fauxAssistantMessage("완료"),
+		]);
+		const outcome = await svc.start("run-pkg-ok", request(docxPath, "업데이트"), io());
+		expect(outcome.changed).toBe(true);
+		expect(await readFile(docxPath, "utf8")).toBe("after-bytes");
+	});
+
 	it("undoes an edit by putting the original bytes back, once", async () => {
 		const registration = register();
 		const notePath = join(docsDir, "a.md");

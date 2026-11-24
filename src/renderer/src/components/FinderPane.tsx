@@ -14,11 +14,12 @@ import { batchToast } from "../state/format";
 import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn, type ListColumnKey, type ListColumnsState } from "../state/list-columns";
 import { basename, breadcrumbTrail } from "../state/paths";
 import { requestSettingsCategory } from "../state/settings-navigation";
-import { AI_SEARCH_PATH, AUTOMATIONS_PATH, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
+import { AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
 import { searchGroups, type SearchGroupKey } from "../state/whole-search";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
 import { AutomationsTab } from "./AutomationsTab";
 import { ColumnBrowser } from "./ColumnBrowser";
+import { DocumentEditorTab } from "./DocumentEditorTab";
 import { ColumnHeader } from "./ColumnHeader";
 import { FileList } from "./FileList";
 import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
@@ -382,6 +383,13 @@ export const FinderPane = memo(function FinderPane({
 				) : finder.path === AI_SEARCH_PATH ? (
 					// The tab's chat is mounted by the workspace over this body, so it survives moving panes.
 					<div className="min-h-0 flex-1 bg-subtle-alt" />
+				) : editorFilePathOf(finder.path) !== null ? (
+					<DocumentEditorTab
+						key={finder.path}
+						filePath={editorFilePathOf(finder.path)!}
+						onOpenExternal={(targetPath) => void shell.source.open(targetPath)}
+						onOpenEditorFile={finder.openDocumentEditor}
+					/>
 				) : (
 					<>
 						{/* Figma 428:1845: the group tabs sit right on the results; no scope row, no ask button. */}
