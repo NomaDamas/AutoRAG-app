@@ -44,6 +44,49 @@ describe("scrubText", () => {
 	it("cuts long text so echoed document content cannot ride along", () => {
 		expect(scrubText("x".repeat(5000)).length).toBeLessThan(600);
 	});
+
+	describe("names the first pass missed (ELECTRON-16, ELECTRON-17)", () => {
+		it("removes the whole of a bare path whose folders and file name hold spaces", () => {
+			const scrubbed = scrubText("scan failed on /Users/kim/Library/CloudStorage/Box-Acme Corp/Team Folder/Q3 보고서 김철수.pptx and /Users/kim/Library/CloudStorage/Box-Acme Corp/Team Folder/Other Deck.pptx");
+			expect(scrubbed).not.toMatch(/Acme|Team|Folder|보고서|김철수|Other|Deck|kim/u);
+			expect(scrubbed).toBe("scan failed on <path>.pptx and <path>.pptx");
+		});
+
+		it("removes a Windows path with spaces and keeps the text after it", () => {
+			const scrubbed = scrubText("open C:\\Users\\kim\\OneDrive - Acme Corp\\Team Folder\\Budget 2026 김철수.xlsx: access denied");
+			expect(scrubbed).toBe("open <path>.xlsx: access denied");
+		});
+
+		it("keeps two paths apart when only a space separates them", () => {
+			expect(scrubText("copy /a/one.txt /b/two.md failed")).toBe("copy <path>.txt <path>.md failed");
+		});
+
+		it("removes a failed command's arguments and keeps the program name and its switches", () => {
+			const scrubbed = scrubText("Command failed: /usr/bin/stat -f %f /Users/kim/Box-Acme Corp/Deck 김철수.pptx /Users/kim/Box-Acme Corp/Other.pptx\nstat: /Users/kim/Box-Acme Corp/Deck 김철수.pptx: stat: No such file or directory");
+			expect(scrubbed).not.toMatch(/Acme|Deck|김철수|Other|kim/u);
+			expect(scrubbed).toMatch(/^Command failed: stat -f %f <args>\n/u);
+		});
+
+		it("removes a relative path= field of a tool log line, with spaces and non-ASCII names", () => {
+			const scrubbed = scrubText("WARN minsync::manifest: scan error: entry skipped path=files/Documents/Q3 보고서 김철수.xlsx.md kind=SizeGuard error=file is 92994918 bytes, over max_file_bytes (67108864)");
+			expect(scrubbed).not.toMatch(/Documents|보고서|김철수|files\//u);
+			expect(scrubbed).toContain("path=<path>.md kind=SizeGuard error=file is 92994918 bytes");
+		});
+
+		it("keeps a refresh failure free of file names end to end", () => {
+			const report = refreshFailureReport({
+				ok: false,
+				methods: ["parsed", "minsync"],
+				scanned: 0,
+				written: 0,
+				deleted: 0,
+				skipped: 0,
+				diagnostics: [],
+				error: "minsync: sync-failed; 2026-11-06T01:50:16.562438Z  WARN minsync::manifest: scan error: entry skipped, existing chunks kept path=files/Downloads/Salary Table 박영희.csv.md kind=SizeGuard error=file is 92994918 bytes, over max_file_bytes (67108864)",
+			});
+			expect(JSON.stringify(report)).not.toMatch(/Downloads|Salary|Table|박영희/u);
+		});
+	});
 });
 
 describe("scrubEvent", () => {
