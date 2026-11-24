@@ -1028,7 +1028,7 @@ app.whenReady().then(async () => {
 		return toolPins.librarian.version;
 	};
 	const toolVersions = createToolVersionsService({
-		appVersion: APP_VERSION,
+		appVersion: app.isPackaged ? app.getVersion() : APP_VERSION,
 		librarianVersion: readLibrarianVersion(),
 		resourcesPath: process.resourcesPath,
 		env: process.env,
