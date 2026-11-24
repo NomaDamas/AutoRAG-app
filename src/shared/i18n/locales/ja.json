@@ -113,6 +113,7 @@
     "new": "新規タブ ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "「{{name}}」が元のフォルダに見つかりません。移動または削除された可能性があります。",
     "emptyFolder": "空のフォルダー",
     "emptyRecents": "最近開いたファイルはありません",
     "emptyTag": "「{{name}}」タグの付いた項目はありません",

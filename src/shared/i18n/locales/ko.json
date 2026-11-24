@@ -113,6 +113,7 @@
     "new": "새 탭 ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "‘{{name}}’ 파일을 원래 폴더에서 찾을 수 없습니다. 옮겨졌거나 삭제되었을 수 있습니다.",
     "emptyFolder": "빈 폴더",
     "emptyRecents": "최근에 연 파일이 없습니다",
     "emptyTag": "\"{{name}}\" 태그가 붙은 항목이 없습니다",

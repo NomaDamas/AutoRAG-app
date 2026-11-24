@@ -113,6 +113,7 @@
     "new": "新建标签页 ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "在原文件夹中找不到“{{name}}”。它可能已被移动或删除。",
     "emptyFolder": "空文件夹",
     "emptyRecents": "最近没有打开的文件",
     "emptyTag": "没有带有“{{name}}”标签的项目",

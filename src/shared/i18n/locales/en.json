@@ -113,6 +113,7 @@
     "new": "New tab ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "Couldn’t find ‘{{name}}’ in its folder. It may have been moved or deleted.",
     "emptyFolder": "Empty folder",
     "emptyRecents": "No recently opened files",
     "emptyTag": "No items tagged \"{{name}}\"",

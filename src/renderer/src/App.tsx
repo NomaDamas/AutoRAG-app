@@ -487,6 +487,7 @@ export function App(): ReactElement {
 			// ⌘K: the controller adopts the nearest AI Search tab (or opens one); focus its composer.
 			onFocusComposer: () => deliverToAi({}),
 			onToast: setToast,
+			onErrorToast: showErrorToast,
 			deliverToAi,
 			setListColumns,
 			beginTabDrag: (tabId, event) => {
