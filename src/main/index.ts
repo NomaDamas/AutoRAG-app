@@ -132,6 +132,7 @@ import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { createDocumentEditService } from "./document-edit-service";
+import { createPdfEditorIo } from "./pdf-editor-io";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
@@ -1139,7 +1140,8 @@ app.whenReady().then(async () => {
 		backupDir: join(app.getPath("userData"), "document-edit-backups"),
 	});
 	setQuickLookDocumentEdit(documentEditService);
-	registerDocumentEditorIpcHandlers(documentEditService, (event) => sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.aiEvent, event));
+	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
+	registerDocumentEditorIpcHandlers(documentEditService, pdfEditorIo, (event) => sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.aiEvent, event));
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;
 	const getDeviceId = (): Promise<string> => {
@@ -1411,7 +1413,7 @@ app.whenReady().then(async () => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
 		void runQuitCleanup({
-			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose(), documentEditService.dispose()],
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose(), documentEditService.dispose(), pdfEditorIo.dispose()],
 			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
 			onExit: () => app.exit(0),
 		});

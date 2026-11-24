@@ -2,6 +2,7 @@ import { rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { decodeText, lineEnding } from "../preview/shared/code";
+import type { PdfEditorIo } from "./pdf-editor-io";
 import { PREVIEW_BYTE_CAP, readPreviewFile, TEXT_BYTE_CAP } from "../preview/node/read-file";
 import {
 	documentEditorSurface,
@@ -33,12 +34,16 @@ function assertAbsolutePath(filePath: string): void {
  * Text files decode into UTF-8/normalized `\n` strings with encoding/line-ending metadata;
  * package documents (Office, HWP/HWPX, OpenDocument) load their PreviewDocument payload.
  */
-export async function openDocumentForEditor(filePath: string): Promise<DocumentEditorLoad> {
+export async function openDocumentForEditor(filePath: string, pdfIo?: PdfEditorIo): Promise<DocumentEditorLoad> {
 	assertAbsolutePath(filePath);
 	const ext = extname(filePath).slice(1).toLowerCase();
 	const surface = documentEditorSurface(ext);
 	if (surface === null) {
 		throw new Error(`Dazzi cannot edit ${ext ? `.${ext}` : "this kind of"} files.`);
+	}
+	if (surface === "pdf") {
+		if (pdfIo === undefined) throw new Error("PDF editor service is not available.");
+		return pdfIo.open(filePath);
 	}
 	const info = await stat(filePath);
 	if (!info.isFile()) {

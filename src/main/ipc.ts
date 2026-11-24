@@ -52,11 +52,14 @@ import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
 import type { DocumentEditService } from "./document-edit-service";
 import { openDocumentForEditor, saveDocumentText } from "./document-editor-io";
+import type { PdfEditorIo } from "./pdf-editor-io";
 import { isDocumentEditRequest, type DocumentEditEvent } from "../preview/shared/annotation";
 import {
 	DOCUMENT_EDITOR_CHANNELS,
 	isDocumentEditorAiCapture,
 	isDocumentEditorSaveRequest,
+	isPdfApplyRequest,
+	isPdfExtractRequest,
 } from "../shared/document-editor-contract";
 
 /**
@@ -530,18 +533,31 @@ export function registerToolVersionsIpcHandlers(service: ToolVersionsService): v
 /** The widest screenshot of an editor tab handed to the AI document-edit model. */
 const EDITOR_SCREENSHOT_WIDTH = 1600;
 
-/** Document Editor tab: open/save editable files, and run/cancel/undo the AI document-edit agent. */
+/** Document Editor tab: open/save editable files, edit PDFs via pdf-lib, and run/cancel/undo the AI document-edit agent. */
 export function registerDocumentEditorIpcHandlers(
 	service: DocumentEditService,
+	pdfIo: PdfEditorIo,
 	sendEvent: (event: DocumentEditEvent) => void,
 ): void {
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.open, (_event, filePath: unknown) => {
 		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
-		return openDocumentForEditor(filePath);
+		return openDocumentForEditor(filePath, pdfIo);
 	});
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.save, (_event, request: unknown) => {
 		if (!isDocumentEditorSaveRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
 		return saveDocumentText(request);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfApply, (_event, request: unknown) => {
+		if (!isPdfApplyRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
+		return pdfIo.apply(request);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfExtract, (_event, request: unknown) => {
+		if (!isPdfExtractRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
+		return pdfIo.extract(request);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfRestore, (_event, snapshotId: unknown) => {
+		if (typeof snapshotId !== "string" || snapshotId === "") return { ok: false };
+		return pdfIo.restore(snapshotId);
 	});
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiStart, async (event, runId: unknown, request: unknown, capture: unknown) => {
 		if (typeof runId !== "string" || runId === "" || !isDocumentEditRequest(request)) {

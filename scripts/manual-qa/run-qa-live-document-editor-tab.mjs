@@ -21,6 +21,7 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { PDFDocument, rgb } from "pdf-lib";
 import { request as httpsRequest } from "node:https";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -98,6 +99,17 @@ if (isMac) {
 	execFileSync("textutil", ["-inputencoding", "UTF-8", "-convert", "docx", "-output", BUDGET, html]);
 }
 const docxText = (path) => execFileSync("textutil", ["-convert", "txt", "-stdout", path], { encoding: "utf8" });
+
+const CONTRACT = join(DOCS_DIR, "contract.pdf");
+{
+	const pdf = await PDFDocument.create();
+	for (const idx of [0, 1, 2]) {
+		const page = pdf.addPage([595, 842]);
+		page.drawRectangle({ x: 48, y: 720, width: 220, height: 32, color: rgb(0.15 + idx * 0.2, 0.35, 0.7) });
+		page.drawRectangle({ x: 48, y: 660, width: 320, height: 14, color: rgb(0.85, 0.87, 0.9) });
+	}
+	writeFileSync(CONTRACT, await pdf.save());
+}
 
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
@@ -249,31 +261,32 @@ try {
 	await main.locator('[data-save-state="saved"]').waitFor({ timeout: 8_000 });
 	await shotMain("03-wysiwyg-autosaved");
 
-	// 3. Real LLM AI edit inside Document Editor tab + Undo AI edit.
+	// 3. Real LLM AI edit via the RIGHT SIDEBAR chat + Undo AI edit.
 	const beforeAi = readFileSync(PLAN, "utf8");
-	const aiInput = mdEditor.locator('.doc-editor__ai input[type="text"]');
+	const sidebar = main.locator("[data-document-editor-sidebar]");
+	await sidebar.waitFor({ timeout: 10_000 });
+	const aiInput = sidebar.locator("textarea");
 	await aiInput.click();
 	await main.keyboard.type("출시일을 2026년 11월 25일로 바꿔줘");
 	await main.keyboard.press("Enter");
-	await mdEditor.locator('[data-edit-state="running"]').waitFor({ timeout: 10_000 });
-	await mdEditor.locator('[data-edit-state="changed"], [data-edit-state="unchanged"], [data-edit-state="error"]').waitFor({ timeout: 300_000 });
+	await sidebar.locator('[data-edit-state="running"]').waitFor({ timeout: 10_000 });
+	await sidebar.locator('[data-edit-state="changed"], [data-edit-state="unchanged"], [data-edit-state="error"]').waitFor({ timeout: 300_000 });
 	const planAfterAi = readFileSync(PLAN, "utf8");
 	console.log(`plan.md after AI edit:\n${planAfterAi}`);
 	check(
-		"AI edited plan.md on disk and preserved manual edit",
+		"Right-sidebar AI edited plan.md on disk and preserved manual edit",
 		planAfterAi.includes("11월 25일") && !planAfterAi.includes("11월 15일") && planAfterAi.includes("검토자: 이영희"),
 		planAfterAi,
 	);
 	const editorReloaded = await poll(() => prose.innerText(), (txt) => txt.includes("11월 25일"), 10_000);
-	check("WYSIWYG editor reloaded updated text after AI edit", editorReloaded.includes("11월 25일"));
+	check("WYSIWYG editor reloaded updated text after right-sidebar AI edit", editorReloaded.includes("11월 25일"));
 	await shotMain("04-wysiwyg-ai-edited");
 
-	await mdEditor.locator("button", { hasText: "AI 편집 되돌리기" }).click();
-	await mdEditor.locator('[data-edit-state="undone"]').waitFor({ timeout: 15_000 });
+	await sidebar.locator("button", { hasText: "AI 편집 되돌리기" }).click();
+	await sidebar.locator('[data-edit-state="undone"]').waitFor({ timeout: 15_000 });
 	const planUndone = readFileSync(PLAN, "utf8");
-	check("Undo AI edit restored pre-AI bytes", planUndone === beforeAi, planUndone);
+	check("Undo AI edit in right sidebar restored pre-AI bytes", planUndone === beforeAi, planUndone);
 	await shotMain("05-wysiwyg-ai-undone");
-
 	// 4. Switch back to the folder tab and Option/Alt+click notes.ts -> opens code editor tab.
 	await main.locator(".tabs .tab").first().click();
 	await rowFor("notes.ts").waitFor({ timeout: 15_000 });
@@ -290,7 +303,7 @@ try {
 	check("Code editor Cmd/Ctrl+S saved notes.ts to disk", notesSaved.includes("version = 2"), notesSaved);
 	await shotMain("06-code-editor-saved");
 
-	// 5. Option/Alt+click budget.docx (macOS) -> package preview + mark-up + live AI edit.
+	// 5. Option/Alt+click budget.docx (macOS) -> package preview + mark-up + live right-sidebar AI edit.
 	if (isMac) {
 		await main.locator(".tabs .tab").first().click();
 		await rowFor("budget.docx").waitFor({ timeout: 15_000 });
@@ -301,21 +314,83 @@ try {
 		await pkgEditor.locator('[data-markup-layer="true"]').waitFor({ timeout: 15_000 });
 		await shotMain("07-package-editor-opened");
 
-		const pkgAiInput = pkgEditor.locator('.doc-editor__ai input[type="text"]');
+		const pkgSidebar = main.locator(`[data-document-editor-sidebar="${BUDGET}"]`);
+		await pkgSidebar.waitFor({ timeout: 10_000 });
+		const pkgAiInput = pkgSidebar.locator("textarea");
 		await pkgAiInput.click();
 		await main.keyboard.type("예산 금액을 450만 원으로 바꿔줘");
 		await main.keyboard.press("Enter");
-		await pkgEditor.locator('[data-edit-state="running"]').waitFor({ timeout: 10_000 });
-		await pkgEditor.locator('[data-edit-state="changed"], [data-edit-state="unchanged"], [data-edit-state="error"]').waitFor({ timeout: 300_000 });
+		await pkgSidebar.locator('[data-edit-state="running"]').waitFor({ timeout: 10_000 });
+		await pkgSidebar.locator('[data-edit-state="changed"], [data-edit-state="unchanged"], [data-edit-state="error"]').waitFor({ timeout: 300_000 });
 		const budgetAfter = docxText(BUDGET);
 		console.log(`budget.docx after AI edit:\n${budgetAfter}`);
 		check(
-			"Package editor AI updated budget.docx validly",
+			"Package editor right-sidebar AI updated budget.docx validly",
 			budgetAfter.includes("450만") && !budgetAfter.includes("300만") && budgetAfter.includes("승인: 박지영"),
 			budgetAfter,
 		);
 		await shotMain("08-package-ai-edited");
 	}
+
+	// 6. Option/Alt+click contract.pdf -> PDF editor: signature pad + place, rotate, crop, delete page, extract page, undo.
+	await main.locator(".tabs .tab").first().click();
+	await rowFor("contract.pdf").waitFor({ timeout: 15_000 });
+	await rowFor("contract.pdf").click({ modifiers: ["Alt"] });
+
+	const pdfEditor = main.locator('[data-document-editor][data-editor-surface="pdf"]');
+	await pdfEditor.waitFor({ timeout: 15_000 });
+	await pdfEditor.locator('[data-pdf-thumb="1"]').waitFor({ timeout: 15_000 });
+	await pdfEditor.locator('[data-pdf-thumb="3"]').waitFor({ timeout: 15_000 });
+	await shotMain("09-pdf-editor-opened");
+
+	// 6a. Draw signature on Signature Pad and apply to page 1.
+	await pdfEditor.locator("button", { hasText: "서명 추가" }).click();
+	const sigCanvas = main.locator('[data-signature-canvas="true"]');
+	await sigCanvas.waitFor({ timeout: 10_000 });
+	const sigBox = await sigCanvas.boundingBox();
+	if (sigBox === null) throw new Error("Signature canvas has no bounding box");
+	await main.mouse.move(sigBox.x + 60, sigBox.y + 80);
+	await main.mouse.down();
+	await main.mouse.move(sigBox.x + 150, sigBox.y + 40, { steps: 6 });
+	await main.mouse.move(sigBox.x + 240, sigBox.y + 110, { steps: 6 });
+	await main.mouse.up();
+	await main.locator("button", { hasText: "서명 배치" }).click();
+	await pdfEditor.locator('[data-pdf-stamp-box="true"]').waitFor({ timeout: 10_000 });
+	await shotMain("10-pdf-signature-placing");
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("서명을 PDF에 저장했습니다"), 10_000);
+	check("PDF signature stamped and saved to disk", readFileSync(CONTRACT).byteLength > 0);
+
+	// 6b. Rotate page 1 by 90 degrees.
+	await pdfEditor.locator('button[aria-label="오른쪽으로 90도 회전"]').click();
+	await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPage(0).getRotation().angle, (deg) => deg === 90, 10_000);
+	check("PDF page 1 rotated 90 degrees on disk", (await PDFDocument.load(readFileSync(CONTRACT))).getPage(0).getRotation().angle === 90);
+
+	// 6c. Crop page 1.
+	await pdfEditor.locator("button", { hasText: "자르기" }).click();
+	await pdfEditor.locator('[data-pdf-crop-box="true"]').waitFor({ timeout: 10_000 });
+	await pdfEditor.locator('[data-pdf-commit-crop="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("페이지를 잘라 저장했습니다"), 10_000);
+	const croppedBox = (await PDFDocument.load(readFileSync(CONTRACT))).getPage(0).getCropBox();
+	check("PDF page 1 cropped (CropBox smaller than original 595x842)", croppedBox.width < 590 && croppedBox.height < 835, JSON.stringify(croppedBox));
+
+	// 6d. Delete page 3 -> 2 pages remain, then extract page 1 into sibling PDF.
+	await pdfEditor.locator('[data-pdf-thumb="3"]').click();
+	await pdfEditor.locator('button[aria-label="페이지 삭제"]').click();
+	const countAfterDelete = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 2, 10_000);
+	check("PDF page deleted (3 -> 2 pages)", countAfterDelete === 2, `pages=${countAfterDelete}`);
+	await shotMain("11-pdf-edited");
+
+	await pdfEditor.locator('[data-pdf-thumb="1"]').click();
+	await pdfEditor.locator("button", { hasText: "현재 페이지 추출" }).click();
+	const extractedPath = join(DOCS_DIR, "contract-p1.pdf");
+	const extractedExists = await poll(() => existsSync(extractedPath), Boolean, 10_000);
+	check("PDF extracted current page to sibling contract-p1.pdf", extractedExists && (await PDFDocument.load(readFileSync(extractedPath))).getPageCount() === 1);
+
+	// 6e. Undo restores deleted page back to 3 pages.
+	await pdfEditor.locator("button", { hasText: "실행 취소" }).click();
+	const countAfterUndo = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 3, 10_000);
+	check("PDF undo restored deleted page (2 -> 3 pages)", countAfterUndo === 3, `pages=${countAfterUndo}`);
 } catch (error) {
 	check(
 		"the lane ran to the end",

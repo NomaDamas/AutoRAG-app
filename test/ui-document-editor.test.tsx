@@ -12,6 +12,8 @@ import type {
 	DocumentEditorSaveResult,
 } from "../src/shared/document-editor-contract";
 import { DocumentEditorTab } from "../src/renderer/src/components/DocumentEditorTab";
+import { DocumentEditorAiSidebar } from "../src/renderer/src/components/DocumentEditorAiSidebar";
+import { DocumentEditorSidebarProvider } from "../src/renderer/src/components/DocumentEditorSidebarContext";
 import { plainTextToHtml } from "../src/renderer/src/components/WysiwygDocumentEditor";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -43,6 +45,9 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 			saves.push(request);
 			return nextSaveResult;
 		}),
+		pdfApply: vi.fn(async () => ({ ok: true as const, size: 100, modifiedAt: new Date().toISOString(), mtimeMs: initial.mtimeMs + 20, pageCount: 1, snapshotId: "snap-1" })),
+		pdfExtract: vi.fn(async () => ({ outputPath: "/tmp/out.pdf", name: "out.pdf", pageCount: 1 })),
+		pdfRestore: vi.fn(async () => ({ ok: true })),
 		aiStart: vi.fn(async (runId, request) => {
 			aiStarts.push({ runId, instruction: request.instruction, marksCount: request.marks.length });
 			return { changed: true };
@@ -101,7 +106,12 @@ function mountEditor(host: MockEditorHost, filePath: string): HTMLDivElement {
 	document.body.appendChild(container);
 	root = createRoot(container);
 	act(() => {
-		root!.render(<DocumentEditorTab filePath={filePath} />);
+		root!.render(
+			<DocumentEditorSidebarProvider onOpenRightSidebar={() => {}}>
+				<DocumentEditorTab filePath={filePath} />
+				<DocumentEditorAiSidebar filePath={filePath} />
+			</DocumentEditorSidebarProvider>,
+		);
 	});
 	return container;
 }
@@ -140,6 +150,8 @@ describe("DocumentEditorTab UI", () => {
 		expect(el.querySelector(".tiptap")).not.toBeNull();
 		// Opening an unmodified markdown file with a trailing newline must stay saved (never spuriously unsaved)
 		expect(el.querySelector('[data-save-state="saved"]')).not.toBeNull();
+		// Autosave is always on with no checkbox toggle cluttering the header
+		expect(el.querySelector('.doc-editor__header input[type="checkbox"]')).toBeNull();
 
 		// Switch to Source mode and edit text directly
 		const sourceBtn = Array.from(el.querySelectorAll("button")).find((btn) => btn.textContent === "Source");
@@ -256,19 +268,21 @@ describe("DocumentEditorTab UI", () => {
 			await Promise.resolve();
 		});
 
-		const aiInput = el.querySelector<HTMLInputElement>('.doc-editor__ai input[type="text"]');
+		const sidebarEl = el.querySelector<HTMLElement>("[data-document-editor-sidebar]");
+		expect(sidebarEl).not.toBeNull();
+		const aiInput = sidebarEl!.querySelector<HTMLTextAreaElement>("textarea");
 		expect(aiInput).not.toBeNull();
 
 		// Prepare updated disk payload before AI resolves
 		host.setLoad({ ...mdLoad, text: "# Plan\n\nDate: Nov 20", mtimeMs: 2000 });
 
-		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
 		act(() => {
 			nativeSetter.call(aiInput, "Change date to Nov 20");
 			aiInput!.dispatchEvent(new Event("input", { bubbles: true }));
 		});
 
-		const applyBtn = Array.from(el.querySelectorAll<HTMLButtonElement>(".doc-editor__ai button")).find((b) => b.textContent === "Apply");
+		const applyBtn = sidebarEl!.querySelector<HTMLButtonElement>('button[aria-label="Apply"]');
 		expect(applyBtn).toBeDefined();
 		await act(async () => {
 			applyBtn!.click();
@@ -281,11 +295,11 @@ describe("DocumentEditorTab UI", () => {
 			host.emit({ type: "done", runId, path: "/tmp/plan.md", changed: true, reply: "Updated date to Nov 20." });
 		});
 
-		expect(el.querySelector('[data-edit-state="changed"]')).not.toBeNull();
-		expect(el.textContent).toContain("Updated date to Nov 20.");
+		expect(sidebarEl!.querySelector('[data-edit-state="changed"]')).not.toBeNull();
+		expect(sidebarEl!.textContent).toContain("Updated date to Nov 20.");
 
-		// Trigger Undo AI edit
-		const undoBtn = Array.from(el.querySelectorAll<HTMLButtonElement>(".doc-editor__ai button")).find((b) => b.textContent?.includes("Undo AI edit"));
+		// Trigger Undo AI edit from right sidebar
+		const undoBtn = Array.from(sidebarEl!.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent?.includes("Undo AI edit"));
 		expect(undoBtn).toBeDefined();
 		await act(async () => {
 			undoBtn!.click();

@@ -3,6 +3,8 @@ import {
 	documentEditorSurface,
 	isDocumentEditorAiCapture,
 	isDocumentEditorSaveRequest,
+	isPdfApplyRequest,
+	isPdfExtractRequest,
 	wysiwygFormatForExtension,
 } from "../src/shared/document-editor-contract";
 import {
@@ -42,19 +44,35 @@ describe("document editor contract classification", () => {
 		expect(documentEditorSurface("tsv")).toBe("code");
 		expect(documentEditorSurface("py")).toBe("code");
 	});
-
-	it("routes Office/HWP/OpenDocument packages to package mode and rejects media/PDF", () => {
+	it("routes Office/HWP/OpenDocument to package, PDF to pdf, and rejects media", () => {
 		expect(documentEditorSurface("docx")).toBe("package");
 		expect(documentEditorSurface("pptx")).toBe("package");
 		expect(documentEditorSurface("xlsx")).toBe("package");
 		expect(documentEditorSurface("hwpx")).toBe("package");
 		expect(documentEditorSurface("hwp")).toBe("package");
 		expect(documentEditorSurface("odt")).toBe("package");
-		expect(documentEditorSurface("pdf")).toBeNull();
+		expect(documentEditorSurface("pdf")).toBe("pdf");
+		expect(documentEditorSurface(".PDF")).toBe("pdf");
 		expect(documentEditorSurface("png")).toBeNull();
 		expect(documentEditorSurface("mp4")).toBeNull();
 	});
 
+	it("validates PDF apply and extract requests", () => {
+		expect(
+			isPdfApplyRequest({
+				path: "/tmp/doc.pdf",
+				operations: [
+					{ kind: "stampImage", pageIndex: 0, pngDataUrl: "data:image/png;base64,iVBORw0KGgo=", x: 0.1, y: 0.2, width: 0.3, height: 0.1 },
+					{ kind: "rotatePage", pageIndex: 0, deltaDegrees: 90 },
+					{ kind: "cropPage", pageIndex: 0, left: 0.1, top: 0.1, width: 0.5, height: 0.5 },
+				],
+			}),
+		).toBe(true);
+		expect(isPdfApplyRequest({ path: "/tmp/doc.pdf", operations: [] })).toBe(false);
+		expect(isPdfApplyRequest({ path: "/tmp/doc.pdf", operations: [{ kind: "cropPage", pageIndex: 0, left: 0.8, top: 0.1, width: 0.5, height: 0.5 }] })).toBe(false);
+		expect(isPdfExtractRequest({ path: "/tmp/doc.pdf", pages: [1, 3] })).toBe(true);
+		expect(isPdfExtractRequest({ path: "/tmp/doc.pdf", pages: [0] })).toBe(false);
+	});
 	it("validates save requests and capture rects", () => {
 		expect(isDocumentEditorSaveRequest({ path: "/tmp/a.md", text: "hi" })).toBe(true);
 		expect(isDocumentEditorSaveRequest({ path: "/tmp/a.md", text: "hi", ending: "CRLF", expectedMtimeMs: 123, force: false })).toBe(true);

@@ -9,6 +9,9 @@ export function createDocumentEditorBridge(ipcRenderer: IpcRenderer): DocumentEd
 	return {
 		open: (path) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.open, path),
 		save: (request) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.save, request),
+		pdfApply: (request) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfApply, request),
+		pdfExtract: (request) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfExtract, request),
+		pdfRestore: (snapshotId) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfRestore, snapshotId),
 		aiStart: (runId, request, capture) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.aiStart, runId, request, capture),
 		aiCancel: (runId) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.aiCancel, runId),
 		aiUndo: (runId) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.aiUndo, runId),

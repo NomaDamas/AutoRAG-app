@@ -91,11 +91,11 @@ describe("document editor file I/O", () => {
 
 	it("refuses unsupported file extensions and relative paths", async () => {
 		const dir = makeWorkDir();
-		const pdfPath = join(dir, "report.pdf");
-		writeFileSync(pdfPath, "%PDF-1.4\n");
+		const pngPath = join(dir, "photo.png");
+		writeFileSync(pngPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 
-		await expect(openDocumentForEditor(pdfPath)).rejects.toThrow();
+		await expect(openDocumentForEditor(pngPath)).rejects.toThrow();
 		await expect(openDocumentForEditor("relative/plan.md")).rejects.toThrow();
-		await expect(saveDocumentText({ path: pdfPath, text: "nope" })).rejects.toThrow();
+		await expect(saveDocumentText({ path: pngPath, text: "nope" })).rejects.toThrow();
 	});
 });

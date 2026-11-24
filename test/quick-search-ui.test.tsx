@@ -79,6 +79,7 @@ function fakeBridge(calls: Calls): QuickSearchBridge {
 				panel.navigate = listener;
 				return () => {};
 			},
+			onOpenEdit: () => () => {},
 		},
 	};
 }

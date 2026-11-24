@@ -13,7 +13,7 @@ import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
 import { CloseIcon, FullscreenIcon, MarkupIcon, ShareIcon } from "./icons";
-import { documentEditMode } from "../shared/annotation";
+import { documentEditorSurface } from "../../shared/document-editor-contract";
 import { createSlideSweep } from "./slide-sweep";
 import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
@@ -299,7 +299,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	}, [load, measured, report]);
 
 	const material = bridge.platform === "darwin" ? "glass" : "solid";
-	const editable = load !== null && load.document !== null && documentEditMode(load.document.ext) !== null;
+	const editable = load !== null && load.document !== null && documentEditorSurface(load.document.ext) !== null;
 	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
 	const { document, folder, bundle } = load;
 	const meta = document === null ? describeExtension(extensionOf(load.name)) : document.package === true ? describeExtension(document.ext) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;

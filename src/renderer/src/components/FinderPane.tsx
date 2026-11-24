@@ -388,6 +388,7 @@ export const FinderPane = memo(function FinderPane({
 						key={finder.path}
 						filePath={editorFilePathOf(finder.path)!}
 						onOpenExternal={(targetPath) => void shell.source.open(targetPath)}
+						onOpenEditorFile={finder.openDocumentEditor}
 					/>
 				) : (
 					<>

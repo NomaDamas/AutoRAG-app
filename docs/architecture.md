@@ -974,12 +974,17 @@ per action) with live `i` intent progress and streamed Markdown output. The `doc
 Quick Look and hands the file to a new tab in the Finder window) or by **Option+click** (macOS) / **Alt+click**
 (Windows/Linux) on a file row or tile in Finder. Text documents (Markdown, HTML, plain text) open in a TipTap v3 WYSIWYG
 editor (`WysiwygDocumentEditor.tsx`, Rich/Source switch) and code/CSV/TSV files open in a monospace source editor, both
-with debounced autosave, `⌘S`/`Ctrl+S`, mtime conflict detection, and docked AI editing (`documentEditor:*`). Office,
+with always-on debounced autosave, `⌘S`/`Ctrl+S`, and mtime conflict detection (`documentEditor:*`). Office,
 HWP/HWPX and OpenDocument packages render their preview inside the tab with an interactive SVG mark-up layer
-(`EditorMarkupOverlay.tsx`: pen, box, underline) feeding the `document-edit` agent. Its `read`/`ls`/`find`/`grep` refuse
-credential files and the agent dir outside `skills/`; `edit`/`write` reach only that one file and a per-run scratch
-folder. Text documents get no shell; packages get `bash` in the scratch folder to unpack, edit XML and repack (kept away
-from the agent dir, not fenced for writes). The service keeps original bytes under `<userData>/document-edit-backups`
+(`EditorMarkupOverlay.tsx`: pen, box, underline). PDF files open in `PdfDocumentEditor.tsx` (`pdfjs-dist` rendering +
+main-process `src/main/pdf-editor-io.ts` backed by `pdf-lib`): signature pad & saved signatures, text/date stamps,
+page crop (`CropBox`), 90° rotation, reorder, delete, multi-page extraction to a sibling PDF, and snapshot undo.
+Annotations and text selections drawn on text/package documents stream directly into the right-sidebar AI editing chat
+(`DocumentEditorAiSidebar.tsx` + `DocumentEditorSidebarContext.tsx` inside `InspectorColumn`), which runs the
+`document-edit` agent. Its `read`/`ls`/`find`/`grep` refuse credential files and the agent dir outside `skills/`;
+`edit`/`write` reach only that one file and a per-run scratch folder. Text documents get no shell; packages get `bash`
+in the scratch folder to unpack, edit XML and repack (kept away from the agent dir, not fenced for writes). The service
+keeps original bytes under `<userData>/document-edit-backups` (and PDF snapshots under `<userData>/pdf-editor-backups`)
 for Undo, refuses Undo once the file changed again, and deletes the backups at quit.
 The rest of Settings has its own assistants in the right
 sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`APP_CUSTOMIZER_SURFACES`) in `app-customizer-service.ts` and built on

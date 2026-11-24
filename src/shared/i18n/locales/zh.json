@@ -3581,7 +3581,6 @@
     "reload": "重新加载",
     "overwrite": "覆盖保存",
     "truncatedWarning": "文件超过 4MB，仅显示部分内容。为防止数据丢失，已禁用直接保存。",
-    "autosave": "自动保存",
     "status": {
       "saved": "已保存",
       "saving": "正在保存…",
@@ -3616,6 +3615,8 @@
     "placeholder": "开始输入内容…",
     "ai": {
       "title": "与 AI 一起编辑",
+      "emptyTitle": "批注后直接对话修改",
+      "emptyDesc": "在文档上用画笔、方框、下划线标记或选中文字，然后在这里输入修改要求即可直接应用。",
       "selectionBadge": "已附带选区（{{chars}} 字符）",
       "marksBadge": "{{count}} 处标记",
       "placeholder": "告诉 AI 需要修改什么…（按 Enter 应用）",
@@ -3632,10 +3633,51 @@
       "hint": "用画笔、方框或下划线在文档上标记，并让 AI 进行修改。",
       "openExternal": "使用默认应用打开"
     },
+    "pdf": {
+      "addSignature": "添加签名",
+      "addText": "添加文字",
+      "cropPage": "裁剪",
+      "rotate": "旋转",
+      "rotateRight": "顺时针旋转 90°",
+      "moveUp": "页面上移",
+      "moveDown": "页面下移",
+      "deletePage": "删除页面",
+      "extractCurrent": "提取当前页",
+      "extractCount": "提取所选 {{count}} 页",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "signatureTitle": "创建签名",
+      "uploadSignature": "上传图片",
+      "savedSignatures": "已保存的签名",
+      "rememberSignature": "保存以便下次使用",
+      "placeSignature": "放置签名",
+      "textPlaceholder": "输入要添加到页面的文字或日期…",
+      "placeText": "放置文字",
+      "placementHint": "拖动调整位置和大小后，点击“应用”。",
+      "cropHint": "拖动框选要保留的区域，然后点击“应用裁剪”。",
+      "applyCrop": "应用裁剪",
+      "signatureApplied": "签名已保存到 PDF。",
+      "textApplied": "文字已保存到 PDF。",
+      "cropped": "页面已裁剪并保存。",
+      "rotated": "页面已旋转并保存。",
+      "pageDeleted": "页面已删除并保存。",
+      "extracted": "已提取 {{count}} 页至 {{name}}。",
+      "openExtracted": "打开 {{name}}",
+      "undone": "已撤销上一次 PDF 编辑。",
+      "encryptedNotice": "受密码保护的 PDF 无法在 Dazzi 中直接编辑。",
+      "pages": "页面列表",
+      "selectPage": "选择第 {{page}} 页",
+      "sidebarTitle": "PDF 直接编辑",
+      "sidebarDesc": "使用顶部工具栏添加签名或文字、裁剪边距、旋转、调整顺序、删除或提取页面，所有更改均可撤销。",
+      "tipSignature": "添加签名：手写绘制或上传签名图片并自由放置",
+      "tipCrop": "裁剪：拖动矩形框选保留区域以去除多余边距",
+      "tipPages": "页面管理：在左侧缩略图中调整顺序、删除或提取所选页面为新 PDF"
+    },
     "footer": {
       "lines": "{{count}} 行",
       "words": "{{count}} 词",
-      "chars": "{{count}} 字符"
+      "chars": "{{count}} 字符",
+      "pages": "{{count}} 页"
     }
   }
 }

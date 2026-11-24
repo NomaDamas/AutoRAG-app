@@ -14,6 +14,8 @@ import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
+import { DocumentEditorAiSidebar } from "./components/DocumentEditorAiSidebar";
+import { DocumentEditorSidebarProvider } from "./components/DocumentEditorSidebarContext";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
@@ -923,6 +925,7 @@ export function App(): ReactElement {
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
 		<SettingsAssistantContext value={settingsAssistant}>
+		<DocumentEditorSidebarProvider onOpenRightSidebar={() => setInspectorVisible(true)}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
@@ -1085,7 +1088,7 @@ export function App(): ReactElement {
 						/>
 					</div>
 				</div>
-				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null ? "window" : "subtle"}>
+				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null || editedDocPath !== null ? "window" : "subtle"}>
 						{settingsAssistantDock !== null ? (
 							<SettingsAssistantSlot dock={settingsAssistantDock} />
 						) : settingsOpen ? (
@@ -1093,6 +1096,8 @@ export function App(): ReactElement {
 							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
+						) : editedDocPath !== null ? (
+							<DocumentEditorAiSidebar filePath={editedDocPath} />
 						) : (
 							<Inspector
 								entry={inspectorEntry}
@@ -1327,6 +1332,7 @@ export function App(): ReactElement {
 			/>
 		) : null}
 		<Tutorials enabled={tutorialsAllowed && !firstRun} triggers={tutorialTriggers} onEffect={runTutorialEffect} />
+		</DocumentEditorSidebarProvider>
 		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
