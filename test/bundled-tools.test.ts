@@ -91,24 +91,24 @@ describe("bundled SPLADE model", () => {
 		return { resources, bundled };
 	}
 
-	it("seeds MinSync's model cache from the installer so sparse search needs no download", () => {
+	it("seeds the shared inl weight cache from the installer so sparse search needs no download", () => {
 		const { resources } = toolsWithSparseModel();
 		const home = temp();
 
 		applyBundledTools({ resourcesPath: resources, env: { PATH: "/usr/bin" }, platform: "darwin", home });
 
-		const cache = join(home, ".cache", "minsync", "models");
+		const cache = join(home, ".cache", "im-not-llm", "models");
 		expect(sparseModelPresent(cache)).toBe(true);
 		expect(readFileSync(join(cache, SPARSE_MODEL.repoDir, "refs", "main"), "utf8")).toBe(SPARSE_MODEL.revision);
 		const config = join(cache, SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision, "config.json");
 		expect(readFileSync(config, "utf8").startsWith("config.json")).toBe(true);
 	});
 
-	it("honours FASTEMBED_CACHE_DIR, the cache MinSync itself reads", () => {
+	it("honours INL_CACHE_DIR, the cache the inl daemon and MinSync read", () => {
 		const { resources } = toolsWithSparseModel();
 		const custom = temp();
 
-		applyBundledTools({ resourcesPath: resources, env: { PATH: "/usr/bin", FASTEMBED_CACHE_DIR: custom }, platform: "darwin", home: temp() });
+		applyBundledTools({ resourcesPath: resources, env: { PATH: "/usr/bin", INL_CACHE_DIR: custom }, platform: "darwin", home: temp() });
 
 		expect(sparseModelPresent(custom)).toBe(true);
 	});
@@ -116,7 +116,7 @@ describe("bundled SPLADE model", () => {
 	it("leaves a complete cached copy untouched", () => {
 		const { resources, bundled } = toolsWithSparseModel();
 		const home = temp();
-		const cache = join(home, ".cache", "minsync", "models");
+		const cache = join(home, ".cache", "im-not-llm", "models");
 		const input = { resourcesPath: resources, env: { PATH: "/usr/bin" }, platform: "darwin" as const, home };
 		applyBundledTools(input);
 		const tokenizer = join(cache, SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision, "tokenizer.json");
@@ -133,7 +133,7 @@ describe("bundled SPLADE model", () => {
 	it("does not mark a cache complete while a file is missing, and finishes it on the next start", () => {
 		const { resources } = toolsWithSparseModel();
 		const home = temp();
-		const cache = join(home, ".cache", "minsync", "models");
+		const cache = join(home, ".cache", "im-not-llm", "models");
 		const input = { resourcesPath: resources, env: { PATH: "/usr/bin" }, platform: "darwin" as const, home };
 		applyBundledTools(input);
 		rmSync(join(cache, SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision, "model.safetensors"));
@@ -149,6 +149,6 @@ describe("bundled SPLADE model", () => {
 		const home = temp();
 
 		expect(seedBundledSparseModel({ toolsRoot: join(resources, "tools"), home, env: {}, platform: "darwin" })).toBe("not-bundled");
-		expect(existsSync(join(home, ".cache", "minsync"))).toBe(false);
+		expect(existsSync(join(home, ".cache", "im-not-llm"))).toBe(false);
 	});
 });

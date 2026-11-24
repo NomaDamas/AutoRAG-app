@@ -406,7 +406,7 @@ async function stageFileeCli() {
 /**
  * MinSync's SPLADE encoder (`nlpai-lab/KURE-Sparse-nano`, Apache-2.0, 299 MB), shipped under
  * `tools/models/<repoDir>/snapshots/<revision>/` in the Hugging Face hub layout. It ranks every local search in every
- * embedding mode, so the installer carries it: `src/main/bundled-sparse-model.ts` seeds it into MinSync's model cache
+ * embedding mode, so the installer carries it: `src/main/bundled-sparse-model.ts` seeds it into the shared inl weight cache
  * at startup and search works offline from the first launch. The revision, sizes and SHA-256 are pinned once in
  * `src/shared/sparse-model.json`, which the app reads too; the Apache-2.0 LICENSE travels with it.
  */
@@ -436,7 +436,7 @@ async function stageSparseModel() {
 
 /**
  * Native Qwen3 embedding model (`Qwen/Qwen3-Embedding-0.6B`), pinned by commit
- * and SHA-256 in the Hugging Face Hub cache layout that `minsync` (candle /
+ * and SHA-256 in the Hugging Face Hub cache layout that `inl`/`minsync` (candle /
  * `hf-hub`) and `mailcrawl` read directly without network access.
  *
  * Staged for `verify-bundle.mjs` only — an offline MinSync sync needs the real
@@ -482,10 +482,12 @@ const GO_CRAWLERS = [
 	{ name: "notcrawl", repo: PINS.tools.notcrawl.repo, pattern: GITHUB_ASSET_PATTERNS.notcrawl["darwin-arm64"] },
 ];
 
+// `wombat` (AI Sessions) is published as the crate `wombat-sessions`; `cargo install` still produces the `wombat` binary.
 const CARGO_BINARIES = [
 	{ name: "dupey", minVersion: VERSION_FLOORS.dupey },
 	{ name: "jikji", crate: "jikji-cli", minVersion: VERSION_FLOORS.jikji },
 	{ name: "clawgallery" },
+	{ name: "wombat", crate: "wombat-sessions", minVersion: VERSION_FLOORS.wombat },
 ];
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "kordoc"];

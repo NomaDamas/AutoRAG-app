@@ -2,8 +2,8 @@
   "schema": 1,
   "librarian": {
     "repo": "Marker-Inc-Korea/AutoRAG",
-    "ref": "04cef434cb9bbd3cc3623f929946efca82299d05",
-    "version": "2.14.0"
+    "ref": "v2.14.2",
+    "version": "2.14.2"
   },
   "daemon": {
     "owner": "minsync serve",
@@ -210,6 +210,13 @@
       "crate": "clawgallery",
       "version": "0.2.5",
       "checksum": "4d57d61be91265f7ae534a85c0c8f178540ce54bbb1e89a028c43515fa166646"
+    },
+    "wombat": {
+      "source": "cargo",
+      "crate": "wombat-sessions",
+      "version": "0.1.4",
+      "floor": "0.1.3",
+      "checksum": "c272cbeb172066d1f9d5239afa8e0a4e0cfbb1d4f8d7cc726dab327bb0e963d3"
     },
     "@nomadamas/mailcrawl": {
       "source": "npm",

@@ -120,4 +120,11 @@ describe("i18n configuration and locale keys", () => {
 
 		await setAppLanguage("ko");
 	});
+
+	it("names the wombat datasource AI Sessions in the datasource summaries of every language", () => {
+		for (const lang of ["ko", "en", "ja", "zh"] as const) {
+			const summary = leaves(resources[lang].translation).get("settingsSources.templates.wombat.summary");
+			expect(summary, lang).toBeTruthy();
+		}
+	});
 });
