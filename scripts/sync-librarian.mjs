@@ -35,12 +35,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.14.0 adds learning to rank (AutoRAG#2204): the ranking log (on by default), `autorag ltr` (train, status, delete),
 // the `ltr` and `rankingLog` config keys, and serving a trained model after the reranker (opt-in). The app drives it
 // through `src/main/ltr-service.ts` and shows it on the Search Ranking settings page.
-// The pin is one commit past v2.14.0: 04cef434 is AutoRAG#2199, `createWebTools` in `@autorag/librarian/profiles`, the
-// librarian's own `web_search` and `web_fetch` for a helper profile (the Settings assistants for MCP and apps use them).
-// Move back to a release tag once one carries it.
-// v2.13.16 (#2203) lets a query read beside every sync of the refresh that builds a first index, not only the first (the app's first
-// run proves the tour's source against the index while it is still being built); the pin below contains it.
-const librarianRef = "04cef434cb9bbd3cc3623f929946efca82299d05";
+// v2.14.1 carries AutoRAG#2199 (`createWebTools` in `@autorag/librarian/profiles`) and AutoRAG#2209 (discover and
+// launch the shared `im-not-llm` `inl serve` daemon under `~/.cache/im-not-llm/serve`, and forward `INL_CACHE_DIR` to
+// `wombat`). v2.14.2 requires and installs MinSync 0.7.6 (AutoRAG#2221), which shares the `im-not-llm` cache/serve root.
+const librarianRef = "v2.14.2";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

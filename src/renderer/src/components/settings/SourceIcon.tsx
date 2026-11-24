@@ -8,7 +8,7 @@
  */
 
 import type { ReactElement } from "react";
-import { Calendar, Cloud, Folder, Globe, Images, Mail, Search, type LucideIcon } from "lucide-react";
+import { Calendar, Cloud, Folder, Globe, Images, Mail, MessageSquareCode, Search, type LucideIcon } from "lucide-react";
 import {
 	siDiscord,
 	siGithub,
@@ -42,6 +42,7 @@ const GLYPH_BY_TEMPLATE: Readonly<Record<string, LucideIcon>> = {
 	local: Folder,
 	spotlight: Search,
 	hister: Globe,
+	wombat: MessageSquareCode,
 	calendar: Calendar,
 	"apple-events": Calendar,
 };

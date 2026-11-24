@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { minSyncModelCacheRoot } from "../src/main/bundled-sparse-model";
+import { inlModelCacheRoot } from "../src/main/inl-paths";
 import { createModelDownloadService, modelFilesPresent, type ModelSpec } from "../src/main/model-download";
 import type { ModelDownloadStatus } from "../src/shared/model-download-contract";
 
@@ -100,13 +100,13 @@ const snapshot = (cacheRoot: string, spec: ModelSpec, name: string): string => j
 
 const TOTAL = Object.values(CONTENTS).reduce((sum, body) => sum + body.length, 0);
 
-describe("minSyncModelCacheRoot", () => {
-	it("resolves MinSync's native model cache root on macOS and Windows", () => {
-		expect(minSyncModelCacheRoot({ platform: "darwin", home: "/Users/me", env: {} })).toBe(join("/Users/me", ".cache", "minsync", "models"));
-		expect(minSyncModelCacheRoot({ platform: "win32", home: "C:\\Users\\me", env: { LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" } })).toBe(
-			join("C:\\Users\\me\\AppData\\Local", "minsync", "models"),
+describe("inlModelCacheRoot", () => {
+	it("resolves the shared im-not-llm weight cache on macOS and Windows and honours INL_CACHE_DIR", () => {
+		expect(inlModelCacheRoot({ platform: "darwin", home: "/Users/me", env: {} })).toBe(join("/Users/me", ".cache", "im-not-llm", "models"));
+		expect(inlModelCacheRoot({ platform: "win32", home: "C:\\Users\\me", env: { LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" } })).toBe(
+			join("C:\\Users\\me\\AppData\\Local", "im-not-llm", "models"),
 		);
-		expect(minSyncModelCacheRoot({ platform: "darwin", home: "/Users/me", env: { FASTEMBED_CACHE_DIR: "/custom/cache" } })).toBe("/custom/cache");
+		expect(inlModelCacheRoot({ platform: "darwin", home: "/Users/me", env: { INL_CACHE_DIR: "/custom/cache" } })).toBe("/custom/cache");
 	});
 });
 

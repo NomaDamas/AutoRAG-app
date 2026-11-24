@@ -118,7 +118,7 @@ const APP_ENV = {
 	ANTHROPIC_API_KEY: "",
 	AUTORAG_PERMISSION_MODE: "",
 	// No on-device embedding model in this profile, in a VM (where the runner copies the host's cache into the home) or on the host.
-	FASTEMBED_CACHE_DIR: join(WORK, "model-cache"),
+	INL_CACHE_DIR: join(WORK, "model-cache"),
 };
 
 let page;

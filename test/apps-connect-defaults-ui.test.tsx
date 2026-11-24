@@ -66,4 +66,16 @@ describe("adding a connection from Settings → 연결된 앱", () => {
 		await connect("Discord", "discord");
 		expect(bridge.settings.configSet).toHaveBeenCalledWith(["datasources", "discord"], {});
 	});
+
+	it("AI Sessions is offered in the gallery by that name and connects as a plain wombat entry", async () => {
+		const titles = [...host.querySelectorAll(".settings-list-title")].map((node) => node.textContent);
+		expect(titles).toContain("AI Sessions");
+		await connect("AI Sessions", "wombat");
+		expect(bridge.settings.configSet).toHaveBeenCalledWith(["datasources", "wombat"], {});
+	});
+
+	it("a second AI Sessions connection records its type so the librarian builds a wombat skill under that alias", async () => {
+		await connect("AI Sessions", "ai-sessions-work");
+		expect(bridge.settings.configSet).toHaveBeenCalledWith(["datasources", "ai-sessions-work"], { type: "wombat" });
+	});
 });

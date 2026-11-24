@@ -45,7 +45,7 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now `04cef434`, AutoRAG#2199 on top of v2.14.0: `createWebTools` for the Settings assistants' web search and fetch). v2.14.0 is the first to carry learning to rank: the ranking log is on by default, `autorag ltr` trains an XGBoost ranker on it in process with no Python, and the config's `ltr` block reorders the reranker's results with a model that passed its holdout gate; the app drives it through `src/main/ltr-service.ts`, see `docs/architecture.md` "Learning to rank". v2.13.16 (and #2183, #2200 before it): a query reads a MinSync index beside every sync of a refresh that builds it from nothing, one query at a time and only while no other caller syncs the workspace, which lets the first run prove the tour's question while indexing; v2.13.15: the `revise_answer` tool corrects the first answer claim by claim and `searchDocumentsStream` yields a `revision` event, which the app draws where each correction happened (`src/shared/answer-revision.ts`); v2.13.14 reads a MinSync index while its first sync is still running. v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now `v2.14.2`: AutoRAG#2209 shares the `im-not-llm` `inl serve` daemon and `~/.cache/im-not-llm/{models,serve}` root, AutoRAG#2221 requires MinSync 0.7.6, and AutoRAG#2199 adds `createWebTools` for the Settings assistants' web search and fetch). v2.14.0 is the first to carry learning to rank: the ranking log is on by default, `autorag ltr` trains an XGBoost ranker on it in process with no Python, and the config's `ltr` block reorders the reranker's results with a model that passed its holdout gate; the app drives it through `src/main/ltr-service.ts`, see `docs/architecture.md` "Learning to rank". v2.13.16 (and #2183, #2200 before it): a query reads a MinSync index beside every sync of a refresh that builds it from nothing, one query at a time and only while no other caller syncs the workspace, which lets the first run prove the tour's question while indexing; v2.13.15: the `revise_answer` tool corrects the first answer claim by claim and `searchDocumentsStream` yields a `revision` event, which the app draws where each correction happened (`src/shared/answer-revision.ts`); v2.13.14 reads a MinSync index while its first sync is still running. v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
 by config resolution and applied by the refresh walk (the app reads it the same way, `src/main/path-exclusion.ts`); with a reranker the
 baseline search shows it the union of MinSync's dense and SPLADE candidates; the MCP server adds `autorag.convert`/`.formats` and caps repeated
 diagnostics; `AUTORAG_AUTH_MODE=environment` makes model resolution ignore stored credentials. v2.13.8:
@@ -180,10 +180,10 @@ the install smoke uses but nothing ships), `verify-bundle.mjs` runs each of them
 a bare `PATH`, `electron-builder.config.mjs` packs them into the app's
 `resources/`, and `smoke-installed.mjs` installs the real artifact and launches
 it. At run time `src/main/bundled-tools.ts` puts `resources/tools/bin` first on
-`PATH` and seeds MinSync's SPLADE model, which the installer carries in `resources/tools/models`, into MinSync's model
-cache (`src/main/bundled-sparse-model.ts`); the dense embedding model is not bundled — the app downloads it on demand
+`PATH` and seeds MinSync's SPLADE model, which the installer carries in `resources/tools/models`, into the shared
+im-not-llm (`inl`) weight cache (`src/main/bundled-sparse-model.ts`); the dense embedding model is not bundled — the app downloads it on demand
 (`src/main/model-download.ts`) into the same cache
-(`~/.cache/minsync/models`). Stage each platform on a matching host; never commit
+(`~/.cache/im-not-llm/models`, or `INL_CACHE_DIR`). Stage each platform on a matching host; never commit
 `build/stage`, `build/.cache`, or `dist`. Signing credentials live only in GitHub
 secrets.
 
@@ -361,12 +361,12 @@ Each setting fixes a failure seen in the lanes, not a preference:
   a VM cannot show (GPU rendering, a physical display, real Finder.app state).
   Run `--host` for those before release.
 - A fresh VM has no embedding model. For the `onboarding` lane, a full sweep, or a
-  `qa script`, the runner copies the host's MinSync model cache into the guest's
-  `~/.cache/minsync/models` (`~/.cache/minsync/models` or `FASTEMBED_CACHE_DIR` on
+  `qa script`, the runner copies the host's shared im-not-llm model cache into the guest's
+  `~/.cache/im-not-llm/models` (`~/.cache/im-not-llm/models` or `INL_CACHE_DIR` on
   the host); without it the first index downloads ~1.2 GB from Hugging Face inside
-  the VM. The host prerequisite is that MinSync has cached
-  `Qwen/Qwen3-Embedding-0.6B` once — run `minsync serve` (or a MinSync sync) on the
-  host once to populate it.
+  the VM. The host prerequisite is that the shared embedding model
+  `Qwen/Qwen3-Embedding-0.6B` has been cached once — run `inl serve` (or a MinSync
+  sync) on the host once to populate it.
 - Never run `qa:vm:setup` while a run is active; setup needs both VM slots.
 - Do not copy `~/.autorag-qa`, the golden image, or `evidence` into a
   repository. They are machine-local.

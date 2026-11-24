@@ -8,6 +8,8 @@
 //   `--user-data-dir` (the app's own support dir is left alone);
 // - AUTORAG_CONFIG + AUTORAG_HOME + AUTORAG_WORKSPACE: tmp sandbox (the real
 //   `~/.autorag/config.json`, index, and memory are never read or written);
+// - provider API keys are blanked and PI_CODING_AGENT_DIR is a tmp sandbox, so
+//   ambient provider credentials never appear as onboarding connections;
 // - MinSync's SPLADE encoder is COPIED into the sandbox so the keyword-only
 //   first index runs offline; the first run never needs the dense on-device
 //   model, and the real cache is never written through.
@@ -182,24 +184,24 @@ async function main() {
 	const autoragHome = join(sandbox, "autorag-home");
 	const configPath = join(sandbox, "config.json");
 	const userDataDir = join(sandbox, "user-data");
-	const minsyncCache = join(sandbox, "minsync-models");
+	const modelCache = join(sandbox, "model-cache");
 	const piAgentDir = join(sandbox, "pi-agent");
 	const fixtureHome = skipIndex ? join(sandbox, "fixture-home") : null;
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
-	mkdirSync(minsyncCache, { recursive: true });
+	mkdirSync(modelCache, { recursive: true });
 	mkdirSync(piAgentDir, { recursive: true });
 	if (fixtureHome !== null) mkdirSync(fixtureHome, { recursive: true });
-	const realMinsyncCache =
-		process.env.FASTEMBED_CACHE_DIR?.trim() ||
+	const realModelCache =
+		process.env.INL_CACHE_DIR?.trim() ||
 		(process.platform === "win32"
-			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "minsync", "models")
-			: join(homedir(), ".cache", "minsync", "models"));
-	if (existsSync(realMinsyncCache)) {
-		const sparseEntry = join(realMinsyncCache, sparseModel.repoDir);
+			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "im-not-llm", "models")
+			: join(homedir(), ".cache", "im-not-llm", "models"));
+	if (existsSync(realModelCache)) {
+		const sparseEntry = join(realModelCache, sparseModel.repoDir);
 		if (existsSync(sparseEntry)) {
 			try {
-				copyDirInto(sparseEntry, join(minsyncCache, sparseModel.repoDir));
+				copyDirInto(sparseEntry, join(modelCache, sparseModel.repoDir));
 			} catch (error) {
 				fail(`could not copy MinSync's SPLADE model into the sandbox: ${error}`);
 			}
@@ -217,7 +219,7 @@ async function main() {
 		try {
 			console.log("[onboarding] indexing the four-document fixture home (real keyword-only refresh)...");
 			seedFixtureHome(fixtureHome);
-			preindexFixture({ fixtureHome, autoragHome, configPath, minsyncCache });
+			preindexFixture({ fixtureHome, autoragHome, configPath, modelCache });
 		} catch (error) {
 			killPathProcesses(sandbox, "SIGKILL");
 			rmManaged(sandbox);
@@ -232,7 +234,7 @@ async function main() {
 		AUTORAG_HOME: autoragHome,
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
-		FASTEMBED_CACHE_DIR: minsyncCache,
+		INL_CACHE_DIR: modelCache,
 		// Pi's agent home (auth.json) lives in the sandbox, so the flow never reads or writes the
 		// developer's real ~/.pi/agent; the device seed keeps every run a clean unauthenticated machine.
 		PI_CODING_AGENT_DIR: piAgentDir,

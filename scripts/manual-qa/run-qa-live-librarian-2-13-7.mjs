@@ -45,14 +45,14 @@ const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 const WORKSPACE = join(WORK, "workspace");
 for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home")]) mkdirSync(dir, { recursive: true });
-const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const MODELS = process.env.INL_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (!existsSync(MODELS)) {
 	console.log(`SKIP: no on-device sparse model cache at ${MODELS}; real indexing cannot run`);
 	rmSync(WORK, { recursive: true, force: true });
 	process.exit(2);
 }
-mkdirSync(join(WORK, "home", ".cache", "minsync"), { recursive: true });
-if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "minsync", "models"));
+mkdirSync(join(WORK, "home", ".cache", "im-not-llm"), { recursive: true });
+if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "im-not-llm", "models"));
 
 const WORDS = ["quarterly", "milestone", "review", "figure", "ledger", "roadmap", "estimate", "archive", "invoice", "summary", "budget", "forecast"];
 for (let n = 1; n <= FILES; n += 1) {
@@ -92,7 +92,7 @@ const env = {
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
-	FASTEMBED_CACHE_DIR: MODELS,
+	INL_CACHE_DIR: MODELS,
 };
 
 let app;

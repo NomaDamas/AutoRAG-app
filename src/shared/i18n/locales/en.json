@@ -503,14 +503,16 @@
     "answeredCount": "{{answered}} / {{total}} answered",
     "showMore": "Show more",
     "showLess": "Show less",
-    "writeOwn": "Write your own answer",
+    "writeOwn": "Type your own",
     "answerPlaceholder": "Type your answer",
     "questionAria": "Question from Dazzi",
     "approval": {
       "headlineChange": "Allow this file change?",
       "headlineRun": "Dazzi wants to run a task. Allow it?",
       "headlineUnclassified": "Dazzi wants to run this command. Allow it?",
-      "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide whether to allow it."
+      "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide whether to allow it.",
+      "command": "Command to run",
+      "copy": "Copy command"
     },
     "category": {
       "delete": "Delete",
@@ -522,14 +524,16 @@
     },
     "allowOnce": "Allow once",
     "allowSession": {
-      "categories": "Allow all this session",
-      "unclassified": "Allow all unclassified calls this session",
-      "all": "Allow every such call this session"
+      "categories": "Always allow this session",
+      "unclassified": "Allow unclassified this session",
+      "all": "Allow similar this session"
     },
     "deny": "Deny",
     "denyWithNote": "Deny and tell the model…",
     "notePlaceholder": "What should it do instead? (e.g. work on a copy)",
-    "sendNote": "Send"
+    "sendNote": "Send",
+    "prevQuestion": "Previous question",
+    "nextQuestion": "Next question"
   },
   "automations": {
     "list": "Automation rules",
@@ -1332,7 +1336,8 @@
         "mailcrawlSharedEmbedder": "mailcrawl uses the same embedding server as Dazzi. When the model changes it re-indexes on the next index run.",
         "sidecarSharedEmbedder": "The read-only sidecar over the conversation archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next refresh.",
         "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next refresh.",
-        "obsidianSharedEmbedder": "An Obsidian vault follows the selected embedding model (MinSync indexes it in a workspace of its own)."
+        "obsidianSharedEmbedder": "An Obsidian vault follows the selected embedding model (MinSync indexes it in a workspace of its own).",
+        "wombatSharedEmbedder": "AI Sessions uses the same MinSync model as Dazzi. When the model changes it re-indexes on the next index run."
       },
       "actions": {
         "discordConfig": "discrawl config.toml managed by datasources.<id>"
@@ -2717,6 +2722,9 @@
       },
       "spotlight": {
         "summary": "Query local files live with macOS Spotlight (mdfind)."
+      },
+      "wombat": {
+        "summary": "Search your past conversations with AI coding agents such as Claude Code and Codex, through wombat."
       }
     },
     "groups": {
@@ -2740,7 +2748,8 @@
       "rss": "RSS / News",
       "hister": "Hister (Browser history)",
       "calendar": "Apple Calendar & Reminders (EventKit MCP)",
-      "spotlight": "Spotlight (mdfind)"
+      "spotlight": "Spotlight (mdfind)",
+      "aiSessions": "AI sessions"
     },
     "fields": {
       "binaryPath": "Executable path",
@@ -2826,7 +2835,11 @@
         "histerSemantic": "Requires semantic search enabled on the Hister server (autorag setup --sync-hister).",
         "requireWriteConfirmation": "When on, calendar and reminder writes require confirmation (--require-write-confirmation).",
         "mcpExposure": "direct exposes tools directly to the model; codemode calls them through a script.",
-        "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx."
+        "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx.",
+        "agents": "Leave empty to read every installed agent (Claude Code, Codex, OpenCode, Gemini, Kiro and 15 more). Example: claude-code, codex",
+        "includeSubagents": "Also index subagent and sidechain conversations. Off by default.",
+        "includeEphemeral": "Also index sessions run headless, in benchmarks or in temporary folders. Off by default.",
+        "wombatDataDir": "The folder where wombat keeps its copy of the conversations and the index. Empty uses ~/.wombat."
       },
       "envError": {
         "object": "Environment variables must be a JSON object.",
@@ -2848,7 +2861,10 @@
         "removeAt": "Remove feed {{index}}",
         "addAria": "Add feed",
         "addLabel": "+ Add feed"
-      }
+      },
+      "agents": "Agents",
+      "includeSubagents": "Include subagent sessions",
+      "includeEphemeral": "Include temporary sessions"
     },
     "cadence": {
       "min5": "5 min",
@@ -2863,7 +2879,8 @@
     "units": {
       "message": "messages",
       "document": "documents",
-      "image": "images"
+      "image": "images",
+      "session": "sessions"
     },
     "common": {
       "manual": "Manual",
@@ -2935,6 +2952,7 @@
       "groups": {
         "messengers": "Messengers",
         "docsNotes": "Documents & notes",
+        "aiSessions": "AI coding agents",
         "mail": "Mail",
         "cloudDev": "Cloud & dev",
         "newsOther": "News & other"

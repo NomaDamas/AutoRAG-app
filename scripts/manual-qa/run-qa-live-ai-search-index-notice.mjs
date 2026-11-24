@@ -143,7 +143,7 @@ const env = {
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
 	ELECTRON_RENDERER_URL: "",
 	// Never let the on-device model download start in this profile: nothing here embeds.
-	FASTEMBED_CACHE_DIR: join(WORK, "model-cache"),
+	INL_CACHE_DIR: join(WORK, "model-cache"),
 	PATH: `${join(AUTORAG_HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",

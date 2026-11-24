@@ -554,6 +554,48 @@ describe("createSearchService", () => {
 		expect(record?.messages[0]).toMatchObject({ role: "user", text: "who signs off refund exceptions?", attachments });
 	});
 
+	it("hands the image files among the attachments to the agent as pictures, never in the query", async () => {
+		const agent = Object.assign(createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-img", "a screenshot", 1) };
+		}), { setAttachmentImages: vi.fn((_images: readonly unknown[]) => undefined) });
+		const picture = { type: "image" as const, data: "AAAA", mimeType: "image/png" };
+		const attachmentImages = vi.fn(async () => [picture]);
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now, attachmentImages });
+		const attachments = [{ kind: "file" as const, id: "/tmp/pasted-image-1.png", name: "pasted-image-1.png" }];
+
+		await service.start("search-img", "chat-img", "what is this?", attachments);
+
+		expect(attachmentImages).toHaveBeenCalledWith(attachments);
+		expect(agent.setAttachmentImages).toHaveBeenCalledWith([picture]);
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("what is this?");
+		expect((await service.historyGet("chat-img"))?.messages[0]).toMatchObject({ attachments });
+	});
+
+	it("keeps a pasted image only when the model takes images, and says nothing otherwise", async () => {
+		const saved = { kind: "file" as const, id: "/data/pasted-images/pasted-image-ab.png", name: "pasted-image-ab.png" };
+		const pastedImages = { save: vi.fn(async () => saved), clear: vi.fn(async () => undefined) };
+		const base = { agentFactory: () => createFakeAgent(async function*() {}), send: () => undefined, now, pastedImages };
+
+		const vision = createSearchService({ ...base, chatStore: await createStore(), acceptsImages: async () => true });
+		expect(await vision.pasteImage("image/png", "AAAA")).toEqual(saved);
+		expect(pastedImages.save).toHaveBeenCalledWith("image/png", "AAAA");
+
+		pastedImages.save.mockClear();
+		const textOnly = createSearchService({ ...base, chatStore: await createStore(), acceptsImages: async () => false });
+		expect(await textOnly.pasteImage("image/png", "AAAA")).toBeNull();
+		expect(pastedImages.save).not.toHaveBeenCalled();
+
+		const broken = createSearchService({ ...base, chatStore: await createStore(), acceptsImages: async () => { throw new Error("no model"); } });
+		expect(await broken.pasteImage("image/png", "AAAA")).toBeNull();
+	});
+
+	it("deletes the pasted images with the history", async () => {
+		const pastedImages = { save: vi.fn(), clear: vi.fn(async () => undefined) };
+		const service = createSearchService({ agentFactory: () => createFakeAgent(async function*() {}), chatStore: await createStore(), send: () => undefined, now, pastedImages });
+		await service.historyClear();
+		expect(pastedImages.clear).toHaveBeenCalledTimes(1);
+	});
+
 	it("tells the agent the folder the person has open, as a hint, without touching the query or the stored message", async () => {
 		const agent = createFakeAgent(async function*() {
 			yield { type: "complete", response: createResponse("session-folder", "여기 있어요", 1) };

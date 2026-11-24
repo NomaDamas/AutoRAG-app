@@ -5,7 +5,7 @@ import { isJsonObject } from "../shared/settings-contract";
 /**
  * Adaptive embedding batch size. MinSync sends `batchSize` texts per request
  * (default 64). On a slow machine, or against a server with a request cap
- * (the local `minsync serve` answers 413 above its limits, a user's own server
+ * (the local inl embedding daemon answers 413 above its limits, a user's own server
  * may answer 504), one batch can never finish and every retry fails the same
  * way. Instead of fixing one number, a refresh halves the batch after a
  * timeout (64 → 32 → 16 → ...) and remembers the size that worked.

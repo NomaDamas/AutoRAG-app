@@ -179,7 +179,7 @@ export type DataSourceAgentState = "connected" | "disabled" | "unsupported";
 export type DataSourceIndexState = "indexed" | "empty" | "not-indexed" | "live";
 
 /** What `index.chunkCount` counts, so the UI can say "메시지 3,536개" instead of a bare number. */
-export type DataSourceIndexUnit = "message" | "document" | "image";
+export type DataSourceIndexUnit = "message" | "document" | "image" | "session";
 
 export type DataSourceStatus = "ready" | "syncing" | "paused" | "attention";
 

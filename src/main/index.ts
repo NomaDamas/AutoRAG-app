@@ -3,11 +3,12 @@ import { access, open, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { inlModelCacheRoot } from "./inl-paths";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import {
 	app,
+	autoUpdater as nativeAutoUpdater,
 	BrowserWindow,
 	clipboard,
 	ClipboardItem,
@@ -54,6 +55,7 @@ import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
+import { runQuitCleanup, whenQuitting } from "./quit-signal";
 import { LOCAL_ITEM } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { createRefreshQueue } from "./refresh-queue";
@@ -98,7 +100,8 @@ import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
 import { SERVICES_CHANNELS } from "../shared/services-contract";
 import { createAutoRagConfigService } from "./autorag-config-service";
-import { createModelStatusService } from "./model-status";
+import { createModelStatusService, modelAcceptsImages } from "./model-status";
+import { createPastedImageStore } from "./pasted-images";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
@@ -164,6 +167,7 @@ import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
 import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
+import { createElectronRevealBackdrop } from "./reveal-backdrop";
 
 const execFileAsync = promisify(execFile);
 
@@ -438,9 +442,10 @@ app.whenReady().then(async () => {
 			(error: unknown) => console.error("[cli] installing the dazzi command failed:", error),
 		);
 	}
-	// The local embedding model is served by MinSync's own `minsync serve`, which the app runs while it is open
-	// and stops on quit. It never starts before the model is downloaded (`modelDownload`), because `minsync serve`
-	// would fetch the 1.2 GB itself without any way to show progress.
+	// The local embedding model is served by the shared im-not-llm (`inl`) loopback daemon, which the app runs
+	// while it is open and stops on quit (preferring `inl`, else the bundled MinSync, same crates and root). It
+	// never starts before the model is downloaded (`modelDownload`), because the daemon would fetch the 1.2 GB
+	// itself without any way to show progress.
 	configureEmbeddingDaemon({
 		env: process.env,
 		home: homedir(),
@@ -584,6 +589,8 @@ app.whenReady().then(async () => {
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
+		pastedImages: createPastedImageStore({ directory: join(app.getPath("userData"), "pasted-images") }),
+		acceptsImages: () => modelAcceptsImages({ env: process.env, cwd: process.cwd() }),
 		send: sendToMainWindow,
 		analytics,
 		interaction: interactionHub,
@@ -673,7 +680,7 @@ app.whenReady().then(async () => {
 	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
 	// the whole app, so a download started in one place shows its progress everywhere.
 	const modelDownload = createModelDownloadService({
-		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
+		cacheRoot: inlModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 		spec: nativeQwen3Spec(),
 		onChange: (status) => {
 			sendToAllWindows(MODEL_DOWNLOAD_CHANNELS.changed, status);
@@ -1187,10 +1194,20 @@ app.whenReady().then(async () => {
 			analytics.track("onboarding_completed", {});
 		},
 	});
-	registerOnboardingIpcHandlers(firstRun);
+	const revealBackdrop = createElectronRevealBackdrop(() => mainWindow);
+	registerOnboardingIpcHandlers(firstRun, (opacity) => revealBackdrop.setOpacity(opacity));
+	app.on("before-quit", () => revealBackdrop.clear());
+	let quittingApp = false;
+	let quittingForUpdate = false;
+	whenQuitting(() => {
+		quittingApp = true;
+	});
+	nativeAutoUpdater.once("before-quit-for-update", () => {
+		quittingForUpdate = true;
+	});
 	/** Closing the last window while the first index runs would stop it, so that close asks first. */
 	const confirmLastClose = (window: BrowserWindow, event: Electron.Event): void => {
-		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length });
+		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length, updating: quittingForUpdate });
 		if (decision === "allow") return;
 		event.preventDefault();
 		void dialog
@@ -1217,8 +1234,9 @@ app.whenReady().then(async () => {
 		window.on("close", (event) => confirmLastClose(window, event));
 		return window;
 	};
-	/** Open the Finder if it is not on screen. */
+	/** Open the Finder if it is not on screen (never while the app is quitting/updating). */
 	const openWindows = (): void => {
+		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
 	};
 	openWindows();
@@ -1226,10 +1244,11 @@ app.whenReady().then(async () => {
 	firstRun.resumeIndexing();
 	// A Dock click only brings the window back when none is left.
 	app.on("activate", () => {
-		if (appWindows().length === 0) openWindows();
+		if (!quittingApp && appWindows().length === 0) openWindows();
 	});
 	// Menu requests: queue the cold-start request, then serve the ones the running app receives.
 	onOsRequestQueued = () => {
+		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) {
 			mainWindow = openFinderWindow();
 		} else {
@@ -1299,9 +1318,11 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()])
-			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
-			.finally(() => app.exit(0));
+		void runQuitCleanup({
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()],
+			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
+			onExit: () => app.exit(0),
+		});
 	});
 });
 

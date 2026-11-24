@@ -38,7 +38,7 @@ import type {
  *
  * Nothing is written into a datasource for the embedder: the librarian points
  * mailcrawl, lazykatok, discrawl and the chat sidecars at the one endpoint
- * `minSync.embedder` selects (the `minsync serve` server the app runs, or the
+ * `minSync.embedder` selects (the shared inl embedding daemon the app runs, or the
  * server the user configured) every time they index or search.
  *
  * Honesty rules enforced here:
@@ -194,6 +194,7 @@ function currentProfileId(embedder: unknown, semantic: boolean, accountBaseUrl: 
 function adoptionFor(type: string, choice: EmbeddingChoice): { adoption: EmbeddingAdoption; reason: string; action: string | null } {
 	if (choice.profile.kind === "none") return { adoption: "not-applicable", reason: t("main.embedding.reasons.keywordOnly"), action: null };
 	if (type === "mailcrawl") return { adoption: "native", reason: t("main.embedding.reasons.mailcrawlSharedEmbedder"), action: null };
+	if (type === "wombat") return { adoption: "native", reason: t("main.embedding.reasons.wombatSharedEmbedder"), action: null };
 	if (SIDECAR_TEMPLATES[type] === true) return { adoption: "native", reason: t("main.embedding.reasons.sidecarSharedEmbedder"), action: null };
 	switch (type) {
 		case "obsidian":

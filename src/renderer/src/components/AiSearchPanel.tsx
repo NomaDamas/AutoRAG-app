@@ -35,7 +35,9 @@ import { drawQuickAnswer, splitRevisionMarks } from "../state/answer-revisions";
 import { AnswerRevisionMark } from "./AnswerRevisionMark";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
-import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { attachmentsFromDrop, isAttachmentDrag, isThumbnailAttachment, mergeAttachments } from "../state/attachments";
+import { AttachmentThumb } from "./AttachmentThumb";
+import { attachPastedImages } from "../state/pasted-images";
 import { appendTranscript } from "../../../shared/voice-contract";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
@@ -811,6 +813,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		await autorag.search.cancel(id);
 	}
 
+	/** Images pasted into the field become draft attachments; with a model that takes none the paste does nothing. */
+	function pasteImages(files: readonly File[]): void {
+		void attachPastedImages(files, autorag.search.pasteImage).then((pasted) => {
+			if (pasted.length > 0) setAttachments((current) => mergeAttachments(current, pasted));
+		});
+	}
+
 	function removeAttachment(index: number): void {
 		setAttachments((current) => current.filter((_, position) => position !== index));
 	}
@@ -1200,23 +1209,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					</div>
 				) : (
 				<div className={CENTERED}>
-					{attachments.length > 0 ? (
+					{attachments.some((att) => !isThumbnailAttachment(att)) ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
-							{attachments.map((att, index) => (
-								<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
-									<AttachmentGlyph att={att} />
-									<span className="max-w-[180px] truncate">{att.name}</span>
-									<button
-										type="button"
-										className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
-										aria-label={t("finderComponents.removeAttachment")}
-										title={t("finderComponents.removeAttachment")}
-										onClick={() => removeAttachment(index)}
-									>
-										<CloseIcon size={10} />
-									</button>
-								</span>
-							))}
+							{attachments.map((att, index) => (isThumbnailAttachment(att) ? null : <DraftPill key={`${att.id}:${att.name}`} att={att} onRemove={() => removeAttachment(index)} />))}
 						</div>
 					) : null}
 					{searching && !phone ? (
@@ -1292,11 +1287,28 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</div>
 						) : (
 							<>
+								{attachments.some(isThumbnailAttachment) ? (
+									<div className="composer-attach-thumbs flex flex-wrap items-start gap-10 pt-6">
+										{attachments.map((att, index) =>
+											isThumbnailAttachment(att) ? (
+												<AttachmentThumb
+													key={`${att.id}:${att.name}`}
+													att={att}
+													size="composer"
+													removeLabel={t("finderComponents.removeAttachment")}
+													onRemove={() => removeAttachment(index)}
+													fallback={<DraftPill att={att} onRemove={() => removeAttachment(index)} />}
+												/>
+											) : null,
+										)}
+									</div>
+								) : null}
 								<ComposerField
 									fieldRef={inputRef}
 									value={query}
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
+									onPasteImages={pasteImages}
 									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
@@ -1392,14 +1404,35 @@ function AttachmentGlyph({ att, size = 16 }: { readonly att: ChatAttachment; rea
 	}
 }
 
+/** A draft attachment as a pill with its ✕: files, folders and links, and an image the page cannot draw. */
+function DraftPill({ att, onRemove }: { readonly att: ChatAttachment; readonly onRemove: () => void }): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<span className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
+			<AttachmentGlyph att={att} />
+			<span className="max-w-[180px] truncate">{att.name}</span>
+			<button
+				type="button"
+				className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
+				aria-label={t("finderComponents.removeAttachment")}
+				title={t("finderComponents.removeAttachment")}
+				onClick={onRemove}
+			>
+				<CloseIcon size={10} />
+			</button>
+		</span>
+	);
+}
+
 /** A referenced file badge above the user bubble (v7 `.ref-file-chip`). */
 function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
-	return (
+	const chip = (
 		<span className="ref-file-chip inline-flex items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5 text-ink" title={att.id}>
 			<AttachmentGlyph att={att} size={18} />
 			<span className="ref-chip-name text-meta leading-[1.4] text-ink">{att.name}</span>
 		</span>
 	);
+	return <AttachmentThumb att={att} size="message" fallback={chip} />;
 }
 
 /**

@@ -756,9 +756,9 @@ html[data-appearance="dark"] .fr-dock-ready {
 /* -------------------------------------------------------------------- ready */
 
 /*
- * Ready → Finder reveal (design-mockups/finish-reveal/v5v7-hybrid.html). The stage hands its own
- * backdrop to `.fr-reveal-back` (below the ready panel) and the word and bloom sit in
- * `.fr-reveal-front` (above it); `reveal.tsx` sets every opacity, transform and filter.
+ * Ready → Finder Arc/Dia-inspired reveal: one premultiplied-alpha WebGL shader canvas
+ * in `.fr-reveal-back` renders the obsidian stage, Dazzi liquid-glass orb, and organic
+ * melting aperture, while `.fr-reveal-front` runs the per-letter 3D spring cascade.
  */
 .fr-stage--reveal {
 	background: transparent;
@@ -773,7 +773,8 @@ html[data-appearance="dark"] .fr-dock-ready {
 
 .fr-reveal,
 .fr-reveal-back,
-.fr-reveal-front {
+.fr-reveal-front,
+.fr-reveal-shader {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
@@ -789,24 +790,31 @@ html[data-appearance="dark"] .fr-dock-ready {
 	overflow: hidden;
 }
 
+.fr-reveal-shader {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
 .fr-reveal-base,
-.fr-reveal-bgw,
-.fr-reveal-dark {
+.fr-reveal-bgw {
 	position: absolute;
 	inset: 0;
 }
 
 .fr-reveal-base,
 .fr-reveal-bgw,
-.fr-reveal-dark,
-.fr-reveal-glow,
 .fr-reveal-word,
-.fr-reveal-bloom {
+.fr-reveal-glyph {
 	will-change: opacity, transform, filter;
 }
 
 .fr-reveal-base {
 	background: #f6f7fa;
+}
+
+html[data-appearance="dark"] .fr-reveal-base {
+	background: #141518;
 }
 
 .fr-reveal-bgw {
@@ -816,50 +824,32 @@ html[data-appearance="dark"] .fr-dock-ready {
 		linear-gradient(180deg, var(--fr-stage-a), var(--fr-stage-b));
 }
 
-.fr-reveal-dark {
-	background:
-		radial-gradient(75% 65% at 82% 108%, rgba(30, 110, 230, 0.55), rgba(30, 110, 230, 0) 70%),
-		radial-gradient(60% 55% at 12% -6%, rgba(60, 90, 200, 0.3), rgba(60, 90, 200, 0) 70%),
-		#0b0d15;
-	opacity: 0;
-}
-
-.fr-reveal-glow {
-	position: absolute;
-	left: 50%;
-	top: 50%;
-	width: 700px;
-	height: 700px;
-	margin: -366px 0 0 -350px;
-	border-radius: 50%;
-	background: radial-gradient(circle, rgba(255, 232, 180, 0.9) 0%, rgba(255, 184, 70, 0.34) 24%, rgba(120, 150, 230, 0.22) 40%, rgba(30, 110, 230, 0.16) 52%, rgba(30, 110, 230, 0) 66%);
-	opacity: 0;
-}
-
 .fr-reveal-word {
 	position: absolute;
 	left: 0;
 	right: 0;
+	display: flex;
+	justify-content: center;
+	align-items: baseline;
+	gap: 0.14em;
 	padding-left: 0.14em;
-	text-align: center;
-	color: #fff;
-	font-size: 19px;
-	font-weight: 500;
-	letter-spacing: 0.14em;
-	text-shadow: 0 0 22px rgba(255, 190, 90, 0.55);
-	opacity: 0;
+	perspective: 720px;
+	transform-origin: 50% 50%;
 }
 
-.fr-reveal-bloom {
-	position: absolute;
-	left: 50%;
-	top: 50%;
-	width: 1000px;
-	height: 1000px;
-	margin: -500px 0 0 -500px;
-	border-radius: 50%;
-	background: radial-gradient(circle, rgba(255, 250, 235, 1) 0%, rgba(255, 226, 160, 0.65) 18%, rgba(255, 190, 90, 0.22) 38%, rgba(255, 190, 90, 0) 62%);
+.fr-reveal-glyph {
+	display: inline-block;
+	color: #fffdf8;
+	font-size: 26px;
+	line-height: 1.1;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	transform-origin: 0% 100%;
+	text-shadow:
+		0 2px 14px rgba(6, 10, 24, 0.75),
+		0 0 24px rgba(255, 206, 110, 0.42);
 	opacity: 0;
+	user-select: none;
 }
 
 /* The sweep lives on the sunflower (inside `.fr-done-mark`) and is masked to its shape. */
@@ -884,8 +874,8 @@ html[data-appearance="dark"] .fr-dock-ready {
 	top: -20%;
 	bottom: -20%;
 	left: 0;
-	width: 52px;
-	background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+	width: 54px;
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 246, 224, 0.88), rgba(255, 255, 255, 0));
 	transform: translateX(-90px) skewX(-18deg);
 	opacity: 0;
 }

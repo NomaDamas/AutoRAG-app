@@ -62,7 +62,7 @@ if (process.platform !== "darwin") {
 	process.exit(2);
 }
 
-const MODEL_CACHE = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
+const MODEL_CACHE = process.env.INL_CACHE_DIR?.trim() || join(homedir(), ".cache", "im-not-llm", "models");
 const TURN_MS = Number(process.env.QA_TURN_MS ?? 240_000);
 // GLM 5.3 Flash (released 2026-08) is the model the Dazzi-login lane already proves the app drives to an answer.
 const MODEL_ID = process.env.QA_MODEL_ID?.trim() || "z-ai/glm-5.3-flash";
@@ -228,7 +228,7 @@ const app = await launchFinder({
 		AUTORAG_QA_ROOT: QA_ROOT,
 		PI_CODING_AGENT_DIR: AGENT_DIR,
 		// The throwaway HOME would hide the embedding model the first query waits for; the real cache is reused.
-		FASTEMBED_CACHE_DIR: MODEL_CACHE,
+		INL_CACHE_DIR: MODEL_CACHE,
 		AUTORAG_SKIP_DUPEY_CHECK: "1",
 		ELECTRON_RENDERER_URL: "",
 		PATH: `${join(HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,

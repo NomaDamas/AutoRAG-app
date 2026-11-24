@@ -199,6 +199,8 @@ const CONNECTOR_FIELD_KINDS: Readonly<Record<string, ConnectorFieldKind>> = {
 	ghCliFallback: "boolean",
 	semantic: "semantic",
 	requireWriteConfirmation: "boolean",
+	includeSubagents: "boolean",
+	includeEphemeral: "boolean",
 	repos: "stringList",
 	extensions: "stringList",
 	include: "stringList",
@@ -206,6 +208,7 @@ const CONNECTOR_FIELD_KINDS: Readonly<Record<string, ConnectorFieldKind>> = {
 	queries: "stringList",
 	paths: "stringList",
 	args: "stringList",
+	agents: "stringList",
 	feeds: "feeds",
 	env: "env",
 };

@@ -159,7 +159,7 @@ export async function runWithoutSemanticIndexing<T>(work: () => Promise<T>): Pro
 /**
  * Agent options for keyword-only mode. Past-question memory search ranks by keywords too, and the shared embedder
  * reports no endpoint: the datasource CLIs (mailcrawl, lazykatok) then fail their hybrid and semantic searches with
- * `embedding-unavailable` instead of embedding with their own native model or a running `minsync serve`, so a hybrid-first
+ * `embedding-unavailable` instead of embedding with their own native model or a running inl daemon, so a hybrid-first
  * datasource method answers from its keyword search. The datasource skills hold this same embedder instance, which is why
  * it is changed in place.
  */

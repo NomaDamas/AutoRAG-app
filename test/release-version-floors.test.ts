@@ -26,9 +26,9 @@ describe("assertVersionFloor", () => {
 });
 
 describe("VERSION_FLOORS", () => {
-	it("keeps minsync at 0.7.1 or newer: librarian 2.13.7 refuses anything older, so a bundle below it would not run", () => {
-		expect(compareVersions("0.7.0", VERSION_FLOORS.minsync)).toBeLessThan(0);
-		expect(compareVersions("0.7.1", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
+	it("keeps minsync at 0.7.6 or newer: librarian 2.14.2 refuses anything older, and the app relies on the shared im-not-llm daemon root", () => {
+		expect(compareVersions("0.7.5", VERSION_FLOORS.minsync)).toBeLessThan(0);
+		expect(compareVersions("0.7.6", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
 	});
 
 	it("keeps dupey at 0.2.0 or newer: librarian 2.13.7 refuses an older one, whose HWP and fallback hashes disagree with the stored ones", () => {
@@ -39,5 +39,12 @@ describe("VERSION_FLOORS", () => {
 	it("keeps mailcrawl at 0.3.0+ for local mail archive indexing and lazykatok at 0.3.3+ for the embedding daemon", () => {
 		expect(VERSION_FLOORS["@nomadamas/mailcrawl"]).toBe("0.3.0");
 		expect(VERSION_FLOORS.lazykatok).toBe("0.3.3");
+	});
+
+	it("keeps wombat at 0.1.3+: it is the first release that follows MinSync's own defaults and needs minsync 0.7.3", () => {
+		expect(VERSION_FLOORS.wombat).toBe("0.1.3");
+		expect(compareVersions("0.1.2", VERSION_FLOORS.wombat)).toBeLessThan(0);
+		expect(compareVersions("0.1.3", VERSION_FLOORS.wombat)).toBeGreaterThanOrEqual(0);
+		expect(() => assertVersionFloor("wombat", "0.1.2", VERSION_FLOORS.wombat)).toThrow(/wombat 0\.1\.2 is below the required 0\.1\.3/u);
 	});
 });

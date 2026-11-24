@@ -56,7 +56,7 @@ function appendStandardToolDirs(current: string | undefined, home: string | unde
  * Put the bundled tools first on `env.PATH`, in place, and append standard user
  * tool directories after the existing entries when `augmentUserPaths` is set
  * so a Finder-launched build still resolves user-installed CLIs (`~/.cargo/bin/lazykatok`, Homebrew, ...).
- * The bundled SPLADE model is seeded into MinSync's model cache on the way ({@link seedBundledSparseModel}).
+ * The bundled SPLADE model is seeded into the shared inl weight cache on the way ({@link seedBundledSparseModel}).
  * Returns the tools root when bundled tools were applied.
  */
 export function applyBundledTools(input: {
@@ -64,7 +64,7 @@ export function applyBundledTools(input: {
 	readonly env: NodeJS.ProcessEnv;
 	readonly platform?: NodeJS.Platform;
 	readonly augmentUserPaths?: boolean;
-	/** Home of MinSync's model cache; defaults to the OS user's. */
+	/** Home whose inl weight cache the SPLADE model is seeded into; defaults to the OS user's. */
 	readonly home?: string;
 }): string | null {
 	const platform = input.platform ?? process.platform;

@@ -215,6 +215,9 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
 	);
 	ipcMain.handle(SEARCH_CHANNELS.cancel, (_event, searchId: string) => service.cancel(searchId));
+	ipcMain.handle(SEARCH_CHANNELS.pasteImage, (_event, mimeType: unknown, base64: unknown) =>
+		typeof mimeType === "string" && typeof base64 === "string" ? service.pasteImage(mimeType, base64) : null,
+	);
 	ipcMain.handle(SEARCH_CHANNELS.historyList, () => service.historyList());
 	ipcMain.handle(SEARCH_CHANNELS.historyGet, (_event, chatId: string) => service.historyGet(chatId));
 	ipcMain.handle(SEARCH_CHANNELS.historySearch, (_event, query: string) => service.historySearch(query));
@@ -418,7 +421,7 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 }
 
 /** The first run: load, permissions, folders, start/status/complete. The service validates its own state. */
-export function registerOnboardingIpcHandlers(service: FirstRunService): void {
+export function registerOnboardingIpcHandlers(service: FirstRunService, setRevealBackdrop?: (opacity: number) => void): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
@@ -435,6 +438,9 @@ export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 		return service.pickPaths(kind);
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
+	ipcMain.on(ONBOARDING_CHANNELS.revealBackdrop, (_event, opacity: unknown) => {
+		if (typeof opacity === "number" && Number.isFinite(opacity)) setRevealBackdrop?.(opacity);
+	});
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
 }
 
