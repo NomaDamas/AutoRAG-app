@@ -181,7 +181,9 @@ export function AiPage({
 		if (provider.baseUrl === null) return;
 		try {
 			const result = await settings.providersDiscover({ id: provider.id, kind: provider.kind === "local" ? "local" : "custom", label: provider.name, baseUrl: provider.baseUrl });
-			setNotice(result.ok ? t("settingsCore.ai.discoverFound", { name: provider.name, count: result.models.length, protocol: result.protocol ?? "" }) : t("settingsCore.ai.discoverFailed", { name: provider.name, error: result.error ?? t("settingsCore.ai.discoverFailWord") }));
+			// The probe's raw detail ("OpenAI endpoint: 404 …") goes to the console; the notice says what to check.
+			if (!result.ok && result.error !== null) console.warn(`[providers] discovery on ${provider.name} failed: ${result.error}`);
+			setNotice(result.ok ? t("settingsCore.ai.discoverFound", { name: provider.name, count: result.models.length, protocol: result.protocol ?? "" }) : t("settingsCore.ai.discoverFailed", { name: provider.name }));
 		} catch (cause) {
 			setNotice(errorText(cause));
 		}

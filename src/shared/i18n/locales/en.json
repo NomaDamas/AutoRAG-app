@@ -1164,6 +1164,24 @@
   },
   "main": {
     "errors": {
+      "config": {
+        "pathEmpty": "No setting was named to change.",
+        "pathInvalid": "This name can’t be used for a setting: ‘{{path}}’",
+        "pathManaged": "Dazzi manages this setting itself, so it can’t be changed here: ‘{{field}}’",
+        "valueNotJson": "This value can’t be saved in the settings.",
+        "plaintextSecret": "Secrets such as keys and tokens aren’t saved in the settings file. Enter it in the key field instead: ‘{{field}}’",
+        "urlInvalid": "The address isn’t in a valid format. Enter an address that starts with http:// or https://: ‘{{field}}’",
+        "urlNotLoopback": "So that document contents never leave this device, this address has to point at this device (localhost): ‘{{field}}’",
+        "remoteNeedsKey": "An embedding server outside this device needs an API key. Enter the server’s API key as well: ‘{{field}}’",
+        "urlNeedsHttps": "A remote server address that uses a token has to start with https://: ‘{{field}}’",
+        "renameSame": "The new name is the same as the current one.",
+        "renameIntoItself": "‘{{name}}’ can’t be moved into itself.",
+        "renameTaken": "The name ‘{{name}}’ is already taken. Enter a different name.",
+        "renameMissing": "Couldn’t find ‘{{name}}’. It may already have been deleted."
+      },
+      "account": {
+        "authFileUnreadable": "Couldn’t read the sign-in file ‘{{name}}’, so nothing was changed. Check the file’s contents."
+      },
       "provider": {
         "nameEmpty": "Enter a name.",
         "addressEmpty": "Enter the server address.",
@@ -2361,8 +2379,7 @@
       "testOk": "connection successful",
       "testFail": "connection failed",
       "discoverFound": "{{name}}: found {{count}} models ({{protocol}})",
-      "discoverFailed": "{{name}}: {{error}}",
-      "discoverFailWord": "discovery failed",
+      "discoverFailed": "Couldn’t find models on ‘{{name}}’. Check that the server is running and that the address is correct.",
       "menu": {
         "dazziPlan": "Dazzi Plans",
         "apiKeys": "API Keys",

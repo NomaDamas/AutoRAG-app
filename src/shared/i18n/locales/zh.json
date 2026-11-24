@@ -1164,6 +1164,24 @@
   },
   "main": {
     "errors": {
+      "config": {
+        "pathEmpty": "未指定要更改的设置项。",
+        "pathInvalid": "此名称不能用作设置项：“{{path}}”",
+        "pathManaged": "此项由 Dazzi 自行管理，无法在此更改：“{{field}}”",
+        "valueNotJson": "此值的格式无法保存到设置中。",
+        "plaintextSecret": "密钥、令牌等机密值不会保存在设置文件中。请在密钥输入框中输入：“{{field}}”",
+        "urlInvalid": "地址格式不正确。请输入以 http:// 或 https:// 开头的地址：“{{field}}”",
+        "urlNotLoopback": "为确保文档内容不离开此设备，此地址必须指向此设备 (localhost)：“{{field}}”",
+        "remoteNeedsKey": "使用此设备以外的嵌入服务器需要 API 密钥。请同时输入该服务器的 API 密钥：“{{field}}”",
+        "urlNeedsHttps": "使用令牌的远程服务器地址必须以 https:// 开头：“{{field}}”",
+        "renameSame": "新名称与当前名称相同。",
+        "renameIntoItself": "无法将“{{name}}”移动到其自身内部。",
+        "renameTaken": "名称“{{name}}”已被使用。请输入其他名称。",
+        "renameMissing": "找不到“{{name}}”。它可能已被删除。"
+      },
+      "account": {
+        "authFileUnreadable": "无法读取登录信息文件“{{name}}”，因此未作任何更改。请检查文件内容。"
+      },
       "provider": {
         "nameEmpty": "请输入名称。",
         "addressEmpty": "请输入服务器地址。",
@@ -2361,8 +2379,7 @@
       "testOk": "连接成功",
       "testFail": "连接失败",
       "discoverFound": "{{name}}：发现 {{count}} 个模型 ({{protocol}})",
-      "discoverFailed": "{{name}}：{{error}}",
-      "discoverFailWord": "发现失败",
+      "discoverFailed": "在“{{name}}”上未找到模型。请检查服务器是否正在运行，以及地址是否正确。",
       "menu": {
         "dazziPlan": "Dazzi 套餐",
         "apiKeys": "API 密钥",

@@ -25,6 +25,36 @@ import type {
 import { isJsonObject } from "../shared/settings-contract";
 import { migrateLegacyJev } from "./jev-migration";
 import { CALENDAR_MCP_EXPOSURES, syncCalendarMcpConfig } from "./calendar-mcp";
+import { t } from "../shared/i18n/core";
+
+/** Why a config write was refused. Code matches on `code`; the message is the translated sentence a person reads. */
+export type ConfigErrorCode =
+	| "path-empty"
+	| "path-invalid"
+	| "path-managed"
+	| "value-not-json"
+	| "plaintext-secret"
+	| "url-invalid"
+	| "url-not-loopback"
+	| "remote-needs-key"
+	| "url-needs-https"
+	| "rename-same"
+	| "rename-into-itself"
+	| "rename-taken"
+	| "rename-missing";
+
+export class ConfigError extends Error {
+	readonly code: ConfigErrorCode;
+	constructor(code: ConfigErrorCode, message: string) {
+		super(message);
+		this.name = "ConfigError";
+		this.code = code;
+	}
+}
+
+export function isConfigError(error: unknown, code?: ConfigErrorCode): error is ConfigError {
+	return error instanceof ConfigError && (code === undefined || error.code === code);
+}
 
 const REDACTED_SECRET = "__AUTORAG_SECRET_REDACTED__";
 /**
@@ -106,12 +136,12 @@ export function isJsonValue(value: unknown, seen: Set<object> = new Set()): valu
 }
 
 function assertSafePath(path: readonly string[]): void {
-	if (path.length === 0) throw new Error("AutoRAG config path must not be empty");
+	if (path.length === 0) throw new ConfigError("path-empty", t("main.errors.config.pathEmpty"));
 	if (path.some((segment) => typeof segment !== "string" || !SAFE_PATH_SEGMENT.test(segment))) {
-		throw new Error(`Invalid AutoRAG config path: ${path.join(".")}`);
+		throw new ConfigError("path-invalid", t("main.errors.config.pathInvalid", { path: path.join(".") }));
 	}
 	if (FORBIDDEN_ROOTS[path[0] as string] === true) {
-		throw new Error(`AutoRAG config path "${path[0]}" is managed by AutoRAG and cannot be edited here`);
+		throw new ConfigError("path-managed", t("main.errors.config.pathManaged", { field: path[0] }));
 	}
 }
 
@@ -482,10 +512,10 @@ function checkKnownBlock(path: string, value: unknown): void {
 				try {
 					parsedUrl = new URL(rawUrl);
 				} catch {
-					return fail(`datasources.${id}.connector.baseUrl must be a valid http(s) URL`);
+					throw new ConfigError("url-invalid", t("main.errors.config.urlInvalid", { field: `datasources.${id}.connector.baseUrl` }));
 				}
 				if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-					fail(`datasources.${id}.connector.baseUrl must be a valid http(s) URL`);
+					throw new ConfigError("url-invalid", t("main.errors.config.urlInvalid", { field: `datasources.${id}.connector.baseUrl` }));
 				}
 				const tokenEnv = entry.connector.tokenEnv;
 				if (
@@ -494,7 +524,7 @@ function checkKnownBlock(path: string, value: unknown): void {
 					parsedUrl.protocol === "http:" &&
 					LOOPBACK_HOSTS[parsedUrl.hostname.toLowerCase()] !== true
 				) {
-					fail(`datasources.${id}.connector.baseUrl must use https when tokenEnv is set and host is not loopback`);
+					throw new ConfigError("url-needs-https", t("main.errors.config.urlNeedsHttps", { field: `datasources.${id}.connector.baseUrl` }));
 				}
 			}
 		}
@@ -521,7 +551,7 @@ function validateKnownBlocks(candidate: Record<string, unknown>): void {
 /** Reject plaintext secrets in config writes; secrets live only in the credentials store. */
 function assertNoNewPlaintextSecrets(value: unknown, key?: string): void {
 	if (key !== undefined && isSecretKey(key) && typeof value === "string" && value.length > 0 && value !== REDACTED_SECRET) {
-		throw new Error(`AutoRAG config field "${key}" holds a secret; store it through the credentials API instead`);
+		throw new ConfigError("plaintext-secret", t("main.errors.config.plaintextSecret", { field: key }));
 	}
 	if (Array.isArray(value)) {
 		for (const item of value) assertNoNewPlaintextSecrets(item);
@@ -545,16 +575,16 @@ function assertLoopback(
 	try {
 		url = new URL(value);
 	} catch {
-		throw new Error(`AutoRAG config ${label} must be a valid ${options.allowRemote === true ? "http(s)" : "loopback"} URL`);
+		throw new ConfigError("url-invalid", t("main.errors.config.urlInvalid", { field: label }));
 	}
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
-		throw new Error(`AutoRAG config ${label} must use http or https`);
+		throw new ConfigError("url-invalid", t("main.errors.config.urlInvalid", { field: label }));
 	}
 	const host = url.hostname.toLowerCase();
 	if (LOOPBACK_HOSTS[host] === true) return;
 	if (options.allowRemote === true) return;
 	if (options.allowDazzi === true && (DAZZI_HOSTS[host] === true || (options.allowedHost !== undefined && host === options.allowedHost))) return;
-	throw new Error(`AutoRAG config ${label} must point at loopback (corpus never leaves this device)`);
+	throw new ConfigError("url-not-loopback", t("main.errors.config.urlNotLoopback", { field: label }));
 }
 
 /**
@@ -584,8 +614,8 @@ function assertNoRemoteEgress(candidate: Record<string, unknown>, env?: NodeJS.P
 			assertLoopback(embedder.baseUrl, "minSync.embedder.baseUrl", { allowDazzi: true, allowedHost, allowRemote: remoteWithKey });
 		} catch (error) {
 			// Say what a remote server needs, not only that it was refused.
-			if (error instanceof Error && /loopback/u.test(error.message) && !remoteWithKey) {
-				throw new Error(`${error.message}; a server off this computer must set minSync.embedder.apiKeyEnv`);
+			if (isConfigError(error, "url-not-loopback") && !remoteWithKey) {
+				throw new ConfigError("remote-needs-key", t("main.errors.config.remoteNeedsKey", { field: "minSync.embedder.apiKeyEnv" }));
 			}
 			throw error;
 		}
@@ -704,7 +734,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		value: JsonValue,
 	): void {
 		assertSafePath(path);
-		if (!isJsonValue(value)) throw new Error("AutoRAG config value must be JSON");
+		if (!isJsonValue(value)) throw new ConfigError("value-not-json", t("main.errors.config.valueNotJson"));
 		// A plaintext secret must never reach the config file; only the sentinel
 		// (unchanged secret) is permitted.
 		assertNoNewPlaintextSecrets(value, path[path.length - 1]);
@@ -735,16 +765,16 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 				assertSafePath(from);
 				assertSafePath(to);
 				if (from.length === to.length && from.every((segment, index) => segment === to[index])) {
-					throw new Error("AutoRAG config rename source and destination are the same path");
+					throw new ConfigError("rename-same", t("main.errors.config.renameSame"));
 				}
 				if (to.length > from.length && from.every((segment, index) => segment === to[index])) {
-					throw new Error(`AutoRAG config cannot move ${from.join(".")} into its own descendant`);
+					throw new ConfigError("rename-into-itself", t("main.errors.config.renameIntoItself", { name: from[from.length - 1] }));
 				}
 				if (readAt(candidate, to) !== undefined) {
-					throw new Error(`AutoRAG config destination ${to.join(".")} already exists`);
+					throw new ConfigError("rename-taken", t("main.errors.config.renameTaken", { name: to[to.length - 1] }));
 				}
 				const value = readAt(candidate, from);
-				if (value === undefined) throw new Error(`AutoRAG config value not found at ${from.join(".")}`);
+				if (value === undefined) throw new ConfigError("rename-missing", t("main.errors.config.renameMissing", { name: from[from.length - 1] }));
 				deleteAt(candidate, from);
 				setAt(candidate, to, value);
 			}),

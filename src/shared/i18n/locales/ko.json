@@ -1164,6 +1164,24 @@
   },
   "main": {
     "errors": {
+      "config": {
+        "pathEmpty": "바꿀 설정 항목이 지정되지 않았습니다.",
+        "pathInvalid": "이 이름은 설정 항목으로 쓸 수 없습니다: ‘{{path}}’",
+        "pathManaged": "이 항목은 Dazzi가 직접 관리하므로 여기서 바꿀 수 없습니다: ‘{{field}}’",
+        "valueNotJson": "이 값은 설정에 저장할 수 없는 형식입니다.",
+        "plaintextSecret": "키나 토큰 같은 비밀 값은 설정 파일에 저장하지 않습니다. 키 입력란에 입력하세요: ‘{{field}}’",
+        "urlInvalid": "주소 형식이 올바르지 않습니다. http:// 또는 https://로 시작하는 주소를 입력하세요: ‘{{field}}’",
+        "urlNotLoopback": "문서 내용이 이 기기 밖으로 나가지 않도록 이 주소는 이 기기(localhost)를 가리켜야 합니다: ‘{{field}}’",
+        "remoteNeedsKey": "이 기기 밖의 임베딩 서버를 쓰려면 API 키가 필요합니다. 서버의 API 키를 함께 입력하세요: ‘{{field}}’",
+        "urlNeedsHttps": "토큰을 쓰는 원격 서버 주소는 https://로 시작해야 합니다: ‘{{field}}’",
+        "renameSame": "새 이름이 지금 이름과 같습니다.",
+        "renameIntoItself": "‘{{name}}’을(를) 자기 안으로 옮길 수 없습니다.",
+        "renameTaken": "‘{{name}}’ 이름이 이미 있습니다. 다른 이름을 입력하세요.",
+        "renameMissing": "‘{{name}}’ 항목을 찾지 못했습니다. 이미 삭제되었을 수 있습니다."
+      },
+      "account": {
+        "authFileUnreadable": "로그인 정보 파일 ‘{{name}}’을(를) 읽지 못해 아무것도 바꾸지 않았습니다. 파일 내용을 확인하세요."
+      },
       "provider": {
         "nameEmpty": "이름을 입력하세요.",
         "addressEmpty": "서버 주소를 입력하세요.",
@@ -2361,8 +2379,7 @@
       "testOk": "연결 성공",
       "testFail": "연결 실패",
       "discoverFound": "{{name}}: {{count}}개 모델 발견 ({{protocol}})",
-      "discoverFailed": "{{name}}: {{error}}",
-      "discoverFailWord": "발견 실패",
+      "discoverFailed": "‘{{name}}’에서 모델을 찾지 못했습니다. 서버가 실행 중인지, 주소가 맞는지 확인하세요.",
       "menu": {
         "dazziPlan": "Dazzi 요금제",
         "apiKeys": "API 키",

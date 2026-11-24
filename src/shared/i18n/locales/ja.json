@@ -1164,6 +1164,24 @@
   },
   "main": {
     "errors": {
+      "config": {
+        "pathEmpty": "変更する設定項目が指定されていません。",
+        "pathInvalid": "この名前は設定項目に使用できません: 「{{path}}」",
+        "pathManaged": "この項目は Dazzi が管理しているため、ここでは変更できません: 「{{field}}」",
+        "valueNotJson": "この値は設定に保存できない形式です。",
+        "plaintextSecret": "キーやトークンなどの秘密の値は設定ファイルに保存しません。キーの入力欄に入力してください: 「{{field}}」",
+        "urlInvalid": "アドレスの形式が正しくありません。http:// または https:// で始まるアドレスを入力してください: 「{{field}}」",
+        "urlNotLoopback": "書類の内容がこのデバイスの外に出ないよう、このアドレスはこのデバイス (localhost) を指す必要があります: 「{{field}}」",
+        "remoteNeedsKey": "このデバイスの外にある埋め込みサーバーを使うには API キーが必要です。サーバーの API キーも入力してください: 「{{field}}」",
+        "urlNeedsHttps": "トークンを使うリモートサーバーのアドレスは https:// で始まる必要があります: 「{{field}}」",
+        "renameSame": "新しい名前が現在の名前と同じです。",
+        "renameIntoItself": "「{{name}}」をそれ自身の中に移動することはできません。",
+        "renameTaken": "「{{name}}」という名前はすでに使われています。別の名前を入力してください。",
+        "renameMissing": "「{{name}}」が見つかりませんでした。すでに削除されている可能性があります。"
+      },
+      "account": {
+        "authFileUnreadable": "ログイン情報ファイル「{{name}}」を読み込めなかったため、何も変更していません。ファイルの内容を確認してください。"
+      },
       "provider": {
         "nameEmpty": "名前を入力してください。",
         "addressEmpty": "サーバーアドレスを入力してください。",
@@ -2361,8 +2379,7 @@
       "testOk": "接続成功",
       "testFail": "接続失敗",
       "discoverFound": "{{name}}: {{count}} 個のモデルを検出 ({{protocol}})",
-      "discoverFailed": "{{name}}: {{error}}",
-      "discoverFailWord": "検出失敗",
+      "discoverFailed": "「{{name}}」でモデルが見つかりませんでした。サーバーが起動しているか、アドレスが正しいか確認してください。",
       "menu": {
         "dazziPlan": "Dazzi プラン",
         "apiKeys": "API キー",
