@@ -788,6 +788,34 @@ export function App(): ReactElement {
 	useEffect(() => {
 		pruneInspectorChats(tabs.flatMap((tab) => [tab.id, -tab.id - 1]));
 	}, [tabs, pruneInspectorChats]);
+
+	// The 자동화 tab's chat is the AI 에이전트's conversation, not one of its own: on the 자동화 tab the column shows the
+	// chat the last AI 에이전트 tab shows, a question asked there continues it, and that AI tab shows the same chat
+	// (re-read from history) the next time it comes to the front. A new chat started on either side becomes the shared one.
+	const lastAiTabRef = useRef<number | null>(null);
+	const sharedChatRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (activeAiTabId === null) return;
+		lastAiTabRef.current = activeAiTabId;
+		const handle = aiHandlesRef.current.get(activeAiTabId);
+		const shared = sharedChatRef.current;
+		if (handle !== undefined && shared !== null && handle.currentChatId() !== shared) deliverToAi({ chat: shared }, activeAiTabId);
+		else if (handle !== undefined && shared !== null) handle.openChat(shared);
+		sharedChatRef.current = null;
+	}, [activeAiTabId, deliverToAi]);
+	const automationsChatKey = automationsTabActive && chatTabId !== null && chatTabId < 0 ? chatTabId : null;
+	useEffect(() => {
+		if (automationsChatKey === null || !inspectorVisible) return;
+		// A chat this column moved on to that the AI tab has not taken yet stays; otherwise follow the AI tab's.
+		if (sharedChatRef.current !== null) return;
+		const lastAi = lastAiTabRef.current;
+		const aiChat = lastAi === null ? null : (aiHandlesRef.current.get(lastAi)?.currentChatId() ?? null);
+		if (aiChat !== null && inspectorChats.tab(automationsChatKey).chat?.chatId !== aiChat) inspectorChats.open(automationsChatKey, aiChat);
+	}, [automationsChatKey, inspectorVisible]);
+	const automationsChatId = automationsChatKey === null ? null : (chatTab.chat?.chatId ?? null);
+	useEffect(() => {
+		if (automationsChatId !== null) sharedChatRef.current = automationsChatId;
+	}, [automationsChatId, chatTab.chat?.updatedAt]);
 	const openChatInAiTab = useCallback(
 		(chatId: string) => {
 			finder?.openAiSearch();

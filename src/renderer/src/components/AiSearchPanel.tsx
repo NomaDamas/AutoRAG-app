@@ -107,6 +107,8 @@ export interface AiDockHandle {
 	openChat(id: string): void;
 	/** Open the 대화 기록 list (it stays open if it already is). */
 	showHistory(): void;
+	/** The stored chat this tab shows, or null before its first question (the 자동화 tab's chat follows it). */
+	currentChatId(): string | null;
 }
 
 export interface AiSearchPanelProps {
@@ -868,6 +870,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		showHistory(): void {
 			if (!historyOpen) void openHistory();
 		},
+		currentChatId: () => chatIdRef.current,
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
