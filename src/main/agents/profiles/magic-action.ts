@@ -36,6 +36,7 @@ import { createDefaultParserRegistry, type ParserRegistry } from "@autorag/libra
 import type { MagicActionAgentMode } from "../../../shared/context-menu-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { isSecretKey } from "../../autorag-config-service";
+import { CREDENTIAL_NAME, inside, normalizeFencePath } from "../path-fence";
 import { INTENT_FIELD, intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 
 const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
@@ -45,8 +46,6 @@ const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
 	zh: "Simplified Chinese",
 };
 
-const CREDENTIAL_NAME =
-	/^(?:\.env(?:\..*)?|id_[a-z0-9]+(?:\.pub)?|.*\.(?:pem|key|p12|pfx|keychain-db)|(?:auth|models|mcp|mcp-auth|accounts)\.json|credentials(?:\..*)?|\.netrc|\.npmrc|\.pypirc)$/iu;
 
 const MCP_SERVERS_SECTION = "mcp_servers";
 const MCP_RESULT_GUARD =
@@ -87,20 +86,6 @@ export interface MagicActionProfileInput {
 export interface OpenedMagicActionSession {
 	readonly session: AgentSession;
 	dispose(): Promise<void>;
-}
-
-function normalizeFencePath(value: string, platform: NodeJS.Platform): string {
-	if (platform === "win32") {
-		return value.replace(/\//g, "\\").toLowerCase();
-	}
-	return value;
-}
-
-function inside(child: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
-	const normChild = normalizeFencePath(child, platform);
-	const normRoot = normalizeFencePath(root, platform);
-	const boundary = platform === "win32" ? "\\" : sep;
-	return normChild === normRoot || normChild.startsWith(`${normRoot}${boundary}`);
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {

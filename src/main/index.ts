@@ -39,7 +39,7 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, type QuickLookWindowOptions } from "../preview/node/register";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
@@ -129,6 +129,7 @@ import { openPlanRuntime, resolveConfiguredSessionModel } from "@autorag/librari
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
+import { createDocumentEditService } from "./document-edit-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
@@ -1126,6 +1127,14 @@ app.whenReady().then(async () => {
 	});
 	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
+	const documentEditService = createDocumentEditService({
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		language: () => currentLanguage,
+		backupDir: join(app.getPath("userData"), "document-edit-backups"),
+	});
+	setQuickLookDocumentEdit(documentEditService);
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;
 	const getDeviceId = (): Promise<string> => {
@@ -1374,7 +1383,7 @@ app.whenReady().then(async () => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
 		void runQuitCleanup({
-			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()],
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose(), documentEditService.dispose()],
 			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
 			onExit: () => app.exit(0),
 		});
