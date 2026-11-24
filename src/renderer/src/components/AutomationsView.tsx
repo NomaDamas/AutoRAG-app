@@ -758,10 +758,10 @@ function AutomationDetail({
 				<button
 					type="button"
 					data-action="automation-back"
-					className="inline-flex flex-none items-center gap-4 self-start border-0 bg-transparent p-0 text-[13px] leading-[21px] text-ink-muted cursor-pointer hover:text-ink"
+					className="inline-flex flex-none items-center gap-4 self-start border-0 bg-transparent p-0 text-meta leading-[16px] text-ink-muted cursor-pointer hover:text-ink"
 					onClick={onBack}
 				>
-					<ChevronLeftIcon size={16} />
+					<ChevronLeftIcon size={12} />
 					{t("places.automations")}
 				</button>
 				<div className="flex min-w-0 items-center gap-8">
