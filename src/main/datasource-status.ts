@@ -80,6 +80,7 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 	clawgallery: "clawgallery",
 	spotlight: "mdfind",
 	hister: "hister",
+	wombat: "wombat",
 };
 
 /** Templates whose chunks AutoRAG itself persists under `.autorag/datasources/<id>/<instance>/chunks.json`. */

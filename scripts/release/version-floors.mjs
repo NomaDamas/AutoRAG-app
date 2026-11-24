@@ -14,12 +14,16 @@
  *    (`--path`) local archive indexing (which retires `mail-export`), on top of the daemon's
  *    OpenAI embedding route.
  *  - `lazykatok` 0.3.3 gains the OpenAI-compatible embedder, the same route.
+ *  - `wombat-sessions` (the `wombat` CLI) 0.1.3: AI Sessions. It follows MinSync's own embedder and chunker defaults and
+ *    requires minsync 0.7.3, which the bundle already carries; 0.1.2 and older pin a chunker and an embedder
+ *    themselves, so an index they build would not match the one the librarian's MinSync reads.
  */
 export const VERSION_FLOORS = {
 	minsync: "0.7.6",
 	dupey: "0.2.0",
 	"@nomadamas/mailcrawl": "0.3.0",
 	lazykatok: "0.3.3",
+	wombat: "0.1.3",
 };
 
 /** What each floor guarantees, for the error a build prints when it resolves something older. */
@@ -28,6 +32,7 @@ const FLOOR_REASONS = {
 	dupey: "librarian 2.13.7 refuses an older dupey: 0.1.2 hashes an HWP's text incompletely and hashes `fingerprint` and `scan` inconsistently, so the hashes it stores would disagree with the ones it computes",
 	"@nomadamas/mailcrawl": "librarian 2.13.2 requires mailcrawl 0.3.0's `--source files` local archive support on top of the `minsync serve` daemon's OpenAI route",
 	lazykatok: "it is the first release that can embed through the `minsync serve` daemon's OpenAI route",
+	wombat: "0.1.3 is the first release that follows MinSync's own embedder and chunker defaults on minsync 0.7.3; an older one builds an index the librarian's MinSync does not read",
 };
 
 /** Compare dotted numeric versions: `a > b` -> positive, `a < b` -> negative, equal -> 0. */

@@ -401,6 +401,36 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		],
 	},
 	{
+		id: "wombat",
+		// The product name the user sees; "wombat" is the CLI behind it.
+		label: "AI Sessions",
+		binary: "wombat",
+		summary: "settingsSources.templates.wombat.summary",
+		channels: "none",
+		polling: true,
+		groups: [
+			{
+				title: "settingsSources.groups.aiSessions",
+				fields: [
+					{ key: "agents", label: "settingsSources.fields.agents", kind: "stringList", placeholder: "claude-code", hint: "settingsSources.fields.hint.agents" },
+					{ key: "includeSubagents", label: "settingsSources.fields.includeSubagents", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.includeSubagents" },
+					{ key: "includeEphemeral", label: "settingsSources.fields.includeEphemeral", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.includeEphemeral" },
+					{ key: "dataDir", label: "settingsSources.fields.dataDir", kind: "text", placeholder: "~/.wombat", hint: "settingsSources.fields.hint.wombatDataDir" },
+				],
+			},
+			{
+				title: "settingsSources.groups.advancedRuntime",
+				fields: [
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text", hint: "settingsSources.fields.hint.binaryPathEmpty" },
+					{ key: "timeoutMs", label: "settingsSources.fields.searchTimeoutMs", kind: "number" },
+					{ key: "indexTimeoutMs", label: "settingsSources.fields.indexTimeoutMs", kind: "number" },
+					{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+					{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.envSimple" },
+				],
+			},
+		],
+	},
+	{
 		id: "calendar",
 		label: "Apple Calendar & Reminders",
 		binary: "npx",

@@ -1224,7 +1224,8 @@
         "mailcrawlSharedEmbedder": "mailcrawl は Dazzi と同じ埋め込みサーバーを使います。モデルが変わると、次回のインデックス作成で自動的に作り直します。",
         "sidecarSharedEmbedder": "会話アーカイブ上の読み取り専用サイドカーが共有エンベッダーでメッセージを埋め込みます。エンベッダーを変更すると次回の更新で再埋め込みします。",
         "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の更新で再埋め込みします。",
-        "obsidianSharedEmbedder": "Obsidian の保管庫は選択した埋め込みモデルにそのまま従います(MinSync が保管庫専用の作業領域で索引します)。"
+        "obsidianSharedEmbedder": "Obsidian の保管庫は選択した埋め込みモデルにそのまま従います(MinSync が保管庫専用の作業領域で索引します)。",
+        "wombatSharedEmbedder": "AI セッションは Dazzi と同じ MinSync モデルを使います。モデルが変わると、次回のインデックス作成で自動的に作り直します。"
       },
       "actions": {
         "discordConfig": "datasources.<id> が管理する discrawl config.toml"
@@ -2602,6 +2603,9 @@
       },
       "spotlight": {
         "summary": "macOS Spotlight (mdfind) でローカルファイルをライブ照会します。"
+      },
+      "wombat": {
+        "summary": "Claude Code や Codex などの AI コーディングエージェントとの過去の会話を wombat で検索します。"
       }
     },
     "groups": {
@@ -2625,7 +2629,8 @@
       "rss": "RSS / News",
       "hister": "Hister (ブラウザ閲覧履歴)",
       "calendar": "Apple カレンダー・リマインダー (EventKit MCP)",
-      "spotlight": "Spotlight (mdfind)"
+      "spotlight": "Spotlight (mdfind)",
+      "aiSessions": "AI セッション"
     },
     "fields": {
       "binaryPath": "実行ファイルのパス",
@@ -2711,7 +2716,11 @@
         "histerSemantic": "Hister サーバー側でセマンティック検索が有効である必要があります (autorag setup --sync-hister)。",
         "requireWriteConfirmation": "オンにすると、確認なしで予定やリマインダーを変更しません (--require-write-confirmation)。",
         "mcpExposure": "direct はツールを直接モデルに公開し、codemode はスクリプト経由で呼び出します。",
-        "calendarCommand": "空欄にすると npx で mcp-server-apple-events を起動します。"
+        "calendarCommand": "空欄にすると npx で mcp-server-apple-events を起動します。",
+        "agents": "空欄ならインストール済みのすべてのエージェント（Claude Code、Codex、OpenCode、Gemini、Kiro など20種）を読み取ります。例: claude-code, codex",
+        "includeSubagents": "サブエージェントやサイドチェーンの会話もインデックスします。既定はオフです。",
+        "includeEphemeral": "ヘッドレス、ベンチマーク、一時フォルダで実行されたセッションもインデックスします。既定はオフです。",
+        "wombatDataDir": "wombat が会話のコピーとインデックスを保存するフォルダです。空欄なら ~/.wombat を使います。"
       },
       "envError": {
         "object": "環境変数は JSON オブジェクトでなければなりません。",
@@ -2733,7 +2742,10 @@
         "removeAt": "フィード {{index}} を削除",
         "addAria": "フィードを追加",
         "addLabel": "+ フィードを追加"
-      }
+      },
+      "agents": "エージェント",
+      "includeSubagents": "サブエージェントのセッションを含める",
+      "includeEphemeral": "一時的なセッションを含める"
     },
     "cadence": {
       "min5": "5分",
@@ -2748,7 +2760,8 @@
     "units": {
       "message": "メッセージ",
       "document": "ドキュメント",
-      "image": "画像"
+      "image": "画像",
+      "session": "セッション"
     },
     "common": {
       "manual": "手動",
@@ -2820,6 +2833,7 @@
       "groups": {
         "messengers": "メッセンジャー",
         "docsNotes": "ドキュメント・ノート",
+        "aiSessions": "AI コーディングエージェント",
         "mail": "メール",
         "cloudDev": "クラウド・開発",
         "newsOther": "ニュース・その他"

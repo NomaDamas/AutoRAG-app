@@ -53,15 +53,44 @@ function urlOf(metadata: Record<string, unknown>): string | null {
 	return url !== null && /^https?:\/\//iu.test(url) ? url : null;
 }
 
+/**
+ * A wombat hit is a chunk of the plain-text mirror wombat writes (one file per session), so it carries that file's
+ * bookkeeping, which a row must not print:
+ *   - the librarian's one-line `[<sessionKey> | turns A-B | date | title | project]` label, for the model, which reads only a
+ *     result's content and needs the session key to open it. A row shows the title, the agent and the date beside the snippet.
+ *   - the mirror file's path, as `<agent>/<project>/<session>__<hash>.md` or `<path>.md > Session <key>`;
+ *   - the first chunk's `# Session <key>` heading and its `- key: value` header lines, which hold the source log's path;
+ *   - each turn's `## Turn N | User | <time> [src:L12]` heading, which becomes `User:` in front of the turn's text.
+ * Every pattern is anchored to a whole line, so a turn whose own text mentions one of them stays as written.
+ */
+const WOMBAT_LABEL = /^\[[^\]\n]*\]\n/u;
+const MIRROR_PATH_LINE = /^[^\s>][^\n]*\.md(?: > [^\n]*)?\n/u;
+const MIRROR_HEADER = /^# Session [^\n]*\n(?:- [a-z_]+: [^\n]*\n)*\n?/u;
+const MIRROR_TURN_HEADING = /^## Turn \d+ \| (User|Assistant) \| [^\n]*? \[src:[^\]\n]*\]$/gmu;
+
+function conversationOf(result: RetrievalResult): string {
+	if (result.metadata.datasourceId !== "wombat") return result.content;
+	return result.content
+		.replace(WOMBAT_LABEL, "")
+		.replace(MIRROR_PATH_LINE, "")
+		.replace(MIRROR_HEADER, "")
+		.replace(MIRROR_TURN_HEADING, "$1:");
+}
+
 /** A retrieval result as a row; exported for tests. */
 export function sourceHit(result: RetrievalResult, query: string): SourceHit {
-	const flat = result.content.replace(/\s+/gu, " ").trim();
+	const content = conversationOf(result);
+	const flat = content.replace(/\s+/gu, " ").trim();
 	return {
 		id: result.id,
-		// Each source names it differently: KakaoTalk `chatName`, Slack/Discord `channelName`, mail `subject`, pages `title`.
-		title: text(result.metadata.subject) ?? text(result.metadata.chatName) ?? text(result.metadata.channelName) ?? text(result.metadata.title) ?? result.source,
-		author: text(result.metadata.senderNickname) ?? text(result.metadata.authorName) ?? text(result.metadata.senderName) ?? text(result.metadata.from) ?? text(result.metadata.domain),
-		snippet: contentSnippet(result.content, query),
+		// Each source names it differently: KakaoTalk `chatName`, Slack/Discord `channelName`, mail `subject`, pages `title`,
+		// an AI session its `title` (or, untitled, its `sessionKey`).
+		title:
+			text(result.metadata.subject) ?? text(result.metadata.chatName) ?? text(result.metadata.channelName) ?? text(result.metadata.title) ?? text(result.metadata.sessionKey) ?? result.source,
+		// The agent that ran an AI session stands where a chat's sender does.
+		author:
+			text(result.metadata.senderNickname) ?? text(result.metadata.authorName) ?? text(result.metadata.senderName) ?? text(result.metadata.from) ?? text(result.metadata.agent) ?? text(result.metadata.domain),
+		snippet: contentSnippet(content, query),
 		content: flat.length > SOURCE_HIT_CONTENT_LIMIT ? `${flat.slice(0, SOURCE_HIT_CONTENT_LIMIT)}…` : flat,
 		timestamp: timestampOf(result.metadata),
 		url: urlOf(result.metadata),
