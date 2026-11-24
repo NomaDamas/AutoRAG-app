@@ -25,6 +25,11 @@ export interface AutomationsShellDeps {
 	readonly onError: (message: string) => void;
 	/** The names people gave their rules; passed so the list redraws when one changes. */
 	readonly names?: Readonly<Record<string, string>>;
+	/**
+	 * Turn the background service on by itself when there are rules and it is off (the desktop window). The phone
+	 * layout keeps its own switch and leaves this off, so a person who switched it off there is not overruled.
+	 */
+	readonly autoStartService?: boolean;
 	/** Store a rule's name (an empty one goes back to the derived title). */
 	readonly renameRule?: (id: string, name: string) => Promise<void>;
 }
@@ -87,6 +92,17 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const latest = useRef(deps);
 	latest.current = deps;
+
+	// No rule runs while the service is off, so the window turns it on once there is something to run: once per
+	// launch, so a failure (shown as a toast) or a later 끄기 is not fought over.
+	const autoStarted = useRef(false);
+	const daemon = view.state.daemon;
+	useEffect(() => {
+		if (deps.autoStartService !== true || autoStarted.current || view.daemonBusy) return;
+		if (!view.state.ready || rules.length === 0 || daemon === null || daemon.running === true) return;
+		autoStarted.current = true;
+		store.setDaemon(true).catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
+	}, [deps.autoStartService, view.state.ready, rules.length, daemon?.running, daemon === null, view.daemonBusy]);
 
 	const byId = useCallback((id: string | null): AutomationRule | null => (id === null ? null : (rules.find((rule) => rule.id === id) ?? null)), [rules]);
 	// A rule deleted elsewhere (the agent, another window) leaves nothing selected, previewed, or asked about.

@@ -54,8 +54,9 @@ interface Harness {
 	bridge: AutomationBridge;
 }
 
-async function mount(initial: readonly AutomationRule[], options: { active?: boolean; removeFails?: boolean } = {}): Promise<Harness> {
+async function mount(initial: readonly AutomationRule[], options: { active?: boolean; removeFails?: boolean; serviceOff?: boolean; autoStartService?: boolean } = {}): Promise<Harness> {
 	let current = snapshot(initial);
+	if (options.serviceOff === true) current = { ...current, daemon: { platform: "darwin", installed: false, running: false } };
 	let removed: AutomationRule | undefined;
 	let removedIndex = 0;
 	const bridge: AutomationBridge = {
@@ -76,7 +77,10 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 			current = snapshot(next);
 			return current;
 		},
-		setDaemon: async () => current,
+		setDaemon: vi.fn(async (enabled: boolean) => {
+			current = { ...current, daemon: { platform: "darwin", installed: enabled, running: enabled } };
+			return current;
+		}),
 		onChange: () => () => {},
 	};
 	const store = createAutomationsStore(bridge);
@@ -84,7 +88,7 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 	let latest: AutomationsShell | undefined;
 	function Probe(): null {
 		const view = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-		const shellDeps: AutomationsShellDeps = { store, view, active: options.active ?? true, ...deps };
+		const shellDeps: AutomationsShellDeps = { store, view, active: options.active ?? true, autoStartService: options.autoStartService ?? false, ...deps };
 		latest = useAutomationsShell(shellDeps);
 		return null;
 	}
@@ -251,6 +255,25 @@ describe("deleting", () => {
 		expect(h.shell().deleting).toBe(false);
 		expect(h.shell().confirm).toBeNull();
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["b"]);
+	});
+
+	it("turns the background service on by itself once there is a rule to run, only once and only where asked", async () => {
+		const off = await mount([rule("a")], { serviceOff: true });
+		expect(off.bridge.setDaemon).not.toHaveBeenCalled();
+		act(() => root.unmount());
+		root = createRoot(host);
+		const h = await mount([rule("a")], { serviceOff: true, autoStartService: true });
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		expect(h.bridge.setDaemon).toHaveBeenCalledTimes(1);
+		expect(h.bridge.setDaemon).toHaveBeenCalledWith(true);
+		expect(h.store.getSnapshot().state.daemon?.running).toBe(true);
+	});
+
+	it("leaves the service alone while there are no rules", async () => {
+		const h = await mount([], { serviceOff: true, autoStartService: true });
+		expect(h.bridge.setDaemon).not.toHaveBeenCalled();
 	});
 
 	it("deletes on confirm, selects the neighbour, and offers undo that expires", async () => {

@@ -874,6 +874,7 @@ export function App(): ReactElement {
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
 		names: automationNames,
+		autoStartService: true,
 		renameRule: async (id, name) => {
 			const next: Record<string, string> = { ...ruleNamesNow() };
 			if (name.trim().length === 0) delete next[id];

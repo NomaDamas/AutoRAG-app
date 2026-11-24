@@ -830,26 +830,6 @@ function AllRuns({ rules, history, onOpen }: { readonly rules: readonly Automati
 	);
 }
 
-/**
- * The background service runs the rules, so while it is off none of them runs. That is the only time it needs
- * saying: a banner over the page with 켜기, and nothing at all while it runs or its state cannot be read.
- */
-function DaemonOffBanner({ busy, onTurnOn }: { readonly busy: boolean; readonly onTurnOn: () => void }): ReactElement {
-	const { t } = useTranslation();
-	// Figma 641:13722: the same compact warning card as the index notice.
-	return (
-		<div data-daemon>
-			<NoticeCard
-				compact
-				role="status"
-				tone="warning"
-				title={t("automations.daemon.offBanner")}
-				actions={[{ label: busy ? t("automations.daemon.busy") : t("automations.daemon.turnOn"), disabled: busy, onClick: onTurnOn }]}
-			/>
-		</div>
-	);
-}
-
 export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon, onRetryStatus }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
@@ -896,7 +876,6 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							{t("automations.errors.statusHint")}
 						</NoticeCard>
 					)}
-					{state.rules.length > 0 && state.daemon !== null && state.daemon.running !== true ? <DaemonOffBanner busy={daemonBusy} onTurnOn={() => onSetDaemon(true)} /> : null}
 					{broken ? (
 						<div className="flex flex-col items-center gap-8 px-16 py-32 text-center">
 							<strong className="text-body font-semibold text-ink">{t("automations.errors.config")}</strong>
