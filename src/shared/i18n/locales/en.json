@@ -728,7 +728,6 @@
       "open": "New automation"
     },
     "templates": {
-      "hint": "Click to preview",
       "title": "Suggested Automations",
       "screenshot": {
         "title": "Tidy screenshot names",

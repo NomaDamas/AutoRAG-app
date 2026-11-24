@@ -562,7 +562,7 @@ function RuleRow({
 				<span className="truncate text-badge leading-[16px] text-ink-muted">{whenText(rule)}</span>
 			</div>
 			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
-			<span role="presentation" onClick={(event) => event.stopPropagation()}>
+			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
 				<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-rule-on" />
 			</span>
 			<ChevronRightIcon size={16} className="flex-none text-ink-faint" />
@@ -591,8 +591,7 @@ function Section({ title, aside, muted = false, children }: { readonly title: st
 /** 내 자동화 | 전체 기록: the two places the column shows (Figma 621:4556, 621:5262). */
 function Segmented<T extends string>({ value, options, onChange }: { readonly value: T; readonly options: readonly { readonly value: T; readonly label: string }[]; readonly onChange: (value: T) => void }): ReactElement {
 	return (
-		// Quiet tabs for the head bar: no tray, 24px tall; the current one takes the sidebar's selected fill.
-		<div role="tablist" className="inline-flex items-center gap-2" data-automation-tabs>
+		<div role="tablist" className="inline-flex gap-2 rounded-[9px] bg-chrome p-2" data-automation-tabs>
 			{options.map((option) => (
 				<button
 					key={option.value}
@@ -601,8 +600,8 @@ function Segmented<T extends string>({ value, options, onChange }: { readonly va
 					aria-selected={option.value === value}
 					data-tab={option.value}
 					className={cn(
-						"h-24 rounded-6 border-0 px-10 text-meta leading-[16px] cursor-pointer transition-colors duration-(--dur-color)",
-						option.value === value ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-muted hover:bg-hover hover:text-ink",
+						"h-28 rounded-[7px] border-0 px-14 text-[13px] cursor-pointer",
+						option.value === value ? "bg-window font-medium text-ink shadow-[0_0_0_0.5px_var(--border)]" : "bg-transparent text-ink-muted hover:text-ink",
 					)}
 					onClick={() => onChange(option.value)}
 				>
@@ -778,7 +777,7 @@ function AutomationDetail({
 			<Section muted title={list.length === 0 ? t("automations.detail.history") : `${t("automations.detail.history")} (${list.length})`}>
 				{list.length === 0 ? (
 					// Figma 641:13747: no box; the faint line sits between the same hairlines the runs would, 20px from each.
-					<p className="m-0 border-y-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
+					<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 				) : (
 					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
@@ -815,7 +814,7 @@ function AllRuns({ rules, history, onOpen }: { readonly rules: readonly Automati
 			</div>
 			{/* Like a rule's 실행 기록 (Figma 641:13600, 641:13747): plain lines between hairlines, no box, and the empty line the same way. */}
 			{shown.length === 0 ? (
-				<p className="m-0 border-y-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{failOnly ? t("automations.all.noFails") : t("automations.inspector.noRuns")}</p>
+				<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{failOnly ? t("automations.all.noFails") : t("automations.inspector.noRuns")}</p>
 			) : (
 				<div role="list" aria-label={t("automations.tabs.all")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 					{shown.map(({ rule, run }) => (
@@ -846,7 +845,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 	}, [detail?.id, tab]);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
-			{/* The AI 에이전트 tab's head: the mark and the name on the left, the two places centred, + 새 자동화 on the right. */}
+			{/* The AI 에이전트 tab's head: the mark and the name on the left, + 새 자동화 on the right. */}
 			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab px-12 select-none" data-automations-head>
 				<span className="flex min-w-0 items-center gap-8">
 					<span className="grid flex-none place-items-center text-accent">
@@ -854,18 +853,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 					</span>
 					<strong className="truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.automations")}</strong>
 				</span>
-				{detail === null && !broken && state.ready ? (
-					<Segmented
-						value={tab}
-						options={[
-							{ value: "mine", label: t("automations.tabs.rules") },
-							{ value: "all", label: t("automations.tabs.all") },
-						]}
-						onChange={setTab}
-					/>
-				) : (
-					<span />
-				)}
+				<span />
 				<span className="flex justify-end">
 					{/* With no rules the 새 자동화 card is already open on the page, so there is nothing for the button to open. */}
 					{state.rules.length === 0 && detail === null ? null : (
@@ -930,6 +918,17 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 						/>
 					) : (
 						<>
+							{/* The two places sit with the page they switch, centred over it, not in the head bar. */}
+							<div className="flex justify-center">
+								<Segmented
+									value={tab}
+									options={[
+										{ value: "mine", label: t("automations.tabs.rules") },
+										{ value: "all", label: t("automations.tabs.all") },
+									]}
+									onChange={setTab}
+								/>
+							</div>
 							{tab === "all" ? (
 								<AllRuns rules={state.rules} history={history} onOpen={open} />
 							) : (
@@ -964,14 +963,15 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 									) : null}
 									{state.rules.length === 0 ? null : (
 										<Section title={`${t("automations.mine")} ${state.rules.length}`}>
-											<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
+											{/* One soft shadow on the whole list, not on each row, so it lifts the group the same however many rules there are. */}
+											<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
 												{state.rules.map((rule) => (
 													<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
 												))}
 											</div>
 										</Section>
 									)}
-									<Section title={t("automations.templates.title")} aside={t("automations.templates.hint")}>
+									<Section title={t("automations.templates.title")}>
 										{/* Figma 641:13493: three cards side by side. The one whose words are in the card above is outlined, so it is clear what the card shows. */}
 										<div className="flex items-stretch gap-8">
 											{TEMPLATES.map((template) => {
