@@ -22,8 +22,6 @@ const DROP: Partial<Record<string, true>> = {
 	MATH: true,
 	TEMPLATE: true,
 	NOSCRIPT: true,
-	AUDIO: true,
-	VIDEO: true,
 	CANVAS: true,
 	DIALOG: true,
 };
@@ -32,6 +30,8 @@ const DROP: Partial<Record<string, true>> = {
 const ALLOW: Partial<Record<string, readonly string[]>> = {
 	A: ["href", "title"],
 	IMG: ["src", "alt", "title", "width", "height"],
+	VIDEO: ["src", "controls", "width", "height"],
+	AUDIO: ["src", "controls"],
 	P: ["align"],
 	DIV: ["align"],
 	SPAN: [],
@@ -94,6 +94,14 @@ function cleanAttributes(element: Element, tag: string, folder: string | null): 
 		if (local !== null) element.setAttribute("src", previewStreamUrl(local));
 		else if (!DATA_IMAGE.test(src)) element.removeAttribute("src");
 	}
+	if (tag === "VIDEO" || tag === "AUDIO") {
+		// Only a file next to the document plays, through the preview protocol; a remote or absolute source is never loaded.
+		const local = folder === null ? null : resolveRelative(folder, element.getAttribute("src") ?? "");
+		if (local === null) element.removeAttribute("src");
+		else element.setAttribute("src", previewStreamUrl(local));
+		element.setAttribute("controls", "");
+		element.setAttribute("preload", "metadata");
+	}
 }
 
 function clean(parent: Node, folder: string | null): void {
@@ -119,6 +127,7 @@ function clean(parent: Node, folder: string | null): void {
 			continue;
 		}
 		cleanAttributes(element, tag, folder);
+		if ((tag === "VIDEO" || tag === "AUDIO") && !element.hasAttribute("src")) element.remove();
 	}
 }
 

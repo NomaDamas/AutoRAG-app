@@ -19,7 +19,7 @@ const BELOW: RowSlide = { part: "below", offset: 0 };
 
 /**
  * Scrolling file list (v7 `.lv`): the rows and the two empty states. The search
- * summary lives in the ScopeBar now, so the list no longer renders it. Rows are
+ * summary lives in the 파일 이름 (n) group tab now, so the list no longer renders it. Rows are
  * virtualized (issue #16): the container is sized to the full row count and
  * only the window around the viewport is mounted, so a 5,000-entry folder stays
  * cheap to paint. Grouping (issue #47) inserts a section header between row
@@ -38,6 +38,7 @@ export function FileList({
 	sections,
 	listRef,
 	searching,
+	highlight,
 	emptyText,
 	selectedKeys,
 	focusedZone,
@@ -57,6 +58,8 @@ export function FileList({
 	readonly sections: readonly GroupSection<TreeRow>[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searching: boolean;
+	/** The search text while the list shows results; its terms are bold in the names. */
+	readonly highlight?: string;
 	readonly emptyText: string;
 	readonly selectedKeys: readonly string[];
 	readonly focusedZone: boolean;
@@ -105,6 +108,7 @@ export function FileList({
 			zoneFocused={focusedZone}
 			flash={flashPath === row_.entry.path}
 			searching={searching}
+			{...(highlight === undefined ? {} : { highlight })}
 			renameDraft={renamePath === row_.entry.path && slide?.part !== "ghost" ? renameDraft : null}
 			stackCount={row_.stackCount}
 			stackOpen={row_.stackOpen}

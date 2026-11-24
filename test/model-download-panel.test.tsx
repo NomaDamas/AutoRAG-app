@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModelDownloadPanel } from "../src/renderer/src/components/ModelDownloadPanel";
 import { downloadPercent, localModelNeeded } from "../src/renderer/src/state/model-download";
 import type { ModelDownloadStatus } from "../src/shared/model-download-contract";
-import { stubTranslate } from "./support/onboarding-ctx";
+
+/** The panel's copy is irrelevant here, so a key comes back verbatim with its variables. */
+const stubTranslate = (key: string, options?: Record<string, unknown>): string =>
+	options === undefined ? key : `${key} ${Object.entries(options).map(([name, value]) => `${name}=${String(value)}`).join(" ")}`;
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 

@@ -7,7 +7,7 @@
  *   2. Opening Settings (sidebar gear, ⌘,): the left column becomes Settings' own sidebar with a back
  *      button and the 설정 title at its top-left; the tab strip and the toolbar are gone; the page content
  *      starts right under the window's top edge; the Finder sidebar is not on screen.
- *   3. The right sidebar stays: on a customizable page (사이드바) it hosts the AI assistant, and a chat turn
+ *   3. The right sidebar stays: on the one page with an assistant (우클릭 메뉴) it hosts it, and a chat turn
  *      streams a reply there.
  *   4. The right sidebar's hide button works, and Settings' own button brings it back.
  *   5. Back returns to the Finder, on the folder and tab that were focused before; the Settings tab is gone
@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/settings-takeover");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -202,14 +203,14 @@ try {
 	await page.waitForTimeout(150);
 	check("⌘F focuses Settings' search box while Settings is open", await page.evaluate(() => document.activeElement === document.querySelector(".settings-search input")));
 
-	// 3. A customizable page: the assistant fills the right sidebar and chats.
-	await page.locator(".settings-nav-item", { hasText: "Sidebar" }).click();
-	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="sidebar"]');
+	// 3. The one page with an assistant, Context Menu: it fills the right sidebar and chats.
+	await page.locator(".settings-nav-item", { hasText: "Context Menu" }).click();
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="contextMenu"]');
 	await panel.waitFor();
 	const panelBox = await panel.boundingBox();
-	check("on the Sidebar page the assistant is in the right sidebar, outside the page", panelBox !== null && Math.round(panelBox.x) >= (await box("main.settings-content")).right && (await panel.evaluate((el) => el.closest(".settings-view") === null)), JSON.stringify(panelBox));
+	check("on the Context Menu page the assistant is in the right sidebar, outside the page", panelBox !== null && Math.round(panelBox.x) >= (await box("main.settings-content")).right && (await panel.evaluate((el) => el.closest(".settings-view") === null)), JSON.stringify(panelBox));
 	await panel.locator('textarea[data-testid="app-customizer-input"]').click();
-	await page.keyboard.type("how do I change the sidebar?");
+	await page.keyboard.type("how do I change the context menu?");
 	await page.keyboard.press("Enter");
 	await panel.locator(".customizer-turn__reply", { hasText: REPLY }).waitFor({ timeout: 20_000 });
 	check("a chat turn answers in the right sidebar", true);
@@ -250,16 +251,16 @@ try {
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
 
-	// The Finder chrome stays mounted under Settings: an AI Search tab's composer draft survives a round trip.
-	await page.locator('.sidebar__item:has-text("AI Search")').first().click();
-	const composer = page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) textarea[aria-label="Ask Dazzi"]');
+	// The Finder chrome stays mounted under Settings: an AI Chat tab's composer draft survives a round trip.
+	await page.locator('.sidebar__item:has-text("AI Chat")').first().click();
+	const composer = page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) textarea[aria-label="Ask Dazzi"]');
 	await composer.fill("draft kept while Settings is open");
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.waitForTimeout(300);
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
-	check("Back returns to the AI Search tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
+	check("Back returns to the AI Chat tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
 	await shot("05b-ai-draft-after-settings");
 
 	// 6. A hidden Finder sidebar stays hidden; Settings still has its own.
@@ -283,7 +284,7 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
-	await page.selectOption('select[aria-label="App Language"]', "ko");
+	await pickSelect(page.locator(selectField("App Language")), "ko");
 	await page.waitForFunction(() => document.querySelector(".settings-sidebar-back")?.textContent?.trim() === "뒤로", null, { timeout: 10_000 });
 	check("the back row follows the interface language", (await page.locator(".settings-sidebar-back").innerText()).trim() === "뒤로");
 	await shot("07-settings-ko");

@@ -75,7 +75,22 @@ export interface SidebarSettings {
 	 * User-pinned custom folder rows in Favorites.
 	 */
 	readonly customFavorites: readonly CustomSidebarFavorite[];
+	/**
+	 * The last layout the person arranged by hand, kept while a preset (전체 표시 / 핵심만 표시) is applied so
+	 * 사용자 지정 can bring it back. Absent until the layout first differs from every preset.
+	 */
+	readonly custom?: SidebarLayout;
 }
+
+/** What the 빠른 구성 presets set: which rows and sections show, and in what order. Pinned folders are content, not layout. */
+export interface SidebarLayout {
+	readonly hiddenItems: readonly string[];
+	readonly hiddenSections: readonly HideableSidebarSectionId[];
+	readonly favoritesOrder: readonly string[];
+	readonly sectionOrder: readonly SidebarSectionId[];
+}
+
+export type SidebarPresetId = "all" | "minimal";
 
 export const DEFAULT_SIDEBAR_SETTINGS: SidebarSettings = {
 	hiddenItems: [],
@@ -103,6 +118,24 @@ const ITEM_ALIAS_MAP: Readonly<Record<string, string>> = {
 	"ai検索": "app:aiSearch",
 	"ai 搜索": "app:aiSearch",
 	"ai搜索": "app:aiSearch",
+	"ai chat": "app:aiSearch",
+	"aichat": "app:aiSearch",
+	"ai-chat": "app:aiSearch",
+	"ai 채팅": "app:aiSearch",
+	"ai채팅": "app:aiSearch",
+	"ai チャット": "app:aiSearch",
+	"aiチャット": "app:aiSearch",
+	"ai 聊天": "app:aiSearch",
+	"ai聊天": "app:aiSearch",
+	"ai agent": "app:aiSearch",
+	"aiagent": "app:aiSearch",
+	"ai-agent": "app:aiSearch",
+	"ai 에이전트": "app:aiSearch",
+	"ai에이전트": "app:aiSearch",
+	"ai エージェント": "app:aiSearch",
+	"aiエージェント": "app:aiSearch",
+	"ai 智能体": "app:aiSearch",
+	"ai智能体": "app:aiSearch",
 	"app:automations": "app:automations",
 	"automations": "app:automations",
 	"automation": "app:automations",
@@ -305,13 +338,59 @@ export function normalizeSidebarSettings(raw: unknown): SidebarSettings {
 		}
 	}
 
+	const layout: SidebarLayout = { hiddenItems, hiddenSections, favoritesOrder, sectionOrder };
+	// A layout that matches no preset is the person's own: it becomes the remembered 사용자 지정. Under a preset the
+	// previously remembered one is kept, so trying 전체 표시 never loses it.
+	const custom = sidebarPresetOf(layout) === null ? layout : rememberedSidebarLayout(candidate.custom);
+	return custom === null
+		? { hiddenItems, hiddenSections, favoritesOrder, sectionOrder, customFavorites }
+		: { hiddenItems, hiddenSections, favoritesOrder, sectionOrder, customFavorites, custom };
+}
+
+/** The layout a preset sets. 전체 표시 is the default layout; 핵심만 표시 hides the rarely used places on top of it. */
+export function sidebarPresetLayout(preset: SidebarPresetId): SidebarLayout {
 	return {
-		hiddenItems,
-		hiddenSections,
-		favoritesOrder,
-		sectionOrder,
-		customFavorites,
+		hiddenItems: preset === "minimal" ? [...MINIMAL_HIDDEN_FAVORITE_IDS] : [],
+		hiddenSections: [],
+		favoritesOrder: [],
+		sectionOrder: [...DEFAULT_SIDEBAR_SETTINGS.sectionOrder],
 	};
+}
+
+/** Which preset `layout` is, or `null` when it is the person's own arrangement. */
+export function sidebarPresetOf(layout: SidebarLayout): SidebarPresetId | null {
+	for (const preset of ["all", "minimal"] as const) {
+		const target = sidebarPresetLayout(preset);
+		if (
+			sameSet(layout.hiddenItems, target.hiddenItems) &&
+			sameSet(layout.hiddenSections, target.hiddenSections) &&
+			sameList(layout.favoritesOrder, target.favoritesOrder) &&
+			sameList(layout.sectionOrder, target.sectionOrder)
+		) {
+			return preset;
+		}
+	}
+	return null;
+}
+
+/** `sidebar` with a layout applied; its pinned folders and its remembered 사용자 지정 stay. */
+export function withSidebarLayout(sidebar: SidebarSettings, layout: SidebarLayout): SidebarSettings {
+	return normalizeSidebarSettings({ ...sidebar, ...layout });
+}
+
+function rememberedSidebarLayout(raw: unknown): SidebarLayout | null {
+	if (typeof raw !== "object" || raw === null) return null;
+	const { hiddenItems, hiddenSections, favoritesOrder, sectionOrder } = normalizeSidebarSettings({ ...raw, custom: undefined });
+	const layout: SidebarLayout = { hiddenItems, hiddenSections, favoritesOrder, sectionOrder };
+	return sidebarPresetOf(layout) === null ? layout : null;
+}
+
+function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
+	return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function sameSet<T>(a: readonly T[], b: readonly T[]): boolean {
+	return a.length === b.length && a.every((value) => b.includes(value));
 }
 
 /** True when `sidebar` matches the uncustomized default configuration. */

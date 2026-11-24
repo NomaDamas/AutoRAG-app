@@ -1,16 +1,16 @@
 /**
  * Live QA — the app on librarian 2.13.8, on the real built app with a real index and a real model.
  *
- * Librarian 2.13.8 gives the AI Search agent an exact `calculator` tool and turns the record cut on by default, so
+ * Librarian 2.13.8 gives the AI Chat agent an exact `calculator` tool and turns the record cut on by default, so
  * one long document cannot take every slot of a search. This lane checks, end to end through the app:
  *
- *   - a date question asked in AI Search is answered through the `calculator` tool, with the exact day count;
+ *   - a date question asked in AI Chat is answered through the `calculator` tool, with the exact day count;
  *   - with the record cut on (the default), the agent's first local search shows the model several documents,
  *     not only the long one that matches everywhere;
  *   - the app's config writes keep a `limits.recordCut` block the librarian accepts, and the cut acts where it lives:
  *     the librarian's top-50 over the index the app built is all one manual with the cut off and holds every short
  *     note with it on (the agent decides its own searches, so its transcript cannot compare the two runs fairly);
- *   - AI Search still answers with the cut off.
+ *   - AI Chat still answers with the cut off.
  *
  * The model is a real OpenRouter model released in 2026, reached through a loopback proxy that records, and never
  * alters, what passes. The key comes from QA_OPENROUTER_KEY, else OPENROUTER_API_KEY, else the `openrouter` entry of
@@ -59,7 +59,7 @@ if (KEY === null) {
 	console.error("An OpenRouter key is required: set QA_OPENROUTER_KEY or OPENROUTER_API_KEY.");
 	process.exit(2);
 }
-const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const MODELS = process.env.INL_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (!existsSync(MODELS)) {
 	console.log(`SKIP: no on-device sparse model cache at ${MODELS}; real indexing cannot run`);
 	process.exit(2);
@@ -69,8 +69,8 @@ const WORK = mkdtempSync(join(tmpdir(), "dazzi-qa-2138-"));
 const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 const WORKSPACE = join(WORK, "workspace");
-for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home", ".cache", "minsync")]) mkdirSync(dir, { recursive: true });
-if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "minsync", "models"));
+for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home", ".cache", "im-not-llm")]) mkdirSync(dir, { recursive: true });
+if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "im-not-llm", "models"));
 
 // One long manual whose every section talks about the topic, and six short notes that each mention it once.
 const TOPIC = "glacierbolt";
@@ -137,7 +137,7 @@ const env = {
 	OPENROUTER_API_KEY: KEY,
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
-	FASTEMBED_CACHE_DIR: MODELS,
+	INL_CACHE_DIR: MODELS,
 };
 
 /** The text of every tool result the model was shown, with the tool's name, from what passed the proxy. */
@@ -216,7 +216,7 @@ async function localSearchSpread(page, label) {
 	writeFileSync(join(EVIDENCE, `search-results-${label}.json`), JSON.stringify(results, null, 2));
 	writeFileSync(join(EVIDENCE, `requests-${label}.json`), JSON.stringify(traffic.requests.slice(before).map((request) => request.messages?.map((message) => ({ role: message.role, tools: message.tool_calls?.map((call) => call.function?.name), text: (typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "")).slice(0, 400) }))), null, 2));
 	log(`[${label}] tools: ${results.map((result) => result.name).join(", ")}; answer: ${answer.replace(/\s+/g, " ").slice(0, 300)}`);
-	check(`[${label}] AI Search shows no error`, error === "", error);
+	check(`[${label}] AI Chat shows no error`, error === "", error);
 	const first = searches[0];
 	// Without a search there is nothing to measure: the comparison would pass on an empty result.
 	check(`[${label}] the agent ran a local search`, first !== undefined, results.map((result) => result.name).join(",") || "no tool call");
@@ -291,7 +291,7 @@ try {
 	check("with the record cut on (the default), every short note comes back in the same top-50", SHORT.every((name) => onTop[name] >= 1) && onTop[LONG] < 50, JSON.stringify(onTop));
 	writeConfig({ ...readConfig(), limits: { recordCut: { enabled: false } } });
 
-	// 6. the app's AI Search runs with the cut off without error
+	// 6. the app's AI Chat runs with the cut off without error
 	session = await launch("cut-off");
 	const off = await localSearchSpread(session.page, "cut-off");
 	await session.page.screenshot({ path: join(EVIDENCE, "03-cut-off-answer.png") });

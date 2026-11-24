@@ -1,0 +1,64 @@
+name: Refresh Tool Pins
+
+# Proposes updated dependency pins in `src/shared/tool-pins.json` from GitHub Releases,
+# crates.io, npm, and nodejs.org, verifies publisher checksums and librarian version floors,
+# runs the bundled-tools and pin tests, and opens a pull request when anything moved.
+on:
+  schedule:
+    - cron: "0 2 * * 1" # Mondays 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies and sync pinned librarian
+        env:
+          AUTORAG_SKIP_DUPEY_CHECK: "1"
+        run: bun install --frozen-lockfile
+
+      - name: Refresh tool pins and verify checksums + librarian floors
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/refresh-pins.mjs --summary-md /tmp/pin-summary.md
+
+      - name: Run bundled-tools and pin verification tests
+        env:
+          AUTORAG_SKIP_DUPEY_CHECK: "1"
+        run: bunx vitest run test/bundled-tools.test.ts test/release-pins.test.ts test/release-version-floors.test.ts
+
+      - name: Open pull request if pins changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet src/shared/tool-pins.json; then
+            echo "Pins are already up to date."
+            exit 0
+          fi
+          BRANCH="chore/refresh-tool-pins"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add src/shared/tool-pins.json
+          git commit -m "chore(release): refresh pinned tool versions"
+          git push --force-with-lease origin "$BRANCH"
+          if gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' | grep -q .; then
+            gh pr edit "$BRANCH" --body-file /tmp/pin-summary.md
+          else
+            gh pr create --base main --head "$BRANCH" --title "chore(release): refresh pinned tool versions" --body-file /tmp/pin-summary.md
+          fi

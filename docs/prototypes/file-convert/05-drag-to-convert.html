@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 5 · 끌어서 변환</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 5: pick the file up, and the formats it can become fly in as drop targets.
+		 * Dropping on a target converts. Dropping anywhere else is the normal Finder move. */
+		.dropdock {
+			position: absolute; left: 50%; bottom: 36px; z-index: 55; transform: translate(-50%, 24px); opacity: 0; pointer-events: none;
+			display: flex; align-items: stretch; gap: 8px; padding: 10px;
+			background: var(--bg-window); border: 1px solid var(--border); border-radius: var(--radius-14); box-shadow: var(--shadow-menu);
+			transition: opacity var(--dur-popover) var(--ease-out), transform var(--dur-popover) var(--ease-out);
+		}
+		.dropdock.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+		.dz-head { align-self: center; display: flex; flex-direction: column; gap: 2px; padding: 0 8px 0 4px; max-width: 108px; }
+		.dz-head b { color: var(--text-primary); font-size: 12px; font-weight: 600; }
+		.dz-head span { color: var(--text-muted); font-size: 11px; line-height: 1.35; }
+		.dz {
+			position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+			width: 78px; height: 74px; border: 1.5px dashed var(--border-strong); border-radius: var(--radius-10);
+			background: var(--bg-subtle); color: var(--text-primary);
+			transition: transform var(--dur-menu) var(--ease-out), background var(--dur-menu) var(--ease-out), border-color var(--dur-menu) var(--ease-out);
+		}
+		.dz .fmt { background: transparent; font-size: 15px; height: 22px; }
+		.dz small { color: var(--text-muted); font-size: 10.5px; }
+		.dz.hot { transform: translateY(-5px) scale(1.06); background: var(--accent-wash); border-color: var(--accent); border-style: solid; }
+		.dz.hot small { color: var(--accent-text); }
+		.dz.sep { margin-left: 6px; border-color: var(--border-divider); background: transparent; }
+		.dz .badge-dl { position: absolute; top: 4px; right: 5px; color: var(--warn-text); }
+		.dz .badge-dl .icon { width: 11px; height: 11px; }
+		.ghost {
+			position: fixed; z-index: 80; pointer-events: none; display: flex; align-items: center; gap: 8px;
+			padding: 5px 10px 5px 6px; border-radius: var(--radius-8); background: var(--bg-window);
+			border: 1px solid var(--border); box-shadow: var(--shadow-drag); color: var(--text-primary); font-size: 12px;
+			transform: translate(14px, 10px);
+		}
+		.ghost .count { position: absolute; top: -8px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger-dot); color: var(--text-on-badge); font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+		.frow { cursor: grab; user-select: none; }
+		.frow.dragging { opacity: 0.55; }
+		.hint-strip { display: flex; align-items: center; gap: 8px; }
+		.hint-strip kbd.k { margin: 0 1px; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* Real pointer drag: grab a row, the dock appears from the file's own type, hover highlights the zone under the cursor. */
+		const PICK = { e: ["jpg", "png", "webp", "pdf"], c: ["docx", "txt", "md"], a: ["pdf", "docx", "hwp"], j: ["mp4", "gif", "mp3"] };
+		const LABEL = { jpg: "사진", png: "투명 배경", webp: "작은 용량", pdf: "보기용", docx: "편집용", txt: "텍스트", md: "마크다운", hwp: "한글", mp4: "영상", gif: "움짤", mp3: "소리만" };
+		let sel = ["e", "f"];                 // two HEIC photos selected: dragging carries both
+		let dragging = null;
+		let multi = true;
+
+		function ghostLabel() {
+			const names = sel.map((id) => FILES.find((f) => f.id === id).name);
+			return names.length > 1 ? `${names[0]} 외 ${names.length - 1}개` : names[0];
+		}
+
+		function dock() {
+			const first = FILES.find((f) => f.id === sel[0]);
+			const t = PICK[first.id] || TARGETS[first.ext].slice(0, 4);
+			return `<div class="dropdock" id="dock" aria-hidden="true">
+				<div class="dz-head"><b>놓으면 변환</b><span>${sel.length > 1 ? `${sel.length}개 모두` : first.ext.toUpperCase() + "에서"}</span></div>
+				${t.map((x) => `<div class="dz" data-to="${x}">${x === "mp4" ? `<span class="badge-dl">${icon("hard-drive-download")}</span>` : ""}<span class="fmt">${x.toUpperCase()}</span><small>${LABEL[x] || ""}</small></div>`).join("")}
+				<div class="dz sep" data-to="more"><span class="fmt">${icon("ellipsis")}</span><small>더 보기</small></div>
+			</div>`;
+		}
+
+		function render() {
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 5", "파일을 집어 올리면 변환 가능한 형식이 창 아래에 떠오르고, 그 위에 놓으면 변환됩니다.", "05-drag-to-convert.html", "사진 여러 장을 폴더에서 폴더로 옮기려다, “이거 JPG로 바꿔서 보내야 하는데” 하고 떠오를 때 — 손에 파일이 이미 있습니다") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${FILES.map((f) => rowHtml(f, sel.includes(f.id) ? "sel" : "")).join("")}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(FILES.find((f) => f.id === sel[0]), baseChips())}
+				${dock()}
+			</div>
+			<div class="proto-bar"><span class="hint-strip">${icon("hand")} 선택된 사진 행을 <b style="color:var(--text-primary)">마우스로 끌어</b> 아래쪽 형식 위에 놓아 보세요</span><span class="sp"></span>
+				<button class="btn ${multi ? "on" : ""}" id="m2">HEIC 2장</button><button class="btn ${!multi ? "on" : ""}" id="m1">PDF 1개</button>
+			</div></div></div>`;
+			wireChrome();
+			document.getElementById("m2").onclick = () => { multi = true; sel = ["e", "f"]; render(); };
+			document.getElementById("m1").onclick = () => { multi = false; sel = ["c"]; render(); };
+			document.querySelectorAll(".frow").forEach((row) => row.addEventListener("pointerdown", (e) => beginDrag(e, row)));
+		}
+
+		function beginDrag(e, row) {
+			const id = row.dataset.id;
+			if (!sel.includes(id)) { sel = [id]; }
+			const startX = e.clientX, startY = e.clientY;
+			let started = false; let ghost = null;
+			const dockEl = () => document.getElementById("dock");
+			const move = (ev) => {
+				if (!started && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) {
+					started = true;
+					document.querySelectorAll(".frow").forEach((r) => sel.includes(r.dataset.id) && r.classList.add("dragging"));
+					dockEl().classList.add("show");
+					ghost = document.createElement("div"); ghost.className = "ghost";
+					const f = FILES.find((x) => x.id === sel[0]);
+					ghost.innerHTML = `<span class="tile t-${f.tile}">${f.letter}</span><span>${ghostLabel()}</span>${sel.length > 1 ? `<span class="count">${sel.length}</span>` : ""}`;
+					document.body.append(ghost);
+				}
+				if (!started) return;
+				ghost.style.left = `${ev.clientX}px`; ghost.style.top = `${ev.clientY}px`;
+				const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".dz");
+				document.querySelectorAll(".dz").forEach((z) => z.classList.toggle("hot", z === under));
+			};
+			const up = (ev) => {
+				window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+				if (!started) return;
+				const zone = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".dz");
+				ghost?.remove();
+				const to = zone?.dataset.to;
+				render();
+				if (to && to !== "more") toast(`${sel.length > 1 ? `${sel.length}개를` : ghostLabel() + "을"} ${to.toUpperCase()}로 변환합니다 — 완료되면 원본 옆에 생겨요`, "arrow-right-left");
+				else if (to === "more") toast("전체 형식 목록 (1번 팝오버 재사용)", "info");
+			};
+			window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+		}
+		render();
+	</script>
+</body>
+</html>

@@ -1,13 +1,8 @@
-import { TriangleAlert, X } from "lucide-react";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissIndexProblem, retryIndexProblem, useIndexProblem } from "../hooks/useIndexProblem";
-import { describeIndexProblem } from "../state/index-problem";
-import { iconButtonClass } from "./primitives/icon-button";
-
-/** The one button: the accent fill, at the height of the toolbar's pill controls. */
-const PRIMARY_CLASS =
-	"flex-none h-pill px-10 border-0 rounded-6 bg-accent text-on-accent text-meta whitespace-nowrap cursor-pointer transition-colors duration-(--dur-color) ease-[ease] hover:bg-accent-hover";
+import { describeIndexProblem, type IndexProblemActionKind } from "../state/index-problem";
+import { NoticeCard } from "./primitives/NoticeCard";
 
 /**
  * The persistent "needs attention" line above the file list (issue #283): one
@@ -26,36 +21,29 @@ export function IndexProblemBanner({ onFixEmbedding }: { readonly onFixEmbedding
 	// The dismissed record, so the banner leaves with the click instead of after the main process
 	// pushes the cleared record back. A later run leaves its own `at`.
 	const [dismissedAt, setDismissedAt] = useState<string | null>(null);
-	if (view === null || view.retrying || view.primary === null || (problem.at !== null && problem.at === dismissedAt)) return null;
-	const primary = view.primary;
+	if (view === null || view.retrying || (problem.at !== null && problem.at === dismissedAt)) return null;
+	const { banner } = view;
+	const { primary, secondary } = banner;
+	if (primary === null) return null;
+	const run = (kind: IndexProblemActionKind): void => (kind === "fixEmbedding" ? onFixEmbedding() : retryIndexProblem());
+	const dismiss = (): void => {
+		setDismissedAt(problem.at);
+		dismissIndexProblem();
+	};
+	// Figma 548:14204: the shared notice card over the list — an error when nothing works, a warning when search still does (430:8644).
 	return (
-		<div
-			className="flex flex-none items-center gap-8 mx-8 mt-8 px-10 py-8 border border-error-orange-dot rounded-8 bg-error-orange-bg text-meta"
-			role="alert"
+		<NoticeCard
+			className="mx-8 mt-8 flex-none"
+			floating
+			tone={banner.tone}
+			title={view.title}
+			onClose={dismiss}
+			actions={[
+				secondary === null ? { label: t("common.later"), onClick: dismiss } : { label: secondary.label, onClick: () => run(secondary.kind) },
+				{ label: primary.label, primary: true, onClick: () => run(primary.kind) },
+			]}
 		>
-			<TriangleAlert className="flex-none text-error-orange-text" size={16} strokeWidth={1.8} aria-hidden="true" />
-			<span className="flex-1 min-w-0 truncate text-ink" title={view.title}>
-				{view.title}
-			</span>
-			<button
-				type="button"
-				className={PRIMARY_CLASS}
-				onClick={() => (primary.kind === "fixEmbedding" ? onFixEmbedding() : retryIndexProblem())}
-			>
-				{primary.label}
-			</button>
-			<button
-				type="button"
-				className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-				aria-label={t("common.close")}
-				title={t("common.close")}
-				onClick={() => {
-					setDismissedAt(problem.at);
-					dismissIndexProblem();
-				}}
-			>
-				<X size={14} strokeWidth={1.8} />
-			</button>
-		</div>
+			{banner.detail}
+		</NoticeCard>
 	);
 }

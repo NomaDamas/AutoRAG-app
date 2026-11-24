@@ -43,10 +43,15 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
 		});
 		return { updateInfo: info, downloadPromise };
 	}
+	/** Optional async gate so a test can interleave events mid-download (e.g. the 30s background check timer). */
+	downloadGate: Promise<void> | null = null;
 	async downloadUpdate(): Promise<unknown> {
 		this.downloads += 1;
 		this.autoInstallDuringDownload.push(this.autoInstallOnAppQuit);
 		this.emit("download-progress", { percent: 42.4 });
+		if (this.downloadGate !== null) await this.downloadGate;
+		// MacUpdater checks `autoInstallOnAppQuit` at the END of the download, when deciding whether to hand the zip to Squirrel.Mac.
+		this.autoInstallDuringDownload.push(this.autoInstallOnAppQuit);
 		if (this.next === "none" || this.next instanceof Error) throw new Error("downloadUpdate without an available update");
 		this.emit("update-downloaded", { version: this.next.version });
 		return [];
@@ -112,9 +117,37 @@ describe("app updater policy", () => {
 		expect(updater.autoInstallOnAppQuit).toBe(false);
 		await service.download();
 		// On macOS electron-updater stages the zip with Squirrel.Mac only when this is on; without it the update never becomes ready.
-		expect(updater.autoInstallDuringDownload).toEqual([true]);
+		expect(updater.autoInstallDuringDownload).toEqual([true, true]);
 	});
 
+	it("a background check firing mid-download does not clear autoInstallOnAppQuit before MacUpdater hands the zip to Squirrel", async () => {
+		const { updater, service, fireFirstCheck } = setup("install", false);
+		updater.next = { version: "1.1.0" };
+		service.start();
+		await service.check();
+		const gate = Promise.withResolvers<void>();
+		updater.downloadGate = gate.promise;
+		const downloading = service.download();
+		// The 30s startup check fires while the manual download is in flight.
+		fireFirstCheck();
+		await setImmediate();
+		// Even an explicit settings re-apply while the user's download is in flight must not turn off staging.
+		await service.applySettings();
+		gate.resolve();
+		await downloading;
+		expect(updater.autoInstallDuringDownload).toEqual([true, true]);
+		expect(updater.autoInstallOnAppQuit).toBe(true);
+	});
+
+	it("a ready update keeps autoInstallOnAppQuit on even if settings are re-applied with auto-install off", async () => {
+		const { updater, service } = setup("install", false);
+		updater.next = { version: "1.1.0" };
+		await service.check();
+		await service.download();
+		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+		await service.applySettings();
+		expect(updater.autoInstallOnAppQuit).toBe(true);
+	});
 	it("turning auto-install off takes effect on the next check, not only at launch", async () => {
 		const { updater, service, setAuto } = setup("install");
 		await service.applySettings();
@@ -177,14 +210,37 @@ describe("app updater policy", () => {
 		expect(service.snapshot().state).toEqual({ kind: "error", message: "ENOSPC: no space left on device, write" });
 	});
 
-	it("restart-now installs silently and relaunches, and only when an update is ready", async () => {
+	it("restart-now installs silently and relaunches, ignores duplicate clicks, and only runs when ready", async () => {
 		const { updater, service } = setup("install");
 		service.install();
 		expect(updater.installs).toEqual([]);
 		updater.next = { version: "1.1.0" };
 		await service.check();
 		service.install();
+		service.install();
 		expect(updater.installs).toEqual([[true, true]]);
+	});
+
+	it("an error emitted after restart-now is surfaced so the user is not stuck on a dead restart button", async () => {
+		const squirrel = new EventEmitter();
+		const { updater, service } = setup("install", true, { staged: squirrel });
+		updater.next = { version: "1.1.0" };
+		await service.check();
+		squirrel.emit("staged");
+		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+		service.install();
+		updater.emit("error", new Error("Could not read update request"));
+		expect(service.snapshot().state).toEqual({ kind: "error", message: "Could not read update request" });
+		// After a failed install, a fresh download must wait for Squirrel to stage again instead of reusing the stale staged flag.
+		await service.download();
+		expect(service.snapshot().state).toEqual({ kind: "downloading", version: "1.1.0", percent: 100 });
+		squirrel.emit("staged");
+		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+		service.install();
+		expect(updater.installs).toEqual([
+			[true, true],
+			[true, true],
+		]);
 	});
 
 	it("a downloaded update is not re-checked into another state", async () => {

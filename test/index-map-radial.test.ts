@@ -55,11 +55,21 @@ describe("radial indexing map", () => {
 		const map = buildIndexMap({ roots: [chain(12, "/a"), folder("/b", [file("/b/pending.txt", "unindexed")])], truncated: false });
 		const overview = layoutRadial(map, null);
 		expect(overview.some((sector) => sector.node.name === "leaf.txt")).toBe(false);
-		const deep = map.nodes.find((node) => node.path === "/a/next/next/next/next/next")!;
+		const deep = map.nodes.find((node) => node.path === `/a${"/next".repeat(10)}`)!;
 		const focused = layoutRadial(map, deep.id);
 		expect(focused.some((sector) => sector.node.name === "leaf.txt")).toBe(true);
 		expect(focused.some((sector) => sector.node.path.startsWith("/b"))).toBe(false);
 		expect(focused.every((sector) => sector.outer <= 300)).toBe(true);
+	});
+
+	it("keeps the scope's ring width inside a folder: the rings outside it go, the rest do not grow", () => {
+		const chain = (depth: number, path: string): ScanDir => folder(path, [file(`${path}/f.txt`, "indexed")], depth === 0 ? [] : [chain(depth - 1, `${path}/next`)]);
+		const map = buildIndexMap({ roots: [chain(5, "/a")], truncated: false });
+		const width = (sectors: readonly { inner: number; outer: number }[]): number => sectors[0]!.outer - sectors[0]!.inner;
+		const overview = layoutRadial(map, null);
+		const inside = layoutRadial(map, map.nodes.find((node) => node.path === "/a/next/next/next/next")!.id);
+		expect(width(inside)).toBeCloseTo(width(overview));
+		expect(Math.max(...inside.map((sector) => sector.outer))).toBeLessThan(Math.max(...overview.map((sector) => sector.outer)));
 	});
 
 	it("keeps an excluded folder visible next to a huge indexed sibling", () => {

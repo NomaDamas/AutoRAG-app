@@ -112,6 +112,11 @@ export const SHORTCUT_BY_ID: Readonly<Record<ShortcutId, ShortcutCatalogItem>> =
 export interface ShortcutSettings {
 	/** Non-default canonical chords keyed by {@link ShortcutId}. */
 	readonly overrides: Readonly<Partial<Record<ShortcutId, string>>>;
+	/**
+	 * The last bindings the person set by hand, kept while a preset is applied so 사용자 지정 can bring them back.
+	 * Absent until the bindings first differ from every preset.
+	 */
+	readonly custom?: Readonly<Partial<Record<ShortcutId, string>>>;
 }
 
 export const DEFAULT_SHORTCUT_SETTINGS: ShortcutSettings = {
@@ -216,6 +221,18 @@ const ACTION_ALIAS_MAP: Readonly<Record<string, ShortcutId>> = {
 	ai질문: "focusComposer",
 	ai検索: "focusComposer",
 	ai搜索: "focusComposer",
+	aichat: "focusComposer",
+	openaichat: "focusComposer",
+	ai채팅: "focusComposer",
+	ai채팅열기: "focusComposer",
+	aiチャット: "focusComposer",
+	ai聊天: "focusComposer",
+	aiagent: "focusComposer",
+	openaiagent: "focusComposer",
+	ai에이전트: "focusComposer",
+	ai에이전트열기: "focusComposer",
+	aiエージェント: "focusComposer",
+	ai智能体: "focusComposer",
 	// openSettings
 	opensettings: "openSettings",
 	settings: "openSettings",
@@ -1075,6 +1092,25 @@ export function swapShortcutBinding(
  *   bindings never break silently.
  */
 export function normalizeShortcutSettings(raw: unknown): ShortcutSettings {
+	const bindings = normalizeShortcutBindings(raw);
+	// Bindings that match no preset are the person's own: they become the remembered 사용자 지정. Under a preset the
+	// previously remembered ones are kept, so trying Mac Finder never loses them.
+	const custom =
+		presetOfOverrides(bindings.overrides) === null
+			? bindings.overrides
+			: typeof raw === "object" && raw !== null && "custom" in raw
+				? rememberedShortcutOverrides((raw as { readonly custom?: unknown }).custom)
+				: null;
+	return custom === null ? bindings : { overrides: bindings.overrides, custom };
+}
+
+function rememberedShortcutOverrides(raw: unknown): Readonly<Partial<Record<ShortcutId, string>>> | null {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+	const { overrides } = normalizeShortcutBindings({ overrides: raw });
+	return presetOfOverrides(overrides) === null ? overrides : null;
+}
+
+function normalizeShortcutBindings(raw: unknown): ShortcutSettings {
 	if (typeof raw !== "object" || raw === null) return DEFAULT_SHORTCUT_SETTINGS;
 	const candidate = raw as { readonly overrides?: unknown };
 	if (typeof candidate.overrides !== "object" || candidate.overrides === null || Array.isArray(candidate.overrides)) {
@@ -1158,9 +1194,12 @@ function overridesEqual(
 
 /** Identifies which built-in preset matches `settings`, or `null` when custom bindings are active. */
 export function activeShortcutPreset(settings: ShortcutSettings): ShortcutPresetId | null {
-	const normalized = normalizeShortcutSettings(settings);
-	if (Object.keys(normalized.overrides).length === 0) return "default";
-	if (overridesEqual(normalized.overrides, MAC_FINDER_SHORTCUT_OVERRIDES)) return "macFinder";
-	if (overridesEqual(normalized.overrides, WINDOWS_EXPLORER_SHORTCUT_OVERRIDES)) return "windowsExplorer";
+	return presetOfOverrides(normalizeShortcutBindings(settings).overrides);
+}
+
+function presetOfOverrides(overrides: Readonly<Partial<Record<ShortcutId, string>>>): ShortcutPresetId | null {
+	if (Object.keys(overrides).length === 0) return "default";
+	if (overridesEqual(overrides, MAC_FINDER_SHORTCUT_OVERRIDES)) return "macFinder";
+	if (overridesEqual(overrides, WINDOWS_EXPLORER_SHORTCUT_OVERRIDES)) return "windowsExplorer";
 	return null;
 }

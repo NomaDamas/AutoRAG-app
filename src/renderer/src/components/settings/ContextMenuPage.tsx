@@ -1,34 +1,11 @@
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import {
-	Archive,
-	ChevronDown,
-	ChevronUp,
-	Clipboard,
-	Copy,
-	Eye,
-	FilePlus2,
-	FolderOpen,
-	Lock,
-	Pencil,
-	Pin,
-	RotateCcw,
-	Share2,
-	Sparkles,
-	Tag,
-	Terminal,
-	Trash2,
-	Wand2,
-	Wrench,
-	X,
-	type LucideIcon,
-} from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Eye, FilePen, FileText, Info, Lock, MousePointerClick, Pencil, Plus, Settings, Sparkles, Terminal, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
-	DEFAULT_CONTEXT_MENU_SETTINGS,
-	isDefaultContextMenuSettings,
-	MINIMAL_HIDDEN_CONTEXT_MENU_IDS,
+	contextMenuPresetLayout,
+	contextMenuPresetOf,
 	normalizeContextMenuSettings,
 	normalizeExtensionList,
 	normalizeMagicAction,
@@ -40,12 +17,16 @@ import {
 	type MagicActionAgentMode,
 	type MagicActionSelectionRule,
 	type MagicActionTargetKind,
+	withContextMenuLayout,
 } from "../../../../shared/context-menu-contract";
 import type { ShortcutId } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { formatContextMenuKeycap } from "../../state/context-menu";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 import { Switch } from "../primitives/Switch";
-import { ModalActions, ModalShell, Note, Section, SettingsPageHead } from "./SettingsKit";
+import { ModalActions, ModalShell, SettingsPageHead } from "./SettingsKit";
+import { useReorder, useSlideAnimation } from "./reorder";
 
 type ContextMenuBridgeWindow = Window & {
 	readonly autorag?: {
@@ -56,17 +37,6 @@ type ContextMenuBridgeWindow = Window & {
 function getSettingsWriter(): Pick<SettingsBridge, "set"> | undefined {
 	return (window as ContextMenuBridgeWindow).autorag?.settings;
 }
-
-const SECTION_ICONS: Readonly<Record<ContextMenuSectionId, LucideIcon>> = {
-	open: FolderOpen,
-	magic: Wand2,
-	index: Sparkles,
-	clipboard: Clipboard,
-	actions: Archive,
-	services: Wrench,
-	tags: Tag,
-	trash: Trash2,
-};
 
 interface BuiltinRowSpec {
 	readonly id: BuiltinContextMenuItemId;
@@ -91,48 +61,159 @@ interface BuiltinRowSpec {
 		| "settingsCore.contextMenu.items.services"
 		| "settingsCore.contextMenu.items.tags"
 		| "settingsCore.contextMenu.items.trash";
-	readonly icon: LucideIcon;
 	readonly shortcutId?: ShortcutId;
 	readonly locked?: boolean;
 }
 
 const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, readonly BuiltinRowSpec[]>> = {
 	open: [
-		{ id: "builtin:quickLook", labelKey: "settingsCore.contextMenu.items.quickLook", icon: Eye, shortcutId: "quickLook" },
-		{ id: "builtin:open", labelKey: "settingsCore.contextMenu.items.open", icon: FolderOpen, shortcutId: "openItem" },
-		{ id: "builtin:openWith", labelKey: "settingsCore.contextMenu.items.openWith", icon: FolderOpen },
-		{ id: "builtin:showInEnclosingFolder", labelKey: "settingsCore.contextMenu.items.showInEnclosingFolder", icon: FolderOpen },
+		{ id: "builtin:quickLook", labelKey: "settingsCore.contextMenu.items.quickLook", shortcutId: "quickLook" },
+		{ id: "builtin:open", labelKey: "settingsCore.contextMenu.items.open", shortcutId: "openItem" },
+		{ id: "builtin:openWith", labelKey: "settingsCore.contextMenu.items.openWith" },
+		{ id: "builtin:showInEnclosingFolder", labelKey: "settingsCore.contextMenu.items.showInEnclosingFolder" },
 	],
 	index: [
-		{ id: "builtin:toggleIndex", labelKey: "settingsCore.contextMenu.items.toggleIndex", icon: Sparkles },
+		{ id: "builtin:toggleIndex", labelKey: "settingsCore.contextMenu.items.toggleIndex" },
 	],
 	clipboard: [
-		{ id: "builtin:copy", labelKey: "settingsCore.contextMenu.items.copy", icon: Copy, shortcutId: "copy" },
-		{ id: "builtin:paste", labelKey: "settingsCore.contextMenu.items.paste", icon: Clipboard, shortcutId: "paste" },
-		{ id: "builtin:cut", labelKey: "settingsCore.contextMenu.items.cut", icon: Clipboard, shortcutId: "cut" },
-		{ id: "builtin:duplicate", labelKey: "settingsCore.contextMenu.items.duplicate", icon: Copy, shortcutId: "duplicate" },
-		{ id: "builtin:rename", labelKey: "settingsCore.contextMenu.items.rename", icon: Pencil, shortcutId: "rename" },
-		{ id: "builtin:copyPath", labelKey: "settingsCore.contextMenu.items.copyPath", icon: Copy },
+		{ id: "builtin:copy", labelKey: "settingsCore.contextMenu.items.copy", shortcutId: "copy" },
+		{ id: "builtin:paste", labelKey: "settingsCore.contextMenu.items.paste", shortcutId: "paste" },
+		{ id: "builtin:cut", labelKey: "settingsCore.contextMenu.items.cut", shortcutId: "cut" },
+		{ id: "builtin:duplicate", labelKey: "settingsCore.contextMenu.items.duplicate", shortcutId: "duplicate" },
+		{ id: "builtin:rename", labelKey: "settingsCore.contextMenu.items.rename", shortcutId: "rename" },
+		{ id: "builtin:copyPath", labelKey: "settingsCore.contextMenu.items.copyPath" },
 	],
 	actions: [
-		{ id: "builtin:newFolder", labelKey: "settingsCore.contextMenu.items.newFolder", icon: FilePlus2 },
-		{ id: "builtin:pinToSidebar", labelKey: "settingsCore.contextMenu.items.pinToSidebar", icon: Pin },
-		{ id: "builtin:extract", labelKey: "settingsCore.contextMenu.items.extract", icon: Archive },
-		{ id: "builtin:compress", labelKey: "settingsCore.contextMenu.items.compress", icon: Archive },
-		{ id: "builtin:compress7z", labelKey: "settingsCore.contextMenu.items.compress7z", icon: Archive },
-		{ id: "builtin:share", labelKey: "settingsCore.contextMenu.items.share", icon: Share2 },
+		{ id: "builtin:newFolder", labelKey: "settingsCore.contextMenu.items.newFolder" },
+		{ id: "builtin:pinToSidebar", labelKey: "settingsCore.contextMenu.items.pinToSidebar" },
+		{ id: "builtin:extract", labelKey: "settingsCore.contextMenu.items.extract" },
+		{ id: "builtin:compress", labelKey: "settingsCore.contextMenu.items.compress" },
+		{ id: "builtin:compress7z", labelKey: "settingsCore.contextMenu.items.compress7z" },
+		{ id: "builtin:share", labelKey: "settingsCore.contextMenu.items.share" },
 	],
 	services: [
-		{ id: "builtin:services", labelKey: "settingsCore.contextMenu.items.services", icon: Wrench },
+		{ id: "builtin:services", labelKey: "settingsCore.contextMenu.items.services" },
 	],
 	tags: [
-		{ id: "builtin:tags", labelKey: "settingsCore.contextMenu.items.tags", icon: Tag, locked: true },
+		{ id: "builtin:tags", labelKey: "settingsCore.contextMenu.items.tags", locked: true },
 	],
 	trash: [
-		{ id: "builtin:trash", labelKey: "settingsCore.contextMenu.items.trash", icon: Trash2, shortcutId: "trash" },
+		{ id: "builtin:trash", labelKey: "settingsCore.contextMenu.items.trash", shortcutId: "trash" },
 	],
 };
 
+/** A small segmented choice inside the editor's rows: the picked option is a blue chip (Figma 598:3199). */
+function MiniSegmented<T extends string>({
+	value,
+	options,
+	testId,
+	label,
+	onChange,
+}: {
+	readonly value: T;
+	readonly options: readonly { readonly value: T; readonly label: string }[];
+	readonly testId: string;
+	readonly label: string;
+	readonly onChange: (value: T) => void;
+}): ReactElement {
+	return (
+		<div className="magic-editor-mini-seg" role="radiogroup" aria-label={label} data-testid={testId}>
+			{options.map((option) => (
+				<button
+					key={option.value}
+					type="button"
+					role="radio"
+					aria-checked={option.value === value}
+					className={cn(option.value === value && "is-active")}
+					data-testid={`${testId}-${option.value}`}
+					onClick={() => onChange(option.value)}
+				>
+					{option.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+/** 읽기만 ▾: the agent's permission, a chip on the instruction card that opens its two choices. */
+function AgentModeChip({
+	value,
+	onChange,
+}: {
+	readonly value: MagicActionAgentMode;
+	readonly onChange: (value: MagicActionAgentMode) => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+	const wrapRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (!open) return;
+		const onDown = (event: MouseEvent): void => {
+			if (wrapRef.current !== null && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+		};
+		const onKey = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") {
+				event.stopPropagation();
+				setOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", onDown);
+		document.addEventListener("keydown", onKey, true);
+		return () => {
+			document.removeEventListener("mousedown", onDown);
+			document.removeEventListener("keydown", onKey, true);
+		};
+	}, [open]);
+	const modes: readonly { readonly value: MagicActionAgentMode; readonly short: string; readonly long: string; readonly Icon: typeof Eye }[] = [
+		{ value: "read", short: t("settingsCore.contextMenu.editor.modeReadShort"), long: t("settingsCore.contextMenu.editor.modeRead"), Icon: Eye },
+		{ value: "organize", short: t("settingsCore.contextMenu.editor.modeOrganizeShort"), long: t("settingsCore.contextMenu.editor.modeOrganize"), Icon: FilePen },
+	];
+	const current = modes.find((mode) => mode.value === value) ?? modes[0]!;
+	return (
+		<div className="magic-editor-mode" ref={wrapRef}>
+			<button
+				type="button"
+				className="magic-editor-mode-chip"
+				data-testid="magic-editor-agent-mode"
+				aria-haspopup="listbox"
+				aria-expanded={open}
+				aria-label={`${t("settingsCore.contextMenu.editor.agentModeField")}: ${current.short}`}
+				onClick={() => setOpen((prev) => !prev)}
+			>
+				<current.Icon size={13} aria-hidden="true" />
+				<span>{current.short}</span>
+				<ChevronDown size={12} aria-hidden="true" />
+			</button>
+			{open ? (
+				<ul className="magic-editor-mode-menu" role="listbox" aria-label={t("settingsCore.contextMenu.editor.agentModeField")}>
+					{modes.map((mode) => (
+						<li key={mode.value}>
+							<button
+								type="button"
+								role="option"
+								aria-selected={mode.value === value}
+								data-testid={`magic-editor-agent-mode-${mode.value}`}
+								onClick={() => {
+									onChange(mode.value);
+									setOpen(false);
+								}}
+							>
+								<mode.Icon size={14} aria-hidden="true" />
+								<span className="magic-editor-mode-text">
+									<span>{mode.short}</span>
+									<small>{mode.long}</small>
+								</span>
+								{mode.value === value ? <Check size={14} aria-hidden="true" /> : null}
+							</button>
+						</li>
+					))}
+				</ul>
+			) : null}
+		</div>
+	);
+}
+
+/** The 매직 액션 만들기 dialog (Figma 598:3131): the name as its title, 처리 방식, the instruction card, then 표시할 대상 and 고급 설정. */
 function MagicActionEditorModal({
 	initial,
 	onCancel,
@@ -160,11 +241,19 @@ function MagicActionEditorModal({
 	const [command, setCommand] = useState(initial?.execution.kind === "script" ? initial.execution.command : "");
 	const [selection, setSelection] = useState<MagicActionSelectionRule>(initial?.selection ?? "any");
 	const [targetKind, setTargetKind] = useState<MagicActionTargetKind>(initial?.targetKind ?? "file");
-	const [extensionsInput, setExtensionsInput] = useState(initial?.extensions.join(", ") ?? "");
+	const [extensions, setExtensions] = useState<readonly string[]>(initial?.extensions ?? []);
+	const [extensionDraft, setExtensionDraft] = useState("");
 
 	const canSave =
 		label.trim().length > 0 &&
 		(executionKind === "agent" ? prompt.trim().length > 0 : command.trim().length > 0);
+
+	// A typed extension counts once Enter (or a comma) is pressed, and also when the dialog is saved without it.
+	const commitExtensionDraft = (): void => {
+		const added = normalizeExtensionList(extensionDraft);
+		if (added.length > 0) setExtensions((prev) => normalizeExtensionList([...prev, ...added].join(",")));
+		setExtensionDraft("");
+	};
 
 	const submit = (): void => {
 		if (!canSave) return;
@@ -175,7 +264,7 @@ function MagicActionEditorModal({
 			enabled: initial?.enabled ?? true,
 			selection,
 			targetKind,
-			extensions: normalizeExtensionList(extensionsInput),
+			extensions: normalizeExtensionList([...extensions, extensionDraft].join(",")),
 			execution:
 				executionKind === "script"
 					? { kind: "script", command }
@@ -184,101 +273,90 @@ function MagicActionEditorModal({
 		if (normalized !== null) onSave(normalized);
 	};
 
+	const extensionLabel =
+		targetKind === "file" && extensions.length > 0 ? `${extensions.map((ext) => ext.toUpperCase()).join("/")} ` : "";
+	const targetSummary = t(`settingsCore.contextMenu.editor.targetSummary.${selection}.${targetKind}`, { ext: extensionLabel });
+	const advancedSummary =
+		executionKind === "agent"
+			? useSkills || useMcp
+				? t("settingsCore.contextMenu.editor.advancedUses", {
+						list: [useSkills ? t("settingsCore.contextMenu.condSkills") : null, useMcp ? t("settingsCore.contextMenu.condMcp") : null]
+							.filter((part): part is string => part !== null)
+							.join(" · "),
+					})
+				: t("settingsCore.contextMenu.editor.advancedNone")
+			: "";
+	const HeaderIcon = executionKind === "script" ? FileText : Sparkles;
+
 	return (
-		<ModalShell onClose={onCancel}>
-			<div data-testid="magic-action-editor-modal">
-				<h2>{initial === null ? t("settingsCore.contextMenu.editor.createTitle") : t("settingsCore.contextMenu.editor.editTitle")}</h2>
-				<p>{t("settingsCore.contextMenu.editor.desc")}</p>
+		<ModalShell
+			onClose={onCancel}
+			className="magic-editor-modal"
+			label={initial === null ? t("settingsCore.contextMenu.editor.createTitle") : t("settingsCore.contextMenu.editor.editTitle")}
+		>
+			<div className="magic-editor" data-testid="magic-action-editor-modal">
+				<div className="magic-editor-head">
+					<span className="magic-editor-tile" aria-hidden="true">
+						<HeaderIcon size={20} />
+					</span>
+					<div className="magic-editor-name">
+						<input
+							autoFocus
+							data-testid="magic-editor-label"
+							aria-label={t("settingsCore.contextMenu.editor.labelField")}
+							value={label}
+							placeholder={t("settingsCore.contextMenu.editor.labelPlaceholder")}
+							onChange={(e) => setLabel(e.target.value)}
+						/>
+						<span>{t("settingsCore.contextMenu.editor.labelHint")}</span>
+					</div>
+				</div>
 
-				<label>
-					{t("settingsCore.contextMenu.editor.labelField")}
-					<input
-						autoFocus
-						data-testid="magic-editor-label"
-						value={label}
-						placeholder={t("settingsCore.contextMenu.editor.labelPlaceholder")}
-						onChange={(e) => setLabel(e.target.value)}
-					/>
-				</label>
-
-				<label>
-					{t("settingsCore.contextMenu.editor.descriptionField")}
-					<input
-						data-testid="magic-editor-description"
-						value={description}
-						placeholder={t("settingsCore.contextMenu.editor.descriptionPlaceholder")}
-						onChange={(e) => setDescription(e.target.value)}
-					/>
-				</label>
-
-				<label>
-					{t("settingsCore.contextMenu.editor.executionField")}
-					<select
-						data-testid="magic-editor-kind"
-						value={executionKind}
-						onChange={(e) => setExecutionKind(e.target.value === "script" ? "script" : "agent")}
-					>
-						<option value="agent">{t("settingsCore.contextMenu.editor.kindAgent")}</option>
-						<option value="script">{t("settingsCore.contextMenu.editor.kindScript")}</option>
-					</select>
-				</label>
-
-				{executionKind === "agent" ? (
-					<>
-						<label>
-							{t("settingsCore.contextMenu.editor.agentModeField")}
-							<select
-								data-testid="magic-editor-agent-mode"
-								value={agentMode}
-								onChange={(e) => setAgentMode(e.target.value === "organize" ? "organize" : "read")}
+				<div className="magic-editor-kind">
+					<span className="magic-editor-caption">{t("settingsCore.contextMenu.editor.executionField")}</span>
+					<div className="magic-editor-seg" role="radiogroup" aria-label={t("settingsCore.contextMenu.editor.executionField")} data-testid="magic-editor-kind">
+						{(
+							[
+								{ value: "agent", label: t("settingsCore.contextMenu.editor.kindAgent"), Icon: Sparkles },
+								{ value: "script", label: t("settingsCore.contextMenu.editor.kindScript"), Icon: FileText },
+							] as const
+						).map((option) => (
+							<button
+								key={option.value}
+								type="button"
+								role="radio"
+								aria-checked={executionKind === option.value}
+								className={cn(executionKind === option.value && "is-active")}
+								data-testid={`magic-editor-kind-${option.value}`}
+								onClick={() => setExecutionKind(option.value)}
 							>
-								<option value="read">{t("settingsCore.contextMenu.editor.modeRead")}</option>
-								<option value="organize">{t("settingsCore.contextMenu.editor.modeOrganize")}</option>
-							</select>
-						</label>
-						<label>
-							{t("settingsCore.contextMenu.editor.promptField")}
+								<option.Icon size={14} aria-hidden="true" />
+								{option.label}
+							</button>
+						))}
+					</div>
+				</div>
+
+				<div className="magic-editor-card">
+					{executionKind === "agent" ? (
+						<>
 							<textarea
 								data-testid="magic-editor-prompt"
+								aria-label={t("settingsCore.contextMenu.editor.promptField")}
 								value={prompt}
 								placeholder={t("settingsCore.contextMenu.editor.promptPlaceholder")}
 								onChange={(e) => setPrompt(e.target.value)}
 							/>
-						</label>
-						<div className="mt-14 flex flex-col gap-10 rounded-8 border border-border bg-chrome p-12">
-							<div className="flex items-center justify-between gap-12">
-								<div className="flex min-w-0 flex-col gap-2">
-									<span className="text-[12.5px] font-medium text-ink">{t("settingsCore.contextMenu.editor.useSkillsField")}</span>
-									<span className="text-badge text-ink-muted">{t("settingsCore.contextMenu.editor.useSkillsHint")}</span>
-								</div>
-								<Switch
-									checked={useSkills}
-									dataSwitchId="magic-editor:useSkills"
-									ariaLabel={t("settingsCore.contextMenu.editor.useSkillsField")}
-									onChange={() => setUseSkills((prev) => !prev)}
-								/>
+							<div className="magic-editor-card-bar">
+								<AgentModeChip value={agentMode} onChange={setAgentMode} />
 							</div>
-							<div className="flex items-center justify-between gap-12 border-t border-divider pt-10">
-								<div className="flex min-w-0 flex-col gap-2">
-									<span className="text-[12.5px] font-medium text-ink">{t("settingsCore.contextMenu.editor.useMcpField")}</span>
-									<span className="text-badge text-ink-muted">{t("settingsCore.contextMenu.editor.useMcpHint")}</span>
-								</div>
-								<Switch
-									checked={useMcp}
-									dataSwitchId="magic-editor:useMcp"
-									ariaLabel={t("settingsCore.contextMenu.editor.useMcpField")}
-									onChange={() => setUseMcp((prev) => !prev)}
-								/>
-							</div>
-						</div>
-					</>
-				) : (
-					<>
-						<label>
-							{t("settingsCore.contextMenu.editor.commandField")}
+						</>
+					) : (
+						<>
 							<textarea
 								data-testid="magic-editor-command"
-								className="font-mono"
+								className="is-mono"
+								aria-label={t("settingsCore.contextMenu.editor.commandField")}
 								value={command}
 								placeholder={t(
 									isWindows
@@ -287,58 +365,139 @@ function MagicActionEditorModal({
 								)}
 								onChange={(e) => setCommand(e.target.value)}
 							/>
-						</label>
-						<Note>
-							{t(
-								isWindows
-									? "settingsCore.contextMenu.editor.commandHintWindows"
-									: "settingsCore.contextMenu.editor.commandHint",
-							)}
-						</Note>
-					</>
-				)}
+							<p className="magic-editor-card-hint">
+								{t(
+									isWindows
+										? "settingsCore.contextMenu.editor.commandHintWindows"
+										: "settingsCore.contextMenu.editor.commandHint",
+								)}
+							</p>
+						</>
+					)}
+				</div>
 
-				<label>
-					{t("settingsCore.contextMenu.editor.selectionField")}
-					<select
-						data-testid="magic-editor-selection"
-						value={selection}
-						onChange={(e) =>
-							setSelection(e.target.value === "single" || e.target.value === "multiple" ? e.target.value : "any")
-						}
-					>
-						<option value="any">{t("settingsCore.contextMenu.condAnySelection")}</option>
-						<option value="single">{t("settingsCore.contextMenu.condSingle")}</option>
-						<option value="multiple">{t("settingsCore.contextMenu.condMultiple")}</option>
-					</select>
-				</label>
-
-				<label>
-					{t("settingsCore.contextMenu.editor.targetKindField")}
-					<select
-						data-testid="magic-editor-target-kind"
-						value={targetKind}
-						onChange={(e) =>
-							setTargetKind(e.target.value === "file" || e.target.value === "folder" ? e.target.value : "any")
-						}
-					>
-						<option value="file">{t("settingsCore.contextMenu.condFileOnly")}</option>
-						<option value="folder">{t("settingsCore.contextMenu.condFolderOnly")}</option>
-						<option value="any">{t("settingsCore.contextMenu.condAnyKind")}</option>
-					</select>
-				</label>
-
-				{targetKind !== "folder" ? (
-					<label>
-						{t("settingsCore.contextMenu.editor.extensionsField")}
-						<input
-							data-testid="magic-editor-extensions"
-							value={extensionsInput}
-							placeholder={t("settingsCore.contextMenu.editor.extensionsPlaceholder")}
-							onChange={(e) => setExtensionsInput(e.target.value)}
-						/>
-					</label>
-				) : null}
+				<div className="magic-editor-group">
+					<details className="magic-editor-section" open>
+						<summary>
+							<MousePointerClick size={16} aria-hidden="true" />
+							<span className="magic-editor-section-name">{t("settingsCore.contextMenu.editor.targetRow")}</span>
+							<span className="magic-editor-section-value">{targetSummary}</span>
+							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
+						</summary>
+						<div className="magic-editor-sub">
+							<div className="magic-editor-sub-row">
+								<span>{t("settingsCore.contextMenu.editor.targetKindField")}</span>
+								<MiniSegmented
+									value={targetKind}
+									testId="magic-editor-target-kind"
+									label={t("settingsCore.contextMenu.editor.targetKindField")}
+									options={[
+										{ value: "file", label: t("settingsCore.contextMenu.editor.targetFile") },
+										{ value: "folder", label: t("settingsCore.contextMenu.editor.targetFolder") },
+										{ value: "any", label: t("settingsCore.contextMenu.editor.targetBoth") },
+									]}
+									onChange={setTargetKind}
+								/>
+							</div>
+							<div className="magic-editor-sub-row">
+								<span>{t("settingsCore.contextMenu.editor.selectionField")}</span>
+								<MiniSegmented
+									value={selection}
+									testId="magic-editor-selection"
+									label={t("settingsCore.contextMenu.editor.selectionField")}
+									options={[
+										{ value: "any", label: t("settingsCore.contextMenu.editor.selectionAny") },
+										{ value: "single", label: t("settingsCore.contextMenu.editor.selectionSingle") },
+										{ value: "multiple", label: t("settingsCore.contextMenu.editor.selectionMultiple") },
+									]}
+									onChange={setSelection}
+								/>
+							</div>
+							{targetKind !== "folder" ? (
+								<div className="magic-editor-sub-row">
+									<span>{t("settingsCore.contextMenu.editor.extensionsField")}</span>
+									<div className="magic-editor-exts">
+										{extensions.map((ext) => (
+											<button
+												key={ext}
+												type="button"
+												className="magic-editor-ext"
+												aria-label={t("settingsCore.contextMenu.editor.removeExtension", { ext })}
+												onClick={() => setExtensions((prev) => prev.filter((item) => item !== ext))}
+											>
+												{ext}
+												<X size={11} aria-hidden="true" />
+											</button>
+										))}
+										<input
+											data-testid="magic-editor-extensions"
+											aria-label={t("settingsCore.contextMenu.editor.extensionsField")}
+											value={extensionDraft}
+											placeholder={t("settingsCore.contextMenu.editor.extensionsPlaceholder")}
+											onChange={(e) => setExtensionDraft(e.target.value)}
+											onBlur={commitExtensionDraft}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === ",") {
+													e.preventDefault();
+													commitExtensionDraft();
+												} else if (e.key === "Backspace" && extensionDraft === "" && extensions.length > 0) {
+													setExtensions((prev) => prev.slice(0, -1));
+												}
+											}}
+										/>
+									</div>
+								</div>
+							) : null}
+						</div>
+					</details>
+					<details className="magic-editor-section">
+						<summary>
+							<Settings size={16} aria-hidden="true" />
+							<span className="magic-editor-section-name">{t("settingsCore.contextMenu.editor.advancedRow")}</span>
+							<span className="magic-editor-section-value">{advancedSummary}</span>
+							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
+						</summary>
+						<div className="magic-editor-sub">
+							<label className="magic-editor-field">
+								<span>{t("settingsCore.contextMenu.editor.descriptionField")}</span>
+								<input
+									data-testid="magic-editor-description"
+									value={description}
+									placeholder={t("settingsCore.contextMenu.editor.descriptionPlaceholder")}
+									onChange={(e) => setDescription(e.target.value)}
+								/>
+							</label>
+							{executionKind === "agent" ? (
+								<>
+									<div className="magic-editor-sub-row is-switch">
+										<div className="magic-editor-switch-text">
+											<span>{t("settingsCore.contextMenu.editor.useSkillsField")}</span>
+											<small>{t("settingsCore.contextMenu.editor.useSkillsHint")}</small>
+										</div>
+										<Switch
+											checked={useSkills}
+											dataSwitchId="magic-editor:useSkills"
+											ariaLabel={t("settingsCore.contextMenu.editor.useSkillsField")}
+											onChange={() => setUseSkills((prev) => !prev)}
+										/>
+									</div>
+									<div className="magic-editor-sub-row is-switch">
+										<div className="magic-editor-switch-text">
+											<span>{t("settingsCore.contextMenu.editor.useMcpField")}</span>
+											<small>{t("settingsCore.contextMenu.editor.useMcpHint")}</small>
+										</div>
+										<Switch
+											checked={useMcp}
+											dataSwitchId="magic-editor:useMcp"
+											ariaLabel={t("settingsCore.contextMenu.editor.useMcpField")}
+											onChange={() => setUseMcp((prev) => !prev)}
+										/>
+									</div>
+								</>
+							) : null}
+						</div>
+					</details>
+				</div>
 
 				<ModalActions>
 					<button type="button" className="linear-btn" data-action="cancel-magic-editor" onClick={onCancel}>
@@ -414,25 +573,31 @@ export function ContextMenuPage({
 		void updateContextMenu({ ...contextMenu, hiddenSections: [...next] });
 	};
 
-	const moveSection = (index: number, delta: -1 | 1): void => {
-		const targetIndex = index + delta;
-		if (targetIndex < 0 || targetIndex >= contextMenu.sectionOrder.length) return;
+	const moveSectionTo = (from: number, to: number): void => {
+		if (to < 0 || to >= contextMenu.sectionOrder.length || to === from) return;
 		const order = [...contextMenu.sectionOrder];
-		const [moved] = order.splice(index, 1);
+		const [moved] = order.splice(from, 1);
 		if (moved === undefined) return;
-		order.splice(targetIndex, 0, moved);
+		order.splice(to, 0, moved);
 		void updateContextMenu({ ...contextMenu, sectionOrder: order });
 	};
 
-	const moveMagicAction = (index: number, delta: -1 | 1): void => {
-		const targetIndex = index + delta;
-		if (targetIndex < 0 || targetIndex >= contextMenu.magicActions.length) return;
+	const moveMagicActionTo = (from: number, to: number): void => {
+		if (to < 0 || to >= contextMenu.magicActions.length || to === from) return;
 		const actions = [...contextMenu.magicActions];
-		const [moved] = actions.splice(index, 1);
+		const [moved] = actions.splice(from, 1);
 		if (moved === undefined) return;
-		actions.splice(targetIndex, 0, moved);
+		actions.splice(to, 0, moved);
 		void updateContextMenu({ ...contextMenu, magicActions: actions });
 	};
+
+	// Drag and drop by the handles (Figma 472:2581): sections among sections, magic actions among magic actions; the
+	// others slide out of the way while one is dragged.
+	const reorder = useReorder();
+	const pageRef = useRef<HTMLDivElement>(null);
+	useSlideAnimation(pageRef);
+	const sectionCount = contextMenu.sectionOrder.length;
+	const magicCount = contextMenu.magicActions.length;
 
 	const toggleMagicActionEnabled = (id: string): void => {
 		const next = contextMenu.magicActions.map((item) =>
@@ -524,99 +689,89 @@ export function ContextMenuPage({
 		return [sel, kind, ext, ...extras].filter((part): part is string => part !== null).join(" · ");
 	};
 
-	const renderMagicActionRow = (action: MagicAction, index: number, prefix: string): ReactElement => {
-		const isScript = action.execution.kind === "script";
-		const RowIcon = isScript ? Terminal : Sparkles;
-		const badgeLabel = isScript
-			? t("settingsCore.contextMenu.badgeScript")
-			: action.execution.mode === "organize"
-				? t("settingsCore.contextMenu.badgeAgentOrganize")
-				: t("settingsCore.contextMenu.badgeAgentRead");
-		const summary = describeConditions(action);
+	/**
+	 * One magic action, drawn for one of its two places. In 나만의 매직 액션 (`"card"`) it is where the action is
+	 * edited: its conditions, 수정 and 삭제, no switch. In 우클릭 메뉴 섹션 및 항목 (`"section"`) it is one more menu
+	 * item: the name and the on/off switch, nothing else.
+	 */
+	const renderMagicActionRow = (action: MagicAction, index: number, prefix: string, place: "card" | "section"): ReactElement => {
+		const RowIcon = action.execution.kind === "script" ? Terminal : Sparkles;
 
 		return (
 			<div
 				key={action.id}
-				className={`sidebar-custom-row${action.enabled ? "" : " is-muted"}`}
+				className={cn("sidebar-row", !action.enabled && "is-muted", reorder.isDragging("magic", index) && "is-dragging")}
 				data-magic-row={action.id}
+				data-reorder-key={`${prefix}:${action.id}`}
+				{...reorder.target("magic", index, magicCount, moveMagicActionTo)}
 			>
-				<div className="sidebar-custom-row__order">
-					<button
-						type="button"
-						className="sidebar-order-btn"
-						data-action={`${prefix}-move-up-${action.id}`}
-						disabled={index === 0}
-						title={t("settingsCore.contextMenu.moveUp", { name: action.label })}
-						aria-label={t("settingsCore.contextMenu.moveUp", { name: action.label })}
-						onClick={() => moveMagicAction(index, -1)}
-					>
-						<ChevronUp size={12} />
-					</button>
-					<button
-						type="button"
-						className="sidebar-order-btn"
-						data-action={`${prefix}-move-down-${action.id}`}
-						disabled={index === contextMenu.magicActions.length - 1}
-						title={t("settingsCore.contextMenu.moveDown", { name: action.label })}
-						aria-label={t("settingsCore.contextMenu.moveDown", { name: action.label })}
-						onClick={() => moveMagicAction(index, 1)}
-					>
-						<ChevronDown size={12} />
-					</button>
-				</div>
-				<span className="sidebar-custom-row__icon is-accent" aria-hidden="true">
-					<RowIcon size={15} />
+				{reorder.grip({
+					kind: "magic",
+					index,
+					length: magicCount,
+					id: `${prefix}:${action.id}`,
+					label: t("settingsCore.contextMenu.dragHint", { name: action.label }),
+					attr: "data-cmenu-grip",
+					onMove: moveMagicActionTo,
+				})}
+				<span className="sidebar-row-label">
+					<RowIcon size={14} strokeWidth={1.5} className="sidebar-row-icon is-accent" aria-hidden="true" />
+					<span className="sidebar-row-name">{action.label}</span>
 				</span>
-				<div className="sidebar-custom-row__main">
-					<span className="sidebar-custom-row__name">{action.label}</span>
-					<span className="sidebar-custom-badge">{badgeLabel}</span>
-					<span className="sidebar-custom-row__path" title={summary}>
-						{summary}
+				{place === "card" ? (
+					<span className="sidebar-row-path" title={describeConditions(action)}>
+						{describeConditions(action)}
 					</span>
-				</div>
-				<div className="sidebar-custom-row__controls">
-					<button
-						type="button"
-						className="sidebar-order-btn"
-						data-action={`edit-magic-${action.id}`}
-						title={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
-						aria-label={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
-						onClick={() => setEditorState({ open: true, initial: action })}
-					>
-						<Pencil size={12} />
-					</button>
-					<button
-						type="button"
-						className="sidebar-remove-btn"
-						data-action={`remove-magic-${action.id}`}
-						title={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
-						aria-label={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
-						onClick={() => removeMagicAction(action.id)}
-					>
-						<X size={13} />
-					</button>
+				) : null}
+				<span className="sidebar-row-spacer" />
+				{place === "card" ? (
+					<>
+						<button
+							type="button"
+							className="shortcuts-reset"
+							data-action={`edit-magic-${action.id}`}
+							title={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
+							aria-label={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
+							onClick={() => setEditorState({ open: true, initial: action })}
+						>
+							<Pencil size={14} strokeWidth={1.5} />
+						</button>
+						<button
+							type="button"
+							className="shortcuts-reset"
+							data-action={`remove-magic-${action.id}`}
+							title={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
+							aria-label={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
+							onClick={() => removeMagicAction(action.id)}
+						>
+							<X size={14} strokeWidth={1.5} />
+						</button>
+					</>
+				) : (
 					<Switch
 						checked={action.enabled}
 						dataSwitchId={`magic:${action.id}`}
 						ariaLabel={action.label}
 						onChange={() => toggleMagicActionEnabled(action.id)}
 					/>
-				</div>
+				)}
 			</div>
 		);
 	};
 
-	const isDefault = isDefaultContextMenuSettings(contextMenu);
-	const isMinimalActive =
-		MINIMAL_HIDDEN_CONTEXT_MENU_IDS.every((id) => hiddenItems.has(id)) &&
-		contextMenu.hiddenItems.length === MINIMAL_HIDDEN_CONTEXT_MENU_IDS.length;
-	const isShowAllActive = contextMenu.hiddenItems.length === 0 && contextMenu.hiddenSections.length === 0;
+	const magicRows = (prefix: string, place: "card" | "section"): ReactElement[] =>
+		reorder
+			.order("magic", contextMenu.magicActions.map((action) => action.id))
+			.map((index) => renderMagicActionRow(contextMenu.magicActions[index]!, index, prefix, place));
+
+	// 전체 표시 is the default layout, so it doubles as the reset; 사용자 지정 is the last layout arranged by hand.
+	const activePreset = contextMenuPresetOf(contextMenu);
+	const customLayout = contextMenu.custom;
 
 	return (
 		<>
 			<SettingsPageHead
 				title={t("settingsCore.nav.contextMenu")}
-				description={t("settingsCore.contextMenu.description")}
 			/>
 
 			{customizerOpen ? null : (
@@ -636,130 +791,107 @@ export function ContextMenuPage({
 						data-action="open-context-menu-customizer"
 						onClick={onOpenCustomizer}
 					>
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
 						<span>{t("settingsCore.contextMenu.aiHeroButton")}</span>
 					</button>
 				</div>
 			)}
 
-			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.contextMenu.presetsTitle")}>
-				<span className="sidebar-presets-bar__label">{t("settingsCore.contextMenu.presetsTitle")}</span>
-				<div className="sidebar-presets-bar__actions">
-					<button
-						type="button"
-						className={`sidebar-preset-pill${isShowAllActive ? " is-active" : ""}`}
-						data-action="context-menu-preset-all"
-						onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [], hiddenSections: [] })}
-					>
-						{t("settingsCore.contextMenu.presetShowAll")}
-					</button>
-					<button
-						type="button"
-						className={`sidebar-preset-pill${isMinimalActive ? " is-active" : ""}`}
-						data-action="context-menu-preset-minimal"
-						onClick={() =>
-							void updateContextMenu({ ...contextMenu, hiddenItems: [...MINIMAL_HIDDEN_CONTEXT_MENU_IDS] })
-						}
-					>
-						{t("settingsCore.contextMenu.presetMinimal")}
-					</button>
-					<button
-						type="button"
-						className="sidebar-preset-pill is-reset"
-						data-action="context-menu-reset-default"
-						disabled={isDefault}
-						onClick={() => void updateContextMenu(DEFAULT_CONTEXT_MENU_SETTINGS)}
-					>
-						<RotateCcw size={11} aria-hidden="true" />
-						<span>{t("settingsCore.contextMenu.resetDefault")}</span>
-					</button>
-				</div>
-			</div>
-
-			<Section title={t("settingsCore.contextMenu.magicTitle")} description={t("settingsCore.contextMenu.magicDesc")}>
-				<div className="sidebar-section-card" data-context-menu-magic-card="true">
-					<div className="sidebar-section-card__items" style={{ borderTop: 0 }}>
-						{contextMenu.magicActions.length === 0 ? (
-							<p className="sidebar-section-card__empty">{t("settingsCore.contextMenu.magicEmpty")}</p>
-						) : (
-							contextMenu.magicActions.map((action, index) => renderMagicActionRow(action, index, "magic"))
-						)}
-						<div className="sidebar-section-card__foot">
+			{/* Figma 472:2581: 나만의 매직 액션, then 우클릭 메뉴 섹션 및 항목 with its 빠른 구성 under the title (as on the sidebar page), then each menu section as a head over a bordered card. */}
+			<div className="sidebar-page" ref={pageRef}>
+				<section className="cmenu-block">
+					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.magicTitle")}</h3>
+					<div className="sidebar-card cmenu-block-card" data-context-menu-magic-card="true" {...reorder.zone("magic", moveMagicActionTo)}>
+						{magicCount === 0 ? <p className="sidebar-card-empty is-compact">{t("settingsCore.contextMenu.magicEmpty")}</p> : magicRows("magic", "card")}
+						<div className="sidebar-row is-add">
 							<button
 								type="button"
-								className="linear-btn"
+								className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
 								data-action="add-magic-action"
 								onClick={() => setEditorState({ open: true, initial: null })}
 							>
+								<Plus aria-hidden="true" />
 								{t("settingsCore.contextMenu.addMagicAction")}
 							</button>
 						</div>
 					</div>
-				</div>
-			</Section>
+				</section>
 
-			<Section
-				title={t("settingsCore.contextMenu.sectionsTitle")}
-				description={t("settingsCore.contextMenu.sectionsDesc")}
-			>
-				<div className="sidebar-sections-stack">
-					{contextMenu.sectionOrder.map((sectionId, idx) => {
+				<div className="cmenu-block">
+					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.sectionsTitle")}</h3>
+					<div className="sidebar-quick cmenu-block-quick" role="group" aria-label={t("settingsCore.contextMenu.presetsTitle")}>
+						<span className="sidebar-quick-label">{t("settingsCore.contextMenu.presetsTitle")}</span>
+						<div className="shortcuts-segmented">
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === "all" && "is-active")}
+								data-action="context-menu-preset-all"
+								aria-pressed={activePreset === "all"}
+								onClick={() => void updateContextMenu(withContextMenuLayout(contextMenu, contextMenuPresetLayout("all")))}
+							>
+								{t("settingsCore.contextMenu.presetShowAll")}
+							</button>
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === "minimal" && "is-active")}
+								data-action="context-menu-preset-minimal"
+								aria-pressed={activePreset === "minimal"}
+								onClick={() => void updateContextMenu(withContextMenuLayout(contextMenu, contextMenuPresetLayout("minimal")))}
+							>
+								{t("settingsCore.contextMenu.presetMinimal")}
+							</button>
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === null && "is-active")}
+								data-action="context-menu-preset-custom"
+								aria-pressed={activePreset === null}
+								disabled={customLayout === undefined}
+								title={customLayout === undefined ? t("settingsCore.contextMenu.presetCustomEmpty") : undefined}
+								onClick={() => {
+									if (customLayout !== undefined && activePreset !== null) void updateContextMenu(withContextMenuLayout(contextMenu, customLayout));
+								}}
+							>
+								{t("settingsCore.contextMenu.presetCustom")}
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
+					{reorder.order("section", contextMenu.sectionOrder).map((idx) => {
+						const sectionId = contextMenu.sectionOrder[idx]!;
 						const isTags = sectionId === "tags";
 						const sectionVisible = isTags ? true : !hiddenSections.has(sectionId);
 						const label = sectionLabel(sectionId);
-						const SectionIcon = SECTION_ICONS[sectionId];
 						const counts = sectionCounts(sectionId);
 
 						return (
-							<div
+							<section
 								key={sectionId}
-								className={`sidebar-section-card${sectionVisible ? "" : " is-collapsed"}`}
+								className={cn("sidebar-section", !sectionVisible && "is-collapsed", reorder.isDragging("section", idx) && "is-dragging")}
 								data-context-menu-section={sectionId}
+								data-reorder-key={`section:${sectionId}`}
+								{...reorder.target("section", idx, sectionCount, moveSectionTo)}
 							>
-								<div className="sidebar-section-card__head">
-									<div className="sidebar-custom-row__order">
-										<button
-											type="button"
-											className="sidebar-order-btn"
-											data-action={`move-cmenu-section-up-${sectionId}`}
-											disabled={idx === 0}
-											title={t("settingsCore.contextMenu.moveUp", { name: label })}
-											aria-label={t("settingsCore.contextMenu.moveUp", { name: label })}
-											onClick={() => moveSection(idx, -1)}
-										>
-											<ChevronUp size={12} />
-										</button>
-										<button
-											type="button"
-											className="sidebar-order-btn"
-											data-action={`move-cmenu-section-down-${sectionId}`}
-											disabled={idx === contextMenu.sectionOrder.length - 1}
-											title={t("settingsCore.contextMenu.moveDown", { name: label })}
-											aria-label={t("settingsCore.contextMenu.moveDown", { name: label })}
-											onClick={() => moveSection(idx, 1)}
-										>
-											<ChevronDown size={12} />
-										</button>
-									</div>
-									<span className="sidebar-section-card__glyph" aria-hidden="true">
-										<SectionIcon size={15} />
-									</span>
-									<div className="sidebar-section-card__title-wrap">
-										<span className="sidebar-section-card__title">{label}</span>
-										{isTags ? (
-											<span
-												className="sidebar-custom-badge is-locked"
-												title={t("settingsCore.contextMenu.sectionAlwaysShown")}
-											>
-												{t("settingsCore.contextMenu.lockedBadge")}
-											</span>
-										) : null}
-										{counts !== null && sectionVisible ? (
-											<span className="sidebar-section-card__count">
-												{t("settingsCore.contextMenu.sectionCount", counts)}
-											</span>
-										) : null}
-									</div>
+								<div className="sidebar-section-head">
+									{reorder.grip({
+										kind: "section",
+										index: idx,
+										length: sectionCount,
+										id: sectionId,
+										label: t("settingsCore.contextMenu.dragHint", { name: label }),
+										attr: "data-cmenu-section-grip",
+										onMove: moveSectionTo,
+									})}
+									<span className="sidebar-section-title">{label}</span>
+									{isTags ? (
+										<span className="sidebar-always-badge" title={t("settingsCore.contextMenu.sectionAlwaysShown")}>
+											{t("settingsCore.contextMenu.lockedBadge")}
+										</span>
+									) : null}
+									<span className="sidebar-row-spacer" />
+									{counts !== null && sectionVisible ? (
+										<span className="sidebar-section-count">{t("settingsCore.contextMenu.sectionCount", counts)}</span>
+									) : null}
 									<Switch
 										checked={sectionVisible}
 										disabled={isTags}
@@ -772,18 +904,15 @@ export function ContextMenuPage({
 								</div>
 
 								{sectionVisible ? (
-									<div className="sidebar-section-card__items">
+									<div className="sidebar-card" {...(sectionId === "magic" ? reorder.zone("magic", moveMagicActionTo) : {})}>
 										{sectionId === "magic" ? (
-											contextMenu.magicActions.length === 0 ? (
-												<p className="sidebar-section-card__empty">{t("settingsCore.contextMenu.magicEmpty")}</p>
+											magicCount === 0 ? (
+												<p className="sidebar-card-empty">{t("settingsCore.contextMenu.magicEmpty")}</p>
 											) : (
-												contextMenu.magicActions.map((action, aIdx) =>
-													renderMagicActionRow(action, aIdx, "section-magic"),
-												)
+												magicRows("section-magic", "section")
 											)
 										) : (
 											SECTION_ITEMS[sectionId].map((spec) => {
-												const RowIcon = spec.icon;
 												const locked = spec.locked === true;
 												const visible = locked ? true : !hiddenItems.has(spec.id);
 												const itemLabel = t(spec.labelKey);
@@ -794,27 +923,14 @@ export function ContextMenuPage({
 												return (
 													<div
 														key={spec.id}
-														className={`sidebar-custom-row${locked ? " is-locked" : visible ? "" : " is-muted"}`}
+														className={cn("sidebar-row cmenu-row", locked ? "is-locked" : !visible && "is-muted")}
 														data-cmenu-row={spec.id}
 														title={locked ? t("settingsCore.contextMenu.lockedHint") : undefined}
 													>
-														<div className="sidebar-custom-row__order" aria-hidden="true">
-															{locked ? <Lock size={12} className="sidebar-custom-row__lock-glyph" /> : null}
-														</div>
-														<span className={`sidebar-custom-row__icon${locked ? " is-accent" : ""}`} aria-hidden="true">
-															<RowIcon size={15} />
-														</span>
-														<div className="sidebar-custom-row__main">
-															<span className="sidebar-custom-row__name">{itemLabel}</span>
-															{locked ? (
-																<span className="sidebar-custom-badge is-locked">
-																	{t("settingsCore.contextMenu.lockedBadge")}
-																</span>
-															) : null}
-															{keycap !== undefined ? (
-																<span className="sidebar-custom-badge">{keycap}</span>
-															) : null}
-														</div>
+														<span className="sidebar-row-name">{itemLabel}</span>
+														{locked ? <Lock size={14} strokeWidth={1.5} className="cmenu-row-lock" aria-label={t("settingsCore.contextMenu.lockedBadge")} /> : null}
+														{keycap !== undefined ? <span className="sidebar-row-path">{keycap}</span> : null}
+														<span className="sidebar-row-spacer" />
 														<Switch
 															checked={visible}
 															disabled={locked}
@@ -828,12 +944,16 @@ export function ContextMenuPage({
 										)}
 									</div>
 								) : null}
-							</div>
+							</section>
 						);
 					})}
 				</div>
-				<Note>{t("settingsCore.contextMenu.shortcutNote")}</Note>
-			</Section>
+
+				<p className="cmenu-note">
+					<Info size={14} strokeWidth={1.5} aria-hidden="true" />
+					<span>{t("settingsCore.contextMenu.shortcutNote")}</span>
+				</p>
+			</div>
 
 			{editorState.open ? (
 				<MagicActionEditorModal

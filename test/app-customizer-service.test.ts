@@ -90,9 +90,11 @@ describe("app-customizer pi agent profile & toolkit", () => {
 			"update_sidebar",
 			"upsert_magic_action",
 		]);
-		expect(profile.systemPrompt).toContain("AI Search");
+		expect(profile.systemPrompt).toContain("AI Agent");
 		expect(profile.systemPrompt).toContain("Automations");
-		expect(profile.systemPrompt).toContain("Korean");
+		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
+		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 	});
 
 	it("never hides AI Search or Automations even when update_sidebar asks to hide them or uses showOnlyFavorites", async () => {
@@ -116,7 +118,7 @@ describe("app-customizer pi agent profile & toolkit", () => {
 			undefined as never,
 		);
 		const text1 = res1.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
-		expect(text1).toMatch(/AI Search|app:aiSearch/i);
+		expect(text1).toMatch(/AI Agent|app:aiSearch/i);
 		expect(text1).toMatch(/Automations|app:automations/i);
 
 		const saved1 = await settings.get();

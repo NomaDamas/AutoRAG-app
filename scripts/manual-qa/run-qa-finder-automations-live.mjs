@@ -3,7 +3,7 @@
  * a real model, and a real login service.
  *
  * What the other lane (`run-qa-finder-automations.mjs`) cannot show, this does:
- *   1. "Edit in AI Search" opens a draft; the person types the change and sends it;
+ *   1. "Edit in AI Chat" opens a draft; the person types the change and sends it;
  *      the librarian agent's `manage_automations` tool rewrites the rules file, and
  *      the rules list changes by itself, with no click;
  *   2. "Add a rule" does the same for a rule that did not exist;
@@ -62,7 +62,7 @@ if (process.platform !== "darwin") {
 	process.exit(2);
 }
 
-const MODEL_CACHE = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
+const MODEL_CACHE = process.env.INL_CACHE_DIR?.trim() || join(homedir(), ".cache", "im-not-llm", "models");
 const TURN_MS = Number(process.env.QA_TURN_MS ?? 240_000);
 // GLM 5.3 Flash (released 2026-08) is the model the Dazzi-login lane already proves the app drives to an answer.
 const MODEL_ID = process.env.QA_MODEL_ID?.trim() || "z-ai/glm-5.3-flash";
@@ -228,7 +228,7 @@ const app = await launchFinder({
 		AUTORAG_QA_ROOT: QA_ROOT,
 		PI_CODING_AGENT_DIR: AGENT_DIR,
 		// The throwaway HOME would hide the embedding model the first query waits for; the real cache is reused.
-		FASTEMBED_CACHE_DIR: MODEL_CACHE,
+		INL_CACHE_DIR: MODEL_CACHE,
 		AUTORAG_SKIP_DUPEY_CHECK: "1",
 		ELECTRON_RENDERER_URL: "",
 		PATH: `${join(HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
@@ -254,7 +254,7 @@ try {
 	check("the seeded rule is listed", (await text(page, ROW(ruleA.id))).includes("New PDF"), await text(page, ROW(ruleA.id)));
 	check("the background service starts off", (await text(page, "[data-daemon]")).includes("Off · rules are not running"), await text(page, "[data-daemon]"));
 
-	// 1. Edit a rule through the AI Search draft, with the real agent.
+	// 1. Edit a rule through the AI Chat draft, with the real agent.
 	await page.locator(ROW(ruleA.id)).click();
 	await page.keyboard.press("Enter");
 	await page.waitForSelector(COMPOSER);
@@ -270,7 +270,7 @@ try {
 	await sleep(350);
 	await page.screenshot({ path: join(EVIDENCE, "02-list-after-edit.png") });
 
-	// 2. Add a rule through the AI Search draft.
+	// 2. Add a rule through the AI Chat draft.
 	await page.locator("[data-rules-body]").click({ button: "right", position: { x: 40, y: 300 } });
 	await page.waitForSelector('[role="menu"]');
 	await page.locator('[role="menu"] [role="menuitem"]').click();

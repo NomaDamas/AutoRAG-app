@@ -42,6 +42,22 @@ interface ProbeSpec {
 	readonly parse: (stdout: string, context: ProbeContext) => BackendIndexReading | undefined;
 }
 
+/** Where each coding agent keeps its sessions when the user moved it; wombat reads these itself. */
+const WOMBAT_AGENT_HOME_ENV = [
+	"CODEX_HOME",
+	"CLAUDE_CONFIG_DIR",
+	"HERMES_HOME",
+	"GEMINI_CLI_HOME",
+	"QWEN_HOME",
+	"COPILOT_HOME",
+	"CONTINUE_GLOBAL_DIR",
+	"CODEBUDDY_CONFIG_DIR",
+	"VIBE_HOME",
+	"GOOSE_PATH_ROOT",
+	"FACTORY_HOME",
+	"KIRO_HOME",
+] as const;
+
 const PROBE_TIMEOUT_MS = 8000;
 const MAX_BUFFER_BYTES = 4 * 1024 * 1024;
 const SAFE_ENV_KEYS = new Set([
@@ -220,6 +236,20 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 				return undefined;
 			}
 			return reading(lastSync.total_messages, lastIndex?.completed_at ?? lastSync.completed_at);
+		},
+	},
+	// AI Sessions: wombat parses coding-agent logs into its own MinSync-indexed mirror. `doctor --json` is read-only
+	// (it never parses or indexes) and reports the sessions the catalog holds; the global flags precede the subcommand.
+	wombat: {
+		unit: "session",
+		envPrefixes: ["WOMBAT_", ...WOMBAT_AGENT_HOME_ENV],
+		command: ({ connector }) => ({
+			args: [...optionFlags(connector, { dataDir: "--data-dir", configPath: "--config" }), "doctor", "--json"],
+		}),
+		parse: (stdout) => {
+			const doctor = parseJson(stdout);
+			const freshness = isJsonObject(doctor?.freshness) ? doctor.freshness : undefined;
+			return reading(freshness?.indexed_sessions, null);
 		},
 	},
 	clawgallery: {

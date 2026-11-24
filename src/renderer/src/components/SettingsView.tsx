@@ -12,18 +12,20 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Globe, Info, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
-import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
+import { isAppCustomizerSurface, type AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
+import { LtrPage } from "./settings/LtrPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
-import { DuplicatesPage, ReadingPage, WebPage } from "./settings/ConfigPages";
-import { ScopePage } from "./settings/ScopePage";
+import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
+import { AboutPage } from "./settings/AboutPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
+import { SettingsAssistantHeroContext, type SettingsAssistantHero } from "./settings/SettingsKit";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
@@ -35,15 +37,16 @@ import { settings } from "../settings-runtime";
 import { attachSettingsNavigation } from "../state/settings-navigation";
 import { cn } from "../lib/cn";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
-import { ChevronLeftIcon, PanelRightIcon, SearchIcon } from "./icons";
+import { hostPlatform } from "../lib/shortcuts";
+import { ChevronLeftIcon, InspectorToggleIcon, PanelLeftIcon, SearchIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "mcp" | "indexing" | "scope" | "reading" | "duplicates" | "apps";
-/** Legacy ids stay accepted so an old deep link still lands on a page. */
-type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "about" | "ai" | "web" | "ltr" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
+/** Legacy ids stay accepted so an old deep link still lands on a page. 검색 범위 (`scope`) is part of 인덱싱 now. */
+type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "scope";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
 
 type NavLabelKey =
@@ -54,12 +57,13 @@ type NavLabelKey =
 	| "settingsCore.nav.contextMenu"
 	| "settingsCore.nav.shortcuts"
 	| "settingsCore.nav.remote"
+	| "settingsCore.nav.about"
 	| "settingsCore.nav.ai"
 	| "settingsCore.nav.web"
 	| "settingsCore.nav.indexing"
-	| "settingsCore.nav.scope"
 	| "settingsCore.nav.reading"
 	| "settingsCore.nav.duplicates"
+	| "settingsCore.nav.ltr"
 	| "settingsCore.nav.mcp"
 	| "settingsCore.nav.apps";
 
@@ -84,17 +88,17 @@ export const GROUP_APPS: NavGroupKey = "settingsCore.nav.group.apps";
 
 export const PAGES = [
 	{ id: "account", labelKey: "settingsCore.nav.account", icon: User, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.account" },
-	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: CreditCard, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
+	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: ChartNoAxesColumn, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
 	{ id: "general", labelKey: "settingsCore.nav.general", icon: Settings, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.general" },
 	{ id: "sidebar", labelKey: "settingsCore.nav.sidebar", icon: PanelLeft, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.sidebar" },
 	{ id: "contextMenu", labelKey: "settingsCore.nav.contextMenu", icon: MousePointerClick, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.contextMenu" },
 	{ id: "shortcuts", labelKey: "settingsCore.nav.shortcuts", icon: Keyboard, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.shortcuts" },
 	{ id: "remote", labelKey: "settingsCore.nav.remote", icon: MonitorSmartphone, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.remote" },
+	{ id: "about", labelKey: "settingsCore.nav.about", icon: Info, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.about" },
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
+	{ id: "ltr", labelKey: "settingsCore.nav.ltr", icon: ListOrdered, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ltr" },
 	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
-	{ id: "scope", labelKey: "settingsCore.nav.scope", icon: Folder, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.scope" },
-	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.reading" },
 	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
 	{ id: "mcp", labelKey: "settingsCore.nav.mcp", icon: Server, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.mcp" },
 	{ id: "apps", labelKey: "settingsCore.nav.apps", icon: Plug, groupKey: GROUP_APPS, keywordsKey: "settingsCore.nav.keywords.apps" },
@@ -104,6 +108,9 @@ export const PAGES = [
 export function normalizeCategory(category: SettingsCategory): SettingsCategory {
 	if (category === "llm" || category === "embedding" || category === "reranker") return "ai";
 	if (category === "sources" || category === "deep" || category === "light") return "apps";
+	if (category === "scope") return "indexing";
+	// 문서 언어 is a section of 일반 now; a link to the old page (an AI fix, say) lands there.
+	if (category === "reading") return "general";
 	return category;
 }
 
@@ -137,10 +144,16 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** Settings pages whose AI customization assistant fills the window's right sidebar. */
+/**
+ * Settings pages whose AI assistant fills the window's right sidebar; each page is its own surface. 사이드바 and
+ * 단축키 are surfaces of the main-process profiles but have no assistant in the UI, so their right sidebar stays the Inspector's.
+ */
 function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
-	return page === "sidebar" || page === "contextMenu" || page === "shortcuts" ? page : null;
+	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
 }
+
+/** The pages that draw their own invitation to the assistant; every other assistant page gets it from its head. */
+const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["sidebar", "contextMenu", "shortcuts"];
 
 /**
  * What every settings page reads and writes: the app settings, the config
@@ -161,6 +174,12 @@ export interface SettingsData {
 	readonly setSources: (sources: DataSourcesSnapshot) => void;
 	readonly saveSnapshot: (next: AutoRagConfigSnapshot) => void;
 	readonly changeAppSettings: (next: AppSettings) => void;
+	/** Counts the assistant turns that changed something; a page that loads its own data (MCP servers) keys on it to read again. */
+	readonly assistantRevision: number;
+	/** Reads the config and the app preferences again without a loading state: a page opened later shows what is on disk now. */
+	readonly refresh: () => Promise<void>;
+	/** An assistant changed the shared config, the MCP file or a datasource behind the pages' backs: read them again. */
+	readonly reloadAfterAssistant: () => Promise<void>;
 }
 
 export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => void): SettingsData {
@@ -169,6 +188,7 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 	const [sources, setSources] = useState<DataSourcesSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [assistantRevision, setAssistantRevision] = useState(0);
 	/** False until the first datasource scan has answered (or failed): the pages say "checking" instead of "none". */
 	const [sourcesReady, setSourcesReady] = useState(false);
 	const scanSeq = useRef(0);
@@ -234,7 +254,30 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 		changedRef.current?.(next);
 	}, []);
 
-	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings };
+	const refresh = useCallback(async (): Promise<void> => {
+		try {
+			const [app, config] = await Promise.all([autorag.settings.get(), autorag.settings.configGet()]);
+			setAppSettings(app);
+			setSnapshot(config);
+			setError(config.error);
+		} catch {
+			// A failed quiet re-read keeps what is shown; the page's own writes still report their errors.
+		}
+	}, []);
+
+	const reloadAfterAssistant = useCallback(async (): Promise<void> => {
+		setAssistantRevision((revision) => revision + 1);
+		void scan();
+		try {
+			const config = await autorag.settings.configGet();
+			setSnapshot(config);
+			setError(config.error);
+		} catch (cause) {
+			setError(errorMessage(cause));
+		}
+	}, [scan]);
+
+	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings, assistantRevision, refresh, reloadAfterAssistant };
 }
 
 /** One settings page's body for `category`; `onNavigate` follows a page's own link to another page. */
@@ -265,23 +308,23 @@ export function SettingsPageContent({
 		case "general":
 			return <GeneralPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "sidebar":
-			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
+			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "contextMenu":
 			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
 		case "shortcuts":
-			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
+			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
+		case "about":
+			return <AboutPage />;
 		case "ai":
-			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} />;
+			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
+		case "ltr":
+			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} />;
 		case "web":
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":
-			return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} onOpenSource={(alias) => onNavigate(alias.length === 0 ? "scope" : `source:${alias}`)} />;
-		case "scope":
-			return <ScopePage snapshot={snapshot} onSaved={saveSnapshot} />;
-		case "reading":
-			return <ReadingPage snapshot={snapshot} onSaved={saveSnapshot} />;
+			return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} onOpenSource={(alias) => onNavigate(`source:${alias}`)} onOpenApps={() => onNavigate("apps")} />;
 		case "duplicates":
 			return (
 				<DuplicatesPage
@@ -292,7 +335,7 @@ export function SettingsPageContent({
 				/>
 			);
 		case "mcp":
-			return <McpPage />;
+			return <McpPage key={data.assistantRevision} />;
 		default:
 			return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} onOpenSource={(alias) => onNavigate(`source:${alias}`)} />;
 	}
@@ -309,6 +352,9 @@ export function SettingsView({
 	onBack,
 	inspectorHidden,
 	onShowInspector,
+	sidebarHidden = false,
+	onHideSidebar,
+	onShowSidebar,
 	searchRef,
 }: {
 	readonly initialCategory?: SettingsCategory;
@@ -320,6 +366,10 @@ export function SettingsView({
 	/** The window's right sidebar is hidden: the content's top-right offers to bring it back. */
 	readonly inspectorHidden: boolean;
 	readonly onShowInspector: () => void;
+	/** The window's left sidebar is hidden: Settings hides its own too, and the content's top-left offers it back. */
+	readonly sidebarHidden?: boolean;
+	readonly onHideSidebar?: () => void;
+	readonly onShowSidebar?: () => void;
 	/** The window's focus-search shortcut lands here while Settings is open (the Finder's search box is hidden). */
 	readonly searchRef?: RefObject<HTMLInputElement | null>;
 }): ReactElement {
@@ -353,6 +403,17 @@ export function SettingsView({
 		if (initial !== null) setCategory(normalizeCategory(initial));
 		return detach;
 	}, []);
+
+	// Something else may have changed the config or the preferences since Settings was loaded (another window, the CLI, the file
+	// edited by hand, an assistant in another session): opening a page shows what is there now.
+	const firstPage = useRef(true);
+	useEffect(() => {
+		if (firstPage.current) {
+			firstPage.current = false;
+			return;
+		}
+		void data.refresh();
+	}, [category]);
 
 	// Usage analytics: which page is open. A `source:<alias>` page counts as `source`, so a user-chosen alias is never sent.
 	useEffect(() => {
@@ -401,14 +462,20 @@ export function SettingsView({
 		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
+	const hero = useMemo<SettingsAssistantHero | null>(
+		() => (activeSurface === null || customizerShown || SELF_INVITING_SURFACES.includes(activeSurface) ? null : { surface: activeSurface, onOpen: openCustomizer }),
+		[activeSurface, customizerShown, openCustomizer],
+	);
 	const content = (
-		<SettingsPageContent
-			data={data}
-			category={category}
-			onNavigate={setCategory}
-			customizerOpen={customizerShown}
-			onOpenCustomizer={openCustomizer}
-		/>
+		<SettingsAssistantHeroContext value={hero}>
+			<SettingsPageContent
+				data={data}
+				category={category}
+				onNavigate={setCategory}
+				customizerOpen={customizerShown}
+				onOpenCustomizer={openCustomizer}
+			/>
+		</SettingsAssistantHeroContext>
 	);
 
 	const sourceButtons = filteredSources.map((entry) => {
@@ -426,16 +493,14 @@ export function SettingsView({
 
 	return (
 		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
-			<aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
-				{/* Level with the Finder sidebar's head: room for the traffic lights, and the window drags from it. */}
-				<div className="settings-sidebar-head" aria-hidden="true" />
-				<div className="settings-sidebar-backrow">
-					<button type="button" className="settings-nav-item settings-sidebar-back" onClick={onBack}>
-						<span className="settings-nav-icon" aria-hidden="true">
-							<ChevronLeftIcon size={14} />
-						</span>
-						<span>{t("toolbar.back")}</span>
-					</button>
+			{sidebarHidden ? null : <aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
+				{/* Level with the Finder sidebar's head: room for the traffic lights, the sidebar toggle at the right, and the window drags from it. */}
+				<div className="settings-sidebar-head">
+					{onHideSidebar === undefined ? null : (
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "settings-sidebar-toggle")} title={t("toolbar.hideSidebar")} aria-label={t("toolbar.hideSidebar")} onClick={onHideSidebar}>
+							<PanelLeftIcon size={18} />
+						</button>
+					)}
 				</div>
 				<div className="sidebar-search flex-none px-10 pt-2 pb-8">
 					<label className="side-search settings-search flex items-center gap-7 h-30 pl-9 pr-6 border border-transparent rounded-8 bg-hover text-ink-muted transition-[background,border-color,box-shadow,color] duration-(--dur-color) ease-[ease] hover:bg-hover-strong focus-within:bg-window focus-within:border-accent focus-within:text-accent-hover focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
@@ -476,7 +541,7 @@ export function SettingsView({
 									const Icon = page.icon;
 									const active = sourceAlias === null && normalizeCategory(category) === page.id;
 									return (
-										<button key={page.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
+										<button key={page.id} type="button" data-settings-nav={page.id} className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
 											<span className="settings-nav-icon" aria-hidden="true">
 												<Icon size={14} strokeWidth={1.8} />
 											</span>
@@ -496,12 +561,24 @@ export function SettingsView({
 					</nav>
 					{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">{t("settingsCore.view.empty")}</p> : null}
 				</div>
-			</aside>
+				{/* The way out, Figma 403:8201: the sidebar's footer. */}
+				<div className="settings-sidebar-foot">
+					<button type="button" className="settings-sidebar-back" onClick={onBack}>
+						<ChevronLeftIcon size={14} aria-hidden="true" />
+						<span>{t("settingsCore.view.backToApp")}</span>
+					</button>
+				</div>
+			</aside>}
 			<div className="settings-main">
 				<div className="settings-main-head">
+					{sidebarHidden && onShowSidebar !== undefined ? (
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "settings-main-sidebar", hostPlatform() === "win32" ? "" : "settings-main-sidebar--lights")} title={t("toolbar.showSidebar")} aria-label={t("toolbar.showSidebar")} onClick={onShowSidebar}>
+							<PanelLeftIcon size={18} />
+						</button>
+					) : null}
 					{inspectorHidden ? (
-						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
-							<PanelRightIcon size={18} />
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "group settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
+							<InspectorToggleIcon open={false} />
 						</button>
 					) : null}
 				</div>
@@ -520,6 +597,7 @@ export function SettingsView({
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
 						onSettingsUpdated={changeAppSettings}
+						onChangesApplied={data.reloadAfterAssistant}
 						onOpenAiSettings={openAiSettings}
 					/>
 				)),

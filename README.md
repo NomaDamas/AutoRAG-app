@@ -78,7 +78,7 @@ Quick Look. HWP pages are drawn locally by
 <tr>
 <td width="50%" valign="top">
 
-<img src="https://dazziapp.com/assets/screens/panes-ai-2400.webp" alt="A folder pane beside an AI Search pane">
+<img src="https://dazziapp.com/assets/screens/panes-ai-2400.webp" alt="A folder pane beside an AI Chat pane">
 
 </td>
 <td width="50%" valign="top">
@@ -150,7 +150,8 @@ make run     # launch the dev app on free ports, debuggers enabled
 |---|---|
 | `make setup` | Verifies bun, Node 24+ and dupey, then installs dependencies |
 | `make run` | Starts the dev app; prints the renderer URL, main-process inspector, and renderer debug endpoint |
-| `make onboarding` | Walks first-run onboarding in a disposable sandbox profile |
+| `make onboarding` | Experiences a brand-new user's first run (setup → tour → plans) in a disposable sandbox profile |
+| `make onboarding-skip-index` | Same first-run sandbox with indexing stubbed (~2 s) to preview ready → tour → plans |
 | `bun run test` | Vitest unit tests |
 | `bun run typecheck` | TypeScript checks |
 | `bun run build` | Production build into `out/` |

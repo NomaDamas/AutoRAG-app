@@ -1,5 +1,5 @@
 /**
- * Manual QA — an AI Search question on a Dazzi account whose weekly credits are used up, in the real app.
+ * Manual QA — an AI Chat question on a Dazzi account whose weekly credits are used up, in the real app.
  *
  * A loopback stand-in for the Dazzi service signs the profile in and reports an account over its weekly
  * credit limit (as GET /v1/account does for a real exhausted account); every model-side request is recorded
@@ -173,7 +173,7 @@ check("the plan page shows the same reset instant, not a calendar guess", planTe
 await shot("02-plan-page");
 
 // The question's own tab keeps its chat while Settings is in front: the notice is still there when the person goes back.
-check("the AI Search tab keeps the notice while Settings is open", (await page.locator('section[aria-label="AI Search"]', { hasText: "credits are used up" }).count()) === 1);
+check("the AI Chat tab keeps the notice while Settings is open", (await page.locator('section[aria-label="AI Chat"]', { hasText: "credits are used up" }).count()) === 1);
 check("nothing was sent at any point", modelSide.length === 0, JSON.stringify(modelSide));
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);

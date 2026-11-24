@@ -1,7 +1,7 @@
 import { homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 /**
- * Manual QA — images in AI Search answers and evidence, in the real app.
+ * Manual QA — images in AI Chat answers and evidence, in the real app.
  *
  * Deterministic lane: seeds the chat store (<userData>/chat-history/chats.json)
  * with one chat whose answers reference images the way model output does —
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
  *
  *   - local images render as pictures (decoded pixels, not raw text); in the
  *     answer they carry no caption (the Evidence panel names each source) and
- *     the full path shows on hover, while excerpt images keep their caption;
+ *     the full path shows on hover; excerpt images carry no caption either;
  *   - a missing file and an undecodable format fall back to a card that shows
  *     the path instead of a broken image;
  *   - a web image is never fetched (no remote loads from model output); its
@@ -32,7 +32,7 @@ import { finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
 import { rmRetry } from "./platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-images");
+const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-images");
 mkdirSync(EVIDENCE, { recursive: true });
 const LOG = join(EVIDENCE, "run.log");
 writeFileSync(LOG, "");
@@ -106,7 +106,7 @@ const evidence = [
 		title: basename(NOTE),
 		summary: "회의록의 도식입니다.",
 		source: NOTE,
-		excerpts: ["도식은 아래 그림을 참고합니다.\n![도식 1](images/fig%201.png)"],
+		excerpts: ["도식은 아래 그림을 참고합니다.\n![도식 1](images/fig%201.png)", `원본 파일은 ${DIAGRAM}에 있습니다.`],
 		confidence: 0.74,
 	},
 ];
@@ -244,11 +244,17 @@ const paperImage = await waitDecoded(page.locator(EVIDENCE_HALF), EVIDENCE_IMAGE
 check("an image evidence source renders in the Evidence paper", paperImage?.width === 180 && paperImage?.height === 240, JSON.stringify(paperImage));
 await page.screenshot({ path: join(EVIDENCE, "03-evidence-image.png") });
 await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^2$/ }).click();
-await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("2. "), `${EVIDENCE_HALF} .preview-title`);
+await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("회의록"), `${EVIDENCE_HALF} .preview-title`);
 const figure = await waitDecoded(page.locator(EVIDENCE_HALF), FIGURE);
+const inlineDiagram = await waitDecoded(page.locator(EVIDENCE_HALF), DIAGRAM);
+check("a bare image path in an excerpt renders the picture", inlineDiagram?.width === 200, JSON.stringify(inlineDiagram));
 check("a relative image in an excerpt resolves against the source folder", figure?.width === 160, JSON.stringify(figure));
-const excerptCaption = (await page.locator(`${EVIDENCE_HALF} ${byAttr("data-image-path", FIGURE)} figcaption`).innerText().catch(() => "")) ?? "";
-check("an excerpt image keeps its caption", excerptCaption.includes(basename(FIGURE)), excerptCaption);
+const excerptCaptions = await page.locator(`${EVIDENCE_HALF} figcaption`).count();
+check("an excerpt image has no file-name caption under it", excerptCaptions === 0, `figcaption=${excerptCaptions}`);
+const panelText = await page.locator(EVIDENCE_HALF).innerText();
+check("the Evidence panel does not write out the path of an image it renders", !panelText.includes(DIAGRAM) && !panelText.includes(DOCS), panelText.replace(/\s+/g, " ").slice(0, 200));
+check("the sentence around a rendered image's path stays", panelText.includes("원본 파일은") && panelText.includes("에 있습니다."), panelText.replace(/\s+/g, " ").slice(0, 200));
+check("the Evidence panel does not repeat the answer's summary sentence", !panelText.includes("회의록의 도식입니다."), panelText.replace(/\s+/g, " ").slice(0, 200));
 await page.screenshot({ path: join(EVIDENCE, "04-evidence-relative.png") });
 
 // Rendered image -> Quick Look.

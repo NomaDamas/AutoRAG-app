@@ -38,7 +38,7 @@ const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
 const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, string>>>> = {
 	ko: {
 		focusSearch: "검색창 포커스",
-		focusComposer: "AI 검색 열기",
+		focusComposer: "AI 에이전트 열기",
 		openSettings: "설정 열기",
 		newTab: "새 탭",
 		reopenTab: "닫은 탭 다시 열기",
@@ -52,7 +52,7 @@ const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, 
 		openItem: "열기",
 		newFolder: "새 폴더",
 		newFile: "새 텍스트 파일",
-		rename: "이름 변경",
+		rename: "이름 바꾸기",
 		duplicate: "복제",
 		copy: "복사",
 		cut: "잘라내기",
@@ -66,7 +66,7 @@ const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, 
 	},
 	en: {
 		focusSearch: "Focus Search",
-		focusComposer: "Open AI Search",
+		focusComposer: "Open AI Agent",
 		openSettings: "Open Settings",
 		newTab: "New Tab",
 		reopenTab: "Reopen Closed Tab",
@@ -89,12 +89,12 @@ const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, 
 		trash: "Move to Trash",
 		undo: "Undo",
 		redo: "Redo",
-		aiNewChat: "New AI Chat",
+		aiNewChat: "New AI Agent chat",
 		aiToggleHistory: "Toggle Chat History",
 	},
 	ja: {
 		focusSearch: "検索欄にフォーカス",
-		focusComposer: "AI 検索を開く",
+		focusComposer: "AI エージェントを開く",
 		openSettings: "設定を開く",
 		newTab: "新しいタブ",
 		reopenTab: "閉じたタブを再度開く",
@@ -122,7 +122,7 @@ const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, 
 	},
 	zh: {
 		focusSearch: "聚焦搜索框",
-		focusComposer: "打开 AI 搜索",
+		focusComposer: "打开 AI 智能体",
 		openSettings: "打开设置",
 		newTab: "新建标签页",
 		reopenTab: "重新打开关闭的标签页",
@@ -442,7 +442,8 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 			}
 
 			ensureLive();
-			await deps.settings.set({ shortcuts: working });
+			// Keep the remembered 사용자 지정 when the agent applies a preset; bindings of its own replace it.
+			await deps.settings.set({ shortcuts: normalizeShortcutSettings({ ...working, custom: normalizeShortcutSettings(currentSettings.shortcuts).custom }) });
 
 			if (params.preset !== undefined || params.resetAll === true || touchedIds.length > 0 || warnings.length > 0) {
 				const fields =
@@ -485,12 +486,12 @@ function systemPrompt(language: ReplyLanguage, platform: string): string {
 	const modLabel = platform === "darwin" ? "⌘ (Mod)" : "Ctrl (Mod)";
 	const altLabel = platform === "darwin" ? "⌥ (Alt)" : "Alt";
 	const catalogLines = SHORTCUT_CATALOG.map(
-		(item) => `- \`${item.id}\` (${ACTION_LABELS.ko[item.id]} / ${ACTION_LABELS.en[item.id]}): default \`${item.defaultChord}\` [scope: ${item.scope}]`,
+		(item) => `- \`${item.id}\` (${ACTION_LABELS.en[item.id]}): default \`${item.defaultChord}\` [scope: ${item.scope}]`,
 	).join("\n");
 
 	return [
 		"You are Dazzi's dedicated Keyboard Shortcut Customization Assistant (`shortcut-customizer`), embedded inside Settings → Shortcuts.",
-		`Always reply in ${replyLang}, concisely and warmly.`,
+		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
 		"",
 		"## Role & Scope",
 		"- You customize Dazzi's keyboard shortcuts stored in `settings-state.json` (separate from the shared AutoRAG config).",
@@ -501,12 +502,12 @@ function systemPrompt(language: ReplyLanguage, platform: string): string {
 		"",
 		"## Built-in Quick Presets (`preset` parameter on `update_shortcuts`)",
 		"- `macFinder` (Mac Finder): `editPath`=`Mod+Shift+G` (`⇧⌘G`), `parentFolder`=`Mod+ArrowUp` (`⌘↑`), `openItem`=`Mod+O` (`⌘O`), `rename`=`Enter` (`↩`), `trash`=`Mod+Backspace` (`⌘⌫`).",
-		"- `windowsExplorer` (Windows File Explorer / 파일 탐색기): `editPath`=`Alt+D`, `viewIcons`=`Mod+Shift+2`, `viewList`=`Mod+Shift+6`, `viewColumns`=`Mod+Shift+5`, `quickLook`=`Alt+P`, `rename`=`F2`, `trash`=`Delete`, `redo`=`Mod+Y`.",
-		"- `default` (기본값): restores all 26 Dazzi default shortcuts.",
+		"- `windowsExplorer` (Windows File Explorer): `editPath`=`Alt+D`, `viewIcons`=`Mod+Shift+2`, `viewList`=`Mod+Shift+6`, `viewColumns`=`Mod+Shift+5`, `quickLook`=`Alt+P`, `rename`=`F2`, `trash`=`Delete`, `redo`=`Mod+Y`.",
+		"- `default` (Dazzi defaults): restores all 26 Dazzi default shortcuts.",
 		"",
 		"## Non-Negotiable Invariants",
 		"1. **Closed Action Catalog**: You can ONLY edit, swap, or reset shortcuts for the 26 existing actions listed above. You can NEVER create new actions, macros, custom shell commands, or shortcuts for features that do not already have a default shortcut in Dazzi. If the person asks to add a shortcut for an unsupported/new feature, apply any valid requests and politely explain that only existing default-bound shortcuts can be customized.",
-		"2. **Locked System Keys**: `Esc` (`dismiss`, 닫기/취소) and unmodified arrow keys (`↑`, `↓`, `←`, `→`) are reserved system keys and can NEVER be reassigned.",
+		"2. **Locked System Keys**: `Esc` (`dismiss`) and unmodified arrow keys (`↑`, `↓`, `←`, `→`) are reserved system keys and can NEVER be reassigned.",
 		"3. **Modifier Rule**: Letter, digit, and punctuation keys require `Mod` (`⌘`/`Ctrl`) or `Alt` (`⌥`/`Alt`). `Space`, `Enter`, `Backspace`, `Delete`, and `F1`–`F12` work with or without modifiers.",
 		"4. **Conflicts**: If the person asks to bind a chord already used by an overlapping action (or asks to swap two shortcuts), pass `swapConflicts: true` or update both actions in `bindings`.",
 		"",

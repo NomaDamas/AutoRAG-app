@@ -58,8 +58,8 @@ async function render(next: IndexProblem): Promise<Mock> {
 
 const banner = (): HTMLElement | null => host.querySelector<HTMLElement>('[role="alert"]');
 const buttons = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonElement>('[role="alert"] button')];
-/** The one labelled action; the dismiss is the icon button that carries an `aria-label` instead. */
-const primary = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[role="alert"] button:not([aria-label])');
+/** The accent action; 나중에 and the × both dismiss. */
+const primary = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[role="alert"] button.bg-accent');
 const dismissButton = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[role="alert"] button[aria-label]');
 
 describe("IndexProblemBanner", () => {
@@ -68,20 +68,30 @@ describe("IndexProblemBanner", () => {
 		expect(banner()).toBeNull();
 	});
 
-	it("shows one line and one button for a refused embedder, and that button opens the embedding choice", async () => {
+	it("warns, not errs, for a refused embedder, says keyword search still works, and offers 다시 시도 beside 설정 열기 (Figma 430:8644)", async () => {
 		const onFixEmbedding = await render(failed("embedder-config"));
-		expect(banner()?.textContent).toContain("의미 검색을 쓸 수 없어요");
-		expect(buttons()).toHaveLength(2);
-		expect(primary()).not.toBeNull();
+		expect(banner()?.getAttribute("data-tone")).toBe("warning");
+		expect(banner()?.textContent).toContain("의미 검색을 사용할 수 없습니다");
+		expect(banner()?.textContent).toContain("문서 이해 모델 설정을 확인해 주세요. 키워드 검색은 계속 사용할 수 있습니다.");
+		expect(buttons().map((button) => button.textContent)).toEqual(["", "다시 시도", "설정 열기"]);
 		act(() => primary()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(onFixEmbedding).toHaveBeenCalledTimes(1);
 		expect(retry).not.toHaveBeenCalled();
+		const again = buttons().find((button) => button.textContent === "다시 시도");
+		act(() => again?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(retry).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps 나중에 and the error tone for a problem that stops search", async () => {
+		await render(failed("disk-full"));
+		expect(banner()?.getAttribute("data-tone")).toBe("error");
+		expect(buttons().map((button) => button.textContent)).toContain("나중에");
 	});
 
 	it("shows one line and one button while the embedder is unreachable, and that button retries", async () => {
 		const onFixEmbedding = await render(failed("embedder-offline"));
 		expect(banner()?.textContent).toBeTruthy();
-		expect(buttons()).toHaveLength(2);
+		expect(buttons()).toHaveLength(3);
 		expect(primary()).not.toBeNull();
 		act(() => primary()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(retry).toHaveBeenCalledTimes(1);

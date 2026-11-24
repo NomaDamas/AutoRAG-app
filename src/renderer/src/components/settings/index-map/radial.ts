@@ -35,12 +35,17 @@ export interface RadialSector {
 	readonly path: string;
 	/** An arc along the sector's outer edge, as drawn (a file is a fine stroke, narrower than its share): where a mark can sit without covering the fill. */
 	readonly edge: string;
+	/** The ring, counted from the hole (0). */
+	readonly level: number;
+	/** The angles as drawn: a file is narrower than its share. */
+	readonly drawnStart: number;
+	readonly drawnEnd: number;
 }
 
 const TAU = Math.PI * 2;
 export const RADIAL_CENTER = 320;
 export const RADIAL_HOLE = 87;
-const OUTER_RADIUS = 300;
+export const OUTER_RADIUS = 300;
 /** An excluded folder holds few or no files, so by count it would be a hairline: it keeps at least this angle (about 4°), wide enough to see, hover and click. */
 const EXCLUDED_MIN_ANGLE = (4 * Math.PI) / 180;
 /** ...but never more than this share of the ring it sits in, so a small parent is not swallowed by its excluded child. */
@@ -81,9 +86,13 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 		weights.set(node.id, kids === undefined ? Math.max(1, node.weight) : kids.reduce((sum, child) => sum + (weights.get(child.id) ?? 1), 0));
 	}
 	const depthOf = (node: IndexMapNode): number => 1 + Math.max(0, ...(children.get(node.id) ?? []).map(depthOf));
-	// Deeper descendants remain in the data; drilling into a folder reveals the next nine rings.
-	const maxRings = 9;
-	const rings = Math.max(1, Math.min(maxRings, Math.max(0, ...roots.map(depthOf))));
+	// Deeper descendants remain in the data; drilling into a folder reveals the next four rings. Four keeps each ring
+	// about as thick as the seed head is wide from the hole to its rim, the proportion of the sunflower design.
+	const maxRings = 4;
+	// Every view keeps the ring width of the whole scope: going into a folder drops the rings outside it, it does not
+	// widen the rings that are left, so a deep folder draws a smaller flower at the same scale.
+	const scope = (children.get(null) ?? []).filter((node) => node.weight > 0 || children.has(node.id));
+	const rings = Math.max(1, Math.min(maxRings, Math.max(0, ...scope.map(depthOf))));
 	const step = (OUTER_RADIUS - RADIAL_HOLE) / rings;
 	const result: RadialSector[] = [];
 	/** Angular share of each sibling: by file count, except an excluded folder keeps its visible minimum. */
@@ -122,7 +131,7 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 			// Files read as fine radial strokes rather than wide blocks, even in a small scope.
 			const middle = (cursor + next) / 2;
 			const half = node.kind === "file" ? Math.min(0.012, (next - cursor - gap) / 2) : (next - cursor - gap) / 2;
-			result.push({ node, start: cursor, end: next, inner, outer, path: sectorPath(middle - half, middle + half, inner, outer), edge: arcPath(middle - half, middle + half, outer + EDGE_OFFSET) });
+			result.push({ node, start: cursor, end: next, inner, outer, level, drawnStart: middle - half, drawnEnd: middle + half, path: sectorPath(middle - half, middle + half, inner, outer), edge: arcPath(middle - half, middle + half, outer + EDGE_OFFSET) });
 			visit(children.get(node.id) ?? [], cursor, next, level + 1);
 			cursor = next;
 		});

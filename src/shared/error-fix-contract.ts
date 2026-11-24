@@ -1,5 +1,5 @@
 /**
- * Contract of the "AI로 고치기" run: the error-fix helper agent that diagnoses an
+ * Contract of the "AI로 해결하기" run: the error-fix helper agent that diagnoses an
  * error the app showed and repairs what it can reach (the shared AutoRAG config,
  * the index), shared by the main process, the preload bridge and the renderer.
  * The run is a plain pi session on the AI Search model (`agents/profiles/error-fix.ts`);

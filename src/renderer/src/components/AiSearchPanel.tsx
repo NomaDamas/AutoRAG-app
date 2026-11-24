@@ -27,18 +27,24 @@ import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import { chordFromKeyEvent, resolveEffectiveShortcuts } from "../../../shared/shortcuts-contract";
 import { useFormattedShortcut, useShortcutSettings } from "../hooks/useShortcutSettings";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
-import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
+import { frontRequest } from "../state/interaction";
+import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
+import { REVISION_MARK, type AnswerChange, type AnswerRevision } from "../../../shared/answer-revision";
+import { drawQuickAnswer, splitRevisionMarks } from "../state/answer-revisions";
+import { AnswerRevisionMark } from "./AnswerRevisionMark";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
-import { answerViewState } from "../state/answer-view";
-import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { attachmentsFromDrop, isAttachmentDrag, isThumbnailAttachment, mergeAttachments } from "../state/attachments";
+import { AttachmentThumb } from "./AttachmentThumb";
+import { attachPastedImages } from "../state/pasted-images";
 import { appendTranscript } from "../../../shared/voice-contract";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { SeedLoader } from "./SeedLoader";
 import { PipeTable } from "./PipeTable";
 import dazziLogo from "../assets/dazzi-logo.png";
 import {
@@ -46,7 +52,8 @@ import {
 	evidenceDetail,
 	evidenceHeading,
 	evidenceKind,
-	resolveActiveEvidence,
+	accumulateEvidence,
+	citationSource,
 	unresolvedCitationNumbers,
 	type EvidenceSelectionSource,
 } from "../state/evidence";
@@ -56,6 +63,7 @@ import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
+import { FileMention } from "./FileMention";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
@@ -79,8 +87,8 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
 export interface AiDockHandle {
 	/** Seed the composer with `text` and send it at once, with `atts` added to the drafts of that run. */
 	sendQuery(text: string, atts?: readonly ChatAttachment[]): void;
-	/** Leave `text` in the composer unsent and focus it: the person finishes the sentence and sends it. */
-	prefill(text: string): void;
+	/** Leave `text` in the composer unsent (`focus: false` types without stealing focus mid-animation); by default the composer is focused so the person finishes the sentence. */
+	prefill(text: string, options?: { readonly focus?: boolean }): void;
 	/** Append draft attachments and focus the composer. */
 	attach(atts: readonly ChatAttachment[]): void;
 	/**
@@ -96,6 +104,10 @@ export interface AiDockHandle {
 	toggleHistory(): void;
 	/** Start a new conversation, like the panel's 새 대화 button. */
 	newChat(): void;
+	/** Show stored chat `id` (the inspector's ⤢), to continue it here; ignored while a run streams. */
+	openChat(id: string): void;
+	/** Open the 대화 기록 list (it stays open if it already is). */
+	showHistory(): void;
 }
 
 export interface AiSearchPanelProps {
@@ -107,8 +119,13 @@ export interface AiSearchPanelProps {
 	/** The panel's tab is on screen in some pane (split panes show several). */
 	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
+	/**
+	 * The person picked source `number` in the Inspector's evidence tabs: the panel scrolls its text to where that source
+	 * is cited. `nonce` is new for every pick, so picking the same source again scrolls again.
+	 */
+	readonly evidenceJump?: { readonly number: number; readonly nonce: number } | null;
 	readonly onSelectEvidence: (number: number) => void;
-	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
+	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[], freshEvidence?: readonly number[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
@@ -138,12 +155,12 @@ function parentFolder(att: ChatAttachment): string | null {
 	return parts.length >= 2 ? parts[parts.length - 2] ?? null : null;
 }
 
-function formatElapsed(ms: number): string {
+export function formatElapsed(ms: number): string {
 	return `${Math.max(1, Math.round(ms / 1000))}s`;
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
+	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -171,9 +188,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [compacting, setCompacting] = useState(false);
 	/** What the current run did to the model's view of the chat, in order. */
 	const [contextNotices, setContextNotices] = useState<readonly ContextNotice[]>([]);
+	/** The corrections the verification made to the Quick answer, in the order they arrived. */
+	const [revisions, setRevisions] = useState<readonly AnswerRevision[]>([]);
+	/** They arrived while this panel watched, so they move; a chat read back from history shows them settled. */
+	const [revisionsMove, setRevisionsMove] = useState(false);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
-	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
+	const interactionQueue = useInteractionQueue();
 	const [stopped, setStopped] = useState(false);
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
 	const [submittedAttachments, setSubmittedAttachments] = useState<readonly ChatAttachment[]>([]);
@@ -303,6 +324,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	deepElapsedRef.current = deepElapsed;
 	const contextNoticesRef = useRef(contextNotices);
 	contextNoticesRef.current = contextNotices;
+	const revisionsRef = useRef(revisions);
+	revisionsRef.current = revisions;
 
 	useEffect(() => {
 		if (!active) {
@@ -320,24 +343,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		},
 		[],
 	);
-
-	// The agent's open requests. `pending()` covers a request that opened before
-	// this panel subscribed (a tab switch or reload); the stream keeps it current.
-	useEffect(() => {
-		const bridge = autorag?.interaction;
-		if (bridge === undefined) return;
-		let alive = true;
-		void bridge.pending().then((requests) => {
-			if (alive) setInteractionQueue((current) => mergePending(current, requests));
-		});
-		const offRequest = bridge.onRequest((request) => setInteractionQueue((current) => openRequest(current, request)));
-		const offClosed = bridge.onClosed((event) => setInteractionQueue((current) => closeRequest(current, event.id)));
-		return () => {
-			alive = false;
-			offRequest();
-			offClosed();
-		};
-	}, []);
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
@@ -382,6 +387,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				case "context-notice":
 					setContextNotices((current) => [...current, event.notice]);
 					break;
+				case "revision":
+					setRevisions((current) => [...current, event.revision]);
+					setRevisionsMove(true);
+					break;
 				case "error":
 					setError(event.message);
 					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
@@ -421,7 +430,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		[pastTurns, quick, deep],
 	);
 	const evidence = useMemo(
-		() => resolveActiveEvidence(allTurnPhases, evidenceSource),
+		() => accumulateEvidence(allTurnPhases, evidenceSource),
 		[allTurnPhases, evidenceSource],
 	);
 	const sessionEvidence = useMemo(() => {
@@ -433,27 +442,54 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		return collectSessionEvidence(phases);
 	}, [pastTurns, quick, deep]);
 
+	// The sources the corrections just brought in, until the person has opened them: their chips in the answer and their
+	// tabs in the inspector wear the sun colour meanwhile. A chat read back from history shows none of them as new.
+	const [seenFresh, setSeenFresh] = useState<readonly number[]>([]);
+	const quickFresh = useMemo(() => (revisionsMove ? (drawQuickAnswer(quick, deep, revisions)?.fresh ?? []) : []), [revisionsMove, quick, deep, revisions]);
+	const unseenFresh = useMemo(() => quickFresh.filter((number) => !seenFresh.includes(number)), [quickFresh, seenFresh]);
+	useEffect(() => {
+		if (revisions.length === 0) setSeenFresh([]);
+	}, [revisions]);
+	useEffect(() => {
+		if (active && selectedEvidence !== null && quickFresh.includes(selectedEvidence)) {
+			setSeenFresh((current) => (current.includes(selectedEvidence) ? current : [...current, selectedEvidence]));
+		}
+	}, [active, selectedEvidence, quickFresh]);
+
 	// Only the visible tab's chat feeds the inspector; it keeps that evidence
 	// while the user browses folders in other tabs.
 	useEffect(() => {
-		if (active) onPublish(evidence, sessionEvidence);
-	}, [active, evidence, sessionEvidence, onPublish]);
+		if (active) onPublish(evidence, sessionEvidence, unseenFresh);
+	}, [active, evidence, sessionEvidence, unseenFresh, onPublish]);
 
 	function selectPhaseCitation(turnIndex: number, phase: "quick" | "deep", number: number): void {
 		const nextSource: EvidenceSelectionSource = { turnIndex, phase };
 		setEvidenceSource(nextSource);
-		const nextEvidence = resolveActiveEvidence(allTurnPhases, nextSource);
-		if (active) onPublish(nextEvidence, sessionEvidence);
+		const nextEvidence = accumulateEvidence(allTurnPhases, nextSource);
+		if (active) onPublish(nextEvidence, sessionEvidence, unseenFresh.filter((fresh) => fresh !== number));
 		onSelectEvidence(number);
 		onCitation?.(number);
 	}
+
+	// A source picked in the Inspector's evidence tabs: show where the text cites it, whichever turn that is.
+	const handledJumpRef = useRef<number | null>(null);
+	useEffect(() => {
+		if (evidenceJump === null || !active || handledJumpRef.current === evidenceJump.nonce) return;
+		handledJumpRef.current = evidenceJump.nonce;
+		const source = citationSource(allTurnPhases, evidenceJump.number);
+		if (source === null) return;
+		setEvidenceSource(source);
+		const scope = bodyRef.current?.querySelector(`[data-cite-scope="${source.turnIndex}:${source.phase}"]`);
+		const target = scope?.querySelector(`[data-cite="${evidenceJump.number}"]`) ?? scope;
+		target?.scrollIntoView({ block: "center", behavior: "smooth" });
+	}, [evidenceJump, active, allTurnPhases]);
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions]);
 
 	const shortcutSettings = useShortcutSettings();
 	const historyShortcutLabel = useFormattedShortcut("aiToggleHistory");
@@ -551,6 +587,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				errorAction: errorRef.current !== null && errorActionRef.current?.message === errorRef.current ? errorActionRef.current.action : null,
 				deepElapsed: deepElapsedRef.current,
 				contextNotices: contextNoticesRef.current,
+				revisions: revisionsRef.current,
 			};
 			setPastTurns((current) => [...current, finished]);
 		}
@@ -564,6 +601,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setIndexNotice(null);
 		setCompacting(false);
 		setContextNotices([]);
+		setRevisions([]);
+		setRevisionsMove(false);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
@@ -692,6 +731,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setIndexNotice(null);
 		setCompacting(false);
 		setContextNotices([]);
+		setRevisions([]);
+		setRevisionsMove(false);
 		setStopped(false);
 		setProgress("");
 		setEvidenceSource(null);
@@ -729,6 +770,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				errorAction: null,
 				deepElapsed: null,
 				contextNotices: turn.assistant?.context ?? [],
+				revisions: turn.assistant?.revisions ?? [],
 			})),
 		);
 		setQuick(assistant?.quick ?? null);
@@ -745,6 +787,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setIndexNotice(null);
 		setCompacting(false);
 		setContextNotices(assistant?.context ?? []);
+		setRevisions(assistant?.revisions ?? []);
+		setRevisionsMove(false);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
@@ -773,6 +817,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		await autorag.search.cancel(id);
 	}
 
+	/** Images pasted into the field become draft attachments; with a model that takes none the paste does nothing. */
+	function pasteImages(files: readonly File[]): void {
+		void attachPastedImages(files, autorag.search.pasteImage).then((pasted) => {
+			if (pasted.length > 0) setAttachments((current) => mergeAttachments(current, pasted));
+		});
+	}
+
 	function removeAttachment(index: number): void {
 		setAttachments((current) => current.filter((_, position) => position !== index));
 	}
@@ -787,9 +838,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	/** Leaves `text` in the composer unsent and focuses it: the person finishes or edits it and sends it themselves. */
-	function prefill(text: string): void {
+	function prefill(text: string, options?: { readonly focus?: boolean }): void {
 		setQuery(text);
-		ensureFocus();
+		if (options?.focus !== false) ensureFocus();
 	}
 
 	useImperativeHandle(ref, () => ({
@@ -814,6 +865,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		},
 		toggleHistory,
 		newChat,
+		openChat(id: string): void {
+			if (searchIdRef.current !== null) return;
+			void loadHistory(id);
+		},
+		showHistory(): void {
+			if (!historyOpen) void openHistory();
+		},
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
@@ -862,6 +920,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// phase can cite fast-answer units that never reach its `results`, leaving
 	// some chips with nothing to open.
 	const quickUnresolved = useMemo(() => unresolvedCitationNumbers(quickText, quick?.evidence ?? []), [quickText, quick]);
+	// A Quick answer the librarian corrected is drawn with the corrections in place, not as it first stood.
+	const quickDraw = useMemo(() => drawQuickAnswer(quick, deep, revisions), [quick, deep, revisions]);
 	const deepUnresolved = useMemo(() => unresolvedCitationNumbers(deepText, deep?.evidence ?? []), [deepText, deep]);
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
@@ -870,7 +930,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// panel of that run shows it: another tab's panel has a different run id.
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
-	const { shimmer } = answerViewState({ pending: searching, deepReady });
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
@@ -893,11 +952,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 border-b border-border select-none">
+			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
 				<span className="ai-mark grid flex-none place-items-center text-accent">
 					<SparklesIcon />
 				</span>
-				<strong className="flex-none text-sm font-semibold text-ink">{t("aiSearch.title")}</strong>
+				<strong className="flex-none text-sm font-medium leading-[19.5px] text-ink">{t("aiSearch.title")}</strong>
 				<span className="flex-1" />
 				<button
 					type="button"
@@ -922,7 +981,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			{historyOpen ? (
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
-					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label={t("aiSearch.history")}>
+					<div className="history absolute right-16 top-36 z-30 flex max-h-[72%] w-358 flex-col overflow-hidden rounded-[16px] border border-divider bg-window py-12 shadow-[0_0_10px_rgba(0,0,0,0.2)]" aria-label={t("aiSearch.history")}>
 						<input
 							autoFocus
 							value={historyQuery}
@@ -946,15 +1005,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							}}
 							placeholder={t("aiSearch.searchHistory")}
 							aria-label={t("aiSearch.searchHistory")}
-							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
+							className="w-full flex-none border-0 bg-transparent px-16 pt-4 pb-12 text-body font-medium leading-[19px] text-ink outline-none placeholder:text-ink-faint"
 						/>
-						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
+						<div className="history-list min-h-0 flex-1 overflow-auto">
 							{historyGroups.length === 0 ? (
-								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
+								<span className="block px-16 py-24 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">
+										<div className="history-group px-16 pt-4 pb-2 text-badge font-bold leading-[15px] text-ink-muted">
 											{t(HISTORY_BUCKET_KEYS[group.label])}
 										</div>
 										{group.items.map((item) => (
@@ -962,17 +1021,17 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 												type="button"
 												key={item.id}
 												className={cn(
-													"history-item flex w-full items-start gap-8 rounded-7 border-0 p-8 text-sm text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
+													"history-item flex w-full items-start gap-8 border-0 px-16 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
 													item.id === chatId ? "current bg-accent-history-current" : "bg-transparent",
 												)}
 												onClick={() => void loadHistory(item.id)}
 											>
-												<span className={cn("hist-dot mt-5 size-5 flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
-												<span className="hist-copy min-w-0 flex-1">
-													<b className="block truncate font-bold text-ink">{item.title}</b>
-													<small className="mt-2 block truncate text-badge text-ink-muted">{item.snippet}</small>
+												
+												<span className="hist-copy flex min-w-0 flex-1 flex-col gap-1">
+													<b className="block truncate text-sm font-medium leading-[19.5px] text-ink">{item.title}</b>
+													<small className="block truncate text-caption leading-[16.5px] text-ink-muted">{item.snippet}</small>
 												</span>
-												<span className="hist-time flex-none text-tile text-ink-muted">{item.time}</span>
+												<span className="hist-time flex-none text-badge font-medium leading-[14px] text-ink-faint">{item.time}</span>
 											</button>
 										))}
 									</div>
@@ -1002,8 +1061,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</div>
 						) : (
 							<div className="ai-empty my-28 text-center">
-								<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
-								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
+								<strong className="block text-title font-medium leading-[27px] text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
+								<p className="mt-8 text-body leading-[21px] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
 							</div>
 						)
 					) : null}
@@ -1036,7 +1095,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										))}
 									</div>
 								) : null}
-								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{submittedQuery}</div>
+								<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{submittedQuery}</div>
 							</div>
 						</div>
 					)}
@@ -1066,18 +1125,19 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{submittedQuery === null ? null : (
 						<div className="message assistant-msg flex flex-col gap-14">
 							{quickReady ? (
-								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:quick`}>
 									<ProseBlocks
-										text={quickText}
+										text={quickDraw?.text ?? quickText}
 										selected={
 											evidenceSource === null ||
 											(evidenceSource.turnIndex === pastTurns.length && evidenceSource.phase === "quick")
 												? selectedEvidence
 												: null
 										}
-										unresolved={quickUnresolved}
+										unresolved={quickDraw?.unresolved ?? quickUnresolved}
 										onCitation={(number) => selectPhaseCitation(pastTurns.length, "quick", number)}
 										imageActions={imageActions}
+										{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: revisionsMove, fresh: quickDraw.fresh.filter((number) => !seenFresh.includes(number)) } })}
 									/>
 								</div>
 							) : null}
@@ -1088,24 +1148,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{contextAfterQuick.map((notice, index) => (
 								<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
 							))}
-							{searching && compacting ? (
-								<CompactingStatus />
-							) : shimmer ? (
-								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
-									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
-										{progress === "" ? t("aiSearch.thinking") : progress}
-									</span>
-								</div>
-							) : null}
 
 							{deepReady ? (
 								<div className="flex flex-col gap-6">
 									{deepElapsed === null ? null : (
-										<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+										<div className="thinking-header flex items-center gap-5 text-body leading-[1.55] font-medium text-ink-muted">
 											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed) })}</span>
 										</div>
 									)}
-									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+																			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:deep`}>
 										<ProseBlocks
 											text={deepText}
 											selected={
@@ -1122,6 +1173,16 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								</div>
 							) : null}
 							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
+							{searching && compacting ? (
+								<CompactingStatus />
+							) : searching ? (
+								<div className="water-wave-thinking my-6 flex items-center gap-6 text-body leading-[1.55] text-ink-muted" role="status">
+									<SeedLoader />
+									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
+										{progress === "" ? t("aiSearch.thinking") : progress}
+									</span>
+								</div>
+							) : null}
 						</div>
 					)}
 
@@ -1156,23 +1217,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					</div>
 				) : (
 				<div className={CENTERED}>
-					{attachments.length > 0 ? (
+					{attachments.some((att) => !isThumbnailAttachment(att)) ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
-							{attachments.map((att, index) => (
-								<span key={`${att.id}:${att.name}`} className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
-									<AttachmentGlyph att={att} />
-									<span className="max-w-[180px] truncate">{att.name}</span>
-									<button
-										type="button"
-										className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
-										aria-label={t("finderComponents.removeAttachment")}
-										title={t("finderComponents.removeAttachment")}
-										onClick={() => removeAttachment(index)}
-									>
-										<CloseIcon size={10} />
-									</button>
-								</span>
-							))}
+							{attachments.map((att, index) => (isThumbnailAttachment(att) ? null : <DraftPill key={`${att.id}:${att.name}`} att={att} onRemove={() => removeAttachment(index)} />))}
 						</div>
 					) : null}
 					{searching && !phone ? (
@@ -1187,10 +1234,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					<div
 						ref={composeBoxRef}
 						className={cn(
-							"compose-box border border-border bg-input transition-[border-color,border-radius] duration-(--dur-color) ease-out",
-							voiceActive
-								? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
-								: "flex flex-col gap-6 rounded-14 px-14 pt-12 pb-8 focus-within:border-accent",
+															"compose-box border border-divider bg-window shadow-[0_2px_5px_rgba(20,20,41,0.07)] transition-[border-color,border-radius] duration-(--dur-color) ease-out",
+							voiceActive ? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8" : "flex flex-col gap-8 rounded-[16px] px-16 py-12",
 						)}
 						onMouseDown={(event) => {
 							if (voiceActive) return;
@@ -1250,12 +1295,29 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</div>
 						) : (
 							<>
+								{attachments.some(isThumbnailAttachment) ? (
+									<div className="composer-attach-thumbs flex flex-wrap items-start gap-10 pt-6">
+										{attachments.map((att, index) =>
+											isThumbnailAttachment(att) ? (
+												<AttachmentThumb
+													key={`${att.id}:${att.name}`}
+													att={att}
+													size="composer"
+													removeLabel={t("finderComponents.removeAttachment")}
+													onRemove={() => removeAttachment(index)}
+													fallback={<DraftPill att={att} onRemove={() => removeAttachment(index)} />}
+												/>
+											) : null,
+										)}
+									</div>
+								) : null}
 								<ComposerField
 									fieldRef={inputRef}
 									value={query}
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
-									placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
+									onPasteImages={pasteImages}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
 								{voiceNotice === null ? null : (
@@ -1265,20 +1327,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								)}
 								<div className="composer-toolbar flex items-center justify-between gap-8">
 									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-									<div className="composer-actions flex items-center gap-7">
-										<button
-											type="button"
-											className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-ink-muted transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
-											title={t("aiSearch.voiceStart")}
-											aria-label={t("aiSearch.voiceStart")}
-											aria-pressed="false"
-											onClick={() => {
-												setVoiceNotice(null);
-												voice.toggle();
-											}}
-										>
-											<MicIcon />
-										</button>
+																			<div className="composer-actions flex items-center gap-7">
 										{searching && query.trim().length > 0 ? (
 											<button
 												type="submit"
@@ -1299,13 +1348,26 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 											>
 												<Square size={10} strokeWidth={3} fill="currentColor" />
 											</button>
+																					) : query.trim().length === 0 && attachments.length === 0 ? (
+											<button
+												type="button"
+												className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.voiceStart")}
+												aria-label={t("aiSearch.voiceStart")}
+												aria-pressed="false"
+												onClick={() => {
+													setVoiceNotice(null);
+													voice.toggle();
+												}}
+											>
+												<MicIcon size={17} />
+											</button>
 										) : (
 											<button
 												type="submit"
-												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
 												title={t("aiSearch.askDazzi")}
 												aria-label={t("aiSearch.askDazzi")}
-												disabled={query.trim().length === 0 && attachments.length === 0}
 											>
 												<ArrowUpIcon />
 											</button>
@@ -1315,7 +1377,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</>
 						)}
 					</div>
-					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
 				)}
 			</form>
@@ -1338,31 +1400,50 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 });
 
 /** The 16px glyph of an attachment chip: the file-kind tile, the folder glyph, or a link badge. */
-function AttachmentGlyph({ att }: { readonly att: ChatAttachment }): ReactElement {
+function AttachmentGlyph({ att, size = 16 }: { readonly att: ChatAttachment; readonly size?: 16 | 18 }): ReactElement {
 	switch (att.kind) {
 		case "url":
 			return (
-				<span className="flex size-16 flex-none items-center justify-center rounded-4 bg-accent-soft text-accent" aria-hidden="true">
+				<span className={cn("flex flex-none items-center justify-center bg-accent-soft text-accent", size === 18 ? "size-18 rounded-5" : "size-16 rounded-4")} aria-hidden="true">
 					<LinkIcon size={11} />
 				</span>
 			);
 		case "folder":
-			return <FileTile kind="folder" size={16} />;
+			return <FileTile kind="folder" size={size} />;
 		case "file":
-			return <FileTile kind={evidenceKind(att.name)} size={16} />;
+			return <FileTile kind={evidenceKind(att.name)} size={size} />;
 	}
+}
+
+/** A draft attachment as a pill with its ✕: files, folders and links, and an image the page cannot draw. */
+function DraftPill({ att, onRemove }: { readonly att: ChatAttachment; readonly onRemove: () => void }): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<span className="composer-attach-pill inline-flex h-chip-draft items-center gap-5 rounded-5 bg-selected-nav px-8 text-badge text-ink" title={att.id}>
+			<AttachmentGlyph att={att} />
+			<span className="max-w-[180px] truncate">{att.name}</span>
+			<button
+				type="button"
+				className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
+				aria-label={t("finderComponents.removeAttachment")}
+				title={t("finderComponents.removeAttachment")}
+				onClick={onRemove}
+			>
+				<CloseIcon size={10} />
+			</button>
+		</span>
+	);
 }
 
 /** A referenced file badge above the user bubble (v7 `.ref-file-chip`). */
 function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
-	const folder = parentFolder(att);
-	return (
-		<span className="ref-file-chip inline-flex h-chip items-center gap-6 rounded-6 border border-border bg-input px-8 text-ink" title={att.id}>
-			<AttachmentGlyph att={att} />
-			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
-			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
+	const chip = (
+		<span className="ref-file-chip inline-flex items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5 text-ink" title={att.id}>
+			<AttachmentGlyph att={att} size={18} />
+			<span className="ref-chip-name text-meta leading-[1.4] text-ink">{att.name}</span>
 		</span>
 	);
+	return <AttachmentThumb att={att} size="message" fallback={chip} />;
 }
 
 /**
@@ -1370,7 +1451,7 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
  * Waiting: a dashed accent outline that breathes, with a pulsing dot. Taken by
  * the model: a solid bubble with a check. The run ended first: dimmed, struck.
  */
-function SteerBubble({
+export function SteerBubble({
 	steer,
 	labels,
 }: {
@@ -1384,8 +1465,8 @@ function SteerBubble({
 					className={cn(
 						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words whitespace-pre-wrap transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
 						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
-						steer.status === "delivered" && "border-border bg-input text-ink-body",
-						steer.status === "dropped" && "border-border bg-input text-ink-muted line-through",
+						steer.status === "delivered" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window",
+						steer.status === "dropped" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window line-through opacity-50",
 					)}
 				>
 					{steer.text}
@@ -1418,6 +1499,8 @@ interface PastTurn {
 	readonly deepElapsed: number | null;
 	/** What the turn's run did to the model's view of the chat (issue #389). */
 	readonly contextNotices: readonly ContextNotice[];
+	/** The corrections the verification made to the Quick answer. */
+	readonly revisions: readonly AnswerRevision[];
 }
 
 function PastTurnView({
@@ -1454,21 +1537,26 @@ function PastTurnView({
 	const after = turn.steers.filter((steer) => steer.timing === "after-quick");
 	const contextBefore = turn.contextNotices.filter((notice) => notice.timing === "before-quick");
 	const contextAfter = turn.contextNotices.filter((notice) => notice.timing === "after-quick");
-	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
-		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
-			<ProseBlocks
-				text={text}
-				selected={
-					activeSource?.turnIndex === turnIndex && activeSource.phase === phaseKind
-						? selectedEvidence
-						: null
-				}
-				unresolved={unresolvedCitationNumbers(text, phase?.evidence ?? [])}
-				onCitation={(number) => onCitation(turnIndex, phaseKind, number)}
-				imageActions={imageActions}
-			/>
-		</div>
-	);
+	const quickDraw = drawQuickAnswer(turn.quick, turn.deep, turn.revisions);
+	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => {
+		const drawn = phaseKind === "quick" ? quickDraw : null;
+		return (
+			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body" data-cite-scope={`${turnIndex}:${phaseKind}`}>
+				<ProseBlocks
+					text={drawn?.text ?? text}
+					selected={
+						activeSource?.turnIndex === turnIndex && activeSource.phase === phaseKind
+							? selectedEvidence
+							: null
+					}
+					unresolved={drawn?.unresolved ?? unresolvedCitationNumbers(text, phase?.evidence ?? [])}
+					onCitation={(number) => onCitation(turnIndex, phaseKind, number)}
+					imageActions={imageActions}
+					{...(drawn === null ? {} : { revisions: { changes: drawn.changes, animate: false, fresh: [] } })}
+				/>
+			</div>
+		);
+	};
 	return (
 		<>
 			<div className="message user-msg flex justify-end">
@@ -1480,7 +1568,7 @@ function PastTurnView({
 							))}
 						</div>
 					) : null}
-					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
+					<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 				</div>
 			</div>
 			{contextBefore.map((notice, index) => (
@@ -1511,7 +1599,7 @@ function PastTurnView({
 				{turn.deepText === "" ? null : (
 					<div className="flex flex-col gap-6">
 						{turn.deepElapsed === null ? null : (
-							<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+							<div className="thinking-header flex items-center gap-5 text-body leading-[1.55] font-medium text-ink-muted">
 								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
 							</div>
 						)}
@@ -1557,6 +1645,7 @@ export function ProseBlocks({
 	unresolved,
 	onCitation,
 	imageActions,
+	revisions,
 }: {
 	readonly text: string;
 	readonly selected: number | null;
@@ -1564,14 +1653,26 @@ export function ProseBlocks({
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 	readonly imageActions: ImageActions;
+	/** The corrections whose marks `text` holds (see `state/answer-revisions.ts`); absent for an answer that was not corrected. */
+	readonly revisions?: RevisionDraw;
 }): ReactElement {
 	return (
 		<>
 			{parseAnswerBlocks(text).map((block, index) => (
-				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} imageActions={imageActions} />
+				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} imageActions={imageActions} revisions={revisions} />
 			))}
 		</>
 	);
+}
+
+/**
+ * The corrections an answer's text holds a mark for, whether they arrived just now (they move) or are read back (they are
+ * settled), and the sources they brought in that the person has not opened yet (their chips wear the sun colour).
+ */
+export interface RevisionDraw {
+	readonly changes: readonly AnswerChange[];
+	readonly animate: boolean;
+	readonly fresh: readonly number[];
 }
 
 /** Inline segments of one answer line: bold, code, image paths as written, citation chips, and web links. */
@@ -1581,12 +1682,14 @@ function AnswerInline({
 	unresolved,
 	onCitation,
 	onOpenUrl,
+	revisions,
 }: {
 	readonly segments: readonly InlineSegment[];
 	readonly selected: number | null;
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 	readonly onOpenUrl: (url: string) => void;
+	readonly revisions?: RevisionDraw | undefined;
 }): ReactElement {
 	return (
 		<>
@@ -1617,7 +1720,7 @@ function AnswerInline({
 								{segment.target}
 							</span>
 						);
-					case "citation":
+					case "citation": {
 						// A citation whose number has no matching evidence entry (a real
 						// library behavior: see Marker-Inc-Korea/AutoRAG#1788) is dropped
 						// from the rendered answer. There is nothing to open, so leaving a
@@ -1626,19 +1729,27 @@ function AnswerInline({
 						if (unresolved.includes(segment.number)) {
 							return null;
 						}
+						// A source the correction brought in wears the sun colour (and pops in) until the person has opened it.
+						const fresh = revisions?.fresh.includes(segment.number) === true && segment.number !== selected;
 						return (
 							<button
 								type="button"
 								key={`${index}`}
 								className={cn(
-									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-									segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-revision-mark) ease-[ease]",
+									segment.number === selected ? "active bg-accent text-on-accent" : fresh ? "bg-source-new text-source-new-text hover:brightness-110" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+									fresh && revisions?.animate === true && "animate-source-pop",
 								)}
+								data-cite={segment.number}
+								data-fresh={fresh ? "true" : undefined}
 								onClick={() => onCitation(segment.number)}
 							>
 								{segment.number}
 							</button>
 						);
+					}
+					case "file":
+						return <FileMention key={`${index}`} path={segment.path} onOpen={onOpenUrl} />;
 					case "link":
 						return (
 							<AnswerLink key={`${index}`} url={segment.url} onOpenUrl={onOpenUrl}>
@@ -1646,8 +1757,41 @@ function AnswerInline({
 							</AnswerLink>
 						);
 					default:
-						return <span key={`${index}`}>{segment.text}</span>;
+						return <AnswerText key={`${index}`} text={segment.text} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} revisions={revisions} />;
 				}
+			})}
+		</>
+	);
+}
+
+/** Plain words of a line; a correction's mark in them is drawn as the struck and the new words, the new ones with their own citation chips. */
+function AnswerText({
+	text,
+	selected,
+	unresolved,
+	onCitation,
+	onOpenUrl,
+	revisions,
+}: {
+	readonly text: string;
+	readonly selected: number | null;
+	readonly unresolved: readonly number[];
+	readonly onCitation: (number: number) => void;
+	readonly onOpenUrl: (url: string) => void;
+	readonly revisions: RevisionDraw | undefined;
+}): ReactElement {
+	if (revisions === undefined || !text.includes(REVISION_MARK)) return <span>{text}</span>;
+	return (
+		<>
+			{splitRevisionMarks(text).map((piece, index) => {
+				if ("text" in piece) return <span key={`${index}`}>{piece.text}</span>;
+				const change = revisions.changes[piece.change];
+				if (change === undefined) return null;
+				return (
+					<AnswerRevisionMark key={`${index}`} change={change} animate={revisions.animate}>
+						<AnswerInline segments={parseInline(change.inserted)} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} revisions={revisions} />
+					</AnswerRevisionMark>
+				);
 			})}
 		</>
 	);
@@ -1659,12 +1803,14 @@ function AnswerBlockView({
 	unresolved,
 	onCitation,
 	imageActions,
+	revisions,
 }: {
 	readonly block: AnswerBlock;
 	readonly selected: number | null;
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 	readonly imageActions: ImageActions;
+	readonly revisions: RevisionDraw | undefined;
 }): ReactElement {
 	if (block.kind === "code") {
 		return <CodeBlock text={block.text} language={block.language} className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body" />;
@@ -1679,7 +1825,7 @@ function AnswerBlockView({
 		);
 	}
 	const parsed = parseInline(block.text);
-	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={imageActions.onOpenUrl} />;
+	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={imageActions.onOpenUrl} revisions={revisions} />;
 	const images = lineImages(parsed);
 	let line: ReactElement;
 	switch (block.kind) {
@@ -1704,7 +1850,7 @@ function AnswerBlockView({
 	return (
 		<div className="flex flex-col gap-8">
 			{isImageOnlyLine(parsed) ? null : line}
-			<ImageRow images={images} folder={null} captioned={false} actions={imageActions} />
+			<ImageRow images={images} folder={null} actions={imageActions} />
 		</div>
 	);
 }

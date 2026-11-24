@@ -1,0 +1,234 @@
+{
+  "schema": 1,
+  "librarian": {
+    "repo": "Marker-Inc-Korea/AutoRAG",
+    "ref": "v2.14.2",
+    "version": "2.14.2"
+  },
+  "daemon": {
+    "owner": "minsync serve",
+    "engine": "inl",
+    "engineVersion": "0.3.4",
+    "discovery": [
+      "~/.cache/im-not-llm/serve",
+      "~/.cache/minsync/serve"
+    ]
+  },
+  "node": {
+    "version": "24.22.3",
+    "tag": "v24.22.3",
+    "sha256": {
+      "darwin-arm64": "ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd",
+      "win32-x64": "e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f"
+    }
+  },
+  "tools": {
+    "minsync": {
+      "source": "github",
+      "repo": "NomaDamas/MinSync",
+      "version": "0.7.6",
+      "tag": "v0.7.6",
+      "affectsVectorSpace": true,
+      "assets": {
+        "darwin-arm64": {
+          "name": "minsync-v0.7.6-aarch64-apple-darwin.tar.gz",
+          "sha256": "3fb10525e3b6ffb45a8e8cece8bdc0e8dbab83a18b63d3a9c000c63d11eeba92"
+        },
+        "win32-x64": {
+          "name": "minsync-v0.7.6-x86_64-pc-windows-msvc.zip",
+          "sha256": "95dd5065437043733ca6da437d03f5e45db9ddc378a54bf48292dac8284c7b85"
+        }
+      }
+    },
+    "rhwp": {
+      "source": "github",
+      "repo": "edwardkim/rhwp",
+      "version": "0.9.1",
+      "tag": "v0.9.1",
+      "assets": {
+        "darwin-arm64": {
+          "name": "rhwp-v0.9.1-macos-aarch64.tar.gz",
+          "sha256": "a8217038f2d2ef33b1fcf215cc570faacb09c8d53366f2aaa88701ecb245c125"
+        },
+        "win32-x64": {
+          "name": "rhwp-v0.9.1-windows-x86_64.zip",
+          "sha256": "2214c5b07408f18417e450e6e8f44a9f0a4cd917b09839f3ec3577ba19945c9c"
+        }
+      }
+    },
+    "himalaya": {
+      "source": "github",
+      "repo": "pimalaya/himalaya",
+      "version": "2.2.1",
+      "tag": "v2.2.1",
+      "assets": {
+        "darwin-arm64": {
+          "name": "himalaya.aarch64-darwin.tgz",
+          "sha256": "a5d97a1f7bbca45e58bddde3f9f17325f614c9cd6d5f17fabf38ddcb030869ab"
+        },
+        "win32-x64": {
+          "name": "himalaya.x86_64-windows.zip",
+          "sha256": "34ef6f148834aeafa2c9a558ec144a678fb12dcfcc618786b0eaeceb52794e00"
+        }
+      }
+    },
+    "rclone": {
+      "source": "github",
+      "repo": "rclone/rclone",
+      "version": "1.76.0",
+      "tag": "v1.76.0",
+      "assets": {
+        "darwin-arm64": {
+          "name": "rclone-v1.76.0-osx-arm64.zip",
+          "sha256": "e72dc90b70f4947a7b72b61bde4a4fbba5777b2874fb448951ffdde67ebd0ab7"
+        },
+        "win32-x64": {
+          "name": "rclone-v1.76.0-windows-amd64.zip",
+          "sha256": "8b4fd2737ade4e70c057ef4a49deb7cffe94b0fb9d7587c189d149823f21a1dc"
+        }
+      }
+    },
+    "lark-cli": {
+      "source": "github",
+      "repo": "larksuite/cli",
+      "version": "1.0.100",
+      "tag": "v1.0.100",
+      "assets": {
+        "darwin-arm64": {
+          "name": "lark-cli-1.0.100-darwin-arm64.tar.gz",
+          "sha256": "d068a27f608335016a8a7fb1b3cd1fccfb96bda92075a027e2bf1c4c23134e30"
+        },
+        "win32-x64": {
+          "name": "lark-cli-1.0.100-windows-amd64.zip",
+          "sha256": "93118ca1992b4e5f1a40c14301f6fbde703d5e9160a9113099e409b4bd1c1d8d"
+        }
+      }
+    },
+    "discrawl": {
+      "source": "github",
+      "repo": "openclaw/discrawl",
+      "version": "0.21.0",
+      "tag": "v0.21.0",
+      "assets": {
+        "darwin-arm64": {
+          "name": "discrawl_0.21.0_darwin_arm64.tar.gz",
+          "sha256": "8f01e505ee0c3b0119c740b3d4e19725aca21ef8222a1f9e9b52cc3d4a4af702"
+        },
+        "win32-x64": {
+          "name": "discrawl_0.21.0_windows_amd64.zip",
+          "sha256": "7df2de031b1c5bd451405f021243c396347ef958c540b13d4dc5ac5586e134e0"
+        }
+      }
+    },
+    "telecrawl": {
+      "source": "github",
+      "repo": "openclaw/telecrawl",
+      "version": "0.6.0",
+      "tag": "v0.6.0",
+      "assets": {
+        "darwin-arm64": {
+          "name": "telecrawl_0.6.0_darwin_arm64.tar.gz",
+          "sha256": "2b864b27571c5a8e16adb3eaefeb862a1e81dc0a421dcedf77e74adf65c458fe"
+        },
+        "win32-x64": {
+          "name": "telecrawl_0.6.0_windows_amd64.zip",
+          "sha256": "5aba88ec161bb84e5046e481a5f23c93e8e08f7090c0bc9ed9f59253e70b13c4"
+        }
+      }
+    },
+    "wacrawl": {
+      "source": "github",
+      "repo": "openclaw/wacrawl",
+      "version": "0.5.1",
+      "tag": "v0.5.1",
+      "assets": {
+        "darwin-arm64": {
+          "name": "wacrawl_0.5.1_darwin_arm64.tar.gz",
+          "sha256": "2243f751b7a0f95b58de2b6a2cf14be2a946b83b07e2201d421b01080a696a3d"
+        },
+        "win32-x64": {
+          "name": "wacrawl_0.5.1_windows_amd64.zip",
+          "sha256": "1ccd3b3e9f606356618c648f9458f97b62dd6903226dbc93449d8663c221c9b1"
+        }
+      }
+    },
+    "lazykatok": {
+      "source": "github",
+      "repo": "changeroa/lazykatok",
+      "version": "0.3.4",
+      "tag": "v0.3.4",
+      "platforms": [
+        "darwin-arm64"
+      ],
+      "floor": "0.3.3",
+      "affectsVectorSpace": true,
+      "assets": {
+        "darwin-arm64": {
+          "name": "lazykatok-0.3.4-aarch64-apple-darwin.tar.gz",
+          "sha256": "cd8e49df960a25ba88b8c80d53bbb4d5247b4e8d5515aa7a201c9ad8912734a7"
+        }
+      }
+    },
+    "slacrawl": {
+      "source": "github-or-go",
+      "repo": "openclaw/slacrawl",
+      "version": "0.11.0",
+      "tag": "v0.11.0",
+      "assets": {
+        "darwin-arm64": {
+          "name": "slacrawl_0.11.0_darwin_arm64.tar.gz",
+          "sha256": "205a185b7a57cac66721b98dcb21ccb9c2f87abccb94c8618afa1513d5f42e82"
+        }
+      }
+    },
+    "notcrawl": {
+      "source": "github-or-go",
+      "repo": "openclaw/notcrawl",
+      "version": "0.6.13",
+      "tag": "v0.6.13",
+      "assets": {
+        "darwin-arm64": {
+          "name": "notcrawl_0.6.13_darwin_arm64.tar.gz",
+          "sha256": "e58355abcfa94f3d27bcf083ed5573ae3444b2987c27b0b15b6f88b2ac969489"
+        }
+      }
+    },
+    "dupey": {
+      "source": "cargo",
+      "crate": "dupey",
+      "version": "0.3.1",
+      "checksum": "d9f4c0f06ba4f5b09cc784b0ccab07e59ba713242b47ae7eede6a57896beab45"
+    },
+    "jikji": {
+      "source": "cargo",
+      "crate": "jikji-cli",
+      "version": "0.2.10",
+      "checksum": "5295dd13577dc348da1103bcf84bd45d45fd104a5c13a7d0261b2311e6429991"
+    },
+    "clawgallery": {
+      "source": "cargo",
+      "crate": "clawgallery",
+      "version": "0.2.5",
+      "checksum": "4d57d61be91265f7ae534a85c0c8f178540ce54bbb1e89a028c43515fa166646"
+    },
+    "wombat": {
+      "source": "cargo",
+      "crate": "wombat-sessions",
+      "version": "0.1.4",
+      "floor": "0.1.3",
+      "checksum": "c272cbeb172066d1f9d5239afa8e0a4e0cfbb1d4f8d7cc726dab327bb0e963d3"
+    },
+    "@nomadamas/mailcrawl": {
+      "source": "npm",
+      "version": "0.3.2",
+      "floor": "0.3.0",
+      "affectsVectorSpace": true,
+      "integrity": "sha512-8YchoDiu8edFszadmPMjfV2KaVip45Wbb0kU65ehbfKn/avNokiH83Y7P9A8VfjOu6w+s84NfqSWjEGGkZBmMA=="
+    },
+    "kordoc": {
+      "source": "npm",
+      "version": "4.25.5",
+      "integrity": "sha512-MUGFayneiHixV7u3o6KrLJo4mMhjSGoLTIUF/obJEE/YTBtHHJYnkBfkV5flMH3CMFqoXfAwyK7rMoTpNG4oXg=="
+    }
+  }
+}

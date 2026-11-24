@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 /**
- * Manual QA — AI Search markdown answers + the Evidence view of the real
+ * Manual QA — AI Chat markdown answers + the Evidence view of the real
  * AI Finder app, per the v7 Bloom design reference.
  *
  * Deterministic lane: seeds the chat store (<userData>/chat-history/chats.json)
@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
  * lists, quote, inline code) and numbered citations, and whose evidence items
  * point at REAL fixture files on disk. Loading the chat exercises only the
  * real render path (loadHistory -> publish -> Inspector Evidence view), then
- * drives: the full-height Evidence view on an AI Search tab and Info on a
+ * drives: the full-height Evidence view on an AI Chat tab and Info on a
  * folder tab, citation chips, evidence tabs (no thumbs controls: the librarian dropped feedback),
  * title -> new-tab reveal with file selection, the datasource virtual-source
  * title guard, a web-page source opening in the OS browser (main's
@@ -192,10 +192,10 @@ await page.locator('[aria-label="Chat history"]').click();
 await page.locator(".history-item").first().waitFor({ state: "visible" });
 await page.locator(".history-item").first().click();
 await deepProse.waitFor({ state: "visible" });
-// An AI Search tab owns the whole inspector: Evidence, never the Info view.
+// An AI Chat tab owns the whole inspector: Evidence, never the Info view.
 await page.waitForSelector(`${EVIDENCE_HALF} .evidence-tab`);
 check(
-	"the AI Search tab shows the Evidence view and no Info view",
+	"the AI Chat tab shows the Evidence view and no Info view",
 	(await page.locator(EVIDENCE_HALF).count()) === 1 && (await page.locator(INFO_HALF).count()) === 0,
 	`evidence=${await page.locator(EVIDENCE_HALF).count()} info=${await page.locator(INFO_HALF).count()}`,
 );
@@ -286,8 +286,8 @@ await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^1$/ }).first()
 await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("1. "), `${EVIDENCE_HALF} .preview-title`);
 const kindCount = async (kind) => page.locator(`${EVIDENCE_HALF} .evidence__block--${kind}`).count();
 check(
-	"evidence 1 chunk renders heading/list ×2/quote/code blocks plus the summary paragraph",
-	(await kindCount("heading")) === 1 && (await kindCount("list")) === 2 && (await kindCount("quote")) === 1 && (await kindCount("code")) === 1 && (await kindCount("paragraph")) === 1,
+	"evidence 1 chunk renders heading/list ×2/quote/code blocks and no summary paragraph repeating the answer",
+	(await kindCount("heading")) === 1 && (await kindCount("list")) === 2 && (await kindCount("quote")) === 1 && (await kindCount("code")) === 1 && (await kindCount("paragraph")) === 0,
 	JSON.stringify({ heading: await kindCount("heading"), list: await kindCount("list"), quote: await kindCount("quote"), code: await kindCount("code"), paragraph: await kindCount("paragraph") }),
 );
 const evBold = await page.locator(`${EVIDENCE_HALF} .inspector-body strong`).count();
@@ -322,7 +322,7 @@ check("the Info view fills the whole inspector column", infoRatio > 0.99, `ratio
 await page.locator('.tabs .tab[data-ai-search="true"]').click();
 await page.waitForSelector(EVIDENCE_HALF);
 check(
-	"refocusing the AI Search tab brings its Evidence back, still on evidence 1",
+	"refocusing the AI Chat tab brings its Evidence back, still on evidence 1",
 	(await page.locator(INFO_HALF).count()) === 0 && ((await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent()) ?? "").startsWith("1. "),
 );
 await page.screenshot({ path: join(EVIDENCE, "05-back-to-ai-tab.png") });

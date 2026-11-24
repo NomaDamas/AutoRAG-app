@@ -5,7 +5,7 @@ const FILL_BY_TONE = {
 	run: "bg-accent",
 	queued: "bg-ink-faint opacity-50",
 	ok: "bg-(--ok-dot)",
-	error: "bg-(--error-orange-dot)",
+	error: "bg-(--activity-warn-fill)",
 } as const;
 
 export type ProgressBarTone = keyof typeof FILL_BY_TONE;

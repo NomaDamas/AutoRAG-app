@@ -9,22 +9,27 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
 import type { InteractionHub } from "./interaction-hub";
-import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
-import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
-import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerPromptAnswer, isAppCustomizerRequest } from "../shared/app-customizer-contract";
+import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import type { ChatStore } from "./chat-store";
+import { saveMagicActionToHistory } from "./magic-action-history";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
-import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isPickPathKind, ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
+import { DEMO_CHANNELS, type DemoBridge } from "../shared/demo-contract";
+import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
+import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
+import type { ToolVersionsService } from "./tool-versions";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
@@ -34,14 +39,14 @@ import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
 import type { AutomationService } from "./automation-service";
+import type { LtrService } from "./ltr-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
 import type { AccountService } from "./account-service";
-import type { OnboardingService } from "./onboarding-service";
+import type { FirstRunService } from "./first-run-service";
 import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
-import type { SmartIndexingService } from "./smart-indexing-service";
 import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
@@ -180,9 +185,19 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.reset, (_event, sessionId: unknown) =>
 		typeof sessionId === "string" ? service.reset(sessionId) : undefined,
 	);
+	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.answer, (_event, promptId: unknown, answer: unknown) => {
+		if (typeof promptId !== "string" || !isAppCustomizerPromptAnswer(answer)) {
+			throw new TypeError("appCustomizer:answer expects a prompt id and an answer");
+		}
+		service.answerPrompt(promptId, answer);
+	});
 }
 
-export function registerMagicActionIpcHandlers(service: MagicActionService): void {
+export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore): void {
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.saveToHistory, (_event, request: unknown) => {
+		if (!isMagicActionSaveRequest(request)) throw new TypeError("magicAction:saveToHistory expects { actionLabel, paths, output }");
+		return saveMagicActionToHistory(chatStore, request);
+	});
 	ipcMain.handle(MAGIC_ACTION_CHANNELS.start, (_event, runId: unknown, request: unknown) => {
 		if (typeof runId !== "string" || !isMagicActionRunRequest(request)) {
 			throw new TypeError("magicAction:start expects a run id and { actionId, paths }");
@@ -195,25 +210,20 @@ export function registerMagicActionIpcHandlers(service: MagicActionService): voi
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
-	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments) =>
-		service.start(searchId, chatId, query, attachments),
+	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments, viewingFolder: unknown) =>
+		service.start(searchId, chatId, query, attachments, typeof viewingFolder === "string" ? viewingFolder : undefined),
 	);
 	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
 	);
 	ipcMain.handle(SEARCH_CHANNELS.cancel, (_event, searchId: string) => service.cancel(searchId));
+	ipcMain.handle(SEARCH_CHANNELS.pasteImage, (_event, mimeType: unknown, base64: unknown) =>
+		typeof mimeType === "string" && typeof base64 === "string" ? service.pasteImage(mimeType, base64) : null,
+	);
 	ipcMain.handle(SEARCH_CHANNELS.historyList, () => service.historyList());
 	ipcMain.handle(SEARCH_CHANNELS.historyGet, (_event, chatId: string) => service.historyGet(chatId));
 	ipcMain.handle(SEARCH_CHANNELS.historySearch, (_event, query: string) => service.historySearch(query));
 	ipcMain.handle(SEARCH_CHANNELS.historyClear, () => service.historyClear());
-}
-
-export function registerSmartIndexingIpcHandlers(service: SmartIndexingService): void {
-	ipcMain.handle(SMART_INDEXING_CHANNELS.analyze, (_event, runId: unknown, roots: unknown) => {
-		if (typeof runId !== "string" || !Array.isArray(roots)) throw new TypeError("smartIndexing:analyze expects a run id and an array of folders");
-		return service.analyze(runId, roots);
-	});
-	ipcMain.handle(SMART_INDEXING_CHANNELS.cancel, (_event, runId: unknown) => (typeof runId === "string" ? service.cancel(runId) : undefined));
 }
 
 interface ConfigUpdatePayload {
@@ -412,31 +422,27 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
 }
 
-/** First-run onboarding: every payload is validated inside the service. */
-export function registerOnboardingIpcHandlers(service: OnboardingService): void {
+/** The first run: load, permissions, folders, start/status/complete. The service validates its own state. */
+export function registerOnboardingIpcHandlers(service: FirstRunService, setRevealBackdrop?: (opacity: number) => void): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
-	ipcMain.handle(ONBOARDING_CHANNELS.save, (_event, draft: unknown) => service.save(draft));
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
-	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
-	ipcMain.handle(ONBOARDING_CHANNELS.requestNotifications, () => service.requestNotifications());
-	ipcMain.handle(ONBOARDING_CHANNELS.openNotificationSettings, () => service.openNotificationSettings());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkNetwork, () => service.checkNetwork());
-	ipcMain.handle(ONBOARDING_CHANNELS.setLaunchAtLogin, (_event, enabled: unknown) => {
-		if (typeof enabled !== "boolean") throw new TypeError("onboarding:setLaunchAtLogin expects a boolean");
-		return service.setLaunchAtLogin(enabled);
-	});
-	ipcMain.handle(ONBOARDING_CHANNELS.folderCandidates, () => service.folderCandidates());
+	ipcMain.handle(ONBOARDING_CHANNELS.folders, () => service.folders());
 	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
-	ipcMain.handle(ONBOARDING_CHANNELS.scanFolders, (_event, paths: unknown) => {
-		if (!Array.isArray(paths)) throw new TypeError("onboarding:scanFolders expects an array of paths");
-		return service.scanFolders(paths);
+	ipcMain.handle(ONBOARDING_CHANNELS.start, (_event, folders: unknown) => {
+		if (folders !== undefined && (!Array.isArray(folders) || !folders.every((path) => typeof path === "string"))) {
+			throw new TypeError("onboarding:start expects an array of folder paths");
+		}
+		return service.start(folders as readonly string[] | undefined);
 	});
-	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
-	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkModel, (_event, role: unknown) => service.checkModel(role === "decomposition" ? "decomposition" : "answer"));
-	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
-	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
+	ipcMain.handle(ONBOARDING_CHANNELS.pickPaths, (_event, kind: unknown) => {
+		if (!isPickPathKind(kind)) throw new TypeError("onboarding:pickPaths expects \"folder\", \"file\" or \"any\"");
+		return service.pickPaths(kind);
+	});
+	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
+	ipcMain.on(ONBOARDING_CHANNELS.revealBackdrop, (_event, opacity: unknown) => {
+		if (typeof opacity === "number" && Number.isFinite(opacity)) setRevealBackdrop?.(opacity);
+	});
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
 }
 
@@ -477,6 +483,21 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 	});
 }
 
+/** The tutorials' practice material: the sample photo, the automation daemon and the example Magic Action. */
+export function registerDemoIpcHandlers(service: DemoBridge): void {
+	ipcMain.handle(DEMO_CHANNELS.preparePhoto, () => service.preparePhoto());
+	ipcMain.handle(DEMO_CHANNELS.ensureDaemon, () => service.ensureDaemon());
+	ipcMain.handle(DEMO_CHANNELS.prepareMagicAction, () => service.prepareMagicAction());
+}
+
+/** Learning to rank: read the log's state and the models, fit one now, delete one; a training run is pushed by the main process. */
+export function registerLtrIpcHandlers(service: LtrService): void {
+	// The renderer's extra arguments are dropped, never forwarded: nothing the page sends reaches a command line but a validated model id.
+	ipcMain.handle(LTR_CHANNELS.get, () => service.get());
+	ipcMain.handle(LTR_CHANNELS.train, () => service.train());
+	ipcMain.handle(LTR_CHANNELS.deleteModel, (_event, id: unknown) => service.deleteModel(requireNonEmptyString(id, "model id")));
+}
+
 /** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */
 export function registerModelDownloadIpcHandlers(service: ModelDownloadService): void {
 	ipcMain.handle(MODEL_DOWNLOAD_CHANNELS.get, () => service.status());
@@ -490,4 +511,10 @@ export function registerAppUpdateIpcHandlers(service: AppUpdaterService): void {
 	ipcMain.handle(APP_UPDATE_CHANNELS.check, () => service.check());
 	ipcMain.handle(APP_UPDATE_CHANNELS.download, () => service.download());
 	ipcMain.handle(APP_UPDATE_CHANNELS.install, () => service.install());
+}
+
+/** Resolved versions of the app, librarian, bundled tools, and embedding daemon. */
+export function registerToolVersionsIpcHandlers(service: ToolVersionsService): void {
+	ipcMain.handle(TOOL_VERSIONS_CHANNELS.get, () => service.get());
+	ipcMain.handle(TOOL_VERSIONS_CHANNELS.restartDaemon, () => service.restartDaemon());
 }

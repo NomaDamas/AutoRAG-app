@@ -3,7 +3,7 @@ import { act, createRef, type RefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsView } from "../src/renderer/src/components/SettingsView";
-import { setAppLanguage } from "../src/shared/i18n";
+import { setAppLanguage, t } from "../src/shared/i18n";
 import { DEFAULT_SETTINGS, type AutoRagConfigSnapshot } from "../src/shared/settings-contract";
 
 const bridge = vi.hoisted(() => {
@@ -17,6 +17,7 @@ const bridge = vi.hoisted(() => {
 		platform: "darwin",
 		settings,
 		appUpdate: { get: () => new Promise(() => undefined), onChange: () => () => undefined },
+		ltr: { get: () => new Promise(() => undefined), train: vi.fn(), deleteModel: vi.fn(), onTraining: () => () => undefined },
 	});
 	return settings;
 });
@@ -76,21 +77,21 @@ async function renderView(props: ShellProps = {}): Promise<void> {
 const nav = (): HTMLElement => host.querySelector<HTMLElement>("aside.settings-sidebar") as HTMLElement;
 
 describe("Settings as a takeover of the window", () => {
-	it("has no title or back button in the sidebar's head; the back button is the first row under it, above the search and the pages", async () => {
+	it("has no title in the sidebar's head; the back button is the footer, under the search and the pages (Figma 403:8201)", async () => {
 		await renderView();
 		const head = nav().firstElementChild as HTMLElement;
 		expect(head.classList.contains("settings-sidebar-head")).toBe(true);
 		expect(head.textContent?.trim()).toBe("");
-		expect(head.querySelector("button")).toBeNull();
 		expect(nav().querySelector(".settings-sidebar-title")).toBeNull();
 		const search = nav().querySelector("label.side-search input") as Node;
-		const back = nav().querySelector<HTMLButtonElement>("button.settings-sidebar-back") as Node;
-		const firstPage = nav().querySelector(".settings-nav-item:not(.settings-sidebar-back)") as Node;
+		const back = nav().querySelector<HTMLButtonElement>(".settings-sidebar-foot button.settings-sidebar-back") as Node;
+		const firstPage = nav().querySelector(".settings-nav-item") as Node;
 		expect(search).not.toBeNull();
 		expect(back).not.toBeNull();
-		expect(back.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(search.compareDocumentPosition(firstPage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-		expect(back.textContent?.trim()).toBe("Back");
+		expect(firstPage.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(nav().lastElementChild?.classList.contains("settings-sidebar-foot")).toBe(true);
+		expect(back.textContent?.trim()).toBe("Back to app");
 	});
 
 	it("wears the Finder sidebar's search: same field, a clear button once typed", async () => {
@@ -149,5 +150,34 @@ describe("Settings as a takeover of the window", () => {
 		const searchRef = createRef<HTMLInputElement>();
 		await renderView({ searchRef });
 		expect(searchRef.current).toBe(nav().querySelector("label.side-search input"));
+	});
+
+	it("lists the search-ranking page under AI, opens it from the nav, and finds it by its keywords", async () => {
+		await renderView();
+		const item = [...nav().querySelectorAll<HTMLButtonElement>("button.settings-nav-item")].find((button) => button.textContent?.includes(t("settingsCore.nav.ltr")));
+		expect(item, "nav item for the search-ranking page").toBeDefined();
+		const group = item?.closest(".settings-nav-group");
+		expect(group?.querySelector(".settings-sidebar-group-title")?.textContent).toBe(t("settingsCore.nav.group.ai"));
+
+		await act(async () => item?.click());
+
+		expect(host.querySelector(".settings-ltr")).not.toBeNull();
+		expect(item?.getAttribute("aria-current")).toBe("true");
+	});
+
+	it("shows the page for a search on its keywords, in every language", async () => {
+		for (const [language, word] of [["ko", "순위 학습"], ["en", "learning to rank"], ["ja", "順位学習"], ["zh", "排序学习"]] as const) {
+			await setAppLanguage(language);
+			await renderView();
+			const input = nav().querySelector<HTMLInputElement>("label.side-search input");
+			await act(async () => {
+				Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, word);
+				input?.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			const labels = [...nav().querySelectorAll("button.settings-nav-item")].map((button) => button.textContent ?? "");
+			expect(labels.some((label) => label.includes(t("settingsCore.nav.ltr"))), `${language}: "${word}" finds the page; nav shows ${labels.join(" | ")}`).toBe(true);
+			act(() => root.unmount());
+			root = createRoot(host);
+		}
 	});
 });

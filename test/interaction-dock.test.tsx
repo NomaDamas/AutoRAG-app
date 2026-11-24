@@ -75,16 +75,45 @@ function setField(el: HTMLInputElement | HTMLTextAreaElement, value: string): vo
 	el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+describe("InteractionDock in a narrow sidebar", () => {
+	it("pages a batch from the head (‹ n / N ›) and keeps Skip and Stop together in a footer that wraps (Figma 625:7171)", () => {
+		render(
+			questionRequest(
+				[
+					question({ question: "One?", options: [{ title: "a" }], allowFreeform: false }),
+					question({ question: "Two?", options: [{ title: "b" }], allowFreeform: false }),
+				],
+				{ heading: "Convert videos" },
+			),
+		);
+
+		const card = host.querySelector('[role="dialog"]') as HTMLElement;
+		expect(card.className).toContain("min-w-0");
+		expect(card.querySelector("strong")?.textContent).toBe("Convert videos");
+		expect(card.textContent).toContain(t("interaction.step", { current: 1, total: 2 }));
+		expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.prevQuestion")}"]`)?.disabled).toBe(true);
+		const row = (label: string): HTMLElement => buttonByText(label).parentElement as HTMLElement;
+		expect(row(t("interaction.stop"))).toBe(row(t("interaction.skip")));
+		expect(row(t("interaction.stop")).parentElement?.className).toContain("flex-wrap");
+	});
+});
+
 describe("InteractionDock question card", () => {
-	it("submits a single-choice question as soon as an option is picked", () => {
+	it("titles a single question with itself, marks the picked option, and sends it with Send (Figma 625:7022)", () => {
 		render(
 			questionRequest([
 				question({ question: "Which plan?", options: [{ title: "Free" }, { title: "Pro" }], allowFreeform: false }),
 			]),
 		);
 
+		expect(host.querySelector('[role="dialog"] strong')?.textContent).toBe("Which plan?");
+		expect(buttonByText(t("interaction.submit")).disabled).toBe(true);
+		act(() => options("radio")[0]?.click());
 		act(() => options("radio")[1]?.click());
+		expect(answer).not.toHaveBeenCalled();
+		expect(options("radio")[1]?.getAttribute("aria-checked")).toBe("true");
 
+		act(() => buttonByText(t("interaction.submit")).click());
 		expect(answer).toHaveBeenCalledTimes(1);
 		expect(answer).toHaveBeenCalledWith("q1", { kind: "question", answers: [{ kind: "selection", selections: ["Pro"] }] });
 	});
@@ -139,8 +168,8 @@ describe("InteractionDock question card", () => {
 		act(() => options("radio")[0]?.click());
 		act(() => buttonByText(t("interaction.next")).click());
 		expect(host.textContent).toContain(t("interaction.step", { current: 2, total: 3 }));
-		expect(host.textContent).toContain(t("interaction.answeredCount", { answered: 1, total: 3 }));
-		act(() => buttonByText(t("interaction.next")).click());
+		expect(host.textContent).toContain("Two?");
+		act(() => host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.nextQuestion")}"]`)?.click());
 		act(() => options("radio")[0]?.click());
 		act(() => buttonByText(t("interaction.submit")).click());
 
@@ -177,7 +206,7 @@ describe("InteractionDock approval card", () => {
 		expect(host.textContent).toContain(t("interaction.allowSession.unclassified"));
 	});
 
-	it("shows the change headline, the category chips, the call and the judgement reason", () => {
+	it("shows the change headline, the call, and under it the categories and the judgement reason", () => {
 		render(
 			approvalRequest({
 				sessionScope: "categories",
@@ -206,28 +235,32 @@ describe("InteractionDock approval card", () => {
 		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "allow-once" });
 	});
 
-	it("focuses Deny first, so the approving buttons need a deliberate click", () => {
+	it("focuses Skip first, so the approving buttons need a deliberate click, and Skip denies", () => {
 		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
-		expect(document.activeElement).toBe(buttonByText(t("interaction.deny")));
+		expect(document.activeElement).toBe(buttonByText(t("interaction.skip")));
+		act(() => buttonByText(t("interaction.skip")).click());
+		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny" });
+	});
+
+	it("offers only allow once, allow for the session, and skip (Figma 564:1396)", () => {
+		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
+		const labels = [...host.querySelectorAll("button:not([data-action='copy-approval-call'])")].map((button) => button.textContent);
+		expect(labels).toEqual([t("interaction.allowOnce"), t("interaction.allowSession.categories"), t("interaction.skip")]);
+	});
+
+	it("heads the call 실행할 명령 and copies it from the box", () => {
+		const writeText = vi.fn(async () => undefined);
+		Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+		render(approvalRequest({ sessionScope: "categories", categories: ["delete"], call: "rm docs/old-draft.txt" }));
+		expect(host.textContent).toContain(t("interaction.approval.command"));
+		act(() => host.querySelector<HTMLButtonElement>('[data-action="copy-approval-call"]')?.click());
+		expect(writeText).toHaveBeenCalledWith("rm docs/old-draft.txt");
+		expect(answer).not.toHaveBeenCalled();
 	});
 
 	it("denies on Escape", () => {
 		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
 		press(document.body, "Escape");
 		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny" });
-	});
-
-	it("sends a trimmed note with 'Deny and tell the model'", () => {
-		render(approvalRequest({ sessionScope: "categories", categories: ["overwrite"] }));
-		act(() => buttonByText(t("interaction.denyWithNote")).click());
-
-		const input = host.querySelector("input");
-		expect(input).not.toBeNull();
-		act(() => setField(input!, "  work on a copy  "));
-
-		act(() => {
-			host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.sendNote")}"]`)?.click();
-		});
-		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny-with-note", note: "work on a copy" });
 	});
 });

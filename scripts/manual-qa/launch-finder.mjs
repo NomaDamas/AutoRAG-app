@@ -61,27 +61,27 @@ export async function launchFinder({
 }
 
 /**
- * One of the app's two renderer pages: the first-run onboarding window (`onboarding: true`) or the Finder
- * (`false`). Both load /index.html, so the preload's launch argument tells them apart. The pre-warmed Quick
- * Look window can register with Playwright before either, so poll instead of trusting `firstWindow()`.
+ * The app's renderer page — its one window. A first run no longer opens a second window beside the Finder: the
+ * Finder window itself carries the first-run overlay, so on that launch `window.autorag.onboarding.pending` is
+ * true and the same page is both "the Finder" and "the first-run screen". A lane that opts out of onboarding
+ * (`launchFinder({ onboarding: false })`) gets the same one page. The pre-warmed Quick Look window never loads
+ * /index.html, so the URL filter alone picks the Finder; poll instead of trusting `firstWindow()`.
  */
-export async function appWindow(app, onboarding, timeoutMs = 6000) {
+export async function appWindow(app, timeoutMs = 6000) {
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
-		for (const page of (await app.windows()).filter((candidate) => candidate.url().endsWith("/index.html"))) {
-			const pending = await page.evaluate(() => window.autorag?.onboarding?.pending === true).catch(() => null);
-			if (pending === onboarding) return page;
-		}
-		if (Date.now() >= deadline) throw new Error(`${onboarding ? "Onboarding" : "Finder"} index window did not open`);
+		const page = (await app.windows()).find((candidate) => candidate.url().endsWith("/index.html"));
+		if (page !== undefined) return page;
+		if (Date.now() >= deadline) throw new Error("the Finder window did not open");
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
 }
 
-/** The Finder renderer page (never the onboarding window that opens beside it on a first run). */
-export const finderWindow = (app, timeoutMs = 6000) => appWindow(app, false, timeoutMs);
+/** The Finder renderer page (during a first run its window also hosts the first-run overlay). */
+export const finderWindow = (app, timeoutMs = 6000) => appWindow(app, timeoutMs);
 
-/** The first-run onboarding renderer page. */
-export const onboardingWindow = (app, timeoutMs = 6000) => appWindow(app, true, timeoutMs);
+/** The first-run renderer page — the same Finder window, which carries the pending flag on a first run. */
+export const onboardingWindow = (app, timeoutMs = 6000) => appWindow(app, timeoutMs);
 
 /** Every pre-warmed Quick Look panel page the app has right now (see {@link createFinderPreview}). */
 export async function quickLookPages(app) {
@@ -187,16 +187,16 @@ export function fsWorkerDiagnostics(app) {
 	});
 }
 
-/** The visible AI Search panel (hidden AI tabs keep theirs mounted with aria-hidden). */
-export const AI_PANEL = 'section[aria-label="AI Search"]:not([aria-hidden="true"])';
+/** The visible AI Chat panel (hidden AI tabs keep theirs mounted with aria-hidden). */
+export const AI_PANEL = 'section[aria-label="AI Agent"]:not([aria-hidden="true"])';
 
 /**
- * Show AI Search in the focused tab through the sidebar's Favorites item, the
+ * Show AI Chat in the focused tab through the sidebar's Favorites item, the
  * way a user does, and wait for its composer.
  */
 export async function openAiSearch(page, timeoutMs = 30_000) {
-	await page.locator(".sidebar__item", { hasText: "AI Search" }).click({ timeout: timeoutMs });
-	await page.waitForSelector(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`, { timeout: timeoutMs });
+	await page.locator(".sidebar__item", { hasText: "AI Agent" }).click({ timeout: timeoutMs });
+	await page.waitForSelector(`${AI_PANEL} textarea[aria-label="Ask AI"]`, { timeout: timeoutMs });
 }
 
 /**

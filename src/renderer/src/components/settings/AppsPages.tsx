@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, ExternalLink, Minus, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
 	AutoRagConfigSnapshot,
 	ConfigRefreshResult,
@@ -31,30 +31,28 @@ import { excludePath, includePath } from "../../../../shared/index-scope-edit";
 import { readScheduleSettings, scheduleUpdates, type ScheduleSettings } from "../../../../shared/refresh-schedule-settings";
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
-import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { ModalShell, ModalActions, Note, PlainRow, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
+import { FullDiskAccessDialog } from "../primitives/FullDiskAccessDialog";
 import { Switch } from "../primitives/Switch";
 import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
 import { IndexActivityCard } from "./IndexActivityCard";
 import { IndexMapPanel } from "./index-map/IndexMapPanel";
+import { ExclusionsSection, FileNameWatchRow, SearchFoldersSection, useScopeEditor } from "./IndexScope";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
+
+import { REFRESH_INTERVALS } from "../../../../shared/settings-options";
 
 const settings = window.autorag.settings;
-
-/** Refresh cadences the config stores in milliseconds. */
-const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKey }[] = [
-	{ ms: 5 * 60_000, label: "settingsSources.cadence.min5" },
-	{ ms: 15 * 60_000, label: "settingsSources.cadence.min15" },
-	{ ms: 30 * 60_000, label: "settingsSources.cadence.min30" },
-	{ ms: 60 * 60_000, label: "settingsSources.cadence.hour1" },
-	{ ms: 6 * 60 * 60_000, label: "settingsSources.cadence.hour6" },
-	{ ms: 24 * 60 * 60_000, label: "settingsSources.cadence.day1" },
-];
 
 const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
 	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
 	{ title: "settingsSources.apps.groups.docsNotes", ids: ["notion", "obsidian", "clawgallery"] },
+	{ title: "settingsSources.apps.groups.aiSessions", ids: ["wombat"] },
 	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl"] },
 	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
 	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
@@ -81,6 +79,7 @@ const UNIT_LABEL: Readonly<Record<NonNullable<DataSourceRow["index"]["unit"]>, L
 	message: "settingsSources.units.message",
 	document: "settingsSources.units.document",
 	image: "settingsSources.units.image",
+	session: "settingsSources.units.session",
 };
 
 /** The local-folder row's meta line: what the last refresh actually parsed. */
@@ -119,22 +118,26 @@ function ScheduleConditions({ config, onApply }: { readonly config: JsonObject; 
 			setProblem(t("settingsSources.indexing.scheduleWindowSame"));
 		}
 	}
+	// The redesigned row style (as on 일반): a 14px bold title, then plain rows with no rule between them.
 	return (
-		<Section title={t("settingsSources.indexing.scheduleTitle")}>
-			<Row name={t("settingsSources.indexing.scheduleAcOnlyName")} hint={t("settingsSources.indexing.scheduleAcOnlyHint")}>
-				<Switch checked={settings.acOnly} onChange={() => void change({ acOnly: !settings.acOnly })} ariaLabel={t("settingsSources.indexing.scheduleAcOnlyName")} />
-			</Row>
-			<Row name={t("settingsSources.indexing.scheduleWindowName")} hint={t("settingsSources.indexing.scheduleWindowHint")}>
-				<Switch checked={settings.windowEnabled} onChange={() => void change({ windowEnabled: !settings.windowEnabled })} ariaLabel={t("settingsSources.indexing.scheduleWindowName")} />
-			</Row>
-			{settings.windowEnabled ? (
-				<Row name={`${t("settingsSources.indexing.scheduleWindowStart")} – ${t("settingsSources.indexing.scheduleWindowEnd")}`}>
-					<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowStart")} value={settings.start} onChange={(event) => event.target.value !== "" && void change({ start: event.target.value })} />
-					<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowEnd")} value={settings.end} onChange={(event) => event.target.value !== "" && void change({ end: event.target.value })} />
-				</Row>
-			) : null}
+		<section className="scope-section" data-index-scope="schedule">
+			<h3 className="scope-section-title">{t("settingsSources.indexing.scheduleTitle")}</h3>
+			<div className="settings-plain plain-section-rows">
+				<PlainRow name={t("settingsSources.indexing.scheduleAcOnlyName")} hint={t("settingsSources.indexing.scheduleAcOnlyHint")}>
+					<Switch checked={settings.acOnly} onChange={() => void change({ acOnly: !settings.acOnly })} ariaLabel={t("settingsSources.indexing.scheduleAcOnlyName")} />
+				</PlainRow>
+				<PlainRow name={t("settingsSources.indexing.scheduleWindowName")} hint={t("settingsSources.indexing.scheduleWindowHint")}>
+					<Switch checked={settings.windowEnabled} onChange={() => void change({ windowEnabled: !settings.windowEnabled })} ariaLabel={t("settingsSources.indexing.scheduleWindowName")} />
+				</PlainRow>
+				{settings.windowEnabled ? (
+					<PlainRow name={`${t("settingsSources.indexing.scheduleWindowStart")} – ${t("settingsSources.indexing.scheduleWindowEnd")}`} hint="">
+						<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowStart")} value={settings.start} onChange={(event) => event.target.value !== "" && void change({ start: event.target.value })} />
+						<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowEnd")} value={settings.end} onChange={(event) => event.target.value !== "" && void change({ end: event.target.value })} />
+					</PlainRow>
+				) : null}
+			</div>
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
-		</Section>
+		</section>
 	);
 }
 
@@ -147,6 +150,7 @@ export function IndexingPage({
 	sourcesPending,
 	setSources,
 	onOpenSource,
+	onOpenApps,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
@@ -155,9 +159,12 @@ export function IndexingPage({
 	readonly sourcesPending: boolean;
 	readonly setSources: (next: DataSourcesSnapshot) => void;
 	readonly onOpenSource: (alias: string) => void;
+	/** 앱 연결: the page where apps are connected (Settings → 모든 연결). */
+	readonly onOpenApps?: () => void;
 }): ReactElement {
 	useTranslation();
 	const { run, saving, error } = useConfigWriter(onSaved);
+	const editor = useScopeEditor({ snapshot, run, saving });
 	const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [refreshResult, setRefreshResult] = useState<ConfigRefreshResult | null>(null);
@@ -251,139 +258,158 @@ export function IndexingPage({
 		}
 	}
 
+	/** 모두 지금 최신화: the local folders and every app that is on and idle. */
 	async function syncAll(): Promise<void> {
 		setLocalError(null);
 		const targets = rows.filter((row) => row.enabled && rowActivityState(row) === null);
-		if (targets.length === 0) return;
-		await Promise.all(targets.map((row) => syncOne(row.id)));
+		await Promise.all([...(localRunning ? [] : [refreshIndex()]), ...targets.map((row) => syncOne(row.id))]);
 	}
+	const nothingToSync = localRunning && rows.every((row) => !row.enabled || rowActivityState(row) !== null);
 
-	const problem = localError ?? error;
+	const problem = editor.problem ?? localError ?? error;
 	return (
 		<div className="indexing-page">
-			<SettingsPageHead title={t("settingsSources.indexing.title")} description={t("settingsSources.indexing.desc")} />
+			<SettingsPageHead title={t("settingsSources.indexing.title")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
-			<Section title={t("settingsSources.indexing.progress")}>
-				<IndexActivityCard snapshot={activity} />
+			{/* Figma 532:9970: 검색할 폴더 → 진행 상황 → 제외한 항목, then 최신으로 유지 and 파일 이름 바로 반영 under a rule. */}
+			<div className="scope-page indexing-sections">
 				<IndexMapPanel
 					searchPaths={searchPaths}
 					excludePaths={excludePaths}
 					busy={saving}
 					onExclude={(path) => void run([listUpdate("excludePaths", excludePath(excludePaths, path))])}
 					onInclude={(path) => void run([listUpdate("excludePaths", includePath(excludePaths, path))])}
+					header={(scope) => <SearchFoldersSection editor={editor} scope={scope} />}
+					progressHead={
+						<div className="index-map-head">
+							<h3 className="scope-section-title">{t("settingsSources.indexing.progress")}</h3>
+							<IndexActivityCard snapshot={activity} hideIdle />
+						</div>
+					}
 				/>
-			</Section>
-			<ScheduleConditions config={snapshot.config} onApply={(next) => run(scheduleUpdates(next))} />
-			<Section title={t("settingsSources.indexing.refreshStatus")}>
-				<div className="settings-list">
-					<div className="settings-list-row settings-sync-row">
-						<button type="button" className="settings-sync-name" onClick={() => onOpenSource("")}>
-							<SourceIcon small type="local" label={t("settingsSources.indexing.localFolder")} />
-							<span className="settings-list-body">
-								<span className="settings-list-title">{t("settingsSources.indexing.localFolder")}</span>
-								<span className="settings-list-meta" title={schedule?.local?.error ?? undefined}>
-									{[localMeta(local, localCount), lastAutoText(schedule?.local, now)].filter((part) => part !== null).join(" · ")}
-								</span>
-							</span>
-						</button>
-						<span className="settings-status">
-							<StatusDot tone={localRunning ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
-							{localRunning ? t("settingsSources.indexing.localUpdating") : t("settingsSources.common.inUse")}
-						</span>
-						<select
-							className="settings-select-compact"
-							aria-label={t("settingsSources.indexing.localIntervalAria")}
-							value={String(localInterval)}
-							onChange={(event) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(event.target.value))}
-						>
-							<option value="0">{t("settingsSources.common.manual")}</option>
-							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-							))}
-						</select>
-						<button
-							type="button"
-							className="settings-icon-btn"
-							aria-label={t("settingsSources.indexing.refreshLocalAria")}
-							title={t("settingsSources.indexing.refreshTitle")}
-							disabled={localRunning}
-							onClick={() => void refreshIndex()}
-						>
-							<RefreshCw size={16} aria-hidden="true" focusable="false" />
+				<ExclusionsSection editor={editor} snapshot={snapshot} />
+				<hr className="scope-divider" />
+				<section className="scope-section" data-index-scope="refresh">
+					<div className="scope-section-head">
+						<div className="scope-section-text">
+							<h3 className="scope-section-title">{t("settingsSources.indexing.keepTitle")}</h3>
+							<p className="scope-section-desc">{t("settingsSources.indexing.keepDesc")}</p>
+						</div>
+						<button type="button" className={cn("scope-primary-btn scope-secondary-btn", buttonClass({ size: "md" }))} data-action="sync-all" disabled={nothingToSync} onClick={() => void syncAll()}>
+							{t("settingsSources.indexing.syncAll")}
 						</button>
 					</div>
-					{rows.map((row) => (
-						<div className="settings-list-row settings-sync-row" key={row.id}>
-							<button type="button" className="settings-sync-name" onClick={() => onOpenSource(row.id)}>
-								<SourceIcon small type={row.type} label={templateLabel(row.type)} />
+					<div className="settings-list">
+						<div className="settings-list-row settings-sync-row">
+							<div className="settings-sync-name">
+								<SourceIcon small type="local" label={t("settingsSources.indexing.localFolder")} />
 								<span className="settings-list-body">
-									<span className="settings-list-title">{sourceTitle(row)}</span>
-									<span className="settings-list-meta" title={schedule?.sources[row.id]?.error ?? undefined}>
-										{[
-											rowActivityState(row) === "running"
-												? t("settingsSources.common.syncing")
-												: rowActivityState(row) === "queued"
-													? t("indexActivity.queued")
-													: sourceMeta(row),
-											lastAutoText(schedule?.sources[row.id], now),
-										]
-											.filter((part) => part !== null)
-											.join(" · ")}
+									<span className="settings-list-title">{t("settingsSources.indexing.localFolder")}</span>
+									<span className="settings-list-meta" title={schedule?.local?.error ?? undefined}>
+										{[localMeta(local, localCount), lastAutoText(schedule?.local, now)].filter((part) => part !== null).join(" · ")}
 									</span>
 								</span>
-							</button>
+							</div>
 							<span className="settings-status">
-								<StatusDot tone={rowActivityState(row) === "running" ? "run" : rowActivityState(row) === "queued" ? "off" : sourceTone(row)} />
-								{rowActivityState(row) === "running"
-									? t("settingsSources.common.syncing")
-									: rowActivityState(row) === "queued"
-										? t("indexActivity.queued")
-										: row.enabled
-											? t("settingsSources.common.inUse")
-											: t("settingsSources.common.off")}
+								<StatusDot tone={localRunning ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
+								{localRunning ? t("settingsSources.indexing.localUpdating") : t("settingsSources.common.inUse")}
 							</span>
-							{TEMPLATE_BY_ID[row.type]?.polling !== false ? (
-								<select
-									className="settings-select-compact"
-									aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
-									value={String(intervalOf(row, snapshot))}
-									onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
-								>
-									<option value="0">{t("settingsSources.common.manual")}</option>
-									{INTERVAL_OPTIONS.map((option) => (
-										<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-									))}
-								</select>
-							) : null}
+							<SelectField
+								className="settings-select-compact"
+								aria-label={t("settingsSources.indexing.localIntervalAria")}
+								value={String(localInterval)}
+								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+								onValueChange={(value) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(value))}
+							/>
 							<button
 								type="button"
 								className="settings-icon-btn"
-								aria-label={t("settingsSources.indexing.rowRefreshAria", { id: row.id })}
-								title={t("settingsSources.indexing.rowRefreshTitle")}
-								disabled={!row.enabled || rowActivityState(row) !== null}
-								onClick={() => void syncOne(row.id)}
+								aria-label={t("settingsSources.indexing.refreshLocalAria")}
+								title={t("settingsSources.indexing.refreshTitle")}
+								disabled={localRunning}
+								onClick={() => void refreshIndex()}
 							>
 								<RefreshCw size={16} aria-hidden="true" focusable="false" />
 							</button>
 						</div>
-					))}
-				</div>
-				{rows.length === 0 ? <Note>{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.indexing.empty")}</Note> : null}
-				<ScheduleNote status={schedule} />
-				<div className="settings-sync-footer">
-					<span className="settings-list-meta">{t("settingsSources.indexing.footer")}</span>
-					<button type="button" className="linear-btn" disabled={rows.every((row) => !row.enabled || rowActivityState(row) !== null)} onClick={() => void syncAll()}>{t("settingsSources.indexing.syncAll")}</button>
-				</div>
-				<Row name={t("settingsSources.indexing.localRefreshName")} hint={t("settingsSources.indexing.localRefreshHint")}>
-					<button type="button" className="linear-btn" disabled={localRunning} onClick={() => void refreshIndex()}>{t("settingsSources.indexing.localRefreshButton")}</button>
-				</Row>
-				{refreshResult !== null ? (
-					<Note>
-						{t("settingsSources.indexing.scanned", { scanned: refreshResult.scanned, written: refreshResult.written, deleted: refreshResult.deleted, skipped: refreshResult.skipped })}
-						{refreshResult.diagnostics.length > 0 ? t("settingsSources.indexing.diagnostics", { count: refreshResult.diagnostics.length }) : ""}
-					</Note>
-				) : null}
-			</Section>
+						{rows.map((row) => (
+							<div className="settings-list-row settings-sync-row" key={row.id}>
+								<button type="button" className="settings-sync-name" onClick={() => onOpenSource(row.id)}>
+									<SourceIcon small type={row.type} label={templateLabel(row.type)} />
+									<span className="settings-list-body">
+										<span className="settings-list-title">{sourceTitle(row)}</span>
+										<span className="settings-list-meta" title={schedule?.sources[row.id]?.error ?? undefined}>
+											{[
+												rowActivityState(row) === "running"
+													? t("settingsSources.common.syncing")
+													: rowActivityState(row) === "queued"
+														? t("indexActivity.queued")
+														: sourceMeta(row),
+												lastAutoText(schedule?.sources[row.id], now),
+											]
+												.filter((part) => part !== null)
+												.join(" · ")}
+										</span>
+									</span>
+								</button>
+								<span className="settings-status">
+									<StatusDot tone={rowActivityState(row) === "running" ? "run" : rowActivityState(row) === "queued" ? "off" : sourceTone(row)} />
+									{rowActivityState(row) === "running"
+										? t("settingsSources.common.syncing")
+										: rowActivityState(row) === "queued"
+											? t("indexActivity.queued")
+											: row.enabled
+												? t("settingsSources.common.inUse")
+												: t("settingsSources.common.off")}
+								</span>
+								{row.index.state === "live" ? (
+									<span className="settings-sync-live">{t("settingsSources.indexing.liveLabel")}</span>
+								) : TEMPLATE_BY_ID[row.type]?.polling !== false ? (
+									<SelectField
+										className="settings-select-compact"
+										aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
+										value={String(intervalOf(row, snapshot))}
+										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+										onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
+									/>
+								) : null}
+								{/* A source asked at search time has nothing to read ahead of it. */}
+								{row.index.state === "live" ? null : (
+									<button
+										type="button"
+										className="settings-icon-btn"
+										aria-label={t("settingsSources.indexing.rowRefreshAria", { id: row.id })}
+										title={t("settingsSources.indexing.rowRefreshTitle")}
+										disabled={!row.enabled || rowActivityState(row) !== null}
+										onClick={() => void syncOne(row.id)}
+									>
+										<RefreshCw size={16} aria-hidden="true" focusable="false" />
+									</button>
+								)}
+							</div>
+						))}
+					<button type="button" className="settings-list-row settings-sync-row settings-sync-add" data-action="connect-app" onClick={() => onOpenApps?.()}>
+							<Plus size={15} aria-hidden="true" focusable="false" />
+							<span className="settings-list-title">{t("settingsSources.indexing.connectApp")}</span>
+							<span className="settings-list-meta">{t("settingsSources.indexing.connectAppHint")}</span>
+						</button>
+					</div>
+
+					{sourcesPending && rows.length === 0 ? <Note>{t("settingsSources.common.checking")}</Note> : null}
+					<ScheduleNote status={schedule} />
+					{refreshResult !== null ? (
+						<Note>
+							{t("settingsSources.indexing.scanned", { scanned: refreshResult.scanned, written: refreshResult.written, deleted: refreshResult.deleted, skipped: refreshResult.skipped })}
+							{refreshResult.diagnostics.length > 0 ? t("settingsSources.indexing.diagnostics", { count: refreshResult.diagnostics.length }) : ""}
+						</Note>
+					) : null}
+				</section>
+				<hr className="scope-divider" />
+				<ScheduleConditions config={snapshot.config} onApply={(next) => run(scheduleUpdates(next))} />
+				<hr className="scope-divider" />
+				<FileNameWatchRow snapshot={snapshot} run={run} />
+			</div>
+			{editor.prompt}
 		</div>
 	);
 }
@@ -480,8 +506,23 @@ export function AppsPage({
 	useTranslation();
 	const [addTemplate, setAddTemplate] = useState<string | null>(null);
 	const [addError, setAddError] = useState<string | null>(null);
+	/** The connection 연결해제 asked about; it goes only after the confirmation. */
+	const [disconnecting, setDisconnecting] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
 	const rows = sources?.sources ?? [];
-	const connectedTypes = new Set(sourceAliases(snapshot).map((entry) => entry.type));
+
+	async function disconnect(alias: string): Promise<void> {
+		setBusy(true);
+		setAddError(null);
+		try {
+			onSaved(await settings.configRemove(["datasources", alias]));
+			setDisconnecting(null);
+		} catch (cause) {
+			setAddError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setBusy(false);
+		}
+	}
 
 	async function addConnection(templateId: string, alias: string): Promise<void> {
 		setAddError(null);
@@ -500,26 +541,33 @@ export function AppsPage({
 		<>
 			<SettingsPageHead title={t("settingsSources.apps.title")} description={t("settingsSources.apps.desc")} />
 			{addError !== null ? <div className="settings-error" role="alert">{addError}</div> : null}
+			<div className="settings-apps">
 			<Section title={t("settingsSources.apps.myConnections")}>
-				{rows.length === 0 ? <Note>{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</Note> : null}
-				<div className="settings-list">
+				{rows.length === 0 ? <p className="settings-apps-empty">{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</p> : null}
+				<div className="settings-list settings-apps-mine">
 					{rows.map((row) => (
-						<button type="button" className="settings-list-row" key={row.id} onClick={() => onOpenSource(row.id)}>
-							<SourceIcon type={row.type} label={templateLabel(row.type)} />
-							<span className="settings-list-body">
-								<span className="settings-list-title">{sourceTitle(row)}</span>
-								<span className="settings-list-meta">{sourceMeta(row)}</span>
-							</span>
-							<StatusDot tone={sourceTone(row)} />
-							<ChevronRight size={16} className="settings-list-chevron" aria-hidden="true" focusable="false" />
-						</button>
+						// The name opens the connection's own page; 연결해제 removes it after a confirmation (Figma 387:4551).
+						<div className="settings-list-row" key={row.id}>
+							<button type="button" className="settings-apps-open" onClick={() => onOpenSource(row.id)}>
+								<SourceIcon type={row.type} label={templateLabel(row.type)} />
+								<span className="settings-list-body">
+									<span className="settings-list-title">{sourceTitle(row)}</span>
+									<span className="settings-list-meta">{sourceMeta(row)}</span>
+								</span>
+							</button>
+							<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => setDisconnecting(row.id)}>
+								<Minus size={14} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
+							</button>
+						</div>
 					))}
 				</div>
 			</Section>
-			<Section title={t("settingsSources.apps.connectApps")} description={t("settingsSources.apps.connectAppsDesc")}>
+			{/* Figma 403:6999: a rule closes 내 연결 before 앱 연결하기. */}
+			<hr className="settings-apps-divider" />
+			<Section title={t("settingsSources.apps.connectApps")}>
 				{GALLERY_GROUPS.map((group) => (
 					<div key={group.title}>
-						<div className="linear-section-title" style={{ marginTop: 18, fontSize: 13 }}>{t(group.title)}</div>
+						<div className="settings-apps-group">{t(group.title)}</div>
 						<div className="settings-list">
 							{group.ids.map((templateId) => {
 								const template = TEMPLATE_BY_ID[templateId];
@@ -536,9 +584,8 @@ export function AppsPage({
 											<span className="settings-list-title">{template.label}</span>
 											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
-										{connectedTypes.has(templateId) ? <span className="settings-badge">{t("settingsSources.apps.connected")}</span> : null}
-										<button type="button" className="linear-btn" disabled={!available} onClick={() => setAddTemplate(templateId)}>
-											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
+										<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={!available} onClick={() => setAddTemplate(templateId)}>
+											<Plus size={14} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>
 								);
@@ -547,6 +594,17 @@ export function AppsPage({
 					</div>
 				))}
 			</Section>
+			</div>
+			{disconnecting !== null ? (
+				<ModalShell onClose={() => setDisconnecting(null)}>
+					<h2>{t("settingsSources.sourceDetail.confirmTitle")}</h2>
+					<p>{t("settingsSources.sourceDetail.confirmBody", { alias: disconnecting })}</p>
+					<ModalActions>
+						<button type="button" className="linear-btn" onClick={() => setDisconnecting(null)}>{t("common.cancel")}</button>
+						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void disconnect(disconnecting)}>{t("settingsSources.apps.disconnect")}</button>
+					</ModalActions>
+				</ModalShell>
+			) : null}
 			{addTemplate !== null ? (
 				<PromptModal
 					title={t("settingsSources.apps.promptTitle", { name: templateLabel(addTemplate) })}
@@ -585,6 +643,8 @@ export function SourceDetailPage({
 	const [busy, setBusy] = useState(false);
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [fdaNeeded, setFdaNeeded] = useState(false);
+	const [fdaDialogOpen, setFdaDialogOpen] = useState(false);
 	const activity = useIndexActivity();
 	const liveSourceState = activityItem(activity, `source:${alias}`)?.state ?? null;
 	const sourceSyncActive = busy || liveSourceState === "running" || liveSourceState === "queued";
@@ -644,7 +704,32 @@ export function SourceDetailPage({
 
 	const appRequirement = row?.install.app ?? null;
 	const downloadUrl = appRequirement?.required ? appDownloadUrl(type, hostPlatform()) : undefined;
+	const mailPaths = connector !== null ? listOf(connector.paths) : [];
+	const usesProtectedStore =
+		hostPlatform() === "darwin" &&
+		(type === "kakao" || (type === "mailcrawl" && mailPaths.some((item) => item.includes("/Library/Mail"))));
 
+	useEffect(() => {
+		if (!usesProtectedStore) {
+			setFdaNeeded(false);
+			return;
+		}
+		let live = true;
+		const check = (): void => {
+			void window.autorag?.onboarding
+				?.permissions()
+				.then((status) => {
+					if (live) setFdaNeeded(status.fullDiskAccess === false);
+				})
+				.catch(() => undefined);
+		};
+		check();
+		window.addEventListener("focus", check);
+		return () => {
+			live = false;
+			window.removeEventListener("focus", check);
+		};
+	}, [usesProtectedStore]);
 	return (
 		<div className="settings-source is-open" data-source-id={alias}>
 			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template !== undefined ? t(template.summary) : t("settingsSources.sourceDetail.fallbackSummary")} />
@@ -660,10 +745,21 @@ export function SourceDetailPage({
 						disabled={busy}
 						ariaLabel={t("settingsSources.sourceDetail.enabledName")}
 						onChange={() => {
-							void run([{ path: ["datasources", alias, "enabled"], value: !enabled }]).then(() => refresh());
+							const turningOn = !enabled;
+							void run([{ path: ["datasources", alias, "enabled"], value: turningOn }]).then(() => {
+								void refresh();
+								if (turningOn && fdaNeeded) setFdaDialogOpen(true);
+							});
 						}}
 					/>
 				</Row>
+				{usesProtectedStore && fdaNeeded ? (
+					<Row name={t("fullDiskAccess.rowName")} hint={t("fullDiskAccess.leadSource")}>
+						<button type="button" className="linear-btn" data-action="source-grant-fda" onClick={() => setFdaDialogOpen(true)}>
+							{t("fullDiskAccess.open")}
+						</button>
+					</Row>
+				) : null}
 				{appRequirement !== null && appRequirement.required ? (
 					<Row
 						name={t("settingsSources.sourceDetail.appRow", { name: appRequirement.name })}
@@ -716,17 +812,13 @@ export function SourceDetailPage({
 				</Row>
 				{template?.polling !== false ? (
 					<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>
-						<select
+						<SelectField
 							className="linear-select"
 							aria-label={t("settingsSources.sourceDetail.intervalName")}
 							value={String(polling)}
-							onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
-						>
-							<option value="0">{t("settingsSources.common.manual")}</option>
-							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-							))}
-						</select>
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							onValueChange={(value) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(value))}
+						/>
 					</Row>
 				) : null}
 			</Section>
@@ -776,6 +868,17 @@ export function SourceDetailPage({
 						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>{t("settingsSources.sourceDetail.removeSection")}</button>
 					</ModalActions>
 				</ModalShell>
+			) : null}
+			{fdaDialogOpen ? (
+				<FullDiskAccessDialog
+					reason="source"
+					onClose={() => setFdaDialogOpen(false)}
+					onConfirmed={() => {
+						setFdaDialogOpen(false);
+						setFdaNeeded(false);
+						void refresh();
+					}}
+				/>
 			) : null}
 		</div>
 	);

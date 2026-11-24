@@ -92,18 +92,18 @@ describe("Toolbar Sort/Group menu", () => {
 });
 
 describe("Toolbar right cluster", () => {
-	// AI Search is reached from the sidebar and ⌘K; the toolbar carries no toggle for it.
+	// AI Chat is reached from the sidebar and ⌘K; the toolbar carries no toggle for it.
 	const clusterLabels = (): (string | null)[] =>
 		[...host.querySelectorAll(".tgroup button")].map((button) => button.getAttribute("aria-label"));
 
-	it("holds Share, and no inspector or AI Search toggle, while the inspector is shown", () => {
+	it("holds Share, and no inspector or AI Chat toggle, while the inspector is shown", () => {
 		renderToolbar(vi.fn(), true);
 		expect(clusterLabels()).toEqual(["Share"]);
 		// The inspector hides from its own head, like the left sidebar; the toolbar stops at its edge.
 		expect(host.querySelector('[aria-label="Show inspector"]')).toBeNull();
 		expect(host.querySelector('[aria-label="Hide inspector"]')).toBeNull();
-		expect(host.querySelector('[aria-label="Show AI Search"]')).toBeNull();
-		expect(host.querySelector('[title^="AI Search"]')).toBeNull();
+		expect(host.querySelector('[aria-label="Show AI Chat"]')).toBeNull();
+		expect(host.querySelector('[title^="AI Chat"]')).toBeNull();
 	});
 
 	it("holds nothing where the OS has no share sheet", () => {

@@ -77,11 +77,11 @@ export interface AppSettings {
 	readonly launchAtLogin: boolean;
 	readonly showInMenuBar: boolean;
 	readonly autoInstallUpdates: boolean;
-	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Stored off until the user continues from the first onboarding step, whose box is ticked by default. */
+	/** Crash and indexing-failure reports go to the maintainers (no file paths, names or document text). Off by default; the first run never asks — Settings → General → Privacy turns it on. */
 	readonly errorReporting: boolean;
 	/**
 	 * Anonymous product-usage statistics (which features are used, never what is in them) go to the maintainers.
-	 * Stored off until the user continues from the first onboarding step, whose box is ticked by default; independent of `errorReporting`.
+	 * Off by default; the first run never asks — Settings turns it on. Independent of `errorReporting`.
 	 */
 	readonly usageAnalytics: boolean;
 	/** Off: dot-prefixed files never appear. On: they appear, rendered dimmed. */
@@ -160,7 +160,7 @@ export type DataSourceAgentState = "connected" | "disabled" | "unsupported";
 export type DataSourceIndexState = "indexed" | "empty" | "not-indexed" | "live";
 
 /** What `index.chunkCount` counts, so the UI can say "메시지 3,536개" instead of a bare number. */
-export type DataSourceIndexUnit = "message" | "document" | "image";
+export type DataSourceIndexUnit = "message" | "document" | "image" | "session";
 
 export type DataSourceStatus = "ready" | "syncing" | "paused" | "attention";
 

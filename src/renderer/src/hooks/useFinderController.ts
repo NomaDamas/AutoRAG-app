@@ -104,6 +104,7 @@ import {
 	navigateTab,
 	openAiSearchTab,
 	openEvidenceFolderTab,
+	openOrSelectFolderTab,
 	openTab,
 	openTabAt,
 	openTabRevealing,
@@ -228,7 +229,8 @@ export interface FinderController {
 	readonly navGroups: readonly NavGroup[];
 	/** Pin, unpin, and reorder of the sidebar's Favorites (they write `AppSettings.sidebar`). */
 	readonly sidebarPins: SidebarPins;
-	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
+	/** The open right-click menu; `onEntry` is false for the empty-space menu. */
+	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number }; readonly onEntry: boolean } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
 	readonly viewMode: ViewMode;
@@ -247,6 +249,8 @@ export interface FinderController {
 	familyEntriesFor(path: string): { readonly head: FinderEntry; readonly members: readonly { readonly entry: FinderEntry; readonly relation: VersionRelation }[] } | null;
 	/** Navigate the current tab to the entry's folder and reveal the row (version-member click). */
 	revealEntry(entry: FinderEntry): void;
+	/** Navigate the current tab to `entry`'s folder and scroll `entry` into view without selecting it, so a guided click lands on the real row. */
+	showEntryFolder(entry: FinderEntry): void;
 	/** Open a new tab on the entry's enclosing folder and reveal the row, keeping the current tab's search intact. */
 	revealEntryInNewTab(entry: FinderEntry): void;
 	/** Create an "untitled folder" in the current directory and select it. */
@@ -261,8 +265,12 @@ export interface FinderController {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
-	/** Run one Inspector action over the whole multi-selection (Compress). */
-	runSelectionAction(target: FileActionTarget): void;
+	/** Run one Inspector action over the whole multi-selection (Compress, Share). */
+	runSelectionAction(target: FileActionTarget, anchor?: ActionAnchor | null): void;
+	/** Trash every selected entry (the multi-selection inspector's Trash button). */
+	trashSelection(): void;
+	/** Include every selected entry in the index, or leave every one out (the multi-selection inspector's index button). */
+	setSelectionIndexed(include: boolean): void;
 	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
 	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
 	/** The "용량 줄이기" dialog (choosing level/mode, or actively reducing with live progress); null when closed. */
@@ -1054,6 +1062,16 @@ export function useFinderController(
 		requestScroll(entry.path, "reveal");
 	});
 
+	const showEntryFolder = useLatestCallback((entry: FinderEntry) => {
+		const dir = locationOf(entry);
+		setTabsState((state) => {
+			const switched = isVirtualTabPath(activeTab(state).path) ? openOrSelectFolderTab(state, dir) : navigateTab(state, dir);
+			return patchActiveTab(switched, (current) => ({ ...current, selection: EMPTY_SELECTION }));
+		});
+		setQueryValue("");
+		requestScroll(entry.path, "reveal");
+	});
+
 	const revealEntryInNewTab = useLatestCallback((entry: FinderEntry) => {
 		setTabsState((state) => openTabRevealing(state, locationOf(entry), entry.path));
 		setFlashPath(entry.path);
@@ -1340,6 +1358,24 @@ export function useFinderController(
 
 	const trashEntry = useLatestCallback((entry: FinderEntry) => trashPaths([entry.path]));
 
+	const trashSelection = useLatestCallback(() => {
+		if (selectedEntries.length > 0) trashPaths(selectedEntries.map((entry) => entry.path));
+	});
+
+	const setSelectionIndexed = useLatestCallback((include: boolean) => {
+		const changing = selectedEntries.filter((entry) => {
+			const current = sidecar.indexStatus(entry.path);
+			return current !== null && current.toggleable && current.excluded === include;
+		});
+		if (changing.length === 0) return;
+		Promise.all(changing.map((entry) => source.setIndexExcluded(entry.path, !include)))
+			.then((statuses) => {
+				sidecar.setIndexStatuses(statuses);
+				showToast(changing.length === 1 ? indexToast(changing[0]?.name ?? "", include) : indexToast(t("finder.itemsCount", { count: changing.length }), include));
+			})
+			.catch(reportError);
+	});
+
 	const copyEntryPath = useLatestCallback(
 		(entry: FinderEntry) => {
 			source
@@ -1452,7 +1488,15 @@ export function useFinderController(
 	 * Run one Inspector action over the whole multi-selection. Compress is the
 	 * only one: it writes a single archive holding every selected row.
 	 */
-	const runSelectionAction = useLatestCallback((target: FileActionTarget) => {
+	const runSelectionAction = useLatestCallback((target: FileActionTarget, anchor: ActionAnchor | null = null) => {
+		if (target.kind === "share") {
+			if (anchor === null) {
+				showToast(t("finderComponents.shareAnchorMissing"));
+				return;
+			}
+			source.actions.share(selectedEntries.map((entry) => entry.path), anchor).catch(reportError);
+			return;
+		}
 		if (target.kind !== "request" || target.request.kind !== "compress") return;
 		startCompress(
 			selectedEntries.map((entry) => entry.path),
@@ -2427,7 +2471,7 @@ export function useFinderController(
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,
 		sidebarPins,
-		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
+		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor, onEntry: contextMenu.entry !== null },
 		contextMenuEntries,
 		viewMode,
 		layout,
@@ -2446,6 +2490,8 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		runSelectionAction,
+		trashSelection,
+		setSelectionIndexed,
 		loadOpenWithApplications,
 		reduceDialog,
 		setReduceDialogLevel,
@@ -2510,6 +2556,7 @@ export function useFinderController(
 		quickLookPath,
 		moveSelectionBy,
 		revealEvidence,
+		showEntryFolder,
 		focusFinder,
 		marqueeSelect,
 		clickRow,

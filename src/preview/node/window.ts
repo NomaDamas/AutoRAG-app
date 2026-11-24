@@ -8,6 +8,7 @@ import { listArchive } from "../../main/archive-list";
 import type { DocumentEditService } from "../../main/document-edit-service";
 import { documentEditMode, isDocumentEditRequest, type DocumentEditEvent } from "../shared/annotation";
 import { isAppBundle, isPackageDirectory } from "../../main/fs-entry";
+import { whenQuitting } from "../../main/quit-signal";
 import {
 	app,
 	BrowserWindow,
@@ -786,7 +787,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
 	iconSource = icons;
 	keynoteSlides = createKeynoteSlideCache({ dir: join(app.getPath("userData"), "keynote-slides") });
-	app.on("before-quit", () => {
+	whenQuitting(() => {
 		quitting = true;
 	});
 	ipc.handle(PREVIEW_CHANNELS.show, async (event, target: unknown, origin: unknown) => {

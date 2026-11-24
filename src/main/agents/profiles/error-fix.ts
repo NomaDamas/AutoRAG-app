@@ -12,7 +12,7 @@ import { intentPromptLine, withIntentTools } from "../profile-progress";
 import { createFixTools } from "./error-fix-files";
 
 /**
- * The error-fix helper ("AI로 고치기"): given an error the app showed, it looks at
+ * The error-fix helper ("AI로 해결하기"): given an error the app showed, it looks at
  * the files the error points to, repairs what is wrong, and says in the person's
  * language what it did or what they have to do. It runs on the AI Search model,
  * like the smart-indexing helper.
@@ -278,17 +278,9 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 	};
 }
 
-/** A natural button label in each reply language, so the model has a model of the tone: what the button does, in the person's own words. */
-const LABEL_EXAMPLE: Readonly<Record<ReplyLanguage, string>> = {
-	ko: "\"검색할 폴더 다시 고르기\"",
-	en: "\"Choose the search folder again\"",
-	ja: "「検索するフォルダを選び直す」",
-	zh: "“重新选择搜索文件夹”",
-};
-
 export function errorFixPrompt(input: { readonly message: string; readonly surface: ErrorFixSurface; readonly language: ReplyLanguage }): string {
 	const message = input.message.length > MAX_MESSAGE_CHARS ? `${input.message.slice(0, MAX_MESSAGE_CHARS)}…` : input.message;
-	const where = input.surface === "ai-search" ? "AI Search (the chat that answers questions from the person's own documents)" : input.surface;
+	const where = input.surface === "ai-search" ? "AI Agent (the chat that answers questions from the person's own documents)" : input.surface;
 	return [
 		"You are the repair helper of Dazzi, a desktop app that searches a person's own documents and data sources with AI.",
 		`The person just saw this error in ${where}:`,
@@ -318,7 +310,7 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		...SETTINGS_PAGE_GUIDE.map((line) => `- ${line}`),
 		"",
 		intentPromptLine(input.language),
-		`Write summary and nextSteps in ${LANGUAGE_NAME[input.language]}, in plain words for someone who is not technical: no stack traces, no shell commands, no jargon, file paths only where they help. Write each button's label in ${LANGUAGE_NAME[input.language]} too, as a short, natural phrase for what the button does, the way a person who speaks it would say it (not a word-for-word translation of a page name; for example: ${LABEL_EXAMPLE[input.language]}). Do not reply with prose; the report_result call is your answer.`,
+		`Write summary, nextSteps and every button label in the language the person writes in (their latest message decides); if it is unclear, write them in ${LANGUAGE_NAME[input.language]}. Keep it in plain words for someone who is not technical: no stack traces, no shell commands, no jargon, file paths only where they help. Write each button's label as a short, natural phrase for what the button does, the way a person who speaks that language would say it (not a word-for-word translation of a page name). Do not reply with prose; the report_result call is your answer.`,
 	].join("\n");
 }
 

@@ -75,3 +75,15 @@ describe("EvidenceExcerpt", () => {
 		expect(host.querySelector("table")).toBeNull();
 	});
 });
+
+describe("EvidenceExcerpt media", () => {
+	it("renders a markdown video reference as a player and an HTML video next to the document", () => {
+		render("![영상](clip.mp4)\n\n<div><video src=\"clip.mp4\"></video></div>");
+		const videos = host.querySelectorAll("video");
+		expect(videos).toHaveLength(2);
+		for (const video of videos) {
+			expect(video.getAttribute("src")).toContain("autorag-preview");
+			expect(video.hasAttribute("controls")).toBe(true);
+		}
+	});
+});

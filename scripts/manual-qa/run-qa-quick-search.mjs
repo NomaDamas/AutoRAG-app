@@ -22,7 +22,7 @@ import { homeEnv, isMac, sh, sleep } from "./platform.mjs";
  *      Search tab in the Finder.
  *   5. Settings → General: the section is there, the switch releases the global shortcut.
  *
- * Run `bun run build` first; needs `minsync` on PATH and the MinSync model cache (`minsync serve` once).
+ * Run `bun run build` first; needs `inl` (or `minsync`) on PATH and the shared model cache (`inl serve` once).
  */
 
 const EVIDENCE = fileURLToPath(new URL(`../../.omo/evidence/quick-search/`, import.meta.url));
@@ -53,7 +53,7 @@ const waitFor = async (predicate, timeoutMs = 30_000, stepMs = 150) => {
 };
 
 const minsync = sh(process.platform === "win32" ? "where minsync" : "command -v minsync").split(/\r?\n/u)[0]?.trim() ?? "";
-const models = join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const models = join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (minsync === "") {
 	console.log("SKIP: no minsync on PATH; the lane needs the real index");
 	process.exit(0);
@@ -63,12 +63,12 @@ const WORK = mkdtempSync(join(tmpdir(), "qa-quick-search-"));
 const home = join(WORK, "home");
 const docs = join(home, "Documents", "qs-fixtures");
 const configPath = join(WORK, "config.json");
-mkdirSync(join(home, ".cache", "minsync"), { recursive: true });
+mkdirSync(join(home, ".cache", "im-not-llm"), { recursive: true });
 mkdirSync(docs, { recursive: true });
 try {
-	execFileSync("ln", ["-s", models, join(home, ".cache", "minsync", "models")]);
+	execFileSync("ln", ["-s", models, join(home, ".cache", "im-not-llm", "models")]);
 } catch {
-	// Windows: the model cache resolves through FASTEMBED_CACHE_DIR below.
+	// Windows: the model cache resolves through INL_CACHE_DIR below.
 }
 const FILES = {
 	refund: join(docs, "refund-policy.md"),
@@ -94,7 +94,7 @@ const app = await launchFinder({
 		AUTORAG_HOME: WORK,
 		AUTORAG_SKIP_DUPEY_CHECK: "1",
 		ELECTRON_RENDERER_URL: "",
-		FASTEMBED_CACHE_DIR: models,
+		INL_CACHE_DIR: models,
 		PATH: `${join(minsync, "..")}${delimiter}${process.env.PATH ?? ""}`,
 	},
 });
@@ -279,8 +279,8 @@ try {
 	check("the footer's Copy button copies the clicked row", Boolean(await waitFor(() => (isMac ? pasteboardFiles()[0] === FILES.report : true), 5000)));
 	const ask = page.locator('.qs__row[role=option]', { hasText: "Dazzi" });
 	await ask.dblclick();
-	const tab = await waitFor(async () => (await finder.locator('section[aria-label="AI Search"]:not([aria-hidden="true"])').count()) > 0, 10_000);
-	check("the Ask row opens AI Search in the Finder with the question", Boolean(tab));
+	const tab = await waitFor(async () => (await finder.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"])').count()) > 0, 10_000);
+	check("the Ask row opens AI Chat in the Finder with the question", Boolean(tab));
 	check("asking hands off: the launcher hides", !(await launcherVisible()));
 	await finder.screenshot({ path: join(OUT, "05-ask-handoff.png") });
 
