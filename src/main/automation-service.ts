@@ -107,6 +107,8 @@ export function librarianCommand(deps: LibrarianCommandDeps): LibrarianCommand {
 const SLOW_COMMANDS: readonly string[] = ["install", "uninstall"];
 const SLOW_TIMEOUT_MS = 60_000;
 const TIMEOUT_MS = 30_000;
+/** Pause before the one repeat of a status read that failed. */
+const STATUS_RETRY_DELAY_MS = 800;
 
 /**
  * Runs the librarian CLI without a shell. Never rejects: a command that could not start comes back as a non-zero code.
@@ -117,7 +119,9 @@ export function runLibrarianCli(command: string, args: readonly string[], env: N
 	const launched = Promise.withResolvers<AutomationCliResult>();
 	execFile(command, [...args], { timeout, maxBuffer: 4 * 1024 * 1024, windowsHide: true, env }, (error, stdout, stderr) => {
 		const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;
-		launched.resolve({ code, stdout: String(stdout), stderr: String(stderr) || error?.message || "" });
+		// The error's own message ("Command failed: node …") says nothing about why; it stands in only when the program wrote nothing at all.
+		const wrote = String(stderr).trim().length > 0 || String(stdout).trim().length > 0;
+		launched.resolve({ code, stdout: String(stdout), stderr: String(stderr) || (wrote ? "" : (error?.message ?? "")) });
 	});
 	return launched.promise;
 }
@@ -251,8 +255,14 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 			return current;
 		}
 		try {
-			const result = await deps.run(["automate", "status", "--json"]);
-			const snapshot = parseStatus(result.stdout);
+			// One read that fails is often a moment's trouble (the rules file being written, the service manager busy): ask once more.
+			let result = await deps.run(["automate", "status", "--json"]);
+			let snapshot = parseStatus(result.stdout);
+			if (snapshot === null) {
+				await new Promise((resolve) => setTimeout(resolve, STATUS_RETRY_DELAY_MS));
+				result = await deps.run(["automate", "status", "--json"]);
+				snapshot = parseStatus(result.stdout);
+			}
 			if (snapshot === null) throw new Error(cliFailureReason(result));
 			current = snapshot;
 			return snapshot;

@@ -467,7 +467,8 @@ describe("createAutomationService snapshot", () => {
 		const cli = fakeCli(dir, { status: () => ({ code: 0, stdout: "not json at all", stderr: "" }) });
 		const automations = service(dir, cli);
 		const [first, second, third] = await Promise.all([automations.snapshot(), automations.snapshot(), automations.snapshot()]);
-		expect(cli.statusCalls()).toBe(1);
+		// One read answers all three callers; a failed read is asked once more before the failure is shown.
+		expect(cli.statusCalls()).toBe(2);
 		expect(first.rules).toEqual([]);
 		expect(first.error).toBe(t("main.automations.errors.cliFailed", { reason: cliFailureReason({ code: 0, stdout: "not json at all", stderr: "" }) }));
 		expect(second).toEqual(first);

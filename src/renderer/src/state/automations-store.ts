@@ -75,6 +75,8 @@ export interface AutomationsStore {
 	create(draft: AutomationDraft): Promise<string | null>;
 	/** Rewrite rule `id`; resolves false when there is no bridge. */
 	update(id: string, draft: AutomationDraft): Promise<boolean>;
+	/** Read the rules and the service again, for the person who saw the read fail. */
+	reload(): Promise<void>;
 	dispose(): void;
 }
 
@@ -123,6 +125,14 @@ export function createAutomationsStore(bridge: AutomationBridge | undefined): Au
 			};
 		},
 		getSnapshot: () => view,
+		async reload() {
+			if (bridge === undefined) return;
+			try {
+				publish({ state: await bridge.get() });
+			} catch (cause) {
+				publish({ state: { ...view.state, ready: true, error: ipcMessage(cause) } });
+			}
+		},
 		async remove(id) {
 			if (bridge === undefined) return;
 			const rule = view.state.rules.find((candidate) => candidate.id === id);

@@ -46,6 +46,8 @@ export interface AutomationsViewProps {
 	readonly onPreview: (id: string) => void;
 	readonly onAskDelete: (id: string) => void;
 	readonly onSetDaemon: (enabled: boolean) => void;
+	/** Read the rules and the service again after a failed read. */
+	readonly onRetryStatus?: (() => void) | undefined;
 	/** Right click on a row (`id`) or on the empty space (`null`), at the pointer. */
 	readonly onContextMenu: (id: string | null, at: { readonly x: number; readonly y: number }) => void;
 	readonly onOpenFolder: (path: string) => void;
@@ -852,7 +854,7 @@ function BackgroundLine({
 	);
 }
 
-export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon, onRetryStatus }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
 	const [tab, setTab] = useState<"mine" | "all">("mine");
@@ -884,9 +886,14 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-56">
 				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
-						<p role="alert" className="m-0 rounded-8 bg-error-orange-bg px-12 py-8 text-meta text-error-orange-text">
-							{state.error}
-						</p>
+						<div role="alert" className="flex items-start gap-12 rounded-8 bg-error-orange-bg px-12 py-8 text-meta text-error-orange-text">
+							<p className="m-0 min-w-0 flex-1 [overflow-wrap:anywhere]">{state.error}</p>
+							{onRetryStatus === undefined ? null : (
+								<button type="button" data-action="retry-status" className="flex-none cursor-pointer border-0 bg-transparent p-0 font-medium text-[length:inherit] text-error-orange-text underline" onClick={onRetryStatus}>
+									{t("automations.errors.retry")}
+								</button>
+							)}
+						</div>
 					)}
 					{broken ? (
 						<div className="flex flex-col items-center gap-8 px-16 py-32 text-center">

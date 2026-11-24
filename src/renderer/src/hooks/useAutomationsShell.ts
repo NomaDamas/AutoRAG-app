@@ -314,6 +314,9 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			const rule = byId(id);
 			if (rule !== null) askDelete(rule);
 		},
+		onRetryStatus: () => {
+			void store.reload();
+		},
 		onSetDaemon: (enabled) => {
 			store.setDaemon(enabled).catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
 		},

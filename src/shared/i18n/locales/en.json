@@ -546,7 +546,8 @@
     },
     "errors": {
       "config": "The rules file cannot be read",
-      "configHint": "Fix the rule in AI Agent or edit the file by hand."
+      "retry": "Check again",
+        "configHint": "Fix the rule in AI Agent or edit the file by hand."
     },
     "daemon": {
       "on": "Running in the background",
