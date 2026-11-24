@@ -6,6 +6,7 @@ import { createErrorFixToolkit, errorFixProfile, type ErrorFixToolkit, type Repl
 import { subscribeProfileProgress } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
 import type { AutoRagConfigService } from "./autorag-config-service";
+import { t } from "../shared/i18n/core";
 
 /**
  * Runs the error-fix agent (`agents/profiles/error-fix.ts`) for one error the
@@ -70,7 +71,7 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 			const failure = modelFailure(session);
 			if (failure !== null) throw new Error(failure);
 			const result = toolkit.result();
-			if (result === null) throw new Error("The AI ended without reporting a result.");
+			if (result === null) throw new Error(t("main.errors.errorFix.noResult"));
 			deps.send({ type: "result", runId, result });
 		} catch (error) {
 			if (!run.cancelled) deps.send({ type: "error", runId, message: errorText(error), ...toolkit.trace() });

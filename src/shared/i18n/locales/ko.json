@@ -1069,6 +1069,7 @@
     "openWithDefault": "{{name}} (기본)",
     "openWithOther": "기타…",
     "source": {
+      "nameTaken": "‘{{name}}’ 이름의 파일 또는 폴더가 이미 있습니다",
       "actionsUnavailable": "이 환경에서는 파일 작업을 실행할 수 없습니다",
       "shareUnavailable": "이 환경에서는 공유를 실행할 수 없습니다",
       "nothingToUndo": "되돌릴 항목이 없습니다",
@@ -1162,6 +1163,31 @@
     }
   },
   "main": {
+    "errors": {
+      "provider": {
+        "nameEmpty": "이름을 입력하세요.",
+        "addressEmpty": "서버 주소를 입력하세요.",
+        "addressInvalid": "서버 주소 형식이 올바르지 않습니다. http:// 또는 https://로 시작하는 주소를 입력하세요.",
+        "localOnly": "내 컴퓨터 서버는 이 기기에서 실행 중이어야 합니다. localhost 또는 127.0.0.1 주소를 입력하세요.",
+        "serverUnreachable": "서버에 연결하지 못했습니다. 서버가 실행 중인지, 주소가 맞는지 확인하세요.",
+        "serverKeyRefused": "서버가 API 키를 거부했습니다. 키를 확인하세요.",
+        "modelsFileUnreadable": "모델 설정 파일 ‘{{name}}’을(를) 읽지 못해 아무것도 바꾸지 않았습니다. 파일 내용을 확인하세요.",
+        "noBrowserLogin": "‘{{name}}’은(는) 브라우저 로그인을 지원하지 않습니다.",
+        "loginNotWaiting": "로그인이 입력을 기다리고 있지 않습니다. 로그인을 다시 시작하세요."
+      },
+      "credentials": {
+        "storeUnreadable": "저장된 API 키 파일을 읽지 못했습니다. 기존 키를 지키기 위해 아무것도 바꾸지 않았습니다.",
+        "envNameInvalid": "‘{{name}}’은(는) 환경 변수 이름으로 쓸 수 없습니다. 영문자, 숫자, 밑줄(_)만 사용하고 숫자로 시작하지 마세요.",
+        "keyEmpty": "API 키를 입력하세요.",
+        "encryptionUnavailable": "이 기기에서 보안 키 저장소를 사용할 수 없어 API 키를 저장하지 않았습니다. 운영체제의 키링을 설정한 뒤 다시 시도하세요."
+      },
+      "errorFix": {
+        "noResult": "AI가 결과를 알리지 않고 작업을 끝냈습니다."
+      },
+      "ltr": {
+        "statusUnreadable": "이 버전의 앱이 읽을 수 없는 형식입니다. 앱을 최신 버전으로 업데이트하세요."
+      }
+    },
     "interaction": {
       "yes": "예",
       "no": "아니요"

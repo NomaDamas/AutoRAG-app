@@ -18,6 +18,7 @@ import type {
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS, normalizeAutomationNames } from "../shared/settings-contract";
 import { isApprovalMode } from "../shared/interaction-contract";
+import { t } from "../shared/i18n/core";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
 import { normalizeShortcutSettings } from "../shared/shortcuts-contract";
@@ -166,7 +167,7 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 					const trimmed = patch.remoteTunnelHostname.trim();
 					const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
 					// A rejected change leaves the stored hostname as it was; the renderer shows the reason.
-					if (normalized === null) throw new Error(`Not a domain name: ${trimmed}`);
+					if (normalized === null) throw new Error(t("settingsCore.remote.domainInvalid", { value: trimmed }));
 					remoteTunnelHostname = normalized;
 				}
 				const quickSearch = patch.quickSearch === undefined ? current.settings.quickSearch : normalizeQuickSearchSettings(patch.quickSearch);

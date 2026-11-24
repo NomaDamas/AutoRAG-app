@@ -1069,6 +1069,7 @@
     "openWithDefault": "{{name}} (デフォルト)",
     "openWithOther": "その他…",
     "source": {
+      "nameTaken": "「{{name}}」という名前のファイルまたはフォルダーがすでにあります",
       "actionsUnavailable": "この環境ではファイル操作を実行できません",
       "shareUnavailable": "この環境では共有を実行できません",
       "nothingToUndo": "元に戻す項目がありません",
@@ -1162,6 +1163,31 @@
     }
   },
   "main": {
+    "errors": {
+      "provider": {
+        "nameEmpty": "名前を入力してください。",
+        "addressEmpty": "サーバーアドレスを入力してください。",
+        "addressInvalid": "サーバーアドレスの形式が正しくありません。http:// または https:// で始まるアドレスを入力してください。",
+        "localOnly": "ローカルサーバーはこのデバイスで実行されている必要があります。localhost または 127.0.0.1 のアドレスを入力してください。",
+        "serverUnreachable": "サーバーに接続できませんでした。サーバーが起動しているか、アドレスが正しいか確認してください。",
+        "serverKeyRefused": "サーバーが API キーを拒否しました。キーを確認してください。",
+        "modelsFileUnreadable": "モデル設定ファイル「{{name}}」を読み込めなかったため、何も変更していません。ファイルの内容を確認してください。",
+        "noBrowserLogin": "「{{name}}」はブラウザーでのログインに対応していません。",
+        "loginNotWaiting": "ログインは入力を待っていません。もう一度ログインを開始してください。"
+      },
+      "credentials": {
+        "storeUnreadable": "保存された API キーのファイルを読み込めませんでした。既存のキーを守るため、何も変更していません。",
+        "envNameInvalid": "「{{name}}」は環境変数名として使用できません。英字・数字・アンダースコア(_)のみを使い、数字で始めないでください。",
+        "keyEmpty": "API キーを入力してください。",
+        "encryptionUnavailable": "このデバイスでは安全なキーリングを利用できないため、API キーを保存しませんでした。OS のキーリングを設定してから、もう一度お試しください。"
+      },
+      "errorFix": {
+        "noResult": "AI が結果を報告せずに作業を終了しました。"
+      },
+      "ltr": {
+        "statusUnreadable": "このバージョンのアプリでは読み取れない形式です。アプリを最新バージョンに更新してください。"
+      }
+    },
     "interaction": {
       "yes": "はい",
       "no": "いいえ"

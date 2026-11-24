@@ -1069,6 +1069,7 @@
     "openWithDefault": "{{name}}（默认）",
     "openWithOther": "其他…",
     "source": {
+      "nameTaken": "名为“{{name}}”的文件或文件夹已存在",
       "actionsUnavailable": "无法在此环境中执行文件操作",
       "shareUnavailable": "无法在此环境中共享",
       "nothingToUndo": "没有可撤销的项目",
@@ -1162,6 +1163,31 @@
     }
   },
   "main": {
+    "errors": {
+      "provider": {
+        "nameEmpty": "请输入名称。",
+        "addressEmpty": "请输入服务器地址。",
+        "addressInvalid": "服务器地址格式不正确。请输入以 http:// 或 https:// 开头的地址。",
+        "localOnly": "本地服务器必须在此设备上运行。请输入 localhost 或 127.0.0.1 地址。",
+        "serverUnreachable": "无法连接到服务器。请检查服务器是否正在运行，以及地址是否正确。",
+        "serverKeyRefused": "服务器拒绝了 API 密钥。请检查密钥。",
+        "modelsFileUnreadable": "无法读取模型设置文件“{{name}}”，因此未作任何更改。请检查文件内容。",
+        "noBrowserLogin": "“{{name}}”不支持通过浏览器登录。",
+        "loginNotWaiting": "登录当前不需要输入。请重新开始登录。"
+      },
+      "credentials": {
+        "storeUnreadable": "无法读取已存储的 API 密钥文件。为保护现有密钥，未作任何更改。",
+        "envNameInvalid": "“{{name}}”不能用作环境变量名称。请只使用字母、数字和下划线(_)，且不要以数字开头。",
+        "keyEmpty": "请输入 API 密钥。",
+        "encryptionUnavailable": "此设备没有可用的安全密钥环，因此未保存 API 密钥。请设置系统密钥环后重试。"
+      },
+      "errorFix": {
+        "noResult": "AI 结束了工作，但未报告结果。"
+      },
+      "ltr": {
+        "statusUnreadable": "此版本的应用无法读取该格式。请将应用更新到最新版本。"
+      }
+    },
     "interaction": {
       "yes": "是",
       "no": "否"

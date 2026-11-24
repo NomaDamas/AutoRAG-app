@@ -1069,6 +1069,7 @@
     "openWithDefault": "{{name}} (Default)",
     "openWithOther": "Other…",
     "source": {
+      "nameTaken": "A file or folder named ‘{{name}}’ already exists",
       "actionsUnavailable": "File actions can't run in this environment",
       "shareUnavailable": "Sharing can't run in this environment",
       "nothingToUndo": "Nothing to undo",
@@ -1162,6 +1163,31 @@
     }
   },
   "main": {
+    "errors": {
+      "provider": {
+        "nameEmpty": "Enter a name.",
+        "addressEmpty": "Enter the server address.",
+        "addressInvalid": "The server address isn’t in a valid format. Enter an address that starts with http:// or https://.",
+        "localOnly": "A local server has to run on this device. Enter a localhost or 127.0.0.1 address.",
+        "serverUnreachable": "Couldn’t connect to the server. Check that it’s running and that the address is correct.",
+        "serverKeyRefused": "The server refused the API key. Check the key.",
+        "modelsFileUnreadable": "Couldn’t read the model settings file ‘{{name}}’, so nothing was changed. Check the file’s contents.",
+        "noBrowserLogin": "‘{{name}}’ doesn’t support signing in through the browser.",
+        "loginNotWaiting": "Sign-in isn’t waiting for input. Start signing in again."
+      },
+      "credentials": {
+        "storeUnreadable": "Couldn’t read the stored API key file. Nothing was changed, so your existing keys are kept.",
+        "envNameInvalid": "‘{{name}}’ can’t be used as an environment variable name. Use only letters, digits and underscores (_), and don’t start with a digit.",
+        "keyEmpty": "Enter an API key.",
+        "encryptionUnavailable": "This device has no secure keyring, so the API key wasn’t saved. Set up the system keyring and try again."
+      },
+      "errorFix": {
+        "noResult": "The AI finished without reporting a result."
+      },
+      "ltr": {
+        "statusUnreadable": "This version of the app can’t read its format. Update the app to the latest version."
+      }
+    },
     "interaction": {
       "yes": "Yes",
       "no": "No"

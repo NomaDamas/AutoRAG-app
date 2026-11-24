@@ -10,6 +10,7 @@ import {
 	type LtrTrainStatus,
 } from "../shared/ltr-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { t } from "../shared/i18n/core";
 
 /**
  * Learning to rank, as the app sees it. The librarian owns the ranking log, the models and the numbers; none of that is
@@ -166,7 +167,7 @@ export function createLtrService(deps: LtrServiceDeps): LtrService {
 		const result = await deps.run(["ltr", "status", "--json"]);
 		if (result.code !== 0) throw new Error(failureText(result));
 		const snapshot = snapshotOf(parseJson(result.stdout));
-		if (snapshot === null) throw new Error("The librarian printed an LTR status this app does not understand.");
+		if (snapshot === null) throw new Error(t("main.errors.ltr.statusUnreadable"));
 		return { ...snapshot, training: inflight !== null };
 	}
 

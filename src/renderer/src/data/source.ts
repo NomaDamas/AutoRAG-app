@@ -420,7 +420,7 @@ export function createFixtureSource(): FinderSource {
 	const removedStep = (path: string, item: FixtureItem): FixtureStep => ({
 		path,
 		apply: () => {
-			if (findItem(state, path) !== null) throw new Error(`A file or folder named "${basename(path)}" already exists`);
+			if (findItem(state, path) !== null) throw new Error(t("finderState.source.nameTaken", { name: basename(path) }));
 			insertItem(state, dirname(path), item);
 			return createdStep(path, item);
 		},
@@ -443,7 +443,7 @@ export function createFixtureSource(): FinderSource {
 			const item = findItem(state, path);
 			if (item === null) throw new Error(t("finderState.source.nothingToUndo"));
 			if (name.toLowerCase() !== basename(path).toLowerCase() && takenNames(state, dirname(path)).includes(name)) {
-				throw new Error(`A file or folder named "${name}" already exists`);
+				throw new Error(t("finderState.source.nameTaken", { name }));
 			}
 			removeItem(state, path);
 			insertItem(state, dirname(path), { ...item, name });
@@ -502,7 +502,7 @@ export function createFixtureSource(): FinderSource {
 			if (state.tree.has(path)) {
 				return Promise.resolve(entryFromFixture({ name: basename(path), fileKind: "folder", dateLabel: "", sizeLabel: "" }, dirname(path)));
 			}
-			return Promise.reject(new Error(`No such file or folder: ${path}`));
+			return Promise.reject(new Error(t("finderState.source.itemNotFound")));
 		},
 		list: (path) =>
 			Promise.resolve((state.tree.get(path) ?? []).map((item) => entryFromFixture(item, path))),

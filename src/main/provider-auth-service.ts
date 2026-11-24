@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
 import type { AuthEvent, AuthPrompt, AuthType, Provider } from "@earendil-works/pi-ai";
@@ -23,6 +23,7 @@ import type { ProviderCredentialService } from "./provider-credentials";
 import { registerDazziProvider } from "@autorag/librarian";
 import { AUTORAG_PROVIDER_ID, autoragFirst } from "../shared/account-contract";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
+import { t } from "../shared/i18n/core";
 
 /**
  * Real Pi provider authentication: `/login` OAuth and API-key flows driven by
@@ -204,17 +205,17 @@ function slugify(label: string): string {
 /** Validate and normalize a local/custom server URL. Throws with a precise reason. */
 function normalizeServerUrl(input: ProviderServerInput): { readonly baseUrl: string; readonly url: URL } {
 	const label = input.label?.trim() ?? "";
-	if (label.length === 0) throw new Error("Provider name must not be empty");
-	if (typeof input.baseUrl !== "string" || input.baseUrl.trim().length === 0) throw new Error("Server address must not be empty");
+	if (label.length === 0) throw new Error(t("main.errors.provider.nameEmpty"));
+	if (typeof input.baseUrl !== "string" || input.baseUrl.trim().length === 0) throw new Error(t("main.errors.provider.addressEmpty"));
 	let url: URL;
 	try {
 		url = new URL(input.baseUrl.trim());
 	} catch {
-		throw new Error("Server address must be a valid URL");
+		throw new Error(t("main.errors.provider.addressInvalid"));
 	}
-	if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Server address must use http or https");
+	if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(t("main.errors.provider.addressInvalid"));
 	if (input.kind === "local" && LOOPBACK_HOSTS[url.hostname.toLowerCase()] !== true) {
-		throw new Error("Local servers must be on this device (localhost or 127.0.0.1)");
+		throw new Error(t("main.errors.provider.localOnly"));
 	}
 	const baseUrl = input.baseUrl.trim().replace(/\/+$/u, "");
 	return { baseUrl, url };
@@ -226,7 +227,8 @@ async function readModelsJson(path: string): Promise<Record<string, unknown>> {
 		const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
 		return isJsonObject(parsed) ? { ...parsed } : {};
 	} catch (error) {
-		throw new Error(`models.json is unreadable; refusing to overwrite it (${String(error)})`);
+		console.warn(`[providers] ${path} is unreadable: ${String(error)}`);
+		throw new Error(t("main.errors.provider.modelsFileUnreadable", { name: basename(path) }));
 	}
 }
 
@@ -407,7 +409,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		const provider = runtime.getProvider(providerId);
 		if (provider === undefined) throw new Error(`Unknown provider: ${providerId}`);
 		if (authType === "oauth" && provider.auth.oauth === undefined) {
-			throw new Error(`${provider.name} does not support browser login`);
+			throw new Error(t("main.errors.provider.noBrowserLogin", { name: provider.name }));
 		}
 		if (authType === "api_key" && provider.auth.apiKey?.login === undefined) {
 			throw new Error(`${provider.name} does not support interactive API-key login here`);
@@ -442,7 +444,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 
 	async function respond(sessionId: string, value: string): Promise<void> {
 		const session = sessions.get(sessionId);
-		if (session?.pending === undefined) throw new Error("Login is not waiting for input");
+		if (session?.pending === undefined) throw new Error(t("main.errors.provider.loginNotWaiting"));
 		session.pending.resolve(value);
 	}
 
@@ -519,7 +521,11 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		const existing = isJsonObject(rawExisting) ? rawExisting : undefined;
 
 		const discovery = await probe(normalized.baseUrl, input.apiKey);
-		if (!discovery.ok) throw new Error(`Could not reach the server: ${discovery.error ?? "unknown error"}`);
+		if (!discovery.ok) {
+			// The probe's raw detail goes to the log; the person gets what to check. A 401/403 means the key, not the address.
+			console.warn(`[providers] ${normalized.baseUrl}: ${discovery.error ?? "unknown error"}`);
+			throw new Error(t(/\b(?:401|403)\b/u.test(discovery.error ?? "") ? "main.errors.provider.serverKeyRefused" : "main.errors.provider.serverUnreachable"));
+		}
 		if (discovery.models.length === 0) throw new Error("The server reported no models");
 
 		const envName = existing?.apiKey !== undefined ? configValueEnvName(typeof existing.apiKey === "string" ? existing.apiKey : undefined) : null;
@@ -551,7 +557,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 	 */
 	async function importCustom(input: CustomProviderImport): Promise<{ readonly id: string; readonly providers: readonly ProviderSummary[] }> {
 		const label = input.label.trim();
-		if (label.length === 0) throw new Error("Provider name must not be empty");
+		if (label.length === 0) throw new Error(t("main.errors.provider.nameEmpty"));
 		if (!isAllowedAgentApi(input.api)) {
 			throw new Error(`Unsupported API "${input.api}"; expected one of: ${ALLOWED_AGENT_APIS.join(", ")}`);
 		}

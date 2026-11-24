@@ -334,14 +334,14 @@ describe("the AI fix dialog", () => {
 	it("hides a non-model failure's raw error behind 자세히 보기 and offers Retry", () => {
 		render("Search root /Users/me/Docs does not exist");
 		press(t("appError.fixAction"));
-		emit({ type: "error", runId: runId(), message: "The AI ended without reporting a result.", changes: [], backupPath: null });
+		emit({ type: "error", runId: runId(), message: t("main.errors.errorFix.noResult"), changes: [], backupPath: null });
 
 		expect(dialog()?.textContent).toContain(t("appError.fix.failedTitle"));
-		expect(dialog()?.textContent).not.toContain("The AI ended without reporting a result.");
+		expect(dialog()?.textContent).not.toContain(t("main.errors.errorFix.noResult"));
 
 		const detailBtn = [...(dialog()?.querySelectorAll("button") ?? [])].find((btn) => btn.textContent === t("appError.showDetails"));
 		act(() => detailBtn?.click());
-		expect(dialog()?.textContent).toContain("The AI ended without reporting a result.");
+		expect(dialog()?.textContent).toContain(t("main.errors.errorFix.noResult"));
 
 		press(t("common.retry"));
 		expect(start).toHaveBeenCalledTimes(2);
