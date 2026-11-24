@@ -620,11 +620,11 @@
     "confirm": {
       "title": "ルール「{{title}}」を削除しますか?",
       "message": "ルールだけが削除され、フォルダとファイルはそのまま残ります。",
-      "action": "削除",
-      "deleting": "削除中…"
+      "action": "削除"
     },
     "toast": {
       "deleted": "ルール「{{title}}」を削除しました。",
+      "deleting": "ルール「{{title}}」を削除しています…",
       "undo": "取り消す",
       "restored": "ルール「{{title}}」を元に戻しました。"
     },

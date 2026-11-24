@@ -227,7 +227,7 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules).toHaveLength(2);
 	});
 
-	it("keeps the confirm up as 삭제 중… until the delete is done, and Esc cannot close it meanwhile", async () => {
+	it("closes the confirm at once and says 삭제 중… in the toast until the delete is done, then offers undo", async () => {
 		const h = await mount([rule("a"), rule("b")]);
 		const remove = h.bridge.remove;
 		let finish: () => void = () => undefined;
@@ -245,15 +245,16 @@ describe("deleting", () => {
 			done = h.shell().confirmDelete();
 		});
 		expect(h.shell().deleting).toBe(true);
-		expect(h.shell().confirm?.id).toBe("a");
-		act(() => h.shell().cancelDelete());
-		expect(h.shell().confirm?.id).toBe("a");
+		expect(h.shell().confirm).toBeNull();
+		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제하는 중…");
+		expect(h.shell().undoToast?.onUndo).toBeNull();
 		await act(async () => {
 			finish();
 			await done;
 		});
 		expect(h.shell().deleting).toBe(false);
-		expect(h.shell().confirm).toBeNull();
+		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제했습니다.");
+		expect(typeof h.shell().undoToast?.onUndo).toBe("function");
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["b"]);
 	});
 
@@ -306,7 +307,7 @@ describe("deleting", () => {
 		const h = await mount([rule("a"), rule("b")]);
 		act(() => h.shell().props.onAskDelete("a"));
 		await act(async () => h.shell().confirmDelete());
-		await act(async () => h.shell().undoToast?.onUndo());
+		await act(async () => h.shell().undoToast?.onUndo?.());
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["a", "b"]);
 		expect(h.shell().props.selectedId).toBe("a");
 		expect(h.shell().undoToast).toBeNull();

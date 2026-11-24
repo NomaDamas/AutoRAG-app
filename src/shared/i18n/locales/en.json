@@ -620,11 +620,11 @@
     "confirm": {
       "title": "Delete the rule “{{title}}”?",
       "message": "Only the rule is removed; the folder and its files stay as they are.",
-      "action": "Delete",
-      "deleting": "Deleting…"
+      "action": "Delete"
     },
     "toast": {
       "deleted": "Deleted the rule “{{title}}”.",
+      "deleting": "Deleting the rule ‘{{title}}’…",
       "undo": "Undo",
       "restored": "Restored the rule “{{title}}”."
     },

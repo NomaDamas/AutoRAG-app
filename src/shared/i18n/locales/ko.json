@@ -620,11 +620,11 @@
     "confirm": {
       "title": "‘{{title}}’ 규칙을 삭제할까요?",
       "message": "규칙만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
-      "action": "삭제",
-      "deleting": "삭제 중…"
+      "action": "삭제"
     },
     "toast": {
       "deleted": "‘{{title}}’ 규칙을 삭제했습니다.",
+      "deleting": "‘{{title}}’ 규칙을 삭제하는 중…",
       "undo": "실행 취소",
       "restored": "‘{{title}}’ 규칙을 되돌렸습니다."
     },

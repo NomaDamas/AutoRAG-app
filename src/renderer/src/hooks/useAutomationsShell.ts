@@ -43,7 +43,8 @@ export interface AutomationsShell {
 	readonly preview: AutomationRule | null;
 	readonly confirm: AutomationRule | null;
 	readonly menu: { readonly cursor: { readonly x: number; readonly y: number }; readonly entries: readonly FinderMenuEntry[] } | null;
-	readonly undoToast: { readonly message: string; readonly onUndo: () => Promise<void> } | null;
+	/** While the confirmed delete runs, the toast reads 삭제 중… with no undo (`onUndo` null); then the undo toast. */
+	readonly undoToast: { readonly message: string; readonly onUndo: (() => Promise<void>) | null } | null;
 	/** The toast's close button: the delete stands, the undo is gone. */
 	readonly dismissUndoToast: () => void;
 	/** Edit (AI draft) a rule: shared by the list, Quick Look, and the inspectors. */
@@ -87,6 +88,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState(false);
+	// The 삭제 중… toast, shown while the delete runs; the window stays usable meanwhile (no modal over it).
+	const [deletingMessage, setDeletingMessage] = useState<string | null>(null);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
 	const [undoMessage, setUndoMessage] = useState<string | null>(null);
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -134,9 +137,13 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	const confirmDelete = useCallback(async () => {
 		const rule = byId(confirmId);
+		setConfirmId(null);
 		if (rule === null || deleting) return;
 		const index = rules.findIndex((candidate) => candidate.id === rule.id);
 		setDeleting(true);
+		clearUndoTimer();
+		setUndoMessage(null);
+		setDeletingMessage(t("automations.toast.deleting", { title: ruleTitle(rule) }));
 		try {
 			await store.remove(rule.id);
 		} catch (cause) {
@@ -144,7 +151,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			return;
 		} finally {
 			setDeleting(false);
-			setConfirmId(null);
+			setDeletingMessage(null);
 		}
 		const left = rules.filter((candidate) => candidate.id !== rule.id);
 		// A rule deleted from its own page leaves for the list.
@@ -161,6 +168,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	}, [byId, confirmId, deleting, rules, store, clearUndoTimer]);
 
 	const dismissUndoToast = useCallback(() => {
+		setDeletingMessage(null);
 		clearUndoTimer();
 		setUndoMessage(null);
 		store.clearUndo();
@@ -259,9 +267,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 					if (selectedRule !== null) askDelete(selectedRule);
 					return;
 				case "dismiss":
-					if (confirmId !== null) {
-						if (!deleting) setConfirmId(null);
-					}
+					if (confirmId !== null) setConfirmId(null);
 					else if (menuState !== null) setMenuState(null);
 					else setPreviewId(null);
 					return;
@@ -351,7 +357,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		preview,
 		confirm,
 		menu,
-		undoToast: undoMessage === null ? null : { message: undoMessage, onUndo: undo },
+		undoToast: deletingMessage !== null ? { message: deletingMessage, onUndo: null } : undoMessage === null ? null : { message: undoMessage, onUndo: undo },
 		dismissUndoToast,
 		edit,
 		askDelete,
@@ -362,9 +368,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		},
 		closePreview: () => setPreviewId(null),
 		confirmDelete,
-		cancelDelete: () => {
-			if (!deleting) setConfirmId(null);
-		},
+		cancelDelete: () => setConfirmId(null),
 		deleting,
 		menuSelect,
 		closeMenu,

@@ -1124,7 +1124,7 @@ export function MobileApp(): ReactElement {
 		<Alert
 			title={t("automations.confirm.title", { title: automations.confirm.id })}
 			text={t("automations.confirm.message")}
-			okLabel={automations.deleting ? t("automations.confirm.deleting") : t("automations.confirm.action")}
+			okLabel={t("automations.confirm.action")}
 			cancelLabel={t("common.cancel")}
 			danger
 			onCancel={automations.cancelDelete}
