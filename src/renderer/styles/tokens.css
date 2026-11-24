@@ -212,8 +212,8 @@
   --info-bg: rgba(59,130,246,0.12);
 
   --danger-dot: #FF3B30;
-  /* Notice badges and surfaces (Figma 548:14204 notice card, 554:7353 toast). */
-  --notice-warn-badge: #FFCC00;
+  /* Notice badges and surfaces (Figma 548:14204 notice card, 554:7353 toast; warning badge 556:7347). */
+  --notice-warn-badge: #F5A623;
   --shadow-notice: 0 12px 32px rgba(0,0,0,0.18);
   --shadow-toast: 0 6px 20px rgba(0,0,0,0.14);
   --danger-text: #FF3B30;
