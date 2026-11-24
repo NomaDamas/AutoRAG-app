@@ -1245,6 +1245,7 @@
 .settings-view .settings-modal {
 	position: relative;
 	width: min(440px, calc(100% - 32px));
+	min-width: var(--modal-min-width);
 	max-height: calc(100vh - 48px);
 	overflow-y: auto;
 	padding: 22px 22px 18px;
