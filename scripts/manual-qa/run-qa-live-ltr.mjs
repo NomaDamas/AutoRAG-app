@@ -35,7 +35,7 @@ const check = (name, ok, detail) => {
 	if (!ok) fails.push(name);
 };
 
-const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const MODELS = process.env.INL_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (!existsSync(join(MODELS, "models--Qwen--Qwen3-Embedding-0.6B"))) {
 	console.log(`SKIP: no dense embedding model in ${MODELS}`);
 	process.exit(2);
@@ -64,8 +64,8 @@ const HOME = join(WORK, "home");
 const docs = join(WORK, "docs");
 const memoryPath = join(WORK, "memory.json");
 const configPath = join(WORK, "config.json");
-for (const dir of [docs, join(WORK, "pi-agent"), join(HOME, ".cache", "minsync")]) mkdirSync(dir, { recursive: true });
-if (process.platform !== "win32") symlinkSync(MODELS, join(HOME, ".cache", "minsync", "models"));
+for (const dir of [docs, join(WORK, "pi-agent"), join(HOME, ".cache", "im-not-llm")]) mkdirSync(dir, { recursive: true });
+if (process.platform !== "win32") symlinkSync(MODELS, join(HOME, ".cache", "im-not-llm", "models"));
 
 const FACTS = [
 	["policy-refund", "Refund exceptions above 500 dollars require director approval before payout. The refund desk is open on weekdays."],
@@ -125,7 +125,7 @@ const env = {
 	OPENROUTER_API_KEY: KEY,
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
-	FASTEMBED_CACHE_DIR: MODELS,
+	INL_CACHE_DIR: MODELS,
 };
 
 const CLI = join(ROOT, "node_modules", "@autorag", "librarian", "dist", "cli", "index.js");

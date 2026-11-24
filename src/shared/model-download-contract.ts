@@ -14,7 +14,7 @@ export const MODEL_DOWNLOAD_CHANNELS = {
 
 /**
  * `absent`: not on disk and nothing running (also what a cancelled download returns to; the partial file is kept
- * so the next start resumes). `downloading`: bytes are arriving. `ready`: every file is in MinSync's model cache.
+ * so the next start resumes). `downloading`: bytes are arriving. `ready`: every file is in the shared inl weight cache.
  * `failed`: the last attempt stopped; `error` says why and a new start resumes.
  */
 export type ModelDownloadState = "absent" | "downloading" | "ready" | "failed";

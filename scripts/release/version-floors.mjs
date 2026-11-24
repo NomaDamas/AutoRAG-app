@@ -2,10 +2,10 @@
  * Hard version floors for the tools the installer bundles. A resolved version below
  * its floor fails the stage instead of shipping a tool that lacks what the app relies on.
  *
- *  - `minsync` 0.7.1: librarian 2.13.7 refuses an older `minsync` outright (`MINSYNC_MIN_VERSION`). 0.7.1 makes every
- *    committed batch searchable, also during the first sync, which the librarian's refresh now relies on when it
- *    syncs alongside parsing. Beneath it: SPLADE sparse retrieval (`--mode sparse`, 0.6.0, which replaced BM25),
- *    sparse-only indexes (`init --embedder none`), the durable stage protocol v2, `--progress jsonl`, and preflight
+ *  - `minsync` 0.7.6: librarian 2.14.2 refuses an older `minsync` outright (`MINSYNC_MIN_VERSION`). 0.7.5+ shares the
+ *    `im-not-llm` daemon and weight cache root (`~/.cache/im-not-llm/{models,serve}`), and 0.7.6 carries the matching
+ *    `inl-server` 0.3.4 protocol. Beneath it: batch-visible first sync (0.7.1), SPLADE sparse retrieval (`--mode sparse`,
+ *    0.6.0), sparse-only indexes (`init --embedder none`), durable stage protocol v2, `--progress jsonl`, and preflight
  *    exit codes.
  *  - `dupey` 0.2.0: librarian 2.13.7 refuses an older one. 0.1.2 misreads HWP 5.x record lengths, so an HWP hashes
  *    incomplete or empty text, and its `fingerprint` hashes empty text where `scan` hashes the file bytes: the
@@ -19,7 +19,7 @@
  *    themselves, so an index they build would not match the one the librarian's MinSync reads.
  */
 export const VERSION_FLOORS = {
-	minsync: "0.7.1",
+	minsync: "0.7.6",
 	dupey: "0.2.0",
 	"@nomadamas/mailcrawl": "0.3.0",
 	lazykatok: "0.3.3",
@@ -28,7 +28,7 @@ export const VERSION_FLOORS = {
 
 /** What each floor guarantees, for the error a build prints when it resolves something older. */
 const FLOOR_REASONS = {
-	minsync: "librarian 2.13.7 refuses an older minsync: it syncs alongside parsing and relies on 0.7.1 making every committed batch searchable during the first sync, on top of 0.6.0's SPLADE sparse retrieval and sparse-only indexes",
+	minsync: "librarian 2.14.2 refuses an older minsync: 0.7.6 shares the im-not-llm daemon/cache root (`~/.cache/im-not-llm`) and links inl-server 0.3.4 on top of batch-visible first sync and SPLADE sparse retrieval",
 	dupey: "librarian 2.13.7 refuses an older dupey: 0.1.2 hashes an HWP's text incompletely and hashes `fingerprint` and `scan` inconsistently, so the hashes it stores would disagree with the ones it computes",
 	"@nomadamas/mailcrawl": "librarian 2.13.2 requires mailcrawl 0.3.0's `--source files` local archive support on top of the `minsync serve` daemon's OpenAI route",
 	lazykatok: "it is the first release that can embed through the `minsync serve` daemon's OpenAI route",

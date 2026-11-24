@@ -178,12 +178,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     minsync cannot be told from the user's own, and not the ones the fs worker
     started for a Finder toggle). MinSync resumes from `progress.jsonl`.
   - *The local embedding model is one long-lived daemon* (`embedding-daemon.ts`):
-    the app starts `minsync serve` (loopback, `--idle-timeout 0`, the downloaded
-    `native:Qwen/Qwen3-Embedding-0.6B`) once the model is in place and stops it at
-    quit. It is the only process holding the weights; every embedding consumer —
-    MinSync's own sync, the librarian's memory, the chat sidecars, discrawl,
-    mailcrawl, lazykatok — resolves it through the state files it publishes under
-    `~/.cache/minsync/serve/` (`%LOCALAPPDATA%\minsync\serve` on Windows).
+    the app starts the shared im-not-llm (`inl`) loopback daemon (preferring
+    `inl serve --idle-timeout 0 --model Qwen/Qwen3-Embedding-0.6B` when an `inl`
+    executable is on `PATH`, else the bundled `minsync serve`) once the model is in
+    place and stops the one it started at quit. It is the only process holding the
+    weights; every embedding consumer — MinSync's own sync, the librarian's memory,
+    the chat sidecars, discrawl, mailcrawl, lazykatok — resolves it through the
+    state files it publishes under `~/.cache/im-not-llm/serve/`
+    (`%LOCALAPPDATA%\im-not-llm\serve` on Windows).
   - *The Finder's exclusion toggle refreshes through the same path*
     (`index-status.ts` calls `refreshAutoragIndex`), so it has the folder check,
     the embedder watchdog, and the learned batch size.

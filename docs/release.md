@@ -55,14 +55,14 @@ installs one file and nothing else:
 | `lazykatok` | newest GitHub release of `changeroa/lazykatok` (macOS only: KakaoTalk for macOS) | the release archive `lazykatok-<version>-aarch64-apple-darwin.tar.gz`, download verified against the sha256 GitHub publishes. The stager refuses a build below 0.3.3, the first with the OpenAI-compatible embedder, so it embeds through the daemon's OpenAI route |
 | `fsearch-cli` | `NomaDamas/fsearch-mac` via its Homebrew tap (macOS only) | fast file-name index. Homebrew links it to `/opt/homebrew/...`, so the stager copies it with its 16 dylibs into `tools/{bin,lib}` and re-points them at `@executable_path/../lib`. Needs `brew install nomadamas/fsearch-mac/fsearch-mac` on the build Mac (the stager runs it if missing; it compiles GTK, so the first run is slow). GPL-2.0-or-later: license and notice ship in `tools/licenses/fsearch-mac` |
 | `filee-cli` | the librarian's pinned release (`FILEE_CLI_VERSION` / `FILEE_CLI_ASSETS`), taken from `NomaDamas/filee-cli` — never resolved from `latest` | the conversion CLI behind the agent's `convert_files` tool. The librarian downloads this exact archive into its home on first use unless it finds the binary on `PATH`; staging it is what makes an offline install convert. It is a self-contained .NET program (an apphost plus its assemblies and `engines/`), so it ships as a folder: `tools/filee-cli`, linked from `tools/bin` on macOS (a relative symlink .NET resolves through the real path) and flattened into `tools/bin` on Windows (a real `filee-cli.exe` beside its siblings — never a `.cmd` shim Node cannot spawn). MIT; license and third-party notices in `tools/licenses/filee-cli`. **Filee's own engines are not bundled** (see below) |
-| MinSync's SPLADE model `nlpai-lab/KURE-Sparse-nano` (299 MB) | Hugging Face, pinned by revision and sha256 in `src/shared/sparse-model.json` | every local search ranks with it, including keyword-only mode on machines too small for the dense model, so the installer carries it in `tools/models/<repoDir>` (Hugging Face hub layout). At every start `bundled-sparse-model.ts` seeds it into MinSync's model cache when the cache lacks it: a clone on APFS, a copy elsewhere, each file renamed into place and `refs/main` written last. Apache-2.0: LICENSE ships in `tools/licenses/kure-sparse-nano`. `verify-bundle.mjs` checks every file's hash and runs an offline sparse-only MinSync sync and Korean stem query from it |
+| MinSync's SPLADE model `nlpai-lab/KURE-Sparse-nano` (299 MB) | Hugging Face, pinned by revision and sha256 in `src/shared/sparse-model.json` | every local search ranks with it, including keyword-only mode on machines too small for the dense model, so the installer carries it in `tools/models/<repoDir>` (Hugging Face hub layout). At every start `bundled-sparse-model.ts` seeds it into the shared im-not-llm weight cache when the cache lacks it: a clone on APFS, a copy elsewhere, each file renamed into place and `refs/main` written last. Apache-2.0: LICENSE ships in `tools/licenses/kure-sparse-nano`. `verify-bundle.mjs` checks every file's hash and runs an offline sparse-only MinSync sync and Korean stem query from it |
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
 
 The dense embedding model is **not** in the installer. The app downloads the pinned
 `Qwen/Qwen3-Embedding-0.6B` files (~1.2 GB, sha256-verified, resumable) from
-Hugging Face into MinSync's model cache (`~/.cache/minsync/models` on macOS,
-`%LOCALAPPDATA%\minsync\models` on Windows, or `FASTEMBED_CACHE_DIR`) when the
+Hugging Face into the shared im-not-llm (`inl`) weight cache (`~/.cache/im-not-llm/models` on macOS,
+`%LOCALAPPDATA%\im-not-llm\models` on Windows, or `INL_CACHE_DIR`) when the
 user chooses local embedding in onboarding or switches to it in Settings
 (`src/main/model-download.ts`), and the embedding daemon does not start until the
 model is present. `stage-tools.mjs` still stages a copy under
@@ -107,17 +107,19 @@ does not match its published digest.
   (`97b0c614be4d`) and its four files (`config.json`, `tokenizer.json`,
   `model.safetensors`, `refs/main`), each verified by SHA-256 as it arrives and
   resumed rather than restarted if the download is interrupted. They land in
-  MinSync's native model cache (`~/.cache/minsync/models` on macOS,
-  `%LOCALAPPDATA%\minsync\models` on Windows, or `FASTEMBED_CACHE_DIR`), never
-  overwriting an existing entry, and the `minsync serve` daemon does not start
+  the shared im-not-llm (`inl`) weight cache (`~/.cache/im-not-llm/models` on macOS,
+  `%LOCALAPPDATA%\im-not-llm\models` on Windows, or `INL_CACHE_DIR`), never
+  overwriting an existing entry, and the embedding daemon does not start
   until the model is present.
-* Once the model is in place the app starts `minsync serve` itself —
-  `--idle-timeout 0 --embedder native:Qwen/Qwen3-Embedding-0.6B`, MinSync's own
-  loopback embedding server — and stops it at quit (`src/main/embedding-daemon.ts`).
+* Once the model is in place the app starts the shared im-not-llm embedding daemon
+  itself — preferring `inl serve --idle-timeout 0 --model Qwen/Qwen3-Embedding-0.6B`
+  when an `inl` executable is on `PATH`, else the bundled `minsync serve
+  --idle-timeout 0 --embedder native:Qwen/Qwen3-Embedding-0.6B` — and stops the one
+  it started at quit (`src/main/embedding-daemon.ts`).
   It is the one process that holds the weights: MinSync's own sync, the librarian's
   memory, the chat sidecars, discrawl, mailcrawl and lazykatok all reach it through
-  the state files it publishes under `~/.cache/minsync/serve/`
-  (`%LOCALAPPDATA%\minsync\serve` on Windows). mailcrawl (≥ 0.2.2) and lazykatok
+  the state files it publishes under `~/.cache/im-not-llm/serve/`
+  (`%LOCALAPPDATA%\im-not-llm\serve` on Windows). mailcrawl (≥ 0.2.2) and lazykatok
   (≥ 0.3.3) use its OpenAI route, so none of them loads a second copy.
 * Non-ASCII file names are signed decomposed (NFD). Finder writes names decomposed when
   a user drags the app out of the dmg, and the code seal compares names byte for byte:

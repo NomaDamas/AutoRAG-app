@@ -26,9 +26,9 @@ describe("assertVersionFloor", () => {
 });
 
 describe("VERSION_FLOORS", () => {
-	it("keeps minsync at 0.7.1 or newer: librarian 2.13.7 refuses anything older, so a bundle below it would not run", () => {
-		expect(compareVersions("0.7.0", VERSION_FLOORS.minsync)).toBeLessThan(0);
-		expect(compareVersions("0.7.1", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
+	it("keeps minsync at 0.7.6 or newer: librarian 2.14.2 refuses anything older, and the app relies on the shared im-not-llm daemon root", () => {
+		expect(compareVersions("0.7.5", VERSION_FLOORS.minsync)).toBeLessThan(0);
+		expect(compareVersions("0.7.6", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
 	});
 
 	it("keeps dupey at 0.2.0 or newer: librarian 2.13.7 refuses an older one, whose HWP and fallback hashes disagree with the stored ones", () => {
