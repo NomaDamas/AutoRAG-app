@@ -983,9 +983,10 @@ Annotations and text selections drawn on text/package documents stream directly 
 (`DocumentEditorAiSidebar.tsx` + `DocumentEditorSidebarContext.tsx` inside `InspectorColumn`), which runs the
 `document-edit` agent. Its `read`/`ls`/`find`/`grep` refuse credential files and the agent dir outside `skills/`;
 `edit`/`write` reach only that one file and a per-run scratch folder. Text documents get no shell; packages get `bash`
-in the scratch folder to unpack, edit XML and repack (kept away from the agent dir, not fenced for writes). The service
-keeps original bytes under `<userData>/document-edit-backups` (and PDF snapshots under `<userData>/pdf-editor-backups`)
-for Undo, refuses Undo once the file changed again, and deletes the backups at quit.
+in the scratch folder to unpack, edit XML and repack, gated by `createWriteGate` + `createWriteJudge` (`write-gate.ts`)
+so writes/deletes outside `[target, scratchDir]` are refused (`allowEnvVars: false`). The service keeps original bytes
+under `<userData>/document-edit-backups` (and PDF snapshots under `<userData>/pdf-editor-backups`) for Undo, refuses Undo
+once the file changed again, and deletes the backups at quit.
 The rest of Settings has its own assistants in the right
 sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`APP_CUSTOMIZER_SURFACES`) in `app-customizer-service.ts` and built on
 `src/main/agents/profiles/customizer-kit.ts` (change log with 4-language summaries, cancel guard): `general-customizer` (Settings → 일반:

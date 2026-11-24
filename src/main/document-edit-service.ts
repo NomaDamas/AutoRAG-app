@@ -8,6 +8,7 @@ import { documentEditMode, type DocumentEditEvent, type DocumentEditRequest } fr
 import { documentEditMessage, documentEditProfile } from "./agents/profiles/document-edit";
 import { subscribeProfileProgress, type ReplyLanguage } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
+import type { WriteJudge } from "./agents/write-gate";
 
 /** Files larger than this are not kept for undo, so they are not edited either. */
 const MAX_EDIT_BYTES = 64 * 1024 * 1024;
@@ -21,6 +22,8 @@ export interface DocumentEditServiceDeps {
 	/** Where the original bytes of each edited file wait for an undo. */
 	readonly backupDir: string;
 	readonly platform?: NodeJS.Platform;
+	readonly homeDir?: string;
+	readonly writeJudge?: WriteJudge;
 }
 
 /** The Quick Look window a run belongs to: its event sink and a capture of what it shows. */
@@ -113,6 +116,8 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 					agentDir: deps.agentDir,
 					env: deps.env,
 					...(deps.platform === undefined ? {} : { platform: deps.platform }),
+					...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+					...(deps.writeJudge === undefined ? {} : { writeJudge: deps.writeJudge }),
 					cancelled: () => active.cancelled,
 				}),
 				cwd: scratchDir,

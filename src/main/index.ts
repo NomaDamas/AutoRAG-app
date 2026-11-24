@@ -43,7 +43,7 @@ import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
 import { PREVIEW_CHANNELS } from "../preview/shared/contract";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
@@ -133,6 +133,8 @@ import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { createDocumentEditService } from "./document-edit-service";
 import { createPdfEditorIo } from "./pdf-editor-io";
+import { createWriteJudge } from "./agents/write-judge";
+import { resolveDecisionBackendsForConfig } from "./decision-model";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
@@ -1132,12 +1134,18 @@ app.whenReady().then(async () => {
 	});
 	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
+	const documentEditWriteJudge = createWriteJudge({
+		resolveBackends: () =>
+			resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() }), process.env, process.cwd()),
+	});
 	const documentEditService = createDocumentEditService({
 		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
 		agentDir: getAgentDir(),
 		env: process.env,
+		homeDir: home,
 		language: () => currentLanguage,
 		backupDir: join(app.getPath("userData"), "document-edit-backups"),
+		writeJudge: documentEditWriteJudge,
 	});
 	setQuickLookDocumentEdit(documentEditService);
 	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
