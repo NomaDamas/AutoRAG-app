@@ -44,7 +44,7 @@ export interface AutomationsShell {
 	readonly confirm: AutomationRule | null;
 	readonly menu: { readonly cursor: { readonly x: number; readonly y: number }; readonly entries: readonly FinderMenuEntry[] } | null;
 	/** While the confirmed delete runs, the toast reads 삭제 중… with no undo (`onUndo` null); then the undo toast. */
-	readonly undoToast: { readonly message: string; readonly onUndo: (() => Promise<void>) | null } | null;
+	readonly undoToast: { readonly message: string; readonly onUndo: (() => Promise<void>) | null; readonly busy?: boolean } | null;
 	/** The toast's close button: the delete stands, the undo is gone. */
 	readonly dismissUndoToast: () => void;
 	/** Edit (AI draft) a rule: shared by the list, Quick Look, and the inspectors. */
@@ -90,6 +90,18 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const [deleting, setDeleting] = useState(false);
 	// The 삭제 중… toast, shown while the delete runs; the window stays usable meanwhile (no modal over it).
 	const [deletingMessage, setDeletingMessage] = useState<string | null>(null);
+	// Making or saving a rule says so in the toast (만드는 중… → 만들었습니다), not on the card's button, so the window stays free.
+	const [progress, setProgress] = useState<{ readonly message: string; readonly busy: boolean } | null>(null);
+	const progressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const showProgress = useCallback((message: string, busy: boolean) => {
+		clearTimeout(progressTimer.current);
+		setProgress({ message, busy });
+		if (!busy) progressTimer.current = setTimeout(() => setProgress(null), UNDO_MS);
+	}, []);
+	const clearProgress = useCallback(() => {
+		clearTimeout(progressTimer.current);
+		setProgress(null);
+	}, []);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
 	const [undoMessage, setUndoMessage] = useState<string | null>(null);
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -169,6 +181,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	const dismissUndoToast = useCallback(() => {
 		setDeletingMessage(null);
+		clearTimeout(progressTimer.current);
+		setProgress(null);
 		clearUndoTimer();
 		setUndoMessage(null);
 		store.clearUndo();
@@ -293,23 +307,31 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		},
 		onAdd: add,
 		onCreate: async (draft) => {
+			showProgress(t("automations.toast.creating"), true);
 			try {
 				const id = await store.create(draft);
 				if (id !== null) setSelectedId(id);
+				if (id !== null) showProgress(t("automations.toast.created"), false);
+				else clearProgress();
 				return id !== null;
 			} catch (cause) {
+				clearProgress();
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 				return false;
 			}
 		},
 		editing: byId(editingId),
 		onUpdate: async (id, next) => {
+			showProgress(t("automations.toast.saving"), true);
 			try {
 				const ok = await store.update(id, next);
 				// Saving keeps the rule's page open: its 실행 기록 is right under the card.
 				if (ok) setSelectedId(id);
+				if (ok) showProgress(t("automations.toast.saved"), false);
+				else clearProgress();
 				return ok;
 			} catch (cause) {
+				clearProgress();
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 				return false;
 			}
@@ -357,7 +379,14 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		preview,
 		confirm,
 		menu,
-		undoToast: deletingMessage !== null ? { message: deletingMessage, onUndo: null } : undoMessage === null ? null : { message: undoMessage, onUndo: undo },
+		undoToast:
+			deletingMessage !== null
+				? { message: deletingMessage, onUndo: null, busy: true }
+				: progress !== null
+					? { message: progress.message, onUndo: null, busy: progress.busy }
+					: undoMessage === null
+						? null
+						: { message: undoMessage, onUndo: undo },
 		dismissUndoToast,
 		edit,
 		askDelete,

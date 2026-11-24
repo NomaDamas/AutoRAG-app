@@ -272,6 +272,19 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.daemon?.running).toBe(true);
 	});
 
+	it("says 만드는 중… in the toast while a rule is made, then 만들었습니다", async () => {
+		const h = await mount([rule("a")]);
+		let done: Promise<boolean> = Promise.resolve(false);
+		act(() => {
+			done = h.shell().props.onCreate({ paths: ["/x"], events: ["create"], include: [], run: ["autorag", "refresh"] });
+		});
+		expect(h.shell().undoToast).toMatchObject({ message: "자동화를 만드는 중…", busy: true, onUndo: null });
+		await act(async () => {
+			await done;
+		});
+		expect(h.shell().undoToast).toMatchObject({ message: "자동화를 만들었습니다.", busy: false });
+	});
+
 	it("leaves the service alone while there are no rules", async () => {
 		const h = await mount([], { serviceOff: true, autoStartService: true });
 		expect(h.bridge.setDaemon).not.toHaveBeenCalled();

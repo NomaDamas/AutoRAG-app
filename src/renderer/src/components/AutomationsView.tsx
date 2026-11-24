@@ -246,6 +246,7 @@ function NewAutomationCard({
 	onDraftChange,
 	pageMode = false,
 	onClose,
+	closable = true,
 	editing,
 	filled,
 }: {
@@ -257,6 +258,8 @@ function NewAutomationCard({
 	readonly pageMode?: boolean;
 	/** On the list's 새 자동화 card: 취소, beside 저장, closes the card. Absent while there is no rule to go back to. */
 	readonly onClose?: (() => void) | undefined;
+	/** 취소 shows on the empty card too (there are rules, so the card can go); otherwise only once it holds something. */
+	readonly closable?: boolean;
 	readonly editing: AutomationRule | null;
 	readonly filled: { readonly template: Template; readonly at: number } | null;
 }): ReactElement {
@@ -381,7 +384,8 @@ function NewAutomationCard({
 					include: customInclude ?? KIND_GLOBS[kind],
 					...(run === null ? { agent: { profile: customProfile ?? PROFILES[mode], task: task.trim() } } : { run }),
 				};
-	const canSubmit = !busy && draft !== null && task.trim().length > 0;
+	// The work shows in the toast, so the button keeps its look while it runs; `busy` only stops a second click.
+	const canSubmit = draft !== null && task.trim().length > 0;
 
 	useEffect(() => {
 		onDraftChange?.(touched && draft !== null ? draftRule(draft) : null);
@@ -394,7 +398,7 @@ function NewAutomationCard({
 		setChanged(true);
 	};
 	const submit = async (): Promise<void> => {
-		if (!canSubmit || draft === null) return;
+		if (!canSubmit || draft === null || busy) return;
 		setBusy(true);
 		const ok = editing === null ? await onCreate(draft) : onUpdate === undefined ? false : await onUpdate(editing.id, draft);
 		setBusy(false);
@@ -477,7 +481,7 @@ function NewAutomationCard({
 				<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
 				<span className="flex-1" />
 				{/* 취소 is a quiet word beside 저장 (Figma 641:13493, 641:13600): it closes the new-automation card, or undoes a change on a rule's page. */}
-				{(editing === null ? onClose !== undefined : !pageMode || changed) ? (
+				{(editing === null ? onClose !== undefined && (closable || touched) : !pageMode || changed) ? (
 					<button
 						type="button"
 						data-action="automation-cancel-edit"
@@ -505,7 +509,7 @@ function NewAutomationCard({
 					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
 					onClick={() => void submit()}
 				>
-					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : pageMode ? t("common.save") : t("automations.create.submitEdit")}
+					{editing === null ? t("automations.create.submit") : pageMode ? t("common.save") : t("automations.create.submitEdit")}
 				</button>
 			</div>
 		</div>
@@ -587,7 +591,8 @@ function Section({ title, aside, muted = false, children }: { readonly title: st
 /** 내 자동화 | 전체 기록: the two places the column shows (Figma 621:4556, 621:5262). */
 function Segmented<T extends string>({ value, options, onChange }: { readonly value: T; readonly options: readonly { readonly value: T; readonly label: string }[]; readonly onChange: (value: T) => void }): ReactElement {
 	return (
-		<div role="tablist" className="inline-flex self-start gap-2 rounded-[9px] bg-chrome p-2" data-automation-tabs>
+		// Quiet tabs for the head bar: no tray, 24px tall; the current one takes the sidebar's selected fill.
+		<div role="tablist" className="inline-flex items-center gap-2" data-automation-tabs>
 			{options.map((option) => (
 				<button
 					key={option.value}
@@ -596,8 +601,8 @@ function Segmented<T extends string>({ value, options, onChange }: { readonly va
 					aria-selected={option.value === value}
 					data-tab={option.value}
 					className={cn(
-						"h-28 rounded-[7px] border-0 px-14 text-[13px] cursor-pointer",
-						option.value === value ? "bg-window font-medium text-ink shadow-[0_0_0_0.5px_var(--border)]" : "bg-transparent text-ink-muted hover:text-ink",
+						"h-24 rounded-6 border-0 px-10 text-meta leading-[16px] cursor-pointer transition-colors duration-(--dur-color)",
+						option.value === value ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-muted hover:bg-hover hover:text-ink",
 					)}
 					onClick={() => onChange(option.value)}
 				>
@@ -670,15 +675,6 @@ function RunLine({ run, rule, onOpen, flat = false }: { readonly run: Automation
 		<button type="button" className={cn(row, "cursor-pointer hover:bg-hover-row")} data-run={run.startedAt} onClick={onOpen}>
 			{body}
 		</button>
-	);
-}
-
-/** A rounded list whose rows are split by hairlines, the box every section of the column uses. */
-function ListBox({ children, label }: { readonly children: ReactNode; readonly label?: string }): ReactElement {
-	return (
-		<div role="list" aria-label={label} className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
-			{children}
-		</div>
 	);
 }
 
@@ -817,14 +813,15 @@ function AllRuns({ rules, history, onOpen }: { readonly rules: readonly Automati
 				<span className="text-meta leading-[16px] text-ink-body">{t("automations.all.failOnly")}</span>
 				<Switch checked={failOnly} dataSwitchId="automation-fail-only" ariaLabel={t("automations.all.failOnly")} onChange={() => setFailOnly((was) => !was)} />
 			</div>
+			{/* Like a rule's 실행 기록 (Figma 641:13600, 641:13747): plain lines between hairlines, no box, and the empty line the same way. */}
 			{shown.length === 0 ? (
-				<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{failOnly ? t("automations.all.noFails") : t("automations.inspector.noRuns")}</p>
+				<p className="m-0 border-y-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{failOnly ? t("automations.all.noFails") : t("automations.inspector.noRuns")}</p>
 			) : (
-				<ListBox label={t("automations.tabs.all")}>
+				<div role="list" aria-label={t("automations.tabs.all")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 					{shown.map(({ rule, run }) => (
-						<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} />
+						<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} flat />
 					))}
-				</ListBox>
+				</div>
 			)}
 		</section>
 	);
@@ -870,6 +867,8 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 					<span />
 				)}
 				<span className="flex justify-end">
+					{/* With no rules the 새 자동화 card is already open on the page, so there is nothing for the button to open. */}
+					{state.rules.length === 0 && detail === null ? null : (
 					<button
 						type="button"
 						data-action="automation-composer-open"
@@ -883,6 +882,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 						<TabPlusIcon size={14} />
 						{t("automations.create.headButton")}
 					</button>
+					)}
 				</span>
 			</div>
 			<div
@@ -895,7 +895,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-28">
+				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-48">
 				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
 						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
@@ -951,14 +951,11 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 													onUpdate={onUpdate}
 													onCancelEdit={onCancelEdit}
 													onDraftChange={onDraftChange}
-													onClose={
-														state.rules.length === 0
-															? undefined
-															: () => {
-																	setComposerOpen(false);
-																	setFilled(null);
-																}
-													}
+													closable={state.rules.length > 0}
+													onClose={() => {
+														setComposerOpen(false);
+														setFilled(null);
+													}}
 													editing={null}
 													filled={filled}
 												/>

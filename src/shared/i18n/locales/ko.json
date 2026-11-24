@@ -624,6 +624,10 @@
     },
     "toast": {
       "deleted": "‘{{title}}’ 규칙을 삭제했습니다.",
+      "creating": "자동화를 만드는 중…",
+      "created": "자동화를 만들었습니다.",
+      "saving": "변경 사항을 저장하는 중…",
+      "saved": "변경 사항을 저장했습니다.",
       "deleting": "‘{{title}}’ 규칙을 삭제하는 중…",
       "undo": "실행 취소",
       "restored": "‘{{title}}’ 규칙을 되돌렸습니다."

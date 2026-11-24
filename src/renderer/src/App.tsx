@@ -1239,7 +1239,7 @@ export function App(): ReactElement {
 				{toast === null && automations.undoToast === null ? null : (
 					<Toast
 						message={automations.undoToast?.message ?? toast ?? ""}
-						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : automations.undoToast.onUndo === null ? "busy" : "ok"}
+						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : automations.undoToast.busy === true ? "busy" : "ok"}
 						action={
 							automations.undoToast !== null
 								? automations.undoToast.onUndo === null

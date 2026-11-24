@@ -624,6 +624,10 @@
     },
     "toast": {
       "deleted": "已删除规则“{{title}}”。",
+      "creating": "正在创建自动化…",
+      "created": "已创建自动化。",
+      "saving": "正在保存更改…",
+      "saved": "已保存更改。",
       "deleting": "正在删除规则“{{title}}”…",
       "undo": "撤销",
       "restored": "已恢复规则“{{title}}”。"

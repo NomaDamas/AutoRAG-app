@@ -624,6 +624,10 @@
     },
     "toast": {
       "deleted": "Deleted the rule “{{title}}”.",
+      "creating": "Creating the automation…",
+      "created": "Automation created.",
+      "saving": "Saving your changes…",
+      "saved": "Changes saved.",
       "deleting": "Deleting the rule ‘{{title}}’…",
       "undo": "Undo",
       "restored": "Restored the rule “{{title}}”."

@@ -445,4 +445,19 @@ describe("AutomationsView 새 자동화 card", () => {
 		});
 		expect(p.onCreate).toHaveBeenCalledWith({ paths: ["/Users/jeffrey/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
 	});
+
+	it("hides + 새 자동화 while there are no rules, and 취소 empties a card a 추천 자동화 filled", async () => {
+		render(props({ state: state([]) }));
+		await settle();
+		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
+		// The empty card has nothing to undo.
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
+		click(host.querySelector('[data-template="refresh"]'));
+		await settle();
+		expect(task().value).toBe("검색에 바로 반영해 줘");
+		click(host.querySelector('[data-action="automation-cancel-edit"]'));
+		await settle();
+		expect(task().value).toBe("");
+		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
+	});
 });
