@@ -10,6 +10,8 @@ import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { useFavoritesDrop, type FavoritesDropTarget } from "../hooks/useFavoritesDrop";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
+import { NotificationCenter } from "./NotificationCenter";
+import type { SettingsCategory } from "./SettingsView";
 import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
@@ -75,6 +77,7 @@ export function Sidebar({
 	onHideSidebar,
 	onOpenIndexing,
 	onOpenAiSettings,
+	onOpenSettingsPage,
 	sourceStatus,
 	searchQuery,
 	searchRef,
@@ -102,6 +105,8 @@ export function Sidebar({
 	readonly onOpenIndexing: () => void;
 	/** Model download entries open Settings on its AI page. */
 	readonly onOpenAiSettings?: (() => void) | undefined;
+	/** The notification center opens a Settings page by category (`general`, `source:<alias>`). */
+	readonly onOpenSettingsPage?: ((category: SettingsCategory) => void) | undefined;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
@@ -209,7 +214,11 @@ export function Sidebar({
 									>
 										{item.tag === undefined ? (
 											<Icon
-												className={cn("sidebar__item-icon flex-none", active ? "text-accent" : "text-ink-muted")}
+												className={cn(
+													"sidebar__item-icon flex-none",
+													// AI 에이전트 and 자동화 keep the blue icon whether or not they are selected; a selected place row is grey with ink.
+													item.view === "aiSearch" || item.view === "automations" ? "text-accent" : active ? "text-ink" : "text-ink-muted",
+												)}
 												size={14}
 												strokeWidth={1.8}
 											/>
@@ -261,7 +270,7 @@ export function Sidebar({
 						className={cn(
 							iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }),
 							"sidebar__item--settings",
-							settingsActive && "bg-selected-nav text-accent-text",
+							settingsActive && "bg-selected-nav text-ink",
 						)}
 						aria-current={settingsActive ? "true" : undefined}
 						aria-label={t("places.settings")}
@@ -280,6 +289,8 @@ export function Sidebar({
 					>
 						<UsageIcon />
 					</button>
+					{/* Figma 553:6673: the bell sits after the usage chart and opens the notification center above it. */}
+					<NotificationCenter onOpenAiSettings={onOpenAiSettings} onOpenSettingsPage={onOpenSettingsPage} />
 					<div className="flex-1" aria-hidden="true" />
 					<SidebarUpdateButton />
 				</div>

@@ -236,7 +236,7 @@ try {
 		});
 	});
 
-	// 1. Open Settings → 우클릭 메뉴 → AI로 커스텀하기
+	// 1. Open Settings → 우클릭 메뉴 → AI에게 요청하기
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "우클릭 메뉴" }).click();
 	await page.locator("h1.linear-title", { hasText: "우클릭 메뉴" }).waitFor();

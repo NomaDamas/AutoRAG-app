@@ -90,33 +90,30 @@ describe("Settings → Indexing", () => {
 	it("shows the index map in the progress section, right under the progress bar", async () => {
 		await mount(RUNNING);
 
-		const section = host.querySelector(".index-map-panel")?.closest(".settings-section");
-		expect(section).not.toBeNull();
-		const card = section!.querySelector(".settings-activity");
+		const panel = host.querySelector(".index-map-panel");
+		const card = panel?.querySelector(".index-map-head .settings-activity");
 		expect(card).not.toBeNull();
-		expect(card!.compareDocumentPosition(host.querySelector(".index-map-panel")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(card!.compareDocumentPosition(panel!.querySelector(".index-map-legend")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(host.querySelectorAll(".index-map-chart path[data-node-id]").length).toBeGreaterThan(0);
 	});
 
-	it("shows the map when nothing is indexing too, under the idle line", async () => {
+	it("shows the map when nothing is indexing too, without an idle line (Figma 532:9970)", async () => {
 		await mount();
 
-		expect(host.querySelector('[data-testid="index-activity-idle"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="index-activity-idle"]')).toBeNull();
 		expect(host.querySelector(".index-map-panel")).not.toBeNull();
 	});
 
 	it("leaves a folder out from the map and writes it to excludePaths", async () => {
 		await mount();
-		await click(sector("/r/notes"));
-		await click(host.querySelector('[data-action="index-map-exclude"]'));
+		await click(host.querySelector('.index-map-row[data-path="/r/notes"] [data-action="index-map-exclude"]'));
 
 		expect(bridge.settings.configPatch).toHaveBeenCalledExactlyOnceWith([{ path: ["excludePaths"], value: ["/r/notes"] }]);
 	});
 
 	it("brings a folder back from the map, and removes the key when the list is empty", async () => {
 		await mount(IDLE_INDEX_ACTIVITY, { searchPaths: ["/r"], excludePaths: ["/r/notes"] });
-		await click(sector("/r/notes"));
-		await click(host.querySelector('[data-action="index-map-include"]'));
+		await click(host.querySelector('.index-map-row[data-path="/r/notes"] [data-action="index-map-include"]'));
 
 		expect(bridge.settings.configPatch).toHaveBeenCalledExactlyOnceWith([{ path: ["excludePaths"], remove: true }]);
 	});

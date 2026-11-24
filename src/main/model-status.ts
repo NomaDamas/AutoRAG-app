@@ -51,3 +51,17 @@ export function createModelStatusService(deps: ModelStatusDeps): ModelStatusServ
 		},
 	};
 }
+
+/**
+ * Whether the model AI Search runs on takes images, read from the same resolver as the agent. A model that cannot be
+ * resolved counts as not taking them: there is nothing to send a picture to.
+ */
+export async function modelAcceptsImages(deps: ModelStatusDeps): Promise<boolean> {
+	try {
+		const config = resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd });
+		const { role } = await resolveAgentModelDetailed(config, { env: deps.env, cwd: deps.cwd });
+		return role.capabilities.input.includes("image");
+	} catch {
+		return false;
+	}
+}

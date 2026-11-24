@@ -1,4 +1,4 @@
-// Live end-to-end: a long, multi-line question typed into the AI Search composer wraps and scrolls inside the
+// Live end-to-end: a long, multi-line question typed into the AI Chat composer wraps and scrolls inside the
 // field, is sent with Enter, and a real model answers it.
 //
 // Same harness as run-qa-live-ai-search-table.mjs: a fresh profile signs in through a loopback stand-in for the
@@ -176,7 +176,7 @@ try {
 		await page.locator(".ai button", { hasText: "Show details" }).first().click();
 		error = (await page.locator(".ai pre").first().innerText()).slice(0, 600);
 	}
-	check("AI Search shows no error", error === "", error);
+	check("AI Chat shows no error", error === "", error);
 	const bubble = await page.locator(".user-msg .bubble").first().evaluate((element) => ({ text: element.textContent ?? "", whiteSpace: getComputedStyle(element).whiteSpace }));
 	check("the sent bubble carries the whole multi-line question with its line breaks", bubble.whiteSpace === "pre-wrap" && bubble.text.includes("마크다운 표 하나") && bubble.text.includes("\n- 존댓말 사용\n") && bubble.text.includes("표의 열 순서는"), JSON.stringify(bubble).slice(0, 300));
 	const after = await geometry();

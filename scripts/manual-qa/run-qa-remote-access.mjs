@@ -382,7 +382,7 @@ try {
 				page.off("download", onDownload);
 			}
 		});
-		await scenario("type an AI Search draft without sending a model request", async () => {
+		await scenario("type an AI Chat draft without sending a model request", async () => {
 			await openAiSearch(page);
 			const composer = page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`);
 			await composer.click();

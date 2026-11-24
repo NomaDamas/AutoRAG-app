@@ -17,7 +17,7 @@ import { seedBundledSparseModel } from "./bundled-sparse-model";
  * (plain Node, as an agent starts the MCP server) has no `<resources>/tools` either: an empty path must not turn
  * into `tools/` under whatever directory the process happens to be in.
  */
-function bundledToolsRoot(input: { readonly resourcesPath: string; readonly env: NodeJS.ProcessEnv }): string | null {
+export function bundledToolsRoot(input: { readonly resourcesPath: string; readonly env: NodeJS.ProcessEnv }): string | null {
 	const override = input.env.AUTORAG_TOOLS_DIR?.trim() ?? "";
 	const root = override.length > 0 ? override : input.resourcesPath.length > 0 ? join(input.resourcesPath, "tools") : "";
 	return root.length > 0 && existsSync(join(root, "bin")) ? root : null;
@@ -56,7 +56,7 @@ function appendStandardToolDirs(current: string | undefined, home: string | unde
  * Put the bundled tools first on `env.PATH`, in place, and append standard user
  * tool directories after the existing entries when `augmentUserPaths` is set
  * so a Finder-launched build still resolves user-installed CLIs (`~/.cargo/bin/lazykatok`, Homebrew, ...).
- * The bundled SPLADE model is seeded into MinSync's model cache on the way ({@link seedBundledSparseModel}).
+ * The bundled SPLADE model is seeded into the shared inl weight cache on the way ({@link seedBundledSparseModel}).
  * Returns the tools root when bundled tools were applied.
  */
 export function applyBundledTools(input: {
@@ -64,7 +64,7 @@ export function applyBundledTools(input: {
 	readonly env: NodeJS.ProcessEnv;
 	readonly platform?: NodeJS.Platform;
 	readonly augmentUserPaths?: boolean;
-	/** Home of MinSync's model cache; defaults to the OS user's. */
+	/** Home whose inl weight cache the SPLADE model is seeded into; defaults to the OS user's. */
 	readonly home?: string;
 }): string | null {
 	const platform = input.platform ?? process.platform;

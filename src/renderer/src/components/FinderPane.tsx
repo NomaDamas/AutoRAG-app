@@ -24,9 +24,9 @@ import { FileList } from "./FileList";
 import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
 import { IconGrid } from "./IconGrid";
 import { IndexProblemBanner } from "./IndexProblemBanner";
+import { OutdatedDaemonBanner } from "./OutdatedDaemonBanner";
 import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./list-scroll";
 import { PathBar } from "./PathBar";
-import { ScopeBar } from "./ScopeBar";
 import { TabStrip } from "./TabStrip";
 import { ContentResults, SearchGroupTabs, SourceResults } from "./WholeSearch";
 
@@ -106,11 +106,6 @@ export const FinderPane = memo(function FinderPane({
 	const group: SearchGroupKey = groupChoice.query === wholeQuery && groups.some((candidate) => candidate.key === groupChoice.key) ? groupChoice.key : "files";
 	const selectGroup = useCallback((key: SearchGroupKey) => setGroupChoice({ query: wholeQuery, key }), [wholeQuery]);
 	const selectedDatasource = groups.find((candidate) => candidate.key === group)?.datasource ?? null;
-	const askAi = useCallback(() => {
-		if (wholeQuery === "") return;
-		finder.openAiSearch();
-		shell.deliverToAi({ query: wholeQuery });
-	}, [finder, shell, wholeQuery]);
 	const headerViewportRef = useRef<HTMLDivElement>(null);
 	// The list is the one sideways scroller; the column header follows it (`list-scroll.ts`).
 	const listElement = finder.listRef.current;
@@ -389,19 +384,18 @@ export const FinderPane = memo(function FinderPane({
 					<div className="min-h-0 flex-1 bg-subtle-alt" />
 				) : (
 					<>
-						{whole !== null ? <SearchGroupTabs groups={groups} selected={group} onSelect={selectGroup} onAskAi={askAi} /> : null}
-						{finder.searching && group === "files" ? (
-							<ScopeBar
-								scope={finder.searchScope}
-								folderName={isTagPath(finder.path) ? tagNameOf(finder.path) : basename(finder.path)}
-								resultCount={finder.rows.length}
-								onScopeChange={finder.setSearchScope}
-							/>
-						) : null}
+						{/* Figma 428:1845: the group tabs sit right on the results; no scope row, no ask button. */}
+						{whole !== null ? <SearchGroupTabs groups={groups} selected={group} onSelect={selectGroup} /> : null}
 						<IndexProblemBanner
 							onFixEmbedding={() => {
 								// The embedding choice lives on Settings > AI.
 								requestSettingsCategory("ai");
+								finder.openSettings();
+							}}
+						/>
+						<OutdatedDaemonBanner
+							onOpenAbout={() => {
+								requestSettingsCategory("about");
 								finder.openSettings();
 							}}
 						/>
@@ -474,6 +468,7 @@ export const FinderPane = memo(function FinderPane({
 									onRetryVersionFamilies={finder.retryVersionFamilies}
 									listRef={finder.listRef}
 									searching={finder.searching}
+									{...(finder.searching ? { highlight: finder.query } : {})}
 									emptyText={finder.emptyText}
 									selectedKeys={finder.selection.keys}
 									focusedZone={focused && finder.zone === "finder"}

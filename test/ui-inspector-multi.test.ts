@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
 import type { FsFinderMetadata } from "../src/shared/fs-contract";
-import { stackCards, summarizeSelection } from "../src/renderer/src/state/inspector-multi";
+import { selectionInfoRows, stackCards, summarizeSelection } from "../src/renderer/src/state/inspector-multi";
 
 function finder(overrides: Partial<FsFinderMetadata> = {}): FsFinderMetadata {
 	return {
@@ -138,5 +138,19 @@ describe("stackCards", () => {
 
 	it("returns no cards for an empty selection", () => {
 		expect(stackCards([], null)).toEqual([]);
+	});
+});
+
+describe("일반 정보 for a multi-selection", () => {
+	it("keeps the kinds, total size and shared folder in 간략히, and the date ranges for 자세히", () => {
+		const rows = selectionInfoRows([entry(), entry({ name: "b.pdf", path: "/Users/me/Documents/b.pdf" })]);
+		expect(rows.filter((row) => row.core).map((row) => row.label)).toEqual(["종류", "총 크기", "위치"]);
+		expect(rows.find((row) => row.label === "위치")?.value).toBe("/Users/me/Documents");
+		expect(rows.filter((row) => !row.core).map((row) => row.label)).toContain("수정한 날짜");
+	});
+
+	it("leaves the folder out when the selection spans folders", () => {
+		const rows = selectionInfoRows([entry(), entry({ name: "b.pdf", path: "/Users/me/Desktop/b.pdf" })]);
+		expect(rows.map((row) => row.label)).not.toContain("위치");
 	});
 });

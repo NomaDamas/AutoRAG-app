@@ -33,6 +33,8 @@ export interface AutomationsShell {
 	readonly confirm: AutomationRule | null;
 	readonly menu: { readonly cursor: { readonly x: number; readonly y: number }; readonly entries: readonly FinderMenuEntry[] } | null;
 	readonly undoToast: { readonly message: string; readonly onUndo: () => Promise<void> } | null;
+	/** The toast's close button: the delete stands, the undo is gone. */
+	readonly dismissUndoToast: () => void;
 	/** Edit (AI draft) a rule: shared by the list, Quick Look, and the inspectors. */
 	readonly edit: (rule: AutomationRule) => void;
 	readonly askDelete: (rule: AutomationRule) => void;
@@ -117,6 +119,12 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			store.clearUndo();
 		}, UNDO_MS);
 	}, [byId, confirmId, rules, store, clearUndoTimer]);
+
+	const dismissUndoToast = useCallback(() => {
+		clearUndoTimer();
+		setUndoMessage(null);
+		store.clearUndo();
+	}, [store, clearUndoTimer]);
 
 	const undo = useCallback(async () => {
 		const restored = store.getSnapshot().undo?.rule.id ?? null;
@@ -262,6 +270,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		confirm,
 		menu,
 		undoToast: undoMessage === null ? null : { message: undoMessage, onUndo: undo },
+		dismissUndoToast,
 		edit,
 		askDelete,
 		editFromPreview: () => {

@@ -14,7 +14,7 @@ import type { AppSettings } from "../../../../shared/settings-contract";
 import { chordFromKeyEvent, formatHeldModifiers, formatShortcutChord } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { Switch } from "../primitives/Switch";
-import { Note, Row, Section } from "./SettingsKit";
+import { Note, PlainRow, PlainSection } from "./SettingsKit";
 
 const autorag = window.autorag;
 
@@ -84,16 +84,16 @@ export function QuickSearchSettingsSection({
 
 	const current = formatShortcutChord(settings.chord, platform);
 	return (
-		<Section title={t("settingsCore.general.quickSearchTitle")} description={t("settingsCore.general.quickSearchDesc")}>
-			<Row name={t("settingsCore.general.quickSearchEnabled")} hint={t("settingsCore.general.quickSearchEnabledHint", { shortcut: current })}>
+		<PlainSection title={t("settingsCore.general.quickSearchTitle")}>
+			<PlainRow name={t("settingsCore.general.quickSearchEnabled")} hint={t("settingsCore.general.quickSearchEnabledHint")}>
 				<Switch
 					checked={settings.enabled}
 					onChange={() => void setApp({ quickSearch: { ...settings, enabled: !settings.enabled } })}
 					ariaLabel={t("settingsCore.general.quickSearchEnabled")}
 					dataSwitchId="quick-search"
 				/>
-			</Row>
-			<Row name={t("settingsCore.general.quickSearchShortcut")} hint={t("settingsCore.general.quickSearchShortcutHint")}>
+			</PlainRow>
+			<PlainRow name={t("settingsCore.general.quickSearchShortcut")} hint={t("settingsCore.general.quickSearchShortcutHint")}>
 				<button
 					type="button"
 					data-quick-search-record
@@ -115,9 +115,9 @@ export function QuickSearchSettingsSection({
 						current
 					)}
 				</button>
-			</Row>
+			</PlainRow>
 			{invalid !== null ? <Note>{t(invalid)}</Note> : null}
 			{settings.enabled && status?.error === "taken" ? <Note>{t("settingsCore.general.quickSearchTaken", { shortcut: current })}</Note> : null}
-		</Section>
+		</PlainSection>
 	);
 }

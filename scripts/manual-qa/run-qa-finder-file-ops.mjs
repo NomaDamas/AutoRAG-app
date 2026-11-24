@@ -13,7 +13,7 @@
  *   5. holding ⌥ while dragging onto a folder row copies instead;
  *   6. dropping a row on another tab switches to that tab and moves the row
  *      into that tab's folder, with the tab highlighted while hovered, and the
- *      AI Search drag overlay clears once the drop is done;
+ *      AI Chat drag overlay clears once the drop is done;
  *   7. dwelling on a tab for ~1.5s adopts that tab with the drag still held, so
  *      the rows can then be dropped into a folder inside it;
  *   8. dwelling on a tab and dropping on its listing background moves the row
@@ -44,7 +44,7 @@ mkdirSync(EVIDENCE, { recursive: true });
 
 const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
 /**
- * Copy shown by the AI Search panel's drag overlay. The lane runs in English
+ * Copy shown by the AI Chat panel's drag overlay. The lane runs in English
  * (`launchFinder` seeds `en`), so read the real string from the locale file —
  * a hard-coded Korean literal never matches and makes "no overlay lingers"
  * checks pass vacuously.
@@ -237,7 +237,7 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "6-tab-drop.png") });
 	check(
-		"no AI Search drag overlay lingers once a tab drop has moved the rows",
+		"no AI Chat drag overlay lingers once a tab drop has moved the rows",
 		(await page.getByText(DOCK_OVERLAY).count()) === 0,
 		`overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
 	);
@@ -279,7 +279,7 @@ try {
 		`switched=${springSwitched} B/sub=${listNames(sub)} root=${listNames(top)}`,
 	);
 	check(
-		"no AI Search drag overlay lingers after the spring-loaded drop",
+		"no AI Chat drag overlay lingers after the spring-loaded drop",
 		(await page.getByText(DOCK_OVERLAY).count()) === 0,
 		`overlay nodes during dwell=${overlayDuringDwell}, after drop=${await page.getByText(DOCK_OVERLAY).count()}`,
 	);
@@ -325,13 +325,13 @@ try {
 		`switched=${backgroundSwitched} B=${listNames(dirB)} root=${listNames(top)}`,
 	);
 	check(
-		"no AI Search drag overlay lingers after a spring-loaded background drop",
+		"no AI Chat drag overlay lingers after a spring-loaded background drop",
 		(await page.getByText(DOCK_OVERLAY).count()) === 0,
 		`overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
 	);
 
 	/* --------------------------------------- 10. orphaned drag overlay watchdog */
-	// The overlay belongs to the visible AI Search panel: show one in a new tab.
+	// The overlay belongs to the visible AI Chat panel: show one in a new tab.
 	await page.keyboard.press(chord("t"));
 	await openAiSearch(page);
 	await page.evaluate((mime) => {
@@ -351,7 +351,7 @@ try {
 	const watchdogShown = (await page.getByText(DOCK_OVERLAY).count()) > 0;
 	await page.waitForTimeout(1_300);
 	check(
-		"the AI Search watchdog clears an orphaned drag overlay without drop or dragend",
+		"the AI Chat watchdog clears an orphaned drag overlay without drop or dragend",
 		watchdogShown && (await page.getByText(DOCK_OVERLAY).count()) === 0,
 		`shown=${watchdogShown} overlay nodes=${await page.getByText(DOCK_OVERLAY).count()}`,
 	);

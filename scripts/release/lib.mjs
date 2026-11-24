@@ -100,15 +100,51 @@ export async function latestRelease(repo) {
 	return fetchJson(`https://api.github.com/repos/${repo}/releases/latest`, githubHeaders());
 }
 
+/** A specific GitHub release by tag name (e.g. `v0.7.6`), with its assets and server-side sha256 digests. */
+export async function releaseByTag(repo, tag) {
+	return fetchJson(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`, githubHeaders());
+}
+
 export async function latestCrateVersion(crate) {
-	const body = await fetchJson(`https://crates.io/api/v1/crates/${crate}`);
+	const body = await fetchJson(`https://crates.io/api/v1/crates/${crate}`, {
+		"user-agent": "autorag-release (https://github.com/NomaDamas/AutoRAG-app)",
+	});
 	return body.crate.max_stable_version;
+}
+
+/** Latest stable crates.io version plus its published sha256 checksum. */
+export async function latestCrateInfo(crate) {
+	const body = await fetchJson(`https://crates.io/api/v1/crates/${crate}`, {
+		"user-agent": "autorag-release (https://github.com/NomaDamas/AutoRAG-app)",
+	});
+	const version = body.crate.max_stable_version;
+	const entry = body.versions?.find((item) => item.num === version);
+	return { version, checksum: entry?.checksum ?? null };
+}
+
+/** Verify a specific crates.io version's published sha256 checksum. */
+export async function crateVersionChecksum(crate, version) {
+	const body = await fetchJson(`https://crates.io/api/v1/crates/${crate}/${encodeURIComponent(version)}`, {
+		"user-agent": "autorag-release (https://github.com/NomaDamas/AutoRAG-app)",
+	});
+	return body.version?.checksum ?? null;
 }
 
 export function latestNpmVersion(pkg) {
 	return run("npm", ["view", pkg, "version"], { capture: true }).trim();
 }
 
+/** Latest npm package version and registry dist.integrity. */
+export async function latestNpmInfo(pkg) {
+	const body = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(pkg)}/latest`);
+	return { version: body.version, integrity: body.dist?.integrity ?? null };
+}
+
+/** Registry dist.integrity for a specific pinned npm package version. */
+export async function npmVersionIntegrity(pkg, version) {
+	const body = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(pkg)}/${encodeURIComponent(version)}`);
+	return body.dist?.integrity ?? null;
+}
 /** Latest Node 24 LTS release (the line mailcrawl's `engines` requires). */
 export async function latestNode24() {
 	const index = await fetchJson("https://nodejs.org/dist/index.json");

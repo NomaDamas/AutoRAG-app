@@ -4,7 +4,7 @@ import { DEFAULT_LOCAL_EMBEDDING_MODEL, localEmbeddingModel, type EmbeddingDaemo
 /**
  * Where text is embedded right now, for everything that embeds: the librarian's memory and chat sidecars,
  * the gist index, and the datasource CLIs that embed for themselves (mailcrawl, lazykatok, discrawl).
- * One answer, derived from `minSync.embedder` in the shared config: the local `minsync serve` server the
+ * One answer, derived from `minSync.embedder` in the shared config: the local shared inl embedding daemon the
  * app runs, or the server the user configured. Nothing here loads a model or starts a process; the local
  * server is asked for through `local`, which the app wires to its embedding daemon.
  *

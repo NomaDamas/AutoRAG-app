@@ -9,14 +9,17 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { type AssistantMessage, isContextOverflow } from "@earendil-works/pi-ai";
+import { type AssistantMessage, type ImageContent, isContextOverflow } from "@earendil-works/pi-ai";
 import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
+import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-images";
+import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
+import { withoutAgentAutoTrain } from "./ltr-service";
 import { syncCalendarMcpConfig } from "./calendar-mcp";
 import type {
 	AnswerPhase,
@@ -33,7 +36,8 @@ import type {
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
-import { buildAttachmentContext } from "./attachment-context";
+import { type AnswerRevision, isAnswerChange, remainderAfterRevised, revisedAnswer } from "../shared/answer-revision";
+import { buildAttachmentContext, buildViewingFolderContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
 import type { ContextEvent } from "./context-watch";
 import { createAgentInteraction } from "./agent-interaction";
@@ -73,10 +77,12 @@ type ChatSession = {
 	dispose(): void;
 };
 
-type SearchAgent = {
+export type SearchAgent = {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
+	/** The pictures the next run sends with the question (image files among its attachments). */
+	readonly setAttachmentImages?: (images: readonly ImageContent[]) => void;
 	readonly subscribe?: (listener: (event: LiveAgentEvent) => void) => () => void;
 	readonly abort?: () => void;
 	/** Correct the running search; false when it no longer takes steers. */
@@ -106,6 +112,12 @@ export interface SearchServiceDeps {
 	readonly now?: () => Date;
 	/** Reads a message's attachments into the agent's context block. Defaults to {@link buildAttachmentContext}. */
 	readonly attachmentContext?: (attachments: readonly ChatAttachment[]) => Promise<string>;
+	/** Reads a message's image attachments for the model. Defaults to {@link loadAttachmentImages}. */
+	readonly attachmentImages?: (attachments: readonly ChatAttachment[]) => Promise<readonly ImageContent[]>;
+	/** Where pasted images are kept; without it a paste is refused. */
+	readonly pastedImages?: PastedImageStore;
+	/** Whether the model the chat runs on takes images; absent means it does. A paste is dropped silently when it does not. */
+	readonly acceptsImages?: () => Promise<boolean>;
 	/** Usage analytics; absent (tests, a build with no project key) means nothing is reported. */
 	readonly analytics?: Pick<Analytics, "track">;
 	/** Where the agent's questions and approvals reach the person. Absent: the agent has nobody to ask. */
@@ -118,6 +130,12 @@ export interface SearchServiceDeps {
 	 * A preflight that throws never stops a run.
 	 */
 	readonly preflight?: () => Promise<SearchRefusal | null>;
+	/**
+	 * Called once a search has answered and its `done` event is sent, never before: the answer is already on screen.
+	 * Learning-to-rank training hangs here. Fire and forget: a hook that throws or rejects is dropped and never fails
+	 * the search it follows.
+	 */
+	readonly afterAnsweredSearch?: () => void | Promise<unknown>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
 	/**
@@ -146,7 +164,13 @@ function seedTurnsOf(messages: readonly ChatMessage[]): SeedTurn[] {
 			if (message.steer === undefined) question = message.text;
 			continue;
 		}
-		const answer = (message.deep?.answer ?? message.quick?.answer ?? "").trim();
+		// The answer the person ended up with: the Quick answer with its corrections applied, then whatever Deep added.
+		const changes = (message.revisions ?? []).some(isAnswerChange);
+		const answer = (
+			changes
+				? [revisedAnswer(message.quick?.answer ?? "", message.revisions ?? []), message.deep?.answer ?? ""].filter((part) => part.trim() !== "").join("\n\n")
+				: (message.deep?.answer ?? message.quick?.answer ?? "")
+		).trim();
 		if (question !== undefined && answer !== "") turns.push({ question, answer });
 		question = undefined;
 	}
@@ -165,6 +189,10 @@ interface SearchRun {
 	ended: boolean;
 	quick: AnswerPhase | null;
 	deep: AnswerPhase | null;
+	/** The first answer exactly as the librarian wrote it: the corrections' `original` claims are cut from it, not from the Quick text, which also holds the notes the model wrote on the way. */
+	firstAnswer: string;
+	/** The corrections the verification made to the Quick answer, in order. */
+	revisions: AnswerRevision[];
 	sessionId: string;
 	/** Messages the chat held before this run's question: earlier turns, left untouched by this run's writes. */
 	base: number;
@@ -211,17 +239,34 @@ export function draftText(raw: string): string {
  * (Deep) prompt second, so the phase is the number of `agent_start` events
  * seen. Both answer in plain assistant text. Whether a message is the answer
  * is not known while its text streams: a message that goes on to call a tool
- * (`stopReason: "toolUse"`) is a progress note ("checking X next"), which the
- * stream reports as `progress`, never as part of the answer. So a draft is the
- * text of the message currently streaming, and it is withdrawn (an empty
- * draft) the moment that message starts a tool call, which is announced when
- * its text ends and well before the tool has finished running.
+ * (`stopReason: "toolUse"`) is a note the model wrote on the way ("checking X
+ * next"). What the person has watched stream stays on screen: such a message
+ * is kept, in order, ahead of the messages that follow it, so a phase's draft
+ * is every message the phase wrote so far, and the answer the phase ends with
+ * carries the same text ({@link LiveStream.takeNotes}). Only a message that
+ * failed (`stopReason: "error"`) is taken back: it never finished.
  */
-function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEvent) => void): (event: LiveAgentEvent) => void {
+interface LiveStream {
+	readonly handle: (event: LiveAgentEvent) => void;
+	/** The notes `phase` wrote before its last message (each already shown in its drafts); handing them over forgets them. */
+	readonly takeNotes: (phase: AnswerPhaseName) => readonly string[];
+	/** The text is a note the stream keeps in the answer: the librarian also reports it as progress, which would show it twice. */
+	readonly isNote: (text: string) => boolean;
+}
+
+const NOTE_SEPARATOR = "\n\n";
+
+function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEvent) => void): LiveStream {
 	let agentRuns = 0;
+	/** Text of the message that is streaming now. */
 	let current = "";
 	let lastDraft = "";
 	let lastStopReason: string | undefined;
+	/** The finished messages of each phase that went on to call a tool, in order. */
+	const notes: Record<AnswerPhaseName, string[]> = { quick: [], deep: [] };
+	const everNoted = new Set<string>();
+	/** The streaming message was already added to `notes`. */
+	let committed = false;
 	const thinkingPhases = new Set<AnswerPhaseName>();
 	const phase = (): AnswerPhaseName => (agentRuns > 1 ? "deep" : "quick");
 	const setDraft = (text: string): void => {
@@ -229,28 +274,47 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 		lastDraft = text;
 		emit({ type: phase() === "quick" ? "quick-draft" : "deep-draft", searchId, text });
 	};
-	return (event) => {
+	/** What the phase shows: its notes, then the message streaming now. */
+	const drafted = (visible: string): string => [...notes[phase()], ...(visible.trim() === "" ? [] : [visible])].join(NOTE_SEPARATOR);
+	const commit = (): void => {
+		if (committed) return;
+		const visible = draftText(current).trim();
+		if (visible !== "") {
+			notes[phase()].push(visible);
+			everNoted.add(visible);
+		}
+		committed = true;
+		current = "";
+	};
+	const handle = (event: LiveAgentEvent): void => {
 		if (event.type === "agent_start") {
 			// If the first phase failed with a provider error before producing a fast
 			// answer, the next agent_start produces the run's only answer (delivered
 			// into the Quick slot on `complete`), so keep streaming it as Quick.
 			if (!(agentRuns === 1 && lastStopReason === "error")) {
 				agentRuns += 1;
+				notes[phase()].length = 0;
 			}
 			lastStopReason = undefined;
 			current = "";
+			committed = false;
 			lastDraft = "";
 			return;
 		}
 		if (event.type === "message_start" && event.message?.role === "assistant") {
 			current = "";
+			committed = false;
 			return;
 		}
 		if (event.type === "message_end" && event.message?.role === "assistant") {
 			lastStopReason = event.message.stopReason;
-			// Backstop for a provider that announces no tool call before the message ends.
-			if ((event.message.stopReason === "toolUse" || event.message.stopReason === "error") && lastDraft !== "") {
-				setDraft("");
+			if (event.message.stopReason === "toolUse") {
+				// Backstop for a provider that announces no tool call before the message ends.
+				commit();
+			} else if (event.message.stopReason === "error" && !committed) {
+				// A message that failed never finished: take its text back.
+				current = "";
+				setDraft(drafted(""));
 			}
 			current = "";
 			return;
@@ -266,21 +330,25 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 				return;
 			}
 			case "text_delta": {
-				if (!update.delta) return;
+				if (!update.delta || committed) return;
 				current += update.delta;
 				const visible = draftText(current);
-				if (visible.trim() !== "") setDraft(visible);
+				if (visible.trim() !== "") setDraft(drafted(visible));
 				return;
 			}
 			case "toolcall_start": {
-				// The message is a progress note, not the answer: take back its text.
-				if (lastDraft !== "") setDraft("");
-				current = "";
+				// The message is a note on the way to the answer: keep what was written, and start the next message below it.
+				commit();
 				return;
 			}
 			default:
 				return;
 		}
+	};
+	return {
+		handle,
+		takeNotes: (name) => notes[name].splice(0, notes[name].length),
+		isNote: (text) => everNoted.has(text.trim()),
 	};
 }
 
@@ -346,6 +414,7 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 		stopped,
 		at: now().toISOString(),
 		...(run.context.length === 0 ? {} : { context: [...run.context] }),
+		...(run.revisions.length === 0 ? {} : { revisions: [...run.revisions] }),
 	};
 }
 
@@ -376,11 +445,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	 * chat again resumes from its file.
 	 */
 	const agents = new Map<string, SearchAgent>();
+	/** Agents that were answering when the config or credentials changed: they finish on what they started with, then are rebuilt. */
+	const staleAgents = new Set<SearchAgent>();
 	/** The mode the person last chose; agents built after that start in it. */
 	let chosenMode: ApprovalMode | undefined;
 	async function agentFor(chatId: string, earlier: readonly ChatMessage[]): Promise<SearchAgent> {
 		const cached = agents.get(chatId);
-		if (cached !== undefined) {
+		if (cached !== undefined && staleAgents.has(cached)) {
+			agents.delete(chatId);
+			staleAgents.delete(cached);
+			await cached.closeSession?.().catch(() => undefined);
+		} else if (cached !== undefined) {
 			// Re-insert so the Map's order is least recently used first.
 			agents.delete(chatId);
 			agents.set(chatId, cached);
@@ -417,6 +492,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function closeAgents(): Promise<void> {
 		const open = [...agents.values()];
 		agents.clear();
+		staleAgents.clear();
 		await Promise.allSettled(open.map((agent) => agent.closeSession?.()));
 	}
 
@@ -424,6 +500,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function resetAgents(): Promise<void> {
 		const answering = new Set([...active.values()].map((run) => run.agent));
 		const idle = [...agents].filter(([, agent]) => !answering.has(agent));
+		for (const [, agent] of agents) if (answering.has(agent)) staleAgents.add(agent);
 		for (const [chatId] of idle) agents.delete(chatId);
 		await Promise.allSettled(idle.map(([, agent]) => agent.closeSession?.()));
 	}
@@ -435,6 +512,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		if (run.reported) return;
 		run.reported = true;
 		deps.analytics?.track("ai_search_finished", { outcome, deepened: run.deep !== null, duration: durationBucket(now().getTime() - run.startedAt) });
+	}
+
+	/** The post-search hook, detached: whatever it does or throws, the search that triggered it is already over. */
+	function runAfterAnswered(): void {
+		const hook = deps.afterAnsweredSearch;
+		if (hook === undefined) return;
+		try {
+			Promise.resolve(hook()).catch(() => undefined);
+		} catch {
+			// A synchronous throw is dropped for the same reason.
+		}
 	}
 
 	/** Runs one read-modify-write of the run's chat record after every earlier one. */
@@ -528,14 +616,19 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
-	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
-		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
+	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[], viewingFolder: string | undefined): Promise<void> {
+		const live = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
+		/** The phase as the person saw it stream: the notes the model wrote on the way, then the answer that ends the phase. */
+		const withNotes = (phase: AnswerPhase, ...names: readonly AnswerPhaseName[]): AnswerPhase => {
+			const notes = names.flatMap((name) => live.takeNotes(name));
+			return notes.length === 0 ? phase : { ...phase, answer: [...notes, phase.answer].join(NOTE_SEPARATOR) };
+		};
 		// Subscribe before the generator starts the run, or the first thinking
 		// tokens are lost.
 		const unsubscribe = agent.subscribe?.((event) => {
-			mapLive(event);
+			live.handle(event);
 			if (event.type === "tool_execution_start" && event.toolCallId !== undefined) run.toolCalls.add(event.toolCallId);
 			if (event.type === "message_start" && event.message?.role === "user" && event.message.timestamp !== undefined) run.userMessages.add(event.message.timestamp);
 			// Each model request starts with a user message, and queued steers go out with it.
@@ -548,20 +641,26 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		const stopContext = agent.onContext?.((event) => noteContext(run, event));
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
-			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			const attached = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			// The folder in view is only a hint; the renderer sends it when nothing is selected.
+			const context = [attached, buildViewingFolderContext(viewingFolder)].filter((part) => part !== "").join("\n\n");
+			const images = await (deps.attachmentImages ?? loadAttachmentImages)(attachments);
 			if (run.cancelled) return;
 			agent.setAttachmentContext(context);
+			agent.setAttachmentImages?.(images);
 			const hub = deps.interaction;
 			agent.bindRun?.(hub === undefined ? undefined : { open: (body, signal) => hub.open(run.searchId, body, signal) });
 			for await (const event of agent.searchDocumentsStream(query)) {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
-						emit({ type: "progress", searchId: run.searchId, text: progressText(event.text) });
+						// A note the answer already shows is not repeated on the shimmer line.
+						emit({ type: "progress", searchId: run.searchId, text: live.isNote(event.text) ? "" : progressText(event.text) });
 						break;
 					case "preliminary": {
 						run.sessionId = event.response.sessionId;
-						run.quick = mapPhase(event.response);
+						run.firstAnswer = event.response.answer;
+						run.quick = withNotes(mapPhase(event.response), "quick");
 						emit({
 							type: "quick",
 							searchId: run.searchId,
@@ -571,6 +670,11 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 						await saveRunMessage(run, false);
 						break;
 					}
+					case "revision":
+						run.revisions.push(event.revision);
+						emit({ type: "revision", searchId: run.searchId, revision: event.revision });
+						await saveRunMessage(run, false);
+						break;
 					case "complete": {
 						const failure = modelRequestFailure(event.response);
 						if (failure !== null) {
@@ -580,7 +684,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 							break;
 						}
 						run.sessionId = event.response.sessionId;
-						const phase = mapPhase(event.response);
+						// A run that corrected the Quick answer ends with that answer corrected; only what follows it is new.
+						const mapped = mapPhase(event.response);
+						const added = run.quick !== null && run.revisions.some(isAnswerChange) ? remainderAfterRevised(run.firstAnswer, run.revisions, mapped.answer) : null;
+						const phase = run.quick === null ? withNotes(mapped, "quick", "deep") : withNotes(added === null ? mapped : { ...mapped, answer: added }, "deep");
 						// Without a preliminary this is the run's only answer: Jev judged the
 						// fast answer final (or routed straight to a direct answer), so no
 						// verification ran. It belongs in the Quick slot, which already shows
@@ -616,7 +723,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			if (!run.cancelled) {
 				emit({ type: "done", searchId: run.searchId });
 				// A stream that ended with no answer at all did not answer.
-				reportFinished(run, run.failed || (run.quick === null && run.deep === null) ? "failed" : "answered");
+				const answered = !(run.failed || (run.quick === null && run.deep === null));
+				reportFinished(run, answered ? "answered" : "failed");
+				if (answered) runAfterAnswered();
 			}
 			active.delete(run.searchId);
 			run.resolveFinish();
@@ -628,7 +737,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			chosenMode = mode;
 			for (const agent of agents.values()) agent.setApprovalMode?.(mode);
 		},
-		start: async (searchId, chatId, query, attachments) => {
+		start: async (searchId, chatId, query, attachments, viewingFolder) => {
 
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
@@ -659,6 +768,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				failed: false,
 				reported: false,
 				context: [],
+				firstAnswer: "",
+				revisions: [],
 				toolCalls: new Set(),
 				userMessages: new Set(),
 			};
@@ -712,7 +823,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				return;
 			}
 			run.agent = agent;
-			void consume(run, agent, query, attachments);
+			void consume(run, agent, query, attachments, viewingFolder);
 			await finish;
 		},
 		steer: async (searchId, text) => {
@@ -741,10 +852,23 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),
 		historySearch: (query) => deps.chatStore.search(query),
+		pasteImage: async (mimeType, base64) => {
+			if (typeof mimeType !== "string" || typeof base64 !== "string" || deps.pastedImages === undefined) return null;
+			try {
+				if (deps.acceptsImages !== undefined && !(await deps.acceptsImages())) return null;
+				const saved = await deps.pastedImages.save(mimeType, base64);
+				// Scale it while the person types, so sending does not wait for it.
+				void prepareAttachmentImage(saved);
+				return saved;
+			} catch {
+				return null;
+			}
+		},
 		historyClear: async () => {
 			await closeAgents();
 			await deps.sessions?.clear();
 			await deps.chatStore.clear();
+			await deps.pastedImages?.clear();
 		},
 		onEvent: () => () => undefined,
 		dispose: closeAgents,
@@ -856,10 +980,32 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 			...(thinking !== undefined ? { thinking } : {}),
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(agentOptions, semantic), createAgentInteraction());
+		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
 		return agent as SearchAgent;
 	};
+}
+
+/**
+ * Runs `question` through the same agent the AI Search panel builds, with no chat around it, and returns the sources
+ * the answer cites, in order, or null when it produced no answer. The first-run tour calls this before it offers a
+ * question, so the question it types into AI Search is one this index has already answered with a citation.
+ * A model failure (a run that ends in the degraded "no final answer" text) is no answer, and so is an empty one.
+ */
+export async function answerQuestion(createAgent: () => Promise<SearchAgent>, question: string, signal?: AbortSignal): Promise<readonly string[] | null> {
+	const agent = await createAgent();
+	try {
+		let final: SearchDocumentsResponse | null = null;
+		for await (const event of agent.searchDocumentsStream(question)) {
+			signal?.throwIfAborted();
+			if (event.type === "complete") final = event.response;
+		}
+		if (final === null || modelRequestFailure(final) !== null || final.answer.trim() === "") return null;
+		return final.results.flatMap((result) => (result.source === undefined ? [] : [result.source]));
+	} finally {
+		agent.abort?.();
+	}
 }

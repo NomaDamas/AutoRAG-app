@@ -22,6 +22,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { assertManifestMatchesPins, loadToolPins } from "./pins.mjs";
 
 const args = process.argv.slice(2);
 const toolsDir = args[0] === undefined ? null : resolve(args[0]);
@@ -56,8 +57,17 @@ process.on("exit", () => rmSync(home, { recursive: true, force: true }));
 
 const manifest = JSON.parse(readFileSync(join(toolsDir, "manifest.json"), "utf8"));
 const versionOf = (name) => manifest.tools.find((tool) => tool.name === name)?.version;
-
 let failures = 0;
+
+// Compare tools/manifest.json against src/shared/tool-pins.json and fail on any drift.
+try {
+	const pinCheck = assertManifestMatchesPins(manifest, loadToolPins());
+	process.stdout.write(`ok   manifest matches src/shared/tool-pins.json (${pinCheck.rows.length} pinned components)\n${pinCheck.formatted}\n`);
+} catch (error) {
+	failures += 1;
+	process.stdout.write(`FAIL manifest matches src/shared/tool-pins.json  <- ${error instanceof Error ? error.message : String(error)}\n`);
+}
+
 function check(label, command, commandArgs, { expect, input, timeoutMs = 120_000 } = {}) {
 	const started = Date.now();
 	const result = spawnSync(command, commandArgs, { env: cleanEnv(home), encoding: "utf8", timeout: timeoutMs, input, cwd: home, windowsHide: true });
@@ -76,6 +86,7 @@ const VERSION_ARGS = {
 	jikji: ["--version"],
 	dupey: ["--version"],
 	clawgallery: ["--version"],
+	wombat: ["--version"],
 	discrawl: ["--version"],
 	telecrawl: ["--version"],
 	wacrawl: ["--version"],
@@ -150,8 +161,9 @@ check("filee-cli converts an image with its bundled engine", filee, ["convert", 
 // Behaviour, not just version output.
 check("kordoc parses a document", join(bin, `kordoc${exe}`), ["--help"], { expect: /kordoc|Usage|usage/i });
 check("minsync reports its embedder commands", join(bin, `minsync${exe}`), ["--help"], { expect: /sync|query/i });
-// The app starts `minsync serve` itself at launch (the one process that holds the model weights, serving
-// every embedding consumer over loopback). Prove the bundled build carries that subcommand and its server.
+// The app starts the shared inl embedding daemon itself at launch (preferring `inl`, else this bundled
+// `minsync serve`, which links the same crates; the one process that holds the model weights, serving every
+// embedding consumer over loopback). Prove the bundled build carries that subcommand and its server.
 check("minsync serve is the shared embedding daemon", join(bin, `minsync${exe}`), ["serve", "--help"], { expect: /loopback HTTP[\s\S]*\/v1\/embeddings/ });
 if (hasApp) check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
 probe("transformers.js loads without onnxruntime-web", `import(${JSON.stringify(pathToFileURL(join(modules, "@huggingface", "transformers", "dist", "transformers.node.mjs")).href)}).then((m)=>console.log(typeof m.pipeline==='function'?'loaded':'broken'))`);
@@ -178,9 +190,14 @@ if (sparseComplete) {
 	mkdirSync(workspace, { recursive: true });
 	const minsync = join(bin, `minsync${exe}`);
 	cpSync(join(toolsDir, "models"), join(home, "models"), { recursive: true });
-	const env = { ...cleanEnv(home), FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
+	const env = { ...cleanEnv(home), INL_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
 	const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000, windowsHide: true });
 	sh(["init", "--format", "json", "--embedder", "none"]);
+	// A hosted macOS runner is a VM without an Apple Neural Engine, and MinSync runs its SPLADE encoder on the Neural Engine by
+	// default: the encoder's own self-test fails there ("ANE self-test failed") and the sync exits 6. This check proves the bundled
+	// model ranks Korean, not the hardware, so it runs the encoder on the CPU (`[sparse] device`, the only switch MinSync has).
+	const configPath = join(workspace, ".minsync", "config.toml");
+	if (existsSync(configPath)) writeFileSync(configPath, readFileSync(configPath, "utf8").replace(/^\[sparse\]\r?$/m, '[sparse]\ndevice = "cpu"'));
 	writeFileSync(join(workspace, "certificate.md"), "인증서를 제출해야 환불이 승인됩니다.\n");
 	writeFileSync(join(workspace, "unrelated.md"), "The quarterly report covers revenue and hiring.\n");
 	const synced = sh(["sync", "--format", "json"]);
@@ -193,7 +210,7 @@ if (sparseComplete) {
 	}
 	const ok = synced.status === 0 && typeof top === "string" && top.endsWith("certificate.md");
 	if (!ok) failures += 1;
-	process.stdout.write(`${ok ? "ok  " : "FAIL"} minsync ranks Korean offline with the bundled SPLADE model and no dense model${ok ? "" : `  <- sync exit ${synced.status}, query exit ${queried.status}: ${`${synced.stderr}${queried.stderr}`.slice(0, 200).replace(/\s+/g, " ")}; top hit ${top}`}\n`);
+	process.stdout.write(`${ok ? "ok  " : "FAIL"} minsync ranks Korean offline with the bundled SPLADE model and no dense model${ok ? "" : `  <- sync exit ${synced.status}, query exit ${queried.status}: ${`${synced.stderr}${queried.stderr}`.replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+/g, " ").slice(-600)}; top hit ${top}`}\n`);
 }
 
 process.stdout.write(failures === 0 ? `\nbundle OK (${manifest.tools.length} components, ${manifest.platform})\n` : `\n${failures} check(s) FAILED\n`);

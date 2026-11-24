@@ -16,6 +16,11 @@
  * authoritative full answer and supersedes the draft. `done` closes every run
  * that was not cancelled, after any `deep` or `error` event.
  *
+ * When verification corrects the Quick answer it does so claim by claim (AutoRAG#2186): each correction is a `revision`
+ * event, and `deep` then carries only what the librarian's final answer says beyond the corrected Quick answer, with
+ * the evidence of every source the corrections cite. The corrections are stored with the answer (`revisions`) so a chat
+ * read back from history shows them again.
+ *
  * A message sent while a run streams steers that run instead of starting a
  * new one (`steer`): the librarian delivers it before the run's next model
  * request, cuts in-flight retrieval short, and always verifies, so the Deep
@@ -26,6 +31,8 @@
  * never pi/librarian class instances.
  */
 
+import type { AnswerRevision } from "./answer-revision";
+
 export const SEARCH_CHANNELS = {
 	start: "search:start",
 	steer: "search:steer",
@@ -35,6 +42,7 @@ export const SEARCH_CHANNELS = {
 	historyGet: "search:historyGet",
 	historySearch: "search:historySearch",
 	historyClear: "search:historyClear",
+	pasteImage: "search:pasteImage",
 } as const;
 
 /**
@@ -112,6 +120,11 @@ export type SearchStreamEvent =
 	| { readonly type: "deep-draft"; readonly searchId: string; readonly text: string }
 	| { readonly type: "quick"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
 	| { readonly type: "deep"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
+	/**
+	 * The verification corrected the Quick answer the person already read. One event per correction, after `quick` and
+	 * before `deep`. `original` is the claim as the person read it in the Quick answer.
+	 */
+	| { readonly type: "revision"; readonly searchId: string; readonly revision: AnswerRevision }
 	/** `action` accompanies an error the person can act on (the weekly credits are used up, the conversation outgrew the model). */
 	| { readonly type: "error"; readonly searchId: string; readonly message: string; readonly action?: SearchErrorAction }
 	| { readonly type: "cancelled"; readonly searchId: string }
@@ -145,6 +158,8 @@ export interface ChatMessageAssistant {
 	readonly at: string;
 	/** What the run did to the model's view of the chat, in order; absent when nothing. */
 	readonly context?: readonly ContextNotice[];
+	/** The corrections the verification made to `quick`, in order; absent when it made none. */
+	readonly revisions?: readonly AnswerRevision[];
 }
 
 export type ChatMessage = ChatMessageUser | ChatMessageAssistant;
@@ -162,8 +177,11 @@ export interface ChatRecord extends ChatSummary {
 }
 
 export interface SearchBridge {
-	/** Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. */
-	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[]): Promise<void>;
+	/**
+	 * Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. `viewingFolder` is the folder the
+	 * person has open when they ask from the right sidebar with nothing selected: a hint to the model, never a limit.
+	 */
+	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[], viewingFolder?: string): Promise<void>;
 	/**
 	 * Steer the running search `searchId` with a correction. Resolves true when
 	 * the run took it, false when that run is not running (finished, stopped,
@@ -172,6 +190,11 @@ export interface SearchBridge {
 	 */
 	steer(searchId: string, text: string): Promise<boolean>;
 	cancel(searchId: string): Promise<void>;
+	/**
+	 * Keep an image pasted from the clipboard (`base64` is the file's bytes) and return the file attachment that stands for
+	 * it. null when nothing was kept: the model takes no images, or the image is not a PNG, JPEG, GIF or WebP.
+	 */
+	pasteImage(mimeType: string, base64: string): Promise<ChatAttachment | null>;
 	historyList(): Promise<readonly ChatSummary[]>;
 	historyGet(chatId: string): Promise<ChatRecord | null>;
 	historySearch(query: string): Promise<readonly ChatSummary[]>;

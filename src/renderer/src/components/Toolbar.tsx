@@ -16,13 +16,15 @@ import {
 	IconsViewIcon,
 	ListRowsIcon,
 	PanelLeftIcon,
-	PanelRightIcon,
+	InspectorToggleIcon,
 	ShareIcon,
 	SortIcon,
 	PutBackIcon,
 	EmptyTrashIcon,
 } from "./icons";
 import { ToolbarMenu } from "./ToolbarMenu";
+import { iconButtonClass } from "./primitives/icon-button";
+import { cn } from "../lib/cn";
 
 const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly shortcutId: ShortcutId; readonly Icon: typeof IconsViewIcon }[] = [
 	{ mode: "icons", shortcutId: "viewIcons", Icon: IconsViewIcon },
@@ -131,7 +133,7 @@ export function Toolbar({
 	// macOS keeps room for the traffic lights before the icons; Windows has none, so they start at the left edge.
 	const trafficLights = hostPlatform() !== "win32";
 	return (
-		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} ${inspectorHidden ? "pr-[calc(12px+var(--window-controls-gutter))]" : "pr-12"} bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]`}>
+		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} ${inspectorHidden ? "pr-[calc(12px+var(--window-controls-gutter))]" : "pr-12"} bg-linear-to-b from-window to-subtle-alt [-webkit-app-region:drag]`}>
 			{sidebarHidden ? (
 				<>
 					{trafficLights ? <span className="w-[70px] flex-none" aria-hidden="true" /> : null}
@@ -166,7 +168,7 @@ export function Toolbar({
 			>
 				<ChevronRightIcon size={18} />
 			</button>
-			<strong className="toolbar-title min-w-150 overflow-hidden whitespace-nowrap text-ellipsis text-[15px] font-[650] text-ink">
+			<strong className="toolbar-title ml-7 min-w-150 overflow-hidden whitespace-nowrap text-ellipsis text-[14px] font-medium leading-[19px] text-ink">
 				{title}
 			</strong>
 			<span className="toolbar-spacer flex-1" />
@@ -243,12 +245,12 @@ export function Toolbar({
 			{inspectorHidden ? (
 				<button
 					type="button"
-					className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
+					className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "group [-webkit-app-region:no-drag]")}
 					title={t("toolbar.showInspector")}
 					aria-label={t("toolbar.showInspector")}
 					onClick={onShowInspector}
 				>
-					<PanelRightIcon size={18} />
+					<InspectorToggleIcon open={false} />
 				</button>
 			) : null}
 			{menu === null ? null : (
@@ -289,7 +291,7 @@ function ToolbarControl({
 		<button
 			type="button"
 			className={[
-				"toolbar__control flex flex-none items-center gap-3 h-[25px] px-6 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease] [-webkit-app-region:no-drag]",
+				"toolbar__control ml-14 flex flex-none items-center gap-4 h-[25px] px-6 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease] [-webkit-app-region:no-drag]",
 				active || open ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 			].join(" ")}
 			title={label}

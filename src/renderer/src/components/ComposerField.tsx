@@ -5,11 +5,13 @@
  *
  * Enter sends (through the enclosing form, so the panel's own submit guard
  * applies), Shift+Enter inserts a newline, Alt+Enter queues. Enter that confirms
- * an IME composition is never a send.
+ * an IME composition is never a send. Pasting an image (a screenshot on the clipboard) hands the files to
+ * `onPasteImages` instead of the field; a paste that carries text stays a text paste.
  */
 
-import { useLayoutEffect, useRef, type KeyboardEvent, type ReactElement, type Ref } from "react";
+import { useLayoutEffect, useRef, type ClipboardEvent, type KeyboardEvent, type ReactElement, type Ref } from "react";
 import { cn } from "../lib/cn";
+import { imageFilesFromPaste } from "../state/pasted-images";
 
 /** Rows the field grows to before it starts scrolling. */
 export const COMPOSER_MAX_ROWS = 8;
@@ -64,9 +66,13 @@ export interface ComposerFieldProps {
 	readonly placeholder?: string | undefined;
 	readonly ariaLabel: string;
 	readonly fieldRef?: Ref<HTMLTextAreaElement>;
+	/** Image files pasted into the field; without it a paste is left to the browser. */
+	readonly onPasteImages?: (files: readonly File[]) => void;
+	/** Merged over the default look (the inspector chat's smaller type). */
+	readonly className?: string;
 }
 
-export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLabel, fieldRef }: ComposerFieldProps): ReactElement {
+export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLabel, fieldRef, onPasteImages, className }: ComposerFieldProps): ReactElement {
 	const localRef = useRef<HTMLTextAreaElement | null>(null);
 
 	useLayoutEffect(() => {
@@ -99,6 +105,14 @@ export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLa
 		event.currentTarget.form?.requestSubmit();
 	}
 
+	function onPaste(event: ClipboardEvent<HTMLTextAreaElement>): void {
+		if (onPasteImages === undefined) return;
+		const files = imageFilesFromPaste(event.clipboardData);
+		if (files.length === 0) return;
+		event.preventDefault();
+		onPasteImages(files);
+	}
+
 	return (
 		<textarea
 			ref={(node) => {
@@ -110,10 +124,12 @@ export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLa
 			value={value}
 			onChange={(event) => onChange(event.target.value)}
 			onKeyDown={onKeyDown}
+			onPaste={onPaste}
 			placeholder={placeholder}
 			aria-label={ariaLabel}
 			className={cn(
-				"composer-field block w-full min-w-0 resize-none border-0 bg-transparent p-0 text-body leading-body text-ink-body outline-none [overflow-wrap:anywhere] placeholder:text-ink-muted",
+				"composer-field block w-full min-w-0 resize-none border-0 bg-transparent p-0 text-body leading-[21px] text-ink-body outline-none [overflow-wrap:anywhere] placeholder:text-ink-faint",
+				className,
 			)}
 		/>
 	);

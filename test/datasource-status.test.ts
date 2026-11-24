@@ -61,6 +61,52 @@ function byId(rows: readonly DataSourceRow[], id: string): DataSourceRow {
 	return row;
 }
 
+describe("AI Sessions (wombat) datasource status", () => {
+	async function wombatFixture(present: boolean, doctor?: unknown): Promise<Fixture> {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		if (present) {
+			const body = doctor === undefined ? "exit 0" : `echo '${JSON.stringify(doctor)}'`;
+			await writeFile(join(fixture.root, "bin", "wombat"), `#!/bin/sh\n${body}\n`);
+			await chmod(join(fixture.root, "bin", "wombat"), 0o755);
+		}
+		await writeConfig(fixture, { wombat: {} });
+		return fixture;
+	}
+
+	it("reports a missing wombat binary instead of calling it built in", async () => {
+		const fixture = await wombatFixture(false);
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "wombat");
+		expect(row.type).toBe("wombat");
+		expect(row.install).toMatchObject({ state: "missing", binary: "wombat" });
+		expect(row.install.detail).toContain("was not found on PATH");
+	});
+
+	it("connects the agent through the librarian's wombat skill and reads the session count", async () => {
+		const fixture = await wombatFixture(true, { ready: true, freshness: { indexed_sessions: 41, indexed_turns: 900 } });
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "wombat");
+		expect(row.install.state).toBe("installed");
+		expect(row.agent.state).toBe("connected");
+		expect(row.index).toMatchObject({ state: "indexed", chunkCount: 41, unit: "session" });
+		const skills = buildAgentOptions(resolveConfigReadOnly({ flags: {}, env: fixture.env, cwd: fixture.root })).datasourceSkills;
+		expect(skills?.map((skill) => skill.describe().name)).toEqual(["wombat"]);
+	});
+
+	it("shows an empty store as imported-none, not as an unreadable one", async () => {
+		const fixture = await wombatFixture(true, { ready: true, freshness: { indexed_sessions: 0, indexed_turns: 0 } });
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "wombat");
+		expect(row.index).toMatchObject({ state: "empty", chunkCount: 0, unit: "session" });
+	});
+
+	it("honours a custom binaryPath and a connection alias of the same type", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await writeFile(join(fixture.root, "bin", "my-wombat"), "#!/bin/sh\nexit 0\n");
+		await chmod(join(fixture.root, "bin", "my-wombat"), 0o755);
+		await writeConfig(fixture, { "ai-sessions": { type: "wombat", connector: { binaryPath: "my-wombat" } } });
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "ai-sessions");
+		expect(row).toMatchObject({ type: "wombat", install: { state: "installed", binary: "wombat" } });
+	});
+});
+
 describe("createDataSourceStatusService", () => {
 	it("reports install, agent connection, and index state for every configured datasource", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();

@@ -1,5 +1,5 @@
 /**
- * Where an "AI로 고치기" run stands, as the dialog shows it. Pure over the
+ * Where an "AI로 해결하기" run stands, as the dialog shows it. Pure over the
  * main process's events, like the smart-indexing run in `onboarding/smart-scope.ts`.
  */
 
@@ -47,7 +47,7 @@ const PAGE_KEY: Readonly<Record<ErrorFixSettingsPage, LocaleKey>> = {
 	contextMenu: "settingsCore.nav.contextMenu" as LocaleKey,
 	mcp: "settingsCore.nav.mcp",
 	indexing: "settingsCore.nav.indexing",
-	scope: "settingsCore.nav.scope",
+	scope: "settingsCore.nav.indexing",
 	reading: "settingsCore.nav.reading",
 	duplicates: "settingsCore.nav.duplicates",
 	apps: "settingsCore.nav.apps",

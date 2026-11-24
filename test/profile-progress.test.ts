@@ -126,9 +126,17 @@ describe("subscribeProfileProgress", () => {
 });
 
 describe("intentPromptLine", () => {
-	it("asks for a short plain progress phrase in the reply language on every tool call", () => {
-		expect(intentPromptLine("ko")).toContain("Korean");
-		expect(intentPromptLine("ja")).toContain("Japanese");
-		expect(intentPromptLine("en")).toContain("`i`");
+	it("asks for a short plain progress phrase in the language the person is writing in, with the interface language only as the fallback", () => {
+		for (const [language, name] of [
+			["ko", "Korean"],
+			["en", "English"],
+			["ja", "Japanese"],
+			["zh", "Simplified Chinese"],
+		] as const) {
+			const line = intentPromptLine(language);
+			expect(line).toContain("`i`");
+			expect(line).toMatch(/language the person is writing in/iu);
+			expect(line).toMatch(new RegExp(`not written anything yet[^;]*${name}`, "u"));
+		}
 	});
 });

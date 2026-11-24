@@ -9,22 +9,93 @@
  * settings.css.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
+import type { AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
+import dazziMark from "../../assets/dazzi-mark.png";
 
-export function SettingsPageHead({ title, description }: { readonly title: string; readonly description: string }): ReactElement {
+/**
+ * The invitation to the page's AI assistant, shown under the page head while the right sidebar is not showing the
+ * assistant. A page that has an assistant of its own draws that invitation itself (사이드바, 우클릭 메뉴, 단축키); every other
+ * assistant-backed page gets it from its head through this context, so the page body stays untouched.
+ */
+export interface SettingsAssistantHero {
+	readonly surface: AppCustomizerSurface;
+	readonly onOpen: () => void;
+}
+
+export const SettingsAssistantHeroContext = createContext<SettingsAssistantHero | null>(null);
+
+function AssistantHero({ surface, onOpen }: SettingsAssistantHero): ReactElement {
+	const { t } = useTranslation();
 	return (
-		<div className="settings-page-head">
-			<h1 className="linear-title">{title}</h1>
-			<p className="linear-desc">{description}</p>
+		<div className="sidebar-ai-hero" data-assistant-hero={surface}>
+			<div className="sidebar-ai-hero__body">
+				<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+					<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+				</span>
+				<div className="sidebar-ai-hero__copy">
+					<div className="sidebar-ai-hero__title">{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroTitle`)}</div>
+					<p className="sidebar-ai-hero__desc">{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroDesc`)}</p>
+				</div>
+			</div>
+			<button type="button" className="linear-btn settings-btn-primary sidebar-ai-hero__btn" data-action="open-app-customizer" onClick={onOpen}>
+				<span>{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroButton`)}</span>
+			</button>
 		</div>
 	);
 }
 
-export function Section({ title, description, children }: { readonly title?: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
+export function SettingsPageHead({ title, description, note }: { readonly title: string; readonly description?: string; readonly note?: string }): ReactElement {
+	const hero = useContext(SettingsAssistantHeroContext);
 	return (
-		<section className="settings-section">
+		<>
+			<div className="settings-page-head">
+				<h1 className="linear-title">{title}</h1>
+				{description !== undefined ? <p className="linear-desc">{description}</p> : null}
+				{note !== undefined ? <p className="linear-desc">{note}</p> : null}
+			</div>
+			{hero === null ? null : <AssistantHero {...hero} />}
+		</>
+	);
+}
+
+/** A setting as the redesigned pages draw it (Figma 403:8746): a 14px medium name over a 12px line, the control at the right, 64px a row. */
+export function PlainRow({ name, hint, anchor, children }: { readonly name: string; readonly hint: string; readonly anchor?: string; readonly children: ReactNode }): ReactElement {
+	return (
+		<div className="settings-plain-row" data-settings-row={anchor}>
+			<div className="settings-plain-text">
+				<span className="settings-plain-name">{name}</span>
+				<small>{hint}</small>
+			</div>
+			<div className="settings-plain-control">{children}</div>
+		</div>
+	);
+}
+
+/**
+ * A titled group of plain rows (Figma 416:12228, 일반): a bold 14px title 16px above rows that are separated by
+ * spacing alone. `alignTop` keeps a select on the row's first line instead of centring it on the two lines.
+ */
+export function PlainSection({ title, alignTop = false, children }: { readonly title: string; readonly alignTop?: boolean; readonly children: ReactNode }): ReactElement {
+	return (
+		<section className="plain-section">
+			<h2 className="plain-section-title">{title}</h2>
+			<div className={alignTop ? "settings-plain plain-section-rows is-top" : "settings-plain plain-section-rows"}>{children}</div>
+		</section>
+	);
+}
+
+/** The rule between two `PlainSection`s. */
+export function PlainDivider(): ReactElement {
+	return <hr className="plain-section-divider" />;
+}
+
+/** `anchor` names the section for coach marks (`data-settings-section`). */
+export function Section({ title, description, anchor, children }: { readonly title?: string; readonly description?: string; readonly anchor?: string; readonly children: ReactNode }): ReactElement {
+	return (
+		<section className="settings-section" data-settings-section={anchor}>
 			{title !== undefined ? <div className="linear-section-title">{title}</div> : null}
 			{description !== undefined ? <p className="linear-section-desc">{description}</p> : null}
 			{children}
@@ -32,9 +103,10 @@ export function Section({ title, description, children }: { readonly title?: str
 	);
 }
 
-export function Row({ name, hint, children, stack = false }: { readonly name: string; readonly hint?: string; readonly children?: ReactNode; readonly stack?: boolean }): ReactElement {
+/** `anchor` names the row for coach marks (`data-settings-row`). */
+export function Row({ name, hint, anchor, children, stack = false }: { readonly name: string; readonly hint?: string; readonly anchor?: string; readonly children?: ReactNode; readonly stack?: boolean }): ReactElement {
 	return (
-		<div className={`linear-row${stack ? " is-stack" : ""}`}>
+		<div className={`linear-row${stack ? " is-stack" : ""}`} data-settings-row={anchor}>
 			<div className="linear-row-label">
 				<span className="linear-row-name">{name}</span>
 				{hint === undefined ? null : <small>{hint}</small>}

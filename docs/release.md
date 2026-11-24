@@ -55,34 +55,25 @@ installs one file and nothing else:
 | `lazykatok` | newest GitHub release of `changeroa/lazykatok` (macOS only: KakaoTalk for macOS) | the release archive `lazykatok-<version>-aarch64-apple-darwin.tar.gz`, download verified against the sha256 GitHub publishes. The stager refuses a build below 0.3.3, the first with the OpenAI-compatible embedder, so it embeds through the daemon's OpenAI route |
 | `fsearch-cli` | `NomaDamas/fsearch-mac` via its Homebrew tap (macOS only) | fast file-name index. Homebrew links it to `/opt/homebrew/...`, so the stager copies it with its 16 dylibs into `tools/{bin,lib}` and re-points them at `@executable_path/../lib`. Needs `brew install nomadamas/fsearch-mac/fsearch-mac` on the build Mac (the stager runs it if missing; it compiles GTK, so the first run is slow). GPL-2.0-or-later: license and notice ship in `tools/licenses/fsearch-mac` |
 | `filee-cli` | the librarian's pinned release (`FILEE_CLI_VERSION` / `FILEE_CLI_ASSETS`), taken from `NomaDamas/filee-cli` — never resolved from `latest` | the conversion CLI behind the agent's `convert_files` tool. The librarian downloads this exact archive into its home on first use unless it finds the binary on `PATH`; staging it is what makes an offline install convert. It is a self-contained .NET program (an apphost plus its assemblies and `engines/`), so it ships as a folder: `tools/filee-cli`, linked from `tools/bin` on macOS (a relative symlink .NET resolves through the real path) and flattened into `tools/bin` on Windows (a real `filee-cli.exe` beside its siblings — never a `.cmd` shim Node cannot spawn). MIT; license and third-party notices in `tools/licenses/filee-cli`. **Filee's own engines are not bundled** (see below) |
-| MinSync's SPLADE model `nlpai-lab/KURE-Sparse-nano` (299 MB) | Hugging Face, pinned by revision and sha256 in `src/shared/sparse-model.json` | every local search ranks with it, including keyword-only mode on machines too small for the dense model, so the installer carries it in `tools/models/<repoDir>` (Hugging Face hub layout). At every start `bundled-sparse-model.ts` seeds it into MinSync's model cache when the cache lacks it: a clone on APFS, a copy elsewhere, each file renamed into place and `refs/main` written last. Apache-2.0: LICENSE ships in `tools/licenses/kure-sparse-nano`. `verify-bundle.mjs` checks every file's hash and runs an offline sparse-only MinSync sync and Korean stem query from it |
+| MinSync's SPLADE model `nlpai-lab/KURE-Sparse-nano` (299 MB) | Hugging Face, pinned by revision and sha256 in `src/shared/sparse-model.json` | every local search ranks with it, including keyword-only mode on machines too small for the dense model, so the installer carries it in `tools/models/<repoDir>` (Hugging Face hub layout). At every start `bundled-sparse-model.ts` seeds it into the shared im-not-llm weight cache when the cache lacks it: a clone on APFS, a copy elsewhere, each file renamed into place and `refs/main` written last. Apache-2.0: LICENSE ships in `tools/licenses/kure-sparse-nano`. `verify-bundle.mjs` checks every file's hash and runs an offline sparse-only MinSync sync and Korean stem query from it |
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
 
 The dense embedding model is **not** in the installer. The app downloads the pinned
 `Qwen/Qwen3-Embedding-0.6B` files (~1.2 GB, sha256-verified, resumable) from
-Hugging Face into MinSync's model cache (`~/.cache/minsync/models` on macOS,
-`%LOCALAPPDATA%\minsync\models` on Windows, or `FASTEMBED_CACHE_DIR`) when the
+Hugging Face into the shared im-not-llm (`inl`) weight cache (`~/.cache/im-not-llm/models` on macOS,
+`%LOCALAPPDATA%\im-not-llm\models` on Windows, or `INL_CACHE_DIR`) when the
 user chooses local embedding in onboarding or switches to it in Settings
 (`src/main/model-download.ts`), and the embedding daemon does not start until the
 model is present. `stage-tools.mjs` still stages a copy under
 `build/stage/<platform>/verify-model` for `smoke-installed.mjs`'s daemon check only; nothing
 packages it.
 
-"Newest" is resolved at build time, so each release ships current dependencies;
-`filee-cli` is the exception and follows the librarian's own pin, so the staged
-copy is the exact version (`FILEE_CLI_VERSION`) the librarian would otherwise
-download. Four tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
-the reason for each): `minsync` ≥ 0.7.1, `dupey` ≥ 0.2.0, `@nomadamas/mailcrawl` ≥ 0.3.0,
-`lazykatok` ≥ 0.3.3. `minsync`, `mailcrawl` and `lazykatok` reach the shared `minsync serve` embedding route;
-`minsync` 0.7.1 is the oldest librarian 2.13.7 runs (it makes every committed batch searchable during the first sync, which the
-refresh's overlapped sync relies on), on top of 0.6.0's SPLADE sparse retrieval and sparse-only indexes and 0.5.1's
-durable stage protocol v2 and JSONL sync progress streaming; `dupey` 0.2.0 is the first release whose HWP and fallback hashes agree
-with the ones AutoRAG stores; `mailcrawl` 0.3.0 adds `--source files` local archive indexing. The stager fails
-rather than ship an older one.
-`components-<platform>.json` on the release lists exactly what shipped (name,
-version, source, sha256), and the build fails rather than ship a download that
-does not match its published digest.
+All bundled tools, Node 24 LTS, the librarian ref, and the shared embedding daemon identity (`minsync serve`, engine `inl`) are pinned in one file: `src/shared/tool-pins.json` (with publisher sha256 digests, crates.io checksums, and npm integrity hashes). `scripts/sync-librarian.mjs`, `scripts/release/stage-tools.mjs`, `scripts/release/verify-bundle.mjs`, and the packaged app (`src/main/tool-versions.ts`) all read it.
+
+Version floors for tools `@autorag/librarian` validates itself (`minsync`, `dupey`, `jikji`) are derived directly from the pinned librarian (`MINSYNC_MIN_VERSION`, `DUPEY_MIN_VERSION`, `JIKJI_MIN_VERSION` via `scripts/release/pins.mjs`), merged with app-level floors in `src/shared/tool-pins.json` (`@nomadamas/mailcrawl` ≥ 0.3.0, `lazykatok` ≥ 0.3.3). If a pin drops below a floor or disagrees with the librarian, tests and release staging fail immediately. At the end of staging (and in `verify-bundle.mjs`), `tools/manifest.json` is printed next to `src/shared/tool-pins.json` and the build fails on any difference.
+
+`.github/workflows/refresh-tool-pins.yml` runs `scripts/release/refresh-pins.mjs` weekly (or on `workflow_dispatch`) to propose pin bumps from GitHub Releases, crates.io, npm, and nodejs.org, verifying publisher checksums and librarian floors before opening a PR. `components-<platform>.json` on the release lists exactly what shipped (name, version, source, sha256, and daemon choice).
 
 ### How the app uses them
 
@@ -107,17 +98,19 @@ does not match its published digest.
   (`97b0c614be4d`) and its four files (`config.json`, `tokenizer.json`,
   `model.safetensors`, `refs/main`), each verified by SHA-256 as it arrives and
   resumed rather than restarted if the download is interrupted. They land in
-  MinSync's native model cache (`~/.cache/minsync/models` on macOS,
-  `%LOCALAPPDATA%\minsync\models` on Windows, or `FASTEMBED_CACHE_DIR`), never
-  overwriting an existing entry, and the `minsync serve` daemon does not start
+  the shared im-not-llm (`inl`) weight cache (`~/.cache/im-not-llm/models` on macOS,
+  `%LOCALAPPDATA%\im-not-llm\models` on Windows, or `INL_CACHE_DIR`), never
+  overwriting an existing entry, and the embedding daemon does not start
   until the model is present.
-* Once the model is in place the app starts `minsync serve` itself —
-  `--idle-timeout 0 --embedder native:Qwen/Qwen3-Embedding-0.6B`, MinSync's own
-  loopback embedding server — and stops it at quit (`src/main/embedding-daemon.ts`).
+* Once the model is in place the app starts the shared im-not-llm embedding daemon
+  itself — preferring `inl serve --idle-timeout 0 --model Qwen/Qwen3-Embedding-0.6B`
+  when an `inl` executable is on `PATH`, else the bundled `minsync serve
+  --idle-timeout 0 --embedder native:Qwen/Qwen3-Embedding-0.6B` — and stops the one
+  it started at quit (`src/main/embedding-daemon.ts`).
   It is the one process that holds the weights: MinSync's own sync, the librarian's
   memory, the chat sidecars, discrawl, mailcrawl and lazykatok all reach it through
-  the state files it publishes under `~/.cache/minsync/serve/`
-  (`%LOCALAPPDATA%\minsync\serve` on Windows). mailcrawl (≥ 0.2.2) and lazykatok
+  the state files it publishes under `~/.cache/im-not-llm/serve/`
+  (`%LOCALAPPDATA%\im-not-llm\serve` on Windows). mailcrawl (≥ 0.2.2) and lazykatok
   (≥ 0.3.3) use its OpenAI route, so none of them loads a second copy.
 * Non-ASCII file names are signed decomposed (NFD). Finder writes names decomposed when
   a user drags the app out of the dmg, and the code seal compares names byte for byte:
@@ -374,6 +367,26 @@ per request.
 * **macOS differential needs a previous zip.** The first update after a dmg
   install downloads the whole zip (there is nothing cached to diff against);
   every update after that is differential.
+* **Every window and teardown path must let the app quit for an update.** On
+  macOS, `autoUpdater.quitAndInstall()` closes all windows first, emits only
+  `before-quit-for-update` (not `before-quit`), and starts ShipIt once the last
+  window is gone.
+  * A window that hides instead of closing (the quick-search launcher, the Quick
+    Look panels) must stop refusing `close` on either event via `whenQuitting`
+    (`src/main/quit-signal.ts`), never `app.on("before-quit")` alone, and must
+    ignore late reopen requests once quitting has started.
+  * Close confirmations (such as the background first-index prompt in
+    `closeDecision`) must allow closing once `before-quit-for-update` fires, so
+    an explicit restart-to-update is never vetoed.
+  * `will-quit` teardown runs through `runQuitCleanup` with `Promise.allSettled`
+    and a hard deadline (`QUIT_CLEANUP_TIMEOUT_MS`), so a hung subprocess or MCP
+    session cannot keep the windowless process alive and stall ShipIt.
+  * A user-initiated download keeps `autoInstallOnAppQuit` armed across
+    background settings refreshes so `MacUpdater` always hands the finished zip
+    to Squirrel.Mac even when "업데이트 자동 설치" is off.
+  Otherwise "지금 재시작" stalls, ShipIt waits for a quit that never comes, and
+  the downloaded update is never installed. The live lane asserts the app really
+  exits on the restart click and relaunches as a new process.
 * **Windows** installs per-user with no prompt; the installer copies itself
   into the updater cache at install time, so even the first update is
   differential. Without Azure signing the app installs updates unverified

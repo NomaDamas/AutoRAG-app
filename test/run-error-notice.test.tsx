@@ -159,10 +159,10 @@ describe("RunErrorNotice", () => {
 		render("Search root /Users/me/Docs does not exist");
 
 		const alert = host.querySelector('[role="alert"]');
-		expect(alert?.className).toContain("bg-subtle");
+		expect(alert?.className).toContain("notice-card");
 		expect(alert?.className).toContain("border-border");
 		expect(alert?.className).not.toContain("bg-danger-bg-soft");
-		expect(alert?.querySelector("[data-notice-icon]")).not.toBeNull();
+		expect(alert?.querySelector(".notice-badge")?.getAttribute("data-tone")).toBe("error");
 		const fixBtn = buttons().find((button) => button.textContent?.includes(t("appError.fixAction")));
 		expect(fixBtn?.className).toContain("bg-accent");
 		expect(fixBtn?.className).not.toContain("text-danger-text");
@@ -177,7 +177,7 @@ describe("RunErrorNotice", () => {
 		expect(host.textContent).toContain(t("appError.contextOverflow.title"));
 		expect(host.textContent).toContain(t("appError.contextOverflow.hint"));
 		expect(labels()).toEqual([t("appError.showDetails"), t("aiSearch.newChat"), t("appError.askNarrower")]);
-		expect(host.querySelector("[data-notice-icon]")?.className).toContain("bg-warn-bg");
+		expect(host.querySelector(".notice-badge")?.getAttribute("data-tone")).toBe("warning");
 
 		press(t("appError.askNarrower"));
 		press(t("aiSearch.newChat"));
@@ -197,7 +197,7 @@ describe("the AI fix dialog", () => {
 
 		expect(dialog()).not.toBeNull();
 		expect(start).toHaveBeenCalledExactlyOnceWith(expect.any(String), { message: "Search root /Users/me/Docs does not exist", surface: "ai-search" });
-		expect(dialog()?.querySelector('[data-healing-state="healing"]')).not.toBeNull();
+		expect(dialog()?.getAttribute("data-healing-state")).toBe("healing");
 		expect(dialog()?.querySelector(".shimmer")?.textContent).toBe(t("appError.fix.running"));
 		expect(dialog()?.textContent).not.toContain("Search root /Users/me/Docs does not exist");
 
@@ -212,13 +212,15 @@ describe("the AI fix dialog", () => {
 		emit({ type: "result", runId: runId(), result: FIXED });
 
 		const text = dialog()?.textContent ?? "";
-		expect(dialog()?.querySelector('[data-healing-state="healthy"]')).not.toBeNull();
+		expect(dialog()?.getAttribute("data-healing-state")).toBe("healthy");
 		expect(text).toContain(t("appError.fix.status.fixed"));
 		expect(text).toContain("검색 폴더를 Documents로 바꿨어요.");
+		expect(text).toContain(t("appError.fix.fixedHint"));
 		expect(text).not.toContain("searchPaths");
 		expect(text).not.toContain("/cfg/config.json.bak");
 		const footerButtons = [...(dialog()?.querySelectorAll("button") ?? [])].map((button) => button.textContent).filter((label) => label !== "");
-		expect(footerButtons).toEqual([t("common.close")]);
+		// 다시 시도 puts the question back in the composer.
+		expect(footerButtons).toEqual([t("common.close"), t("common.retry")]);
 
 		press(t("common.close"));
 		expect(dialog()).toBeNull();
@@ -292,7 +294,7 @@ describe("the AI fix dialog", () => {
 			},
 		});
 
-		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }), t("appError.fix.openSource", { name: "kakao" })]));
+		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.indexing") }), t("appError.fix.openSource", { name: "kakao" })]));
 	});
 
 	it("shows only Close (plus 자세히 보기) when a cannot-fix answer has no action button", () => {
@@ -351,7 +353,7 @@ describe("the AI fix dialog", () => {
 		press(t("appError.fixAction"));
 		const id = runId();
 
-		press(t("aiSearch.stop"));
+		press(t("appError.fix.stop"));
 		expect(cancel).toHaveBeenCalledWith(id);
 		emit({ type: "cancelled", runId: id, changes: [], backupPath: null });
 		expect(dialog()?.textContent).toContain(t("appError.fix.stopped"));
@@ -369,7 +371,7 @@ describe("the AI fix dialog", () => {
 		expect(host.querySelector(".sidebar__error-fix")?.textContent).toContain(t("appError.fix.sidebar.running"));
 
 		// Dismissing / minimizing hides the modal WITHOUT cancelling the run.
-		press(t("appError.fix.minimize"));
+		press(t("common.close"));
 		expect(cancel).not.toHaveBeenCalled();
 		expect(dialog()).toBeNull();
 

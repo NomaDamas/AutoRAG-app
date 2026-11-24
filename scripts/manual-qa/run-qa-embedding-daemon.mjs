@@ -7,20 +7,20 @@ import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { homeDir, homeEnv, isolatedToolPath, rmRetry } from "./platform.mjs";
 
 // Live end-to-end for the local embedding model's life cycle, against the real built app and the real
-// `minsync` and Qwen3-Embedding-0.6B weights (no stand-in server):
+// shared im-not-llm (`inl`) daemon and Qwen3-Embedding-0.6B weights (no stand-in server):
 //   1. a config left by an earlier Dazzi (retired `profile`, mailcrawl overrides) is migrated on launch
-//   2. launching the app starts exactly one `minsync serve` for the model, answering /health with real vectors
+//   2. launching the app starts exactly one inl embedding daemon for the model, answering /health with real vectors
 //   3. a second app instance adopts that server; quitting the first leaves a server it did not start alone
 //   4. indexing a document folder embeds through that server and a semantic query finds the document
 //   5. quitting the app stops the server it started, and removes its state files
 // The profile and home are throwaway; the host's model cache is linked in read-only so nothing is downloaded.
-// Needs `minsync` on PATH and the model cached once (`minsync serve` or any sync caches it). Build first: bun run build
+// Needs `inl` (or `minsync`) on PATH and the model cached once on the shared root. Build first: bun run build
 const EVIDENCE = fileURLToPath(new URL("../../.omo/evidence/embedding-daemon/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
 
-const hostModels = join(homeDir(), ".cache", "minsync", "models");
+const hostModels = join(homeDir(), ".cache", "im-not-llm", "models");
 if (!existsSync(hostModels)) {
-	console.log(`SKIP: no MinSync model cache at ${hostModels}; run \`minsync serve\` once to cache Qwen3-Embedding-0.6B`);
+	console.log(`SKIP: no shared im-not-llm model cache at ${hostModels}; run \`inl serve\` (or a MinSync sync on the new root) once to cache Qwen3-Embedding-0.6B`);
 	process.exit(0);
 }
 
@@ -31,8 +31,8 @@ const workspace = join(root, "workspace");
 const agentDir = join(root, "pi-agent");
 const configPath = join(root, "config.json");
 const bin = join(root, "bin");
-for (const dir of [join(home, ".cache", "minsync"), docs, workspace, agentDir, bin]) mkdirSync(dir, { recursive: true });
-symlinkSync(hostModels, join(home, ".cache", "minsync", "models"));
+for (const dir of [join(home, ".cache", "im-not-llm"), docs, workspace, agentDir, bin]) mkdirSync(dir, { recursive: true });
+symlinkSync(hostModels, join(home, ".cache", "im-not-llm", "models"));
 writeFileSync(join(docs, "refund.md"), "# 환불 정책\n\n구매 후 7일 이내에는 사유와 관계없이 전액 환불이 가능합니다.\n");
 writeFileSync(join(docs, "weather.md"), "# 오늘의 날씨\n\n서울은 맑고 낮 최고 기온은 21도입니다.\n");
 // What an earlier Dazzi left behind: the retired runtime profile and the overrides it wrote into mailcrawl.
@@ -47,7 +47,13 @@ writeFileSync(
 	}, null, 2)}\n`,
 );
 const readConfig = () => JSON.parse(readFileSync(configPath, "utf8"));
-const stateRoot = process.platform === "win32" ? join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "minsync", "serve") : join(home, ".cache", "minsync", "serve");
+const stateRoots =
+	process.platform === "win32"
+		? [
+				join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "im-not-llm", "serve"),
+				join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "minsync", "serve"),
+			]
+		: [join(home, ".cache", "im-not-llm", "serve"), join(home, ".cache", "minsync", "serve")];
 const env = {
 	...homeEnv(home),
 	AUTORAG_CONFIG: configPath,
@@ -72,13 +78,16 @@ const waitFor = async (predicate, timeoutMs = 60000) => {
 };
 /** The published `host:port:pid` of every server in the throwaway home, or [] when none. */
 const servers = () => {
-	if (!existsSync(stateRoot)) return [];
-	return readdirSync(stateRoot)
-		.map((instance) => {
+	const found = [];
+	for (const stateRoot of stateRoots) {
+		if (!existsSync(stateRoot)) continue;
+		for (const instance of readdirSync(stateRoot)) {
 			const read = (name) => { try { return readFileSync(join(stateRoot, instance, name), "utf8").trim(); } catch { return ""; } };
-			return { instance, host: read("host") || "127.0.0.1", port: Number(read("port")), pid: Number(read("pid")) };
-		})
-		.filter((server) => server.port > 0);
+			const entry = { instance, host: read("host") || "127.0.0.1", port: Number(read("port")), pid: Number(read("pid")) };
+			if (entry.port > 0) found.push(entry);
+		}
+	}
+	return found;
 };
 const health = async (server) => {
 	try {
@@ -113,7 +122,7 @@ try {
 		const [server] = servers();
 		return server !== undefined && (await health(server)) !== null ? server : null;
 	}, 120000);
-	check("launching the app starts a `minsync serve` that answers /health", running !== null, JSON.stringify(servers()));
+	check("launching the app starts an inl embedding daemon that answers /health", running !== null, JSON.stringify(servers()));
 	const info = running === null ? null : await health(running);
 	check("it serves Qwen3-Embedding-0.6B at 1024 dimensions", info?.model_id === "Qwen/Qwen3-Embedding-0.6B" && info?.dimension === 1024, JSON.stringify(info));
 	check("exactly one server is running", servers().length === 1, String(servers().length));
@@ -174,5 +183,5 @@ if (fails.length > 0) {
 	console.log("FAIL:", fails);
 	process.exitCode = 1;
 } else {
-	console.log(`PASS: the app runs one minsync serve for the local model, adopts it across instances, and stops what it started — evidence in ${EVIDENCE}`);
+	console.log(`PASS: the app runs one shared inl embedding daemon for the local model, adopts it across instances, and stops what it started — evidence in ${EVIDENCE}`);
 }

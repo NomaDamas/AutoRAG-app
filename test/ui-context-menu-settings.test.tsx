@@ -6,6 +6,7 @@ import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
+import { t } from "../src/shared/i18n/core";
 
 const bridge = vi.hoisted(() => {
 	const settingsListeners = new Set<(settings: AppSettings) => void>();
@@ -157,10 +158,11 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await settle();
 		expect(currentSettings.contextMenu.hiddenItems).toEqual(["builtin:compress7z"]);
 
-		// Move `magic` section to the very top
-		const moveMagicUp = host.querySelector<HTMLButtonElement>('[data-action="move-cmenu-section-up-magic"]');
+		// Move `magic` section to the very top: its drag handle also moves it with ↑
+		const magicGrip = host.querySelector<HTMLButtonElement>('[data-cmenu-section-grip="magic"]');
+		expect(magicGrip).not.toBeNull();
 		await act(async () => {
-			moveMagicUp?.click();
+			magicGrip?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
 		});
 		await settle();
 		expect(currentSettings.contextMenu.sectionOrder[0]).toBe("magic");
@@ -183,9 +185,20 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await act(async () => {
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-label"]')!, "PDF 3줄 요약");
 			setInputValue(editor!.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-prompt"]')!, "핵심 3줄 요약해줘");
-			setInputValue(editor!.querySelector<HTMLSelectElement>('[data-testid="magic-editor-selection"]')!, "single");
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-extensions"]')!, ".pdf, md");
 		});
+		await act(async () => {
+			editor!.querySelector<HTMLButtonElement>('[data-testid="magic-editor-selection-single"]')?.click();
+		});
+		// Enter turns the typed extensions into chips, and 표시할 대상 sums the rule up in one line.
+		await act(async () => {
+			editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-extensions"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+		});
+		expect([...editor!.querySelectorAll(".magic-editor-ext")].map((chip) => chip.textContent)).toEqual(["pdf", "md"]);
+		expect(editor!.querySelector('[data-testid="magic-editor-extensions"]')).toHaveProperty("value", "");
+		expect(editor!.querySelector(".magic-editor-section-value")?.textContent).toBe(
+			t("settingsCore.contextMenu.editor.targetSummary.single.file", { ext: "PDF/MD " }),
+		);
 		await settle();
 
 		await act(async () => {
@@ -204,6 +217,16 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 
 		const actionId = currentSettings.contextMenu.magicActions[0]!.id;
 		expect(host.querySelector(`[data-magic-row="${actionId}"]`)?.textContent).toContain("MCP");
+
+		// 나만의 매직 액션 edits (수정 · 삭제, no switch); 우클릭 메뉴 섹션 및 항목 only turns it on or off. Neither shows a kind badge.
+		const [cardRow, sectionRow] = [...host.querySelectorAll<HTMLElement>(`[data-magic-row="${actionId}"]`)];
+		expect(cardRow?.querySelector(`[data-action="edit-magic-${actionId}"]`)).not.toBeNull();
+		expect(cardRow?.querySelector(`[data-action="remove-magic-${actionId}"]`)).not.toBeNull();
+		expect(cardRow?.querySelector(`[data-sidebar-switch="magic:${actionId}"]`)).toBeNull();
+		expect(sectionRow?.querySelector(`[data-sidebar-switch="magic:${actionId}"]`)).not.toBeNull();
+		expect(sectionRow?.querySelector("button[data-action]")).toBeNull();
+		expect(sectionRow?.textContent).toBe("PDF 3줄 요약");
+		expect(host.querySelector(".sidebar-always-badge.is-plain")).toBeNull();
 
 		// Edit the Magic Action and toggle MCP off
 		await act(async () => {
@@ -268,7 +291,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
 		expect(panel).not.toBeNull();
 		expect(panel?.getAttribute("data-surface")).toBe("contextMenu");
-		expect(panel?.textContent).toContain("매직 액션");
+		expect(panel?.textContent).toContain("세 줄로 요약");
 
 		const suggestion = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		await act(async () => {
@@ -333,7 +356,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			await settle();
 			const editor = document.body.querySelector('[data-testid="magic-action-editor-modal"]')!;
 			await act(async () => {
-				setInputValue(editor.querySelector<HTMLSelectElement>('[data-testid="magic-editor-kind"]')!, "script");
+				editor.querySelector<HTMLButtonElement>('[data-testid="magic-editor-kind-script"]')?.click();
 			});
 			await settle();
 

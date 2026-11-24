@@ -6,24 +6,25 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { homeDir, homeEnv, isolatedToolPath, rmRetry } from "./platform.mjs";
+import { pickSelect } from "./settings-select.mjs";
 
 // Live QA for switching where the document-understanding model runs, through the real Settings screen of the
-// built app: this computer (MinSync's `minsync serve`), the Dazzi cloud (the real hosted route, with the account
-// token already on this machine), and the user's own server (a real OpenAI-compatible and a real TEI server,
-// both backed by the real local Qwen3 model). The model itself is never selectable.
+// built app: this computer (the shared im-not-llm `inl` daemon), the Dazzi cloud (the real hosted route, with the
+// account token already on this machine), and the user's own server (a real OpenAI-compatible and a real TEI
+// server, both backed by the real local Qwen3 model). The model itself is never selectable.
 //   - the picker offers exactly four choices and no model field; the model line says it is fixed
 //   - local -> Dazzi -> own OpenAI server -> own TEI server -> local, each applied through the UI, each leaving the
-//     config, the keyring and the running `minsync serve` in the state that choice implies
+//     config, the keyring and the running inl embedding daemon in the state that choice implies
 //   - consent is required before text goes off the computer; a wrong key, a wrong size and a dead server are refused
 //   - the key never reaches the config file
-// Needs `minsync` on PATH, the model cached once, and a Dazzi sign-in for the cloud steps (~/.pi/agent/auth.json
-// or QA_DAZZI_TOKEN); without a sign-in the cloud steps are reported as skipped, never faked. Build first: bun run build
+// Needs `inl` (or `minsync`) on PATH, the model cached once on the shared root, and a Dazzi sign-in for the cloud
+// steps (~/.pi/agent/auth.json or QA_DAZZI_TOKEN); without a sign-in the cloud steps are reported as skipped, never faked. Build first: bun run build
 const EVIDENCE = fileURLToPath(new URL("../../.omo/evidence/embedding-sources/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
 
-const hostModels = join(homeDir(), ".cache", "minsync", "models");
+const hostModels = join(homeDir(), ".cache", "im-not-llm", "models");
 if (!existsSync(hostModels)) {
-	console.log(`SKIP: no MinSync model cache at ${hostModels}; run \`minsync serve\` once to cache Qwen3-Embedding-0.6B`);
+	console.log(`SKIP: no shared im-not-llm model cache at ${hostModels}; run \`inl serve\` (or a MinSync sync on the new root) once to cache Qwen3-Embedding-0.6B`);
 	process.exit(0);
 }
 const dazziToken = (() => {
@@ -44,13 +45,13 @@ const workspace = join(root, "workspace");
 const agentDir = join(root, "pi-agent");
 const configPath = join(root, "config.json");
 const bin = join(root, "bin");
-for (const dir of [join(home, ".cache", "minsync"), docs, workspace, agentDir, bin]) mkdirSync(dir, { recursive: true });
-symlinkSync(hostModels, join(home, ".cache", "minsync", "models"));
+for (const dir of [join(home, ".cache", "im-not-llm"), docs, workspace, agentDir, bin]) mkdirSync(dir, { recursive: true });
+symlinkSync(hostModels, join(home, ".cache", "im-not-llm", "models"));
 writeFileSync(join(docs, "refund.md"), "# 환불 정책\n\n구매 후 7일 이내에는 사유와 관계없이 전액 환불이 가능합니다.\n");
 if (dazziToken !== null) writeFileSync(join(agentDir, "auth.json"), JSON.stringify({ dazzi: { type: "oauth", access: dazziToken, refresh: "", expires: 9_999_999_999_999 } }));
 writeFileSync(configPath, `${JSON.stringify({ searchPaths: [docs], workspacePath: workspace, minSync: { enabled: true }, jikji: false, datasources: {} }, null, 2)}\n`);
 const readConfig = () => JSON.parse(readFileSync(configPath, "utf8"));
-const stateRoot = process.platform === "win32" ? join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "minsync", "serve") : join(home, ".cache", "minsync", "serve");
+const stateRoot = process.platform === "win32" ? join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "im-not-llm", "serve") : join(home, ".cache", "im-not-llm", "serve");
 
 const fails = [];
 const skipped = [];
@@ -239,7 +240,7 @@ try {
 	// ---- my own TEI server --------------------------------------------------------------------------------------
 	await open();
 	await pick("My own server");
-	await modal.locator("select[name='embedding-server-type']").selectOption("tei");
+	await pickSelect(modal.locator('[data-testid="embedding-server-type"]'), "tei");
 	await modal.locator("input[name='embedding-server-url']").fill(teiUrl);
 	await apply();
 	const tei = await waitFor(() => (embedder()?.id === "tei:Qwen/Qwen3-Embedding-0.6B" ? embedder() : null), 60000);

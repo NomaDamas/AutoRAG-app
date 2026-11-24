@@ -9,15 +9,14 @@ import { useTranslation } from "react-i18next";
 import type { SearchDatasource, SourceHit } from "../../../shared/source-search-contract";
 import { i18n } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { markTerms } from "../lib/mark-terms";
+import { emphasizeTerms, markTerms } from "../lib/mark-terms";
 import type { FinderEntry } from "../data/entries";
 import type { ContentRowInput } from "../state/launcher";
 import { dirname } from "../state/paths";
 import type { SearchGroup, SearchGroupKey, WholeSearchState } from "../state/whole-search";
-import { DatabaseIcon, FolderGlyph, LinkIcon, SearchIcon, SparklesIcon } from "./icons";
+import { FileIcon, GroupIcon, LinkIcon, SourceDriveIcon } from "./icons";
 import { EntryTile } from "./primitives/EntryTile";
 import { sourceTitle } from "./settings/datasourceTemplates";
-import { SourceIcon } from "./settings/SourceIcon";
 
 const SPINNER_CLASS = "size-10 flex-none rounded-full border-[1.5px] border-border border-t-accent animate-spin";
 
@@ -27,45 +26,36 @@ function groupLabel(group: SearchGroup, labels: { readonly files: string; readon
 	return group.datasource === null ? group.key : sourceTitle(group.datasource);
 }
 
+/** Figma 428:1845: a document for file names, layers for document content, a drive for every connected source. */
 function GroupGlyph({ group }: { readonly group: SearchGroup }): ReactElement {
-	if (group.key === "files") return <FolderGlyph size={13} />;
-	if (group.key === "content") return <DatabaseIcon size={13} />;
-	const datasource = group.datasource;
-	return datasource === null ? <SearchIcon size={13} /> : <SourceIcon type={datasource.type} label={sourceTitle(datasource)} small />;
+	if (group.key === "files") return <FileIcon size={12} />;
+	if (group.key === "content") return <GroupIcon size={12} />;
+	return <SourceDriveIcon size={12} />;
 }
 
-/** The count, a spinner while the surface is still answering, or a dash when it cannot answer. */
-function GroupBadge({ group, selected }: { readonly group: SearchGroup; readonly selected: boolean }): ReactElement {
+/** A spinner after the label while the surface is still answering; once it has, the count is part of the label. */
+function GroupPending({ group }: { readonly group: SearchGroup }): ReactElement | null {
 	const { t } = useTranslation();
-	if (group.status === "pending") return <span className={SPINNER_CLASS} role="status" aria-label={t("wholeSearch.pending")} />;
-	if (group.count === null) return <span className={cn("text-badge", selected ? "text-ink-muted" : "text-ink-faint")}>–</span>;
-	return (
-		<span
-			className={cn(
-				"min-w-16 px-5 rounded-full text-badge font-semibold tabular-nums text-center",
-				group.count === 0 ? "text-ink-faint" : selected ? "bg-accent text-on-accent" : "bg-hover-strong text-ink-body",
-			)}
-		>
-			{group.count}
-		</span>
-	);
+	return group.status === "pending" ? <span className={SPINNER_CLASS} role="status" aria-label={t("wholeSearch.pending")} /> : null;
+}
+
+/** Figma 428:1845: "파일 이름 (6)", the count in parentheses one space after the name; a dash when it cannot answer. */
+function countedLabel(label: string, group: SearchGroup): string {
+	return group.status === "pending" ? label : `${label} (${group.count === null ? "–" : group.count})`;
 }
 
 /**
  * The group tabs: a fixed order (files, content, then datasources in config order) so a tab never moves under the
- * pointer while answers land. ←/→ move between tabs like any tab list; the AI Search button on the right hands the
- * same query to the chat.
+ * pointer while answers land. ←/→ move between tabs like any tab list.
  */
 export function SearchGroupTabs({
 	groups,
 	selected,
 	onSelect,
-	onAskAi,
 }: {
 	readonly groups: readonly SearchGroup[];
 	readonly selected: SearchGroupKey;
 	readonly onSelect: (key: SearchGroupKey) => void;
-	readonly onAskAi: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const listRef = useRef<HTMLDivElement>(null);
@@ -80,7 +70,7 @@ export function SearchGroupTabs({
 		listRef.current?.querySelector<HTMLButtonElement>(`[data-group="${CSS.escape(next.key)}"]`)?.focus();
 	};
 	return (
-		<div className="search-groups flex flex-none items-start gap-8 min-h-[34px] py-5 pl-10 pr-8 border-b border-divider bg-window">
+		<div className="search-groups flex flex-none items-center gap-8 min-h-[31px] py-5 pl-10 pr-8 border-b border-divider bg-window">
 			<div
 				ref={listRef}
 				className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-4"
@@ -101,28 +91,19 @@ export function SearchGroupTabs({
 							tabIndex={active ? 0 : -1}
 							title={group.status === "error" && group.error !== null ? `${label}: ${group.error}` : label}
 							className={cn(
-								"search-group flex flex-none items-center gap-6 h-[24px] pl-7 pr-6 border rounded-7 text-badge whitespace-nowrap cursor-default transition-[background,color,border-color] duration-(--dur-color) ease-[ease] [&_.settings-app-icon]:grid [&_.settings-app-icon]:place-items-center",
-								active ? "bg-subtle border-border text-ink font-semibold" : "bg-transparent border-transparent text-ink-muted hover:bg-hover hover:text-ink",
+								"search-group flex flex-none items-center gap-6 h-[20px] pl-7 pr-6 border rounded-7 text-badge leading-[16px] whitespace-nowrap cursor-default transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
+								active ? "bg-subtle border-divider text-ink font-bold" : "bg-transparent border-transparent text-ink-muted hover:bg-hover hover:text-ink",
 								group.status === "error" && "text-danger-text",
 							)}
 							onClick={() => onSelect(group.key)}
 						>
 							<GroupGlyph group={group} />
-							<span>{label}</span>
-							<GroupBadge group={group} selected={active} />
+							<span className="tabular-nums">{countedLabel(label, group)}</span>
+							<GroupPending group={group} />
 						</button>
 					);
 				})}
 			</div>
-			<button
-				type="button"
-				className="search-ask flex flex-none items-center gap-5 h-[24px] px-8 border border-border rounded-7 bg-window text-badge text-ink-body whitespace-nowrap cursor-default hover:bg-hover hover:text-ink"
-				title={t("wholeSearch.askAiHint")}
-				onClick={onAskAi}
-			>
-				<SparklesIcon size={12} />
-				{t("wholeSearch.askAi")}
-			</button>
 		</div>
 	);
 }
@@ -170,8 +151,9 @@ const LIST_CLASS = "search-results min-h-0 flex-1 overflow-y-auto p-6 bg-window 
 function rowClass(selected: boolean): string {
 	return cn(
 		"search-hit flex items-start gap-10 px-10 py-7 rounded-7 cursor-default select-none",
-		selected ? "bg-accent text-on-accent [&_mark]:text-on-accent [&_mark]:underline" : "text-ink hover:bg-hover-row [&_mark]:text-accent",
-		"[&_mark]:bg-transparent [&_mark]:font-semibold",
+		selected ? "bg-accent text-on-accent" : "text-ink hover:bg-hover-row",
+		// Figma 428:2244: a matched term is bold in the line's own colour, as in the file-name list.
+		"[&_mark]:bg-transparent [&_mark]:[color:inherit] [&_mark]:font-bold",
 	);
 }
 
@@ -221,7 +203,7 @@ export function ContentResults({
 						</span>
 						<span className="flex min-w-0 flex-1 flex-col gap-2">
 							<span className="flex min-w-0 items-baseline gap-8">
-								<span className="min-w-0 truncate text-file-row font-medium">{hit.entry.name}</span>
+								<span className="min-w-0 truncate text-file-row font-medium">{emphasizeTerms(hit.entry.name, query)}</span>
 								<span className={cn("min-w-0 flex-1 truncate text-meta", selected ? "text-on-accent/80" : "text-ink-muted")}>{dirname(hit.entry.path)}</span>
 							</span>
 							<span className={cn("line-clamp-2 text-meta", selected ? "text-on-accent/90" : "text-ink-body")}>{markTerms(hit.snippet, query)}</span>
@@ -229,7 +211,7 @@ export function ContentResults({
 						<button
 							type="button"
 							className={cn(
-								"search-reveal flex-none self-center h-[22px] px-7 border-0 rounded-5 text-badge whitespace-nowrap cursor-default",
+								"search-reveal flex-none self-start h-[20px] px-7 border-0 rounded-5 text-badge whitespace-nowrap cursor-default",
 								selected ? "bg-on-accent/20 text-on-accent hover:bg-on-accent/30" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",
 							)}
 							onClick={(event) => {
@@ -297,7 +279,7 @@ export function SourceResults({
 					>
 						<span className="flex min-w-0 flex-1 flex-col gap-2">
 							<span className="flex min-w-0 items-baseline gap-8">
-								<span className="min-w-0 truncate text-file-row font-medium">{hit.title}</span>
+								<span className="min-w-0 truncate text-file-row font-medium">{emphasizeTerms(hit.title, query)}</span>
 								{hit.author !== null ? <span className={cn("min-w-0 truncate text-meta", selected ? "text-on-accent/80" : "text-ink-muted")}>{hit.author}</span> : null}
 								<span className="flex-1" />
 								{when !== null ? <span className={cn("flex-none text-meta tabular-nums", selected ? "text-on-accent/80" : "text-ink-faint")}>{when}</span> : null}
@@ -312,7 +294,7 @@ export function SourceResults({
 							<button
 								type="button"
 								className={cn(
-									"search-open flex flex-none items-center gap-4 self-center h-[22px] px-7 border-0 rounded-5 text-badge whitespace-nowrap cursor-default",
+									"search-open flex flex-none items-center gap-4 self-start h-[20px] px-7 border-0 rounded-5 text-badge whitespace-nowrap cursor-default",
 									selected ? "bg-on-accent/20 text-on-accent hover:bg-on-accent/30" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",
 								)}
 								onClick={(event) => {

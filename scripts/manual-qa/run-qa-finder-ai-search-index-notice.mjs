@@ -1,5 +1,5 @@
 /**
- * Manual QA — AI Search warns when the index it is about to search is not ready, in the real app.
+ * Manual QA — AI Chat warns when the index it is about to search is not ready, in the real app.
  *
  * A question that takes the local track (the librarian searches the person's own index) over an index that is
  * empty, small, or still being built shows a warning under the question, with a button to Settings → Indexing. A
@@ -118,7 +118,7 @@ const APP_ENV = {
 	ANTHROPIC_API_KEY: "",
 	AUTORAG_PERMISSION_MODE: "",
 	// No on-device embedding model in this profile, in a VM (where the runner copies the host's cache into the home) or on the host.
-	FASTEMBED_CACHE_DIR: join(WORK, "model-cache"),
+	INL_CACHE_DIR: join(WORK, "model-cache"),
 };
 
 let page;
@@ -126,8 +126,8 @@ let panel;
 let composer;
 /** The panel's own labels per interface language (the shared helpers look for the English ones). */
 const LABELS = {
-	en: { sidebar: "AI Search", panel: "AI Search", ask: "Ask Dazzi", stop: "Stop", newChat: "New chat" },
-	ko: { sidebar: "AI 검색", panel: "AI 검색", ask: "Dazzi에게 물어보기", stop: "중지", newChat: "새 대화" },
+	en: { sidebar: "AI Chat", panel: "AI Chat", ask: "Ask Dazzi", stop: "Stop", newChat: "New chat" },
+	ko: { sidebar: "AI 채팅", panel: "AI 채팅", ask: "Dazzi에게 물어보기", stop: "중지", newChat: "새 대화" },
 };
 let labels = LABELS.en;
 const start = async (language) => {
@@ -198,7 +198,7 @@ const indexingPage = page.getByText("Check that your search folders and connecte
 await indexingPage.waitFor();
 check("the Indexing page is the one showing", await indexingPage.isVisible());
 await shot("02-settings-indexing");
-check("the AI Search tab keeps the warning while Settings is open", (await page.locator('section[aria-label="AI Search"]', { hasText: "No documents are indexed" }).count()) === 1);
+check("the AI Chat tab keeps the warning while Settings is open", (await page.locator('section[aria-label="AI Chat"]', { hasText: "No documents are indexed" }).count()) === 1);
 
 // ── 2. A run that stopped: Settings' own refresh needs the on-device model, which this profile does not have. ──
 addDocs(1, 3);

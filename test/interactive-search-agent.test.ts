@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { type AssistantMessage, type FauxResponseStep, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAgentInteraction } from "../src/main/agent-interaction";
@@ -34,8 +34,13 @@ interface ToolResult {
 	readonly text: string;
 }
 
-async function build(mode: ApprovalMode, responses: FauxResponseStep[], respond: (request: InteractionRequest) => InteractionAnswer) {
-	const registration = registerFauxProvider({ api: `faux-dazzi-${randomUUID()}`, models: [{ id: "interactive" }] });
+async function build(
+	mode: ApprovalMode,
+	responses: FauxResponseStep[],
+	respond: (request: InteractionRequest) => InteractionAnswer,
+	input: ("text" | "image")[] = ["text", "image"],
+) {
+	const registration = registerFauxProvider({ api: `faux-dazzi-${randomUUID()}`, models: [{ id: "interactive", input }] });
 	registration.setResponses(responses);
 	disposers.push(() => registration.unregister());
 	const agentDir = join(root, "agent");
@@ -257,5 +262,67 @@ describe("onLocalTrack on the real librarian agent", () => {
 		progress.endStep("route", "done", "local");
 		expect(taken).toHaveBeenCalledTimes(1);
 		progress.end();
+	});
+});
+
+describe("pictures attached to a question", () => {
+	const png = { type: "image" as const, data: "iVBORw0KGgo=", mimeType: "image/png" };
+
+	/** The image blocks of every request the scripted model received, as the provider would send them. */
+	function recordImages(requests: number[]): FauxResponseStep[] {
+		const seen = (context: { messages: readonly { content: unknown }[] }): AssistantMessage => {
+			const count = context.messages.flatMap((message) => (Array.isArray(message.content) ? message.content : [])).filter((block: { type?: string }) => block.type === "image").length;
+			requests.push(count);
+			return fauxAssistantMessage("answer", { stopReason: "stop" });
+		};
+		return [(context) => seen(context), (context) => seen(context), (context) => seen(context)];
+	}
+
+	it("puts them in front of the model on the first question and on a follow-up", async () => {
+		const counts: number[] = [];
+		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }));
+
+		t.agent.setAttachmentImages([png]);
+		await t.agent.searchDocuments("what is in this screenshot?");
+		expect(counts.length).toBeGreaterThan(0);
+		expect(counts.every((count) => count === 1)).toBe(true);
+
+		counts.length = 0;
+		t.agent.setAttachmentImages([png]);
+		await t.agent.searchDocuments("and now?");
+		// The first picture stays in the conversation and the follow-up adds its own.
+		expect(Math.max(...counts)).toBe(2);
+	});
+
+	it("sends a question without pictures when none were set", async () => {
+		const counts: number[] = [];
+		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }));
+
+		await t.agent.searchDocuments("hello");
+
+		expect(counts.every((count) => count === 0)).toBe(true);
+	});
+
+	it("leaves them out for a model that takes no images, and still answers", async () => {
+		const counts: number[] = [];
+		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }), ["text"]);
+
+		t.agent.setAttachmentImages([png]);
+		await t.agent.searchDocuments("what is in this screenshot?");
+
+		expect(counts.length).toBeGreaterThan(0);
+		expect(counts.every((count) => count === 0)).toBe(true);
+	});
+
+	it("does not repeat them on the next question", async () => {
+		const counts: number[] = [];
+		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }));
+		t.agent.setAttachmentImages([png]);
+		await t.agent.searchDocuments("first");
+		counts.length = 0;
+
+		await t.agent.searchDocuments("second");
+
+		expect(Math.max(...counts)).toBe(1);
 	});
 });

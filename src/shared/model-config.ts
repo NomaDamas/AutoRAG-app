@@ -7,7 +7,7 @@ import type { AutoRagConfigUpdate, ModelCatalogEntry } from "./settings-contract
  * are supported by omitting `api` and letting the catalog model supply its own
  * transport — the config `api` is only an override and must be one of these.
  */
-const ALLOWED_AGENT_APIS: readonly string[] = [
+export const ALLOWED_AGENT_APIS: readonly string[] = [
 	"openai-completions",
 	"openai-responses",
 	"anthropic-messages",

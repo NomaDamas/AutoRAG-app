@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import { isJsonObject } from "../../../../shared/settings-contract";
+import { SelectField } from "./SelectField";
 
 /* ------------------------------------------------------------- field schema -- */
 
@@ -400,6 +401,36 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		],
 	},
 	{
+		id: "wombat",
+		// The product name the user sees; "wombat" is the CLI behind it.
+		label: "AI Sessions",
+		binary: "wombat",
+		summary: "settingsSources.templates.wombat.summary",
+		channels: "none",
+		polling: true,
+		groups: [
+			{
+				title: "settingsSources.groups.aiSessions",
+				fields: [
+					{ key: "agents", label: "settingsSources.fields.agents", kind: "stringList", placeholder: "claude-code", hint: "settingsSources.fields.hint.agents" },
+					{ key: "includeSubagents", label: "settingsSources.fields.includeSubagents", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.includeSubagents" },
+					{ key: "includeEphemeral", label: "settingsSources.fields.includeEphemeral", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.includeEphemeral" },
+					{ key: "dataDir", label: "settingsSources.fields.dataDir", kind: "text", placeholder: "~/.wombat", hint: "settingsSources.fields.hint.wombatDataDir" },
+				],
+			},
+			{
+				title: "settingsSources.groups.advancedRuntime",
+				fields: [
+					{ key: "binaryPath", label: "settingsSources.fields.binaryPath", kind: "text", hint: "settingsSources.fields.hint.binaryPathEmpty" },
+					{ key: "timeoutMs", label: "settingsSources.fields.searchTimeoutMs", kind: "number" },
+					{ key: "indexTimeoutMs", label: "settingsSources.fields.indexTimeoutMs", kind: "number" },
+					{ key: "maxBufferBytes", label: "settingsSources.fields.maxBufferBytes", kind: "number" },
+					{ key: "env", label: "settingsSources.fields.env", kind: "env", hint: "settingsSources.fields.hint.envSimple" },
+				],
+			},
+		],
+	},
+	{
 		id: "calendar",
 		label: "Apple Calendar & Reminders",
 		binary: "npx",
@@ -517,25 +548,21 @@ export function ConnectorFieldInput({ field, value, onChange }: { readonly field
 						? value
 						: "";
 			return (
-				<select
+				<SelectField
 					className="linear-select"
 					style={CONTROL_INPUT}
 					aria-label={t(field.label)}
 					value={current}
-					onChange={(event) => {
-						const label = event.target.value;
+					options={[
+						{ value: "", label: t("settingsSources.fields.defaultOption") },
+						...options.map((option) => ({ value: option, label: option })),
+						...(current.length > 0 && !options.includes(current) ? [{ value: current, label: current }] : []),
+					]}
+					onValueChange={(label) => {
 						if (optionValues !== undefined) onChange(label.length === 0 ? undefined : optionValues[label]);
 						else onChange(label.length === 0 ? undefined : label);
 					}}
-				>
-					<option value="">{t("settingsSources.fields.defaultOption")}</option>
-					{options.map((option) => (
-						<option key={option} value={option}>
-							{option}
-						</option>
-					))}
-					{current.length > 0 && !options.includes(current) ? <option value={current}>{current}</option> : null}
-				</select>
+				/>
 			);
 		}
 		case "stringList":

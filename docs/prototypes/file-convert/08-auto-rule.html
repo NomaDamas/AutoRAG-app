@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 8 · 자동 규칙</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 8: the app notices the same conversion a third time and offers to stop asking.
+		 * A rule is scoped to one folder, previews what it would touch, and every output is a visible derived file. */
+		.suggest {
+			position: absolute; left: 50%; bottom: 42px; z-index: 45; transform: translateX(-50%); width: 520px;
+			display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 12px 14px;
+			background: var(--bg-window); border: 1px solid var(--accent-pending-border); border-radius: var(--radius-12); box-shadow: var(--shadow-menu);
+		}
+		.suggest .gl { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-9); background: var(--accent-soft); color: var(--accent-text); }
+		.suggest b { display: block; color: var(--text-primary); font-size: 12.5px; font-weight: 600; }
+		.suggest p { margin: 2px 0 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.45; }
+		.suggest .acts { display: flex; gap: 6px; }
+
+		.rule {
+			position: absolute; inset: 0; z-index: 60; background: var(--scrim-modal); display: grid; place-items: center;
+		}
+		.rcard { width: 480px; background: var(--bg-window); border: 1px solid var(--border); border-radius: var(--radius-14); box-shadow: var(--shadow-menu); overflow: hidden; }
+		.rcard header { padding: 14px 18px 4px; }
+		.rcard h3 { margin: 0; font-size: 15px; color: var(--text-primary); font-weight: 600; }
+		.rcard header p { margin: 2px 0 0; color: var(--text-muted); font-size: 12px; }
+		.sentence { margin: 12px 18px 8px; padding: 12px 14px; border-radius: var(--radius-10); background: var(--bg-subtle-alt); border: 1px solid var(--border-divider); font-size: 13px; line-height: 2; color: var(--text-body); }
+		.sentence .tok { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; margin: 0 2px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--bg-window); color: var(--text-primary); font-weight: 600; font-size: 12px; }
+		.sentence .tok .icon { width: 12px; height: 12px; color: var(--text-muted); }
+		.sentence .tok.fmt-t { color: var(--accent-text); border-color: var(--accent-pending-border); background: var(--accent-wash); }
+		.would { margin: 0 18px; border: 1px solid var(--border-divider); border-radius: var(--radius-9); overflow: hidden; }
+		.would h5 { margin: 0; padding: 7px 12px; background: var(--bg-subtle-alt); border-bottom: 1px solid var(--border-divider); color: var(--text-faint); font-size: 10.5px; font-weight: 600; }
+		.wrow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; padding: 0 12px; height: 28px; font-size: 12px; }
+		.wrow + .wrow { border-top: 1px solid var(--border-divider); }
+		.wrow .a { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.wrow .icon { color: var(--text-faint); width: 12px; height: 12px; }
+		.wrow .b { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.wrow.skip .b { color: var(--text-faint); }
+		.opts { padding: 8px 18px 6px; }
+		.o { display: flex; align-items: center; justify-content: space-between; height: 30px; font-size: 12.5px; }
+		.o .l { color: var(--text-body); }
+		.o .l small { display: block; color: var(--text-muted); font-size: 11px; margin-top: -1px; }
+		.sw { position: relative; width: 30px; height: 18px; border-radius: 9px; background: var(--switch-off); border: 0; transition: background var(--dur-knob) var(--ease-out); flex: none; }
+		.sw i { position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--bg-window); box-shadow: var(--shadow-ql-knob); transition: left var(--dur-knob) var(--ease-out); }
+		.sw.on { background: var(--accent); } .sw.on i { left: 13px; }
+		.rcard footer { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border-divider); margin-top: 6px; }
+		.rcard footer .grow { flex: 1; color: var(--text-muted); font-size: 11.5px; }
+
+		.rules-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; margin-left: 8px; border-radius: var(--radius-full); background: var(--ok-bg); color: var(--ok-text); font-size: 11.5px; font-weight: 600; }
+		.rules-chip .icon { width: 12px; height: 12px; }
+		.pathbar .rules-chip { margin-left: auto; height: 18px; font-size: 10.5px; }
+		.derive-col { color: var(--text-muted); }
+		.frow.auto .name b { color: inherit; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* The Downloads-like folder: photos keep landing as HEIC. Three manual conversions in, the app offers a rule. */
+		const PHOTOS = [
+			{ id: "p1", name: "IMG_4021.heic", ext: "heic", tile: "heic", letter: "I", kind: "HEIC 이미지", size: "2.6 MB", date: "Oct 16, 08:51" },
+			{ id: "p2", name: "IMG_4022.heic", ext: "heic", tile: "heic", letter: "I", kind: "HEIC 이미지", size: "2.4 MB", date: "Oct 16, 08:51" },
+			{ id: "p3", name: "IMG_4023.heic", ext: "heic", tile: "heic", letter: "I", kind: "HEIC 이미지", size: "2.9 MB", date: "Oct 16, 08:52" },
+			{ id: "p4", name: "IMG_4030.heic", ext: "heic", tile: "heic", letter: "I", kind: "HEIC 이미지", size: "2.1 MB", date: "Oct 12, 18:20" },
+		];
+		const BASE = FILES.filter((f) => ["b", "c", "d", "h"].includes(f.id));
+		let stage = "suggest"; // suggest → editing → active
+		let opts = { keep: true, whenNew: true, askFirst: false };
+		let wouldAll = true;
+
+		function rows() {
+			const list = [...PHOTOS, ...BASE];
+			return list.map((f) => {
+				if (stage === "active" && f.ext === "heic") {
+					const jpg = { ...f, name: f.name.replace(".heic", ".jpg"), ext: "jpg", tile: "png", letter: "J", kind: "JPEG 이미지", date: "방금" };
+					return rowHtml(f, "") + `<div class="frow auto"><div class="name"><span class="tile t-png">J</span><b>${jpg.name}</b><span class="tag-derived">${icon("arrow-right", "sm")}파생</span></div><span class="meta">방금</span><span class="meta num">1.1 MB</span><span class="meta">JPEG 이미지</span><span class="meta">규칙</span></div>`;
+				}
+				return rowHtml(f, f.id === "p3" ? "sel mute" : "");
+			}).join("");
+		}
+
+		function card() {
+			return `<div class="rule"><div class="rcard" role="dialog" aria-label="자동 변환 규칙">
+				<header><h3>이 폴더의 HEIC 사진은 자동으로 JPG로</h3><p>세 번 같은 변환을 하셨어요. 다음부터는 직접 안 하셔도 됩니다.</p></header>
+				<div class="sentence">
+					<span class="tok">${icon("folder")}다운로드</span> 폴더에
+					<span class="tok">${icon("image")}HEIC</span> 파일이 생기면
+					<span class="tok fmt-t">${icon("arrow-right")}JPG</span>로 만들기
+				</div>
+				<div class="would"><h5>지금 있는 파일에 적용하면</h5>
+					${[["IMG_4021.heic", "IMG_4021.jpg"], ["IMG_4022.heic", "IMG_4022.jpg"], ["IMG_4023.heic", "IMG_4023.jpg"]].map(([a, b]) => `<div class="wrow"><span class="a">${a}</span>${icon("arrow-right")}<span class="b">${b}</span></div>`).join("")}
+					<div class="wrow skip"><span class="a">IMG_4030.heic</span>${icon("arrow-right")}<span class="b">이미 IMG_4030.jpg 있음 · 건너뜀</span></div>
+				</div>
+				<div class="opts">
+					<div class="o"><span class="l">원본 HEIC는 그대로 두기<small>끄면 변환 후 휴지통으로 옮겨요 (⌘Z 가능)</small></span><button class="sw ${opts.keep ? "on" : ""}" data-o="keep"><i></i></button></div>
+					<div class="o"><span class="l">앞으로 생기는 파일에도 적용</span><button class="sw ${opts.whenNew ? "on" : ""}" data-o="whenNew"><i></i></button></div>
+					<div class="o"><span class="l">변환할 때마다 알려주기<small>켜면 알림에서 “되돌리기”를 누를 수 있어요</small></span><button class="sw ${opts.askFirst ? "on" : ""}" data-o="askFirst"><i></i></button></div>
+				</div>
+				<footer><span class="grow">설정 → 변환 규칙에서 언제든 끄거나 지울 수 있어요</span><button class="btn" id="no">나중에</button><button class="btn primary" id="yes">규칙 만들고 3개 변환</button></footer>
+			</div></div>`;
+		}
+
+		function render() {
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 8", "같은 변환을 반복하면 규칙을 제안합니다. 무엇이 변환될지 먼저 보여주고, 결과는 항상 눈에 보이는 파생 파일입니다.", "08-auto-rule.html", "아이폰 사진을 AirDrop으로 받을 때마다 HEIC → JPG를 반복할 때 — 사람은 “이번 주에도 또 해야 하네”에서 가장 지칩니다") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">다운로드</div>
+					<div class="finder">${COLHEAD}<div class="rows">${rows()}</div></div>
+					<div class="pathbar">${icon("folder")}<span>Macintosh HD</span><span class="sep">›</span><span>사용자</span><span class="sep">›</span><span>jeffrey</span><span class="sep">›</span><span>다운로드</span>${stage === "active" ? `<span class="rules-chip">${icon("zap")}HEIC → JPG 자동</span>` : ""}</div>
+				</div>
+				${inspectorHtml(PHOTOS[2], baseChips())}
+				${stage === "suggest" ? `<div class="suggest"><span class="gl">${icon("wand-sparkles")}</span><div><b>HEIC → JPG, 세 번째예요</b><p>이 폴더에서 HEIC 사진을 매번 변환하고 계세요. 자동으로 할까요?</p></div><div class="acts"><button class="btn ghost" id="dismiss">그만 묻기</button><button class="btn primary" id="open">규칙 보기</button></div></div>` : ""}
+				${stage === "editing" ? card() : ""}
+			</div>
+			<div class="proto-bar"><span>단계</span>${[["suggest", "제안"], ["editing", "규칙 만들기"], ["active", "적용됨"]].map(([k, l]) => `<button class="btn ${stage === k ? "on" : ""}" data-s="${k}">${l}</button>`).join("")}<span class="sp"></span><span>가운데 행 = 방금 세 번째로 변환한 사진</span></div></div></div>`;
+			wireChrome();
+			document.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => { stage = b.dataset.s; render(); }));
+			document.getElementById("open")?.addEventListener("click", () => { stage = "editing"; render(); });
+			document.getElementById("dismiss")?.addEventListener("click", () => { stage = "active"; render(); stage = "suggest"; document.querySelector(".suggest")?.remove(); toast("이 폴더에서는 더 묻지 않을게요", "info"); });
+			document.getElementById("no")?.addEventListener("click", () => { stage = "suggest"; render(); });
+			document.getElementById("yes")?.addEventListener("click", () => { stage = "active"; render(); toast("규칙을 만들고 3개를 변환했어요 — 파생 파일로 표시돼요", "arrow-right-left"); });
+			document.querySelectorAll("[data-o]").forEach((b) => (b.onclick = () => { opts[b.dataset.o] = !opts[b.dataset.o]; const keepY = document.querySelector(".rcard")?.scrollTop; render(); }));
+		}
+		render();
+	</script>
+</body>
+</html>

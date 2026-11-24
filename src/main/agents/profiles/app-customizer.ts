@@ -365,7 +365,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			scriptShell: isWindows ? "powershell.exe" : "/bin/sh",
 			sidebar: {
 				lockedFavorites: [
-					{ id: "app:aiSearch", label: "AI Search (AI 검색)", visible: true, locked: true, note: "Always shown at top of Favorites; cannot be hidden." },
+					{ id: "app:aiSearch", label: "AI Agent (AI 에이전트)", visible: true, locked: true, note: "Always shown at top of Favorites; cannot be hidden." },
 					{ id: "app:automations", label: "Automations (자동화)", visible: true, locked: true, note: "Always shown at top of Favorites; cannot be hidden." },
 				],
 				favorites: orderedFavorites,
@@ -460,7 +460,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		name: "update_sidebar",
 		label: "Update Sidebar",
 		description:
-			"Customize which items and sections appear in the Dazzi Finder sidebar, their order, or custom pinned folders. IMPORTANT: `AI Search` (`app:aiSearch`) and `Automations` (`app:automations` / `자동화`) are mandatory core features and can NEVER be hidden.",
+			"Customize which items and sections appear in the Dazzi Finder sidebar, their order, or custom pinned folders. IMPORTANT: `AI Agent` (`app:aiSearch`) and `Automations` (`app:automations` / `자동화`) are mandatory core features and can NEVER be hidden.",
 		parameters: Type.Object({
 			showItems: Type.Optional(
 				Type.Array(Type.String(), {
@@ -477,13 +477,13 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			showOnlyFavorites: Type.Optional(
 				Type.Array(Type.String(), {
 					description:
-						"When provided, hides all other customizable Favorite items so ONLY 'AI Search', 'Automations', and the items listed here remain visible in Favorites.",
+						"When provided, hides all other customizable Favorite items so ONLY 'AI Agent', 'Automations', and the items listed here remain visible in Favorites.",
 				}),
 			),
 			favoritesOrder: Type.Optional(
 				Type.Array(Type.String(), {
 					description:
-						"Desired order of customizable Favorite items (e.g. ['place:downloads', 'place:documents', 'place:desktop']). Items listed here are placed first in this exact order below 'AI Search' and 'Automations'.",
+						"Desired order of customizable Favorite items (e.g. ['place:downloads', 'place:documents', 'place:desktop']). Items listed here are placed first in this exact order below 'AI Agent' and 'Automations'.",
 				}),
 			),
 			showSections: Type.Optional(
@@ -616,14 +616,14 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				for (const raw of params.hideItems) {
 					if (isLockedSidebarItemId(raw)) {
 						warnings.push(
-							`'AI Search' (app:aiSearch) and 'Automations / 자동화' (app:automations) are required core features and cannot be hidden. Kept '${raw}' visible.`,
+							`'AI Agent' (app:aiSearch) and 'Automations / 자동화' (app:automations) are required core features and cannot be hidden. Kept '${raw}' visible.`,
 						);
 						continue;
 					}
 					const resolved = resolveCandidateItemId(raw, locations, tags, customFavorites, home);
 					if (isLockedSidebarItemId(resolved)) {
 						warnings.push(
-							`'AI Search' (app:aiSearch) and 'Automations / 자동화' (app:automations) are required core features and cannot be hidden. Kept '${raw}' visible.`,
+							`'AI Agent' (app:aiSearch) and 'Automations / 자동화' (app:automations) are required core features and cannot be hidden. Kept '${raw}' visible.`,
 						);
 						continue;
 					}
@@ -660,7 +660,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 						normalizedSection === "个人收藏"
 					) {
 						warnings.push(
-							"The 'Favorites' section cannot be hidden because 'AI Search' and 'Automations' live in it and must always remain visible.",
+							"The 'Favorites' section cannot be hidden because 'AI Agent' and 'Automations' live in it and must always remain visible.",
 						);
 						continue;
 					}
@@ -705,6 +705,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				favoritesOrder,
 				sectionOrder,
 				customFavorites,
+				custom: current.custom,
 			});
 
 			ensureLive();
@@ -920,6 +921,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				hiddenSections: [...hiddenSections],
 				sectionOrder,
 				magicActions,
+				custom: current.custom,
 			});
 
 			ensureLive();
@@ -1108,7 +1110,7 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 			: "`executionKind: 'script'` runs in `/bin/sh`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`";
 	return [
 		"You are Dazzi's dedicated App Customization Assistant (`app-customizer`), embedded inside Settings.",
-		`Always reply in ${replyLang}, concisely and warmly.`,
+		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
 		"",
 		"## Role & Scope",
 		"- You customize Dazzi's own app settings (stored in `settings-state.json`, completely separate from the AutoRAG index config).",
@@ -1119,8 +1121,8 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
 		"",
 		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",
-		"- Sidebar: `AI Search` (`app:aiSearch`, 'AI 검색') and `Automations` (`app:automations`, '자동화') at the top of Favorites can NEVER be hidden or removed.",
-		"- Right-Click Context Menu: `Tags` (`builtin:tags`, '태그', and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
+		"- Sidebar: `AI Agent` (`app:aiSearch`) and `Automations` (`app:automations`) at the top of Favorites can NEVER be hidden or removed.",
+		"- Right-Click Context Menu: `Tags` (`builtin:tags`, and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
 		"- If the person asks to hide any locked item (or asks to 'hide everything'), keep the locked items visible, apply the rest of their request, and explain politely which core items always remain shown.",
 		"",
 		"## Workflow",

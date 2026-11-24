@@ -42,24 +42,60 @@
 	border-right: 1px solid var(--border);
 }
 
-/* An empty head level with the Finder sidebar's: room for the window's traffic lights, and the window drags from it. */
+/* A head level with the Finder sidebar's: room for the window's traffic lights, the sidebar toggle at the right, and the
+ * window drags from it. */
 .settings-sidebar-head {
+	display: flex;
 	flex: none;
+	align-items: center;
+	justify-content: flex-end;
 	height: var(--size-toolbar);
+	padding: 0 var(--space-12);
 	-webkit-app-region: drag;
 }
 
-/* The way out: the first row under the head, above the search, built like a page row so it reads as one more button in the list. */
-.settings-sidebar-backrow {
+.settings-sidebar-toggle {
+	-webkit-app-region: no-drag;
+}
+
+/* The way out (Figma 403:8201): a footer under a rule, 49px with the rule, 14px in from the edge. */
+.settings-sidebar-foot {
+	display: flex;
 	flex: none;
-	padding: var(--space-2) var(--space-10) 0;
+	align-items: center;
+	height: 49px;
+	padding: 0 var(--space-14);
+	border-top: 1px solid var(--border);
+}
+
+.settings-sidebar-back {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: 27px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted); /* Figma 403:10583: muted text, a faint chevron. */
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+	cursor: pointer;
+}
+
+.settings-sidebar-back > svg {
+	color: var(--text-faint);
+}
+
+.settings-sidebar-back:hover,
+.settings-sidebar-back:hover > svg {
+	color: var(--text-primary);
 }
 
 .settings-sidebar-scroll {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: var(--space-10);
+	gap: var(--space-8);
 	min-height: 0;
 	overflow-y: auto;
 	padding: var(--space-6) var(--space-10) var(--space-12);
@@ -73,11 +109,14 @@
 }
 
 .settings-sidebar-group-title {
-	padding: var(--space-4) var(--space-8);
+	display: flex;
+	align-items: center;
+	height: 24px;
+	padding: var(--space-6) 0 var(--space-4) var(--space-8);
 	font-size: var(--font-size-badge);
-	font-weight: 600;
+	font-weight: var(--weight-medium);
+	line-height: 14px;
 	color: var(--text-muted);
-	letter-spacing: var(--tracking-label);
 }
 
 
@@ -118,11 +157,6 @@
 	white-space: nowrap;
 }
 
-/* The active row is accent-filled; a brand mark drawn in currentColor must stay legible on it. */
-.settings-nav-item--source.is-active .settings-app-icon {
-	background: var(--bg-input);
-	color: var(--text-primary);
-}
 
 .settings-nav-item {
 	display: flex;
@@ -147,10 +181,10 @@
 	color: var(--text-primary);
 }
 
+/* Figma 403:8201: the open page is a grey row in ink, the Finder sidebar's selection, not an accent fill. */
 .settings-nav-item.is-active {
-	background: var(--accent);
-	color: var(--text-on-accent);
-	font-weight: var(--weight-medium);
+	background: var(--bg-selected-nav);
+	color: var(--text-primary);
 }
 
 .settings-nav-icon {
@@ -163,7 +197,19 @@
 }
 
 .settings-nav-item.is-active .settings-nav-icon {
-	color: var(--text-on-accent);
+	color: var(--text-primary);
+}
+
+/* The sidebar is hidden: its toggle sits where the Finder toolbar's does, after the traffic lights on macOS. */
+.settings-main-sidebar {
+	position: absolute;
+	top: calc((var(--size-toolbar) - var(--size-toolbar-icon)) / 2);
+	left: var(--space-10);
+	-webkit-app-region: no-drag;
+}
+
+.settings-main-sidebar--lights {
+	left: calc(var(--space-12) + 70px);
 }
 
 /* ---------------------------------------------------------------- Content -- */
@@ -201,8 +247,11 @@
 	min-width: 0;
 	min-height: 0;
 	overflow-y: auto;
+	/* Keep the scrollbar's lane even when a page is short, so the centred column does not jump sideways when a
+	   page grows past the window (원격 접속 turned on) or shrinks again. */
+	scrollbar-gutter: stable;
 	background: var(--bg-window);
-	padding: 36px 56px 64px; /* reference geometry; the token scale has no 56/64. */
+	padding: 48px 56px 64px; /* reference geometry (Figma 403:9482: the head 12px lower than before); the token scale has no 48/56/64. */
 }
 
 .settings-content-wrap {
@@ -601,10 +650,16 @@
 
 .settings-view .settings-page-head .linear-title {
 	margin: 0 0 var(--space-6);
+	font-size: 22px; /* Figma 535:12679: 22px bold, 22px line, 6px above the description. */
+	font-weight: var(--weight-bold);
+	line-height: 22px;
+	letter-spacing: 0;
 }
 
 .settings-view .settings-page-head .linear-desc {
 	margin: 0;
+	font-size: 13px;
+	line-height: 21px;
 }
 
 /* ---------------------------------------------------------- List groups -- */
@@ -965,11 +1020,11 @@
 	width: 280px;
 	max-height: min(420px, calc(100vh - 24px));
 	overflow-y: auto;
-	padding: var(--space-5);
+	padding: var(--space-4);
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-8);
 	background: var(--bg-window);
-	box-shadow: var(--shadow-menu);
+	box-shadow: var(--shadow-dropdown);
 	font-size: 12.5px;
 }
 
@@ -1143,7 +1198,7 @@
 
 .settings-view .settings-menu-item:hover,
 .settings-view .settings-menu-item.is-open {
-	background: var(--bg-hover-strong);
+	background: var(--bg-hover);
 }
 .settings-view .settings-menu-item.is-danger {
 	color: var(--danger-text);
@@ -1189,9 +1244,11 @@
 
 .settings-view .settings-modal h2 {
 	margin: 0 0 var(--space-6);
+	padding-right: 32px;
 	color: var(--text-primary);
 	font-size: 15px;
 	font-weight: var(--weight-semibold);
+	line-height: 24px;
 }
 
 .settings-view .settings-modal p {
@@ -1214,6 +1271,7 @@
 
 .settings-view .settings-modal input:not([type="radio"], [type="checkbox"]),
 .settings-view .settings-modal select,
+.settings-view .settings-modal .select-field:not(.linear-select),
 .settings-view .settings-modal textarea {
 	display: block;
 	width: 100%;
@@ -1226,6 +1284,17 @@
 	color: var(--text-primary);
 	font-size: 12.5px;
 	outline: none;
+}
+
+/* The modal's dropdowns: the same flat field, with the chevron the settings selects draw. */
+.settings-view .settings-modal .select-field:not(.linear-select),
+.settings-view .shortcut-key-select {
+	display: flex;
+	padding-right: 28px;
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+	background-position: calc(100% - 15px) 50%, calc(100% - 11px) 50%;
+	background-size: 4px 4px;
+	background-repeat: no-repeat;
 }
 
 .settings-view .settings-modal textarea {
@@ -1261,24 +1330,30 @@
 
 .settings-view .settings-modal input:focus,
 .settings-view .settings-modal select:focus,
+.settings-view .settings-modal .select-field:focus-visible,
 .settings-view .settings-modal textarea:focus {
 	border-color: var(--accent);
 	box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/*
+ * One close button for every settings modal: a 14px X in a 24px square, 16px from the right edge, centred on the
+ * title's 24px line. `top` is the modal's top padding, so a variant with other padding only moves it down.
+ * `right` starts inside the modal's 1px border, so 15px here is 16px from the edge; the borderless variant says 16px.
+ */
 .settings-view .settings-modal-close {
 	position: absolute;
-	top: var(--space-12);
-	right: var(--space-12);
+	top: 22px;
+	right: 15px;
 	display: grid;
 	place-items: center;
 	width: 24px;
 	height: 24px;
 	padding: 0;
 	border: 0;
-	border-radius: var(--radius-full);
+	border-radius: var(--radius-6);
 	background: transparent;
-	color: var(--text-faint);
+	color: var(--text-muted);
 	cursor: pointer;
 }
 
@@ -1302,6 +1377,585 @@
 .settings-view .settings-modal-actions .linear-btn:disabled {
 	opacity: 0.6;
 	cursor: progress;
+}
+
+/* -------------------------------------------- 중요 알림 (Figma 580:15140) -- */
+
+/* A short yes/no question: a small card, title and close on one line, the actions at 32px. */
+.settings-view .settings-modal.settings-alert {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+	width: min(416px, calc(100% - 32px));
+	padding: var(--space-14) var(--space-16);
+	border-radius: 14px;
+	box-shadow: var(--shadow-notice);
+}
+
+.settings-view .settings-alert h2 {
+	margin: 0;
+	padding-right: 32px;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 24px;
+}
+
+.settings-view .settings-alert p {
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-alert .settings-modal-close {
+	top: var(--space-14);
+}
+
+.settings-view .magic-editor-modal .settings-modal-close {
+	top: 22px;
+	right: var(--space-16);
+}
+
+.settings-view .settings-alert .settings-modal-actions {
+	margin-top: 0;
+}
+
+.settings-view .settings-alert .settings-modal-actions .linear-btn {
+	height: 32px;
+	font-weight: var(--weight-medium);
+}
+
+/* --------------------------------------- 매직 액션 만들기 모달 (Figma 598:3131) -- */
+
+.settings-view .settings-modal.magic-editor-modal {
+	width: min(468px, calc(100% - 32px));
+	padding: 22px 20px 18px;
+	border: 0;
+	border-radius: 16px;
+	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.settings-view .magic-editor {
+	display: flex;
+	flex-direction: column;
+}
+
+/* The icon starts on the content's left edge, like 처리 방식 below, and sits on the name's 24px line, 10px before it. */
+.settings-view .magic-editor-head {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-10);
+	padding-right: 32px;
+}
+
+.settings-view .magic-editor-tile {
+	display: flex;
+	flex: none;
+	align-items: center;
+	height: 24px;
+	color: var(--accent-text);
+}
+
+/* The name is the title: a borderless 17px field with the hint under it. */
+.settings-view .magic-editor-name {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .settings-modal .magic-editor-name > input {
+	height: 24px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: 17px;
+	font-weight: var(--weight-bold);
+	line-height: 24px;
+}
+
+.settings-view .settings-modal .magic-editor-name > input:focus {
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-name > input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .magic-editor-name > span,
+.settings-view .magic-editor-caption {
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+/* 처리 방식: a full-width segmented control, the picked half a white chip. */
+.settings-view .magic-editor-kind {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: 20px 0 var(--space-12);
+}
+
+.settings-view .magic-editor-seg {
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--bg-input);
+}
+
+.settings-view .magic-editor-seg > button {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-6);
+	min-width: 0;
+	padding: var(--space-6) var(--space-12);
+	border: 0.5px solid transparent;
+	border-radius: var(--radius-8);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 13px;
+	line-height: 19px;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-seg > button.is-active {
+	border-color: var(--border);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+}
+
+/* The instruction card: the prompt (or the command) on grey, with its permission chip underneath. */
+.settings-view .magic-editor-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding: var(--space-12) var(--space-12) var(--space-10);
+	border-radius: var(--radius-12);
+	background: var(--bg-chrome);
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea {
+	height: auto;
+	min-height: 84px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: 14px;
+	line-height: 22px;
+	resize: none;
+	field-sizing: content;
+	max-height: 220px;
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea:focus {
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-card > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .magic-editor-card-bar {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-modal p.magic-editor-card-hint {
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	overflow-wrap: anywhere;
+}
+
+.settings-view .magic-editor-mode {
+	position: relative;
+}
+
+.settings-view .magic-editor-mode-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: 5px var(--space-10);
+	border: 0.5px solid var(--border);
+	border-radius: 13px;
+	background: var(--bg-window);
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 17px;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mode-chip:hover,
+.settings-view .magic-editor-mode-chip[aria-expanded="true"] {
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-mode-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 2;
+	width: 300px;
+	margin: 0;
+	padding: var(--space-4);
+	list-style: none;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-menu);
+}
+
+.settings-view .magic-editor-mode-menu button {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-8);
+	width: 100%;
+	padding: var(--space-6) var(--space-8);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mode-menu button > svg {
+	flex: none;
+	margin-top: 1px;
+}
+
+.settings-view .magic-editor-mode-menu button:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .magic-editor-mode-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .magic-editor-mode-text > small {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+}
+
+/* 표시할 대상 and 고급 설정: one bordered group of rows, each opening a tinted panel. */
+.settings-view .magic-editor-group {
+	margin-top: var(--space-16);
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-12);
+	overflow: hidden;
+}
+
+.settings-view .magic-editor-section + .magic-editor-section {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .magic-editor-section > summary {
+	display: flex;
+	align-items: center;
+	gap: var(--space-10);
+	height: 44px;
+	padding: 0 var(--space-14);
+	list-style: none;
+	cursor: pointer;
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-section > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .magic-editor-section > summary > svg {
+	flex: none;
+}
+
+.settings-view .magic-editor-section-name {
+	flex: none;
+	font-size: 14px;
+	line-height: 20px;
+}
+
+.settings-view .magic-editor-section-value {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-section-chevron {
+	color: var(--text-muted);
+	transition: transform 120ms ease;
+}
+
+.settings-view .magic-editor-section[open] > summary > .magic-editor-section-chevron {
+	transform: rotate(90deg);
+}
+
+.settings-view .magic-editor-sub {
+	padding: var(--space-4) var(--space-14);
+	border-top: 0.5px solid var(--border-divider);
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .magic-editor-sub > * + * {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .magic-editor-sub-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	min-height: 40px;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-sub-row > span {
+	flex: none;
+}
+
+.settings-view .magic-editor-sub-row.is-switch {
+	padding: var(--space-8) 0;
+}
+
+.settings-view .magic-editor-switch-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .magic-editor-switch-text > small {
+	font-size: var(--font-size-badge);
+	line-height: 1.4;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-mini-seg {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .magic-editor-mini-seg > button {
+	padding: 3px var(--space-10);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 17px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mini-seg > button:hover:not(.is-active) {
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-mini-seg > button.is-active {
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+/* 확장자: blue chips (a click removes one), then the field that adds the next. */
+.settings-view .magic-editor-exts {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	align-items: center;
+	gap: var(--space-6);
+	min-width: 0;
+	padding: var(--space-6) 0;
+}
+
+.settings-view .magic-editor-ext {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: 28px;
+	padding: 0 var(--space-12);
+	border: 0;
+	border-radius: 14px;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	cursor: pointer;
+}
+
+.settings-view .settings-modal .magic-editor-exts > input {
+	width: 150px;
+	height: 27px;
+	margin: 0;
+	padding: 0 var(--space-8);
+	border: 0.5px solid var(--border);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-modal label.magic-editor-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin: 0;
+	padding: var(--space-10) 0;
+	font-size: 13px;
+}
+
+.settings-view .settings-modal label.magic-editor-field > input {
+	margin: 0;
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .magic-editor .settings-modal-actions {
+	margin-top: 20px;
+}
+
+.settings-view .magic-editor .settings-modal-actions .linear-btn {
+	height: 28px;
+	padding: 0 var(--space-10);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .magic-editor .settings-modal-actions .linear-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* MCP 서버 추가/수정 in the same dialog: the card holds labelled monospace lines instead of one prompt. */
+.settings-view .mcp-editor-card {
+	gap: 0;
+	padding: 0 var(--space-12);
+}
+
+.settings-view .settings-modal label.mcp-editor-line {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	margin: 0;
+	padding: var(--space-10) 0;
+}
+
+.settings-view .mcp-editor-line + .mcp-editor-line {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .settings-modal .mcp-editor-line > input,
+.settings-view .settings-modal .mcp-editor-line > textarea {
+	height: auto;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 20px;
+	resize: none;
+}
+
+.settings-view .settings-modal .mcp-editor-line > textarea {
+	field-sizing: content;
+	min-height: 60px;
+	max-height: 160px;
+}
+
+.settings-view .settings-modal .mcp-editor-line > input:focus,
+.settings-view .settings-modal .mcp-editor-line > textarea:focus {
+	box-shadow: none;
+}
+
+.settings-view .mcp-editor-line > input::placeholder,
+.settings-view .mcp-editor-line > textarea::placeholder,
+.settings-view .magic-editor-field > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .mcp-editor-line > small,
+.settings-view .magic-editor-field > small {
+	font-size: var(--font-size-badge);
+	line-height: 1.4;
+	color: var(--text-muted);
+	white-space: pre-line;
+}
+
+.settings-view .settings-modal label.magic-editor-field > textarea {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+	field-sizing: content;
+	min-height: 62px;
+	resize: none;
+}
+
+/* 도구 노출 방식: one row per choice, its hint under the name and a check on the picked one. */
+.settings-view .mcp-editor-choices {
+	display: flex;
+	flex-direction: column;
+	padding: var(--space-4) 0;
+}
+
+.settings-view .mcp-editor-choices > button {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	padding: var(--space-6) var(--space-8);
+	margin: 0 calc(-1 * var(--space-8));
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .mcp-editor-choices > button:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .mcp-editor-choices > button > svg {
+	flex: none;
+	color: var(--accent-text);
+}
+
+.settings-view .magic-editor .mcp-editor-note {
+	margin-top: var(--space-12);
 }
 
 /* ------------------------------------------------- Indexing · progress map -- */
@@ -1332,9 +1986,9 @@
 	stroke-width: 0.35;
 	outline: none;
 }
-.settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--tag-blue); }
-.settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--tag-yellow); }
-.settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--tag-red); }
+.settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--index-map-done); }
+.settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--index-map-partial); }
+.settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--index-map-pending); }
 .settings-view .index-map-panel [data-state="excluded"] { --index-map-color: var(--tag-gray); }
 .settings-view .index-map-sector[data-active="true"],
 .settings-view .index-map-sector:focus-visible {
@@ -1356,7 +2010,8 @@
 	padding: var(--space-8);
 	border: 0;
 	border-radius: var(--radius-full);
-	background: var(--bg-window);
+	/* Clear, so the seed head drawn in the chart's hole shows around the readout. */
+	background: transparent;
 	color: var(--text-muted);
 	cursor: pointer;
 	font-size: var(--font-size-meta);
@@ -1370,7 +2025,22 @@
 	line-height: 1.25;
 }
 .settings-view .index-map-center small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-meta); }
-.settings-view .index-map-center:hover { background: var(--bg-subtle); }
+.settings-view .index-map-center:hover:not(:disabled) { background: color-mix(in srgb, var(--bg-window) 60%, transparent); }
+.settings-view .index-map-center:disabled { cursor: default; }
+/* Sectors pop and seeds turn about the chart's centre (320,320 in the 640 viewBox). */
+.settings-view .index-map-sector,
+.settings-view .index-map-seeds-turn { transform-box: view-box; transform-origin: 320px 320px; }
+.settings-view .index-map-chart.is-zooming .index-map-sector { pointer-events: none; }
+.settings-view .index-map-chart.is-zooming .index-map-edge { visibility: hidden; }
+.settings-view .index-map-seeds-turn { pointer-events: none; }
+.settings-view .index-map-seed { r: var(--index-map-seed-r); fill: var(--index-map-seed-empty); transition: fill 260ms ease; }
+.settings-view .index-map-seed[data-lit="true"] { fill: var(--index-map-seed); }
+/* The newest seeds stay bright; after a zoom the seeds fill again from the centre outward, one step apart. */
+.settings-view .index-map-seed[data-lit="new"] { fill: var(--index-map-seed-new); }
+.settings-view .index-map-seeds.is-refill .index-map-seed { transition-delay: calc(var(--i) * 7ms); }
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .index-map-seed { transition: none; }
+}
 .settings-view .index-map-sidebar {
 	display: flex;
 	flex-direction: column;
@@ -1419,12 +2089,12 @@
 /* Where a running index just moved: a ring, never a fill, so the four state colours stay readable under it. */
 .settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); animation: index-map-ring 1.2s ease-in-out infinite; }
 .settings-view .index-map-edge { fill: none; stroke: var(--accent); stroke-width: 3; pointer-events: none; animation: index-map-ring 1.2s ease-in-out infinite; }
-.settings-view .index-map-folders button[data-progress]::after { flex-shrink: 0; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); content: ""; animation: index-map-ring 1.2s ease-in-out infinite; }
+.settings-view .index-map-folders .index-map-row[data-progress]::after { flex-shrink: 0; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); content: ""; animation: index-map-ring 1.2s ease-in-out infinite; }
 @keyframes index-map-ring { 50% { opacity: 0.35; stroke-opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) {
 	.settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch,
 	.settings-view .index-map-edge,
-	.settings-view .index-map-folders button[data-progress]::after { animation: none; }
+	.settings-view .index-map-folders .index-map-row[data-progress]::after { animation: none; }
 }
 .settings-view .index-map-folders .index-map-parent { color: var(--text-muted); }
 .settings-view .index-map-folders .index-map-parent svg { color: var(--text-muted); }
@@ -1891,20 +2561,79 @@
 /* ------------------------------------------------ Sidebar customization -- */
 
 .settings-view .sidebar-ai-hero {
+	position: relative;
+	isolation: isolate;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-16);
 	margin-bottom: var(--space-16);
-	padding: var(--space-14) var(--space-16);
-	border: 1px solid var(--accent-pending-border);
-	border-radius: var(--radius-10);
-	background: linear-gradient(135deg, var(--accent-drop-hover) 0%, var(--bg-subtle) 100%);
+	padding: 12px 14px;
+	border-radius: var(--radius-12);
+	background: var(--bg-window); /* Figma 535:12679: a white card on a soft shadow, no line. */
+	box-shadow: 2px 2px 6px rgb(0 0 0 / 0.15);
+}
+
+/* 20px under the page head (the head's 8px bottom margin collapses into this one). */
+.settings-view .settings-page-head + .sidebar-ai-hero {
+	margin-top: 20px;
+}
+
+/* Behind the card, a very faint yellow and blue light drifts slowly from side to side. */
+.settings-view .sidebar-ai-hero::before {
+	position: absolute;
+	inset: -5px;
+	z-index: -1;
+	border-radius: 16px;
+	background: linear-gradient(
+		110deg,
+		color-mix(in srgb, var(--tag-yellow) 70%, transparent) 0%,
+		color-mix(in srgb, var(--accent) 55%, transparent) 50%,
+		color-mix(in srgb, var(--tag-yellow) 70%, transparent) 100%
+	);
+	background-size: 300% 100%;
+	filter: blur(12px);
+	opacity: 0.28;
+	pointer-events: none;
+	content: "";
+	animation: sidebar-ai-hero-glow 10s ease-in-out infinite alternate;
+}
+
+/* The card's own white sits over the light, so the glow shows only around its edges, never through it. */
+.settings-view .sidebar-ai-hero::after {
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--bg-window);
+	pointer-events: none;
+	content: "";
+}
+
+@keyframes sidebar-ai-hero-glow {
+	0% {
+		background-position: 0% 50%;
+		opacity: 0.2;
+	}
+	50% {
+		opacity: 0.34;
+	}
+	100% {
+		background-position: 100% 50%;
+		opacity: 0.2;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .sidebar-ai-hero::before {
+		animation: none;
+	}
 }
 
 .settings-view .sidebar-ai-hero__body {
 	display: flex;
 	align-items: center;
+	flex: 1;
 	gap: var(--space-12);
 	min-width: 0;
 }
@@ -1933,33 +2662,31 @@
 }
 
 .settings-view .sidebar-ai-hero__title {
-	font-size: var(--font-size-sm);
-	font-weight: var(--weight-semibold);
+	font-size: 13px;
+	font-weight: var(--weight-bold);
+	line-height: 18px;
 	color: var(--text-primary);
 }
 
 .settings-view .sidebar-ai-hero__desc {
 	margin: 0;
 	font-size: var(--font-size-meta);
-	line-height: 1.4;
+	line-height: 17px;
 	color: var(--text-muted);
 }
 
-.settings-view .sidebar-ai-hero__btn {
+/* The accent button, 6px × 12px, 8px corners, 12px medium; no logo in it. */
+.settings-view .linear-btn.sidebar-ai-hero__btn {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-6);
 	flex: none;
+	height: auto;
+	padding: 6px 12px;
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 18px;
 	white-space: nowrap;
-}
-
-.settings-view .sidebar-ai-hero__btn-logo {
-	display: block;
-	flex: none;
-	width: 16px;
-	height: 16px;
-	object-fit: contain;
-	background: transparent;
 }
 
 .settings-view .sidebar-presets-bar {
@@ -2279,7 +3006,7 @@
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
-	background: var(--bg-window);
+	background: var(--bg-subtle-alt);
 }
 
 .customizer-panel[hidden] {
@@ -2291,8 +3018,9 @@
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 28px;
-	height: 28px;
+	width: 20px;
+	height: 20px;
+	margin-right: 2px;
 	padding: 0;
 	border: 0;
 	border-radius: var(--radius-6);
@@ -2307,13 +3035,14 @@
 	color: var(--text-primary);
 }
 
+/* Figma 430:11205: 12px sides, 10px top and bottom, 20px between everything in the thread. */
 .customizer-panel__body {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--space-16);
+	padding: var(--space-10) var(--space-12);
 }
 
 .customizer-panel__empty {
@@ -2325,42 +3054,61 @@
 	text-align: center;
 }
 
+/* Figma 367:8865: the faded 67px mark, a 14px title and 12px line 8px apart, then the suggestions 20px below. */
 .customizer-panel__empty-orb {
 	display: grid;
 	place-items: center;
-	width: 56px;
-	height: 56px;
-	margin-bottom: var(--space-12);
+	width: 67px;
+	height: 67px;
+	margin-bottom: var(--space-8);
 	background: transparent;
 }
 
 .customizer-panel__empty-logo {
 	display: block;
-	width: 52px;
-	height: 52px;
+	width: 67px;
+	height: 67px;
 	object-fit: contain;
 	background: transparent;
 }
 
+.customizer-panel__empty-logo--light {
+	opacity: 0.5;
+}
+
+.customizer-panel__empty-logo--dark {
+	display: none;
+}
+
+:where(html[data-appearance="dark"]) .customizer-panel__empty-logo--light {
+	display: none;
+}
+
+:where(html[data-appearance="dark"]) .customizer-panel__empty-logo--dark {
+	display: block;
+}
+
 .customizer-panel__empty-title {
-	margin: 0 0 var(--space-6);
-	font-size: 15px;
-	font-weight: var(--weight-semibold);
+	margin: 0 0 var(--space-8);
+	font-size: var(--font-size-body);
+	font-weight: var(--weight-medium);
+	line-height: 19px;
 	color: var(--text-primary);
 }
 
 .customizer-panel__empty-desc {
-	margin: 0 0 var(--space-18);
-	max-width: 380px;
+	margin: 0 0 var(--space-20);
+	max-width: 269px;
 	font-size: var(--font-size-meta);
-	line-height: var(--leading-body);
+	line-height: 16px;
 	color: var(--text-muted);
+	word-break: keep-all;
 }
 
 .customizer-panel__suggestions {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-8);
+	gap: var(--space-4);
 	width: 100%;
 	max-width: 440px;
 }
@@ -2370,14 +3118,16 @@
 	align-items: center;
 	gap: var(--space-8);
 	width: 100%;
-	padding: var(--space-10) var(--space-12);
+	padding: var(--space-8) var(--space-12);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-8);
-	background: var(--bg-subtle);
+	background: var(--bg-window);
 	color: var(--text-body);
 	font: inherit;
 	font-size: var(--font-size-meta);
+	line-height: 18px;
 	text-align: left;
+	word-break: keep-all;
 	cursor: pointer;
 	transition: background var(--dur-color) var(--ease-out), border-color var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out);
 }
@@ -2391,13 +3141,13 @@
 .customizer-panel__turns {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-18);
+	gap: 20px;
 }
 
 .customizer-turn {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-10);
+	gap: 20px;
 }
 
 .customizer-turn__user-row {
@@ -2405,60 +3155,67 @@
 	justify-content: flex-end;
 }
 
-.customizer-turn__user-bubble {
-	max-width: 82%;
-	padding: var(--space-8) var(--space-12);
-	border-radius: var(--radius-12) var(--radius-12) var(--radius-3) var(--radius-12);
-	background: var(--accent);
-	color: var(--text-on-accent);
-	font-size: var(--font-size-sm);
-	line-height: 1.45;
-	white-space: pre-wrap;
-}
-
 .customizer-turn__assistant-row {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: var(--space-8);
+	gap: 20px;
+}
+
+/* The question: the inspector chat's dark bubble, 13px on 1.5. */
+.customizer-turn__user-bubble {
+	max-width: 82%;
+	padding: var(--space-8) var(--space-12);
+	border-radius: 16px;
+	background: var(--text-body);
+	color: var(--bg-window);
+	font-size: var(--font-size-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .customizer-turn__changes {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-6);
+	flex-direction: column;
+	gap: var(--space-8);
 }
 
+/* A change the assistant made: an accent check and its 12px medium label, no pill. */
 .customizer-change-pill {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-5);
-	padding: 3px var(--space-8);
-	border: 1px solid var(--ok-border);
-	border-radius: var(--radius-6);
-	background: var(--ok-bg-soft);
-	color: var(--ok-text);
-	font-size: var(--font-size-badge);
+	gap: var(--space-6);
+	color: var(--text-primary);
+	font-size: var(--font-size-meta);
 	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.customizer-change-pill svg {
+	flex: none;
+	color: var(--accent);
 }
 
 .customizer-turn__progress {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
 	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
+/* The reply: plain 13px body text on the panel, as in the inspector chat. */
 .customizer-turn__reply {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
-	max-width: 92%;
-	padding: var(--space-10) var(--space-12);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-3) var(--radius-12) var(--radius-12) var(--radius-12);
-	background: var(--bg-subtle);
-	color: var(--text-primary);
+	max-width: 100%;
+	color: var(--text-body);
 	font-size: var(--font-size-sm);
-	line-height: var(--leading-body);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
 }
 
 .customizer-turn__reply p {
@@ -2502,29 +3259,24 @@
 	line-height: 1.45;
 }
 
+/* Figma 367:8883: the inspector chat's composer, floating on the panel's stage colour. */
 .customizer-panel__foot {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
-	padding: var(--space-12) var(--space-16);
-	border-top: 1px solid var(--border-divider);
-	background: var(--bg-chrome);
+	padding: var(--space-8) var(--space-12) var(--space-10);
+	background: transparent;
 }
 
 .customizer-composer {
 	display: flex;
-	align-items: flex-end;
+	align-items: center;
 	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	padding: var(--space-8) var(--space-12) var(--space-8) 11px;
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
-	transition: border-color var(--dur-color) var(--ease-out), box-shadow var(--dur-color) var(--ease-out);
-}
-
-.customizer-composer:focus-within {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-soft);
+	box-shadow: 0 2px 5px rgba(20, 20, 41, 0.07);
 }
 
 .customizer-composer__input {
@@ -2538,8 +3290,8 @@
 	background: transparent;
 	color: var(--text-primary);
 	font: inherit;
-	font-size: var(--font-size-sm);
-	line-height: 1.45;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
 }
 
 .customizer-composer__input::placeholder {
@@ -2550,8 +3302,8 @@
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 28px;
-	height: 28px;
+	width: 24px;
+	height: 24px;
 	padding: 0;
 	border: 0;
 	border-radius: var(--radius-full);
@@ -2897,7 +3649,7 @@
 	color: var(--danger-text);
 }
 
-/* ---------------------------------------------------------- Remote Access -- */
+/* ------------------------------------------- Remote Access (Figma 585:9647) -- */
 
 .settings-view .settings-remote-via {
 	margin: var(--space-8) 0 0;
@@ -2911,151 +3663,75 @@
 	gap: var(--space-8);
 }
 
-.settings-view .settings-remote-card,
-.settings-view .settings-remote-devices {
-	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
-	background: var(--bg-subtle);
-	padding: var(--space-12) var(--space-14);
-	min-width: 0;
-}
-
+/* The connect card: route and code, 20px apart, no rule between them. */
 .settings-view .settings-remote-card {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-16);
-}
-
-.settings-view .settings-remote-card,
-.settings-view .settings-remote-devices {
+	gap: 20px;
 	margin-top: var(--space-10);
-}
-
-.settings-view .settings-remote-detail__name {
-	font-size: var(--font-size-meta);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
+	padding: var(--space-16) 20px;
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	background: var(--bg-window);
+	min-width: 0;
 }
 
 .settings-view .settings-remote-step {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-8);
+	align-items: flex-start;
+	gap: var(--space-10);
 	min-width: 0;
 }
 
-.settings-view .settings-remote-step + .settings-remote-step {
-	padding-top: var(--space-16);
-	border-top: 1px solid var(--border-divider);
+.settings-view .settings-remote-step > *,
+.settings-view .settings-remote-pane,
+.settings-view .settings-remote-pane > * {
+	align-self: stretch;
 }
 
-.settings-view .settings-remote-step__label {
+.settings-view .settings-remote-step > .settings-remote-tabs {
+	align-self: flex-start;
+}
+
+.settings-view .settings-remote-step__label,
+.settings-view .settings-remote-detail__name {
 	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
+	font-weight: var(--weight-bold);
 	color: var(--text-primary);
 }
 
+/* 같은 Wi-Fi | 외부 인터넷: a segmented control, the picked one a raised white chip. */
 .settings-view .settings-remote-tabs {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-6);
-}
-
-.settings-view .settings-remote-field {
-	display: flex;
-	align-items: center;
-	gap: var(--space-8);
-	min-width: 0;
-}
-
-.settings-view .settings-remote-field > input,
-.settings-view .settings-remote-field > .settings-remote-url-line {
-	flex: 1;
-	min-width: 0;
-}
-
-.settings-view .settings-remote-field > .settings-remote-url-line {
-	padding: var(--space-6) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-6);
-	background: var(--bg-window);
-}
-
-.settings-view .settings-remote-field > .settings-remote-port {
-	flex: 0 0 120px;
-}
-
-.settings-view .settings-remote-details,
-.settings-view .settings-remote-domain {
-	min-width: 0;
-}
-
-.settings-view .settings-remote-details {
-	padding-top: var(--space-12);
-	border-top: 1px solid var(--border-divider);
-}
-
-.settings-view .settings-remote-details > summary,
-.settings-view .settings-remote-domain > summary {
-	cursor: pointer;
-	font-size: var(--font-size-meta);
-	color: var(--text-muted);
-	width: fit-content;
-}
-
-.settings-view .settings-remote-details > summary:hover,
-.settings-view .settings-remote-domain > summary:hover {
-	color: var(--text-primary);
-}
-
-.settings-view .settings-remote-details[open] > summary,
-.settings-view .settings-remote-domain[open] > summary {
-	margin-bottom: var(--space-10);
-}
-
-.settings-view .settings-remote-domain[open] {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-8);
-}
-
-.settings-view .settings-remote-domain[open] > summary {
-	margin-bottom: 0;
-}
-
-.settings-view .settings-remote-detail {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-4);
-	min-width: 0;
-}
-
-.settings-view .settings-remote-detail + .settings-remote-detail {
-	margin-top: var(--space-12);
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
 }
 
 .settings-view .settings-remote-tab {
-	height: 28px;
-	padding: 0 var(--space-12);
-	border: 1px solid var(--border);
+	padding: 5px var(--space-12);
+	border: 0;
 	border-radius: var(--radius-6);
-	background: var(--bg-window);
-	color: var(--text-body);
+	background: transparent;
+	color: var(--text-muted);
 	font: inherit;
 	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
+	line-height: normal;
+	white-space: nowrap;
 	cursor: pointer;
 }
 
 .settings-view .settings-remote-tab:hover {
-	background: var(--bg-hover);
 	color: var(--text-primary);
 }
 
 .settings-view .settings-remote-tab.is-active {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-	color: var(--accent-text);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-bold);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .settings-view .settings-remote-pane {
@@ -3065,16 +3741,11 @@
 	min-width: 0;
 }
 
-.settings-view .settings-remote-desc {
-	margin: 0;
-	font-size: var(--font-size-meta);
-	line-height: var(--leading-body);
-	color: var(--text-body);
-}
-
+.settings-view .settings-remote-desc,
 .settings-view .settings-remote-sub {
 	margin: 0;
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
 	color: var(--text-muted);
 	overflow-wrap: anywhere;
 }
@@ -3090,55 +3761,83 @@
 	min-width: 0;
 }
 
+.settings-view .settings-remote-field {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	min-width: 0;
+}
+
+/* An address: monospace on a grey well, copied with the button beside it. */
+.settings-view .settings-remote-url-line {
+	flex: 1;
+	min-width: 0;
+	padding: var(--space-8) var(--space-12);
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	color: var(--text-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .settings-view .settings-remote-pair-box {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-14);
-	padding: var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+	gap: var(--space-16);
+	padding: var(--space-14);
 	min-width: 0;
 }
 
 .settings-view .settings-remote-qr {
 	flex: none;
 	display: block;
-	border-radius: var(--radius-6);
-	border: 1px solid var(--border-divider);
 }
 
 .settings-view .settings-remote-pair-meta {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: var(--space-6);
+	align-items: flex-start;
+	gap: var(--space-8);
 	min-width: 180px;
+}
+
+.settings-view .settings-remote-code-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-12);
 }
 
 .settings-view .settings-remote-code {
 	font-family: var(--font-mono);
-	font-size: 24px;
-	font-weight: var(--weight-semibold);
-	letter-spacing: 0.14em;
+	font-size: 28px;
+	font-weight: var(--weight-bold);
+	letter-spacing: 2px;
+	line-height: normal;
 	color: var(--text-primary);
-	line-height: 1.15;
 }
 
 .settings-view .settings-remote-expiry {
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-url-line {
-	font-family: var(--font-mono);
-	font-size: var(--font-size-badge);
-	color: var(--text-body);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 100%;
+.settings-view .settings-remote-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-actions .linear-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
 }
 
 .settings-view .settings-remote-status-line {
@@ -3150,49 +3849,140 @@
 	color: var(--text-primary);
 }
 
-.settings-view .settings-remote-command {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+/* 고급 설정: under the card, a chevron and muted label that open the address and the port. */
+.settings-view .settings-remote-details,
+.settings-view .settings-remote-domain {
 	min-width: 0;
 }
 
-.settings-view .settings-remote-command code {
-	font-family: var(--font-mono);
-	font-size: var(--font-size-badge);
-	color: var(--text-primary);
-	word-break: break-all;
-	min-width: 0;
-}
-
-.settings-view .settings-remote-actions {
+.settings-view .settings-remote-details {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-8);
+	flex-direction: column;
+	gap: var(--space-12);
+	margin-top: 20px;
+	padding: 0 var(--space-4);
 }
 
-.settings-view .settings-remote-actions .linear-btn,
-.settings-view .settings-remote-device-actions .linear-btn {
+.settings-view .settings-remote-details > summary {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-6);
+	width: fit-content;
+	list-style: none;
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-devices__head {
+.settings-view .settings-remote-details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .settings-remote-details > summary > svg {
+	transform: rotate(-90deg);
+	transition: transform 120ms ease;
+}
+
+.settings-view .settings-remote-details[open] > summary > svg {
+	transform: none;
+}
+
+.settings-view .settings-remote-details > summary:hover,
+.settings-view .settings-remote-domain > summary:hover {
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-domain > summary {
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
+	width: fit-content;
+}
+
+.settings-view .settings-remote-domain[open] {
 	display: flex;
-	justify-content: flex-end;
-	margin-bottom: var(--space-8);
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+	min-width: 0;
+}
+
+/* 이 컴퓨터에서 열기 and 포트 are two separate settings: 24px apart. <details> lays its content out as blocks
+   (its flex gap does not reach the slotted children), so the space is a margin. */
+.settings-view .settings-remote-detail + .settings-remote-detail {
+	margin-top: 24px;
+}
+
+.settings-view .settings-remote-port-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-remote-port {
+	width: 76px;
+	padding: var(--space-6) var(--space-10);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+}
+
+/* 연결된 기기: the title with 모든 기기 해제 at its end, then one card of rows. */
+.settings-view .settings-remote-devices-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	margin: 30px 0 var(--space-16);
+}
+
+.settings-view .settings-remote-devices-head > .linear-section-title {
+	flex: 1;
+	margin: 0;
+}
+
+.settings-view .settings-remote-revoke-all {
+	height: 28px;
+	padding: 0 var(--space-10);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+}
+
+.settings-view .settings-remote-revoke-all:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-revoke-all.is-confirm {
+	color: var(--danger-text);
+}
+
+.settings-view .settings-remote-devices {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+	overflow: hidden;
+	min-width: 0;
 }
 
 .settings-view .settings-remote-empty {
 	margin: 0;
+	padding: var(--space-12) var(--space-16);
 	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
@@ -3201,26 +3991,23 @@
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-6);
 }
 
 .settings-view .settings-remote-device-row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+	gap: var(--space-12);
+	padding: var(--space-10) var(--space-16);
 	min-width: 0;
+}
+
+.settings-view .settings-remote-device-row + .settings-remote-device-row {
+	border-top: 1px solid var(--border-divider);
 }
 
 .settings-view .settings-remote-device-info {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
 	gap: var(--space-2);
 	min-width: 0;
@@ -3231,7 +4018,7 @@
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-6);
-	font-size: var(--font-size-meta);
+	font-size: var(--font-size-sm);
 	font-weight: var(--weight-medium);
 	color: var(--text-primary);
 }
@@ -3239,9 +4026,8 @@
 .settings-view .settings-remote-device-badge {
 	display: inline-flex;
 	align-items: center;
-	height: 18px;
-	padding: 0 var(--space-6);
-	border-radius: var(--radius-5);
+	padding: 1px var(--space-6);
+	border-radius: 999px;
 	background: var(--accent-soft);
 	color: var(--accent-text);
 	font-size: var(--font-size-badge);
@@ -3249,15 +4035,17 @@
 }
 
 .settings-view .settings-remote-device-seen {
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-device-actions {
-	display: inline-flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-6);
+.settings-view .settings-remote-device-row > .settings-icon-btn {
+	width: 24px;
+	height: 24px;
+}
+
+.settings-view .settings-remote-device-row > .linear-btn.is-confirm {
+	color: var(--danger-text);
 }
 
 .settings-view .settings-remote-rename-form {
@@ -3268,6 +4056,2120 @@
 	min-width: 0;
 }
 
-.settings-view .settings-remote-revoke-btn {
+/* ------------------------------------------------ 검색 범위 (Figma 386:9908) -- */
+
+.settings-view .scope-page {
+	display: flex;
+	flex-direction: column;
+	gap: 32px;
+	margin-top: 40px;
+}
+
+.settings-view .scope-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-view .scope-section--row {
+	flex-direction: row;
+	align-items: center;
+	gap: 16px;
+}
+
+.settings-view .scope-section--row .scope-section-text {
+	flex: 1;
+}
+
+.settings-view .scope-section-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-view .scope-section-text {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.settings-view .scope-section-title {
+	margin: 0;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+	color: var(--text-primary);
+}
+
+.settings-view .scope-section-desc {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .scope-primary-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: var(--radius-8);
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+	transition: background var(--dur-color) var(--ease-out);
+}
+
+.settings-view .scope-primary-btn:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+
+.settings-view .scope-primary-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.settings-view .scope-menu-anchor {
+	position: relative;
+	flex: none;
+}
+
+.settings-view .scope-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	min-width: 180px;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-dropdown);
+}
+
+.settings-view .scope-menu-item {
+	display: flex;
+	align-items: center;
+	height: 30px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .scope-menu-item:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .scope-list {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+}
+
+.settings-view .scope-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 56px; /* Figma 386:9908 */
+	padding: 0 16px;
+}
+
+.settings-view .scope-row + .scope-row {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .scope-row-icon {
+	flex: none;
+	color: var(--text-body);
+}
+
+.settings-view .scope-row-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-primary);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .scope-row-remove {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-faint); /* Figma 353:4605: the × is the faint grey until hovered. */
+	cursor: pointer;
+}
+
+.settings-view .scope-row-remove:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .scope-empty {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .scope-divider {
+	width: 100%;
+	height: 1px;
+	margin: 0;
+	border: 0;
+	background: var(--border-divider);
+}
+
+.settings-view .scope-dev {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: var(--radius-8);
+	background: var(--bg-code); /* #F4F4F7 (Figma 386:10087) */
+}
+
+/* Open, the box grows only below (14px), so 개발용 폴더는 자동으로 제외합니다 stays where it sits closed. */
+.settings-view .scope-dev.is-open {
+	padding: 8px 14px 14px;
+}
+
+.settings-view .scope-dev.is-open .scope-dev-body {
+	padding-bottom: 0;
+}
+
+.settings-view .scope-dev-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-view .scope-dev-title {
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-body);
+}
+
+.settings-view .scope-link {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--accent-text);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	cursor: pointer;
+}
+
+/* Figma 353:4636: 자세히 reads in the muted grey, not the accent; it darkens on hover. */
+.settings-view .scope-dev-head .scope-link {
+	color: var(--text-muted);
+	transition: color var(--dur-color) ease-out;
+}
+
+.settings-view .scope-dev-head .scope-link:hover,
+.settings-view .scope-dev-head .scope-link:focus-visible {
+	color: var(--text-body);
+}
+
+.settings-view .scope-dev-head .scope-link[aria-expanded="true"] {
+	color: var(--text-muted);
+}
+
+.settings-view .scope-dev-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-bottom: 6px;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .scope-dev-names {
+	color: var(--text-muted);
+}
+
+.settings-view .scope-dev-dots {
+	color: var(--text-faint);
+}
+
+/* ------------------------------------------------ 연결된 앱 (Figma 403:6999) -- */
+
+.settings-view .settings-apps .settings-list-title {
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 17px;
+}
+
+.settings-view .settings-apps .settings-list-meta {
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+/* Figma 387:4551 (Settings/App Connection): 12px above and below a 32px tile, 16px between tile, text and button, no rules. */
+.settings-view .settings-apps .settings-list-row {
+	gap: 16px;
+	padding: 12px 0;
+	border-bottom: 0;
+}
+
+.settings-view .settings-apps .settings-app-icon {
+	width: 32px;
+	height: 32px;
+	border: 1.14px solid var(--bg-subtle-alt);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	box-shadow: 0 0 4.57px rgba(0, 0, 0, 0.25);
+}
+
+/* The logo fills 20.5px of the 32px tile. */
+.settings-view .settings-apps .settings-app-icon > svg {
+	width: 20.5px;
+	height: 20.5px;
+}
+
+.settings-view .settings-apps-open {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 16px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-apps-open:hover .settings-list-title {
+	color: var(--accent-text);
+}
+
+.settings-view .settings-apps-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border-radius: var(--radius-6);
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .settings-apps-empty {
+	margin: 0;
+	padding-bottom: 12px; /* the space a row leaves, so the rule under 내 연결 sits 20px below either. */
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .settings-apps-group {
+	margin-top: 24px;
+	margin-bottom: 8px; /* the frame's 8px from the label to the first row. */
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+
+
+/* Figma 386:9908: 제외 추가 is the light secondary button (Stage fill, a border, body text), the plus faint, the chevron muted. */
+.settings-view .scope-secondary-btn {
+	border: 1px solid var(--border);
+	background: var(--bg-subtle-alt);
+	color: var(--text-body);
+}
+
+.settings-view .scope-secondary-btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.settings-view .scope-secondary-btn > svg:first-child {
+	color: var(--text-faint);
+}
+
+.settings-view .scope-secondary-btn > svg:last-child {
+	color: var(--text-muted);
+}
+
+/* 변경 자동 감지 is a setting, not a section: its name is medium, not bold. */
+.settings-view .scope-section--setting .scope-section-title {
+	font-weight: var(--weight-medium);
+}
+
+/* ------------------------------------------- 문서 읽기 / 중복 파일 정리 -- */
+
+/* Figma 403:8347 / 403:8746: plain rows under the page head, 25px apart, no section heading and no rules. */
+.settings-view .settings-plain {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin-top: 40px; /* the frame's 40px between the page head and its content, as on 검색 범위. */
+}
+
+/* Figma 403:8746 / 403:9482: each row is 64px with its two lines centred in it, the control level with the name. */
+.settings-view .settings-plain-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-16);
+	padding: 13.5px 0;
+}
+
+/* 원격 접속 허용: the switch sits in the middle of the title and its hint. */
+.settings-view .settings-remote-toggle > .settings-plain-row {
+	align-items: center;
+}
+
+/* The first row starts right under the head's 40px (Figma 403:8746 / 403:9482: no top padding on it). */
+.settings-view .settings-plain-row:first-child {
+	padding-top: 0;
+}
+
+.settings-view .settings-plain-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+.settings-view .settings-plain-name {
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+}
+
+.settings-view .settings-plain-text small {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-plain-control {
+	display: flex;
+	flex: none;
+	align-items: center;
+}
+
+.settings-view .settings-plain-select {
+	width: 183px;
+	border-color: var(--border-divider); /* Figma 403:8746: the Divider grey, lighter than other fields. */
+	height: 36px;
+	padding: 0 32px 0 var(--space-12);
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	/* The frame's Icon/chevron-down (Lucide, 16px), not the CSS triangle the other selects draw. */
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-position: calc(100% - 12px) 50%;
+	background-size: 16px 16px;
+}
+
+/* Figma 403:6999: the rule under 내 연결, 20px below its last row. */
+.settings-view .settings-apps-divider {
+	height: 1px;
+	margin: 8px 0 0;
+	border: 0;
+	background: var(--border-divider);
+}
+
+/* ---------------------------------------------- AI 모델 (Figma 403:10518) -- */
+
+.settings-view .ai-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-view .ai-section:first-of-type {
+	margin-top: 40px;
+}
+
+.settings-view .ai-section-head {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.settings-view .ai-section-title {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .ai-section-desc {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .ai-divider {
+	height: 1px;
+	margin: 32px 0;
+	border: 0;
+	background: var(--border-divider);
+}
+
+/* 연결된 서비스: a bordered list of 48px rows, the last one "+ 서비스 연결". */
+.settings-view .ai-services {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+}
+
+.settings-view .ai-service-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	height: 56px; /* Figma 409:11076 */
+	padding: 0 16px;
+	border: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+}
+
+.settings-view .ai-service-row + .ai-service-row {
+	border-top: 1px solid var(--border);
+}
+
+.settings-view .ai-service-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .ai-service-add {
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .ai-service-add svg {
+	color: var(--text-faint);
+}
+
+.settings-view .ai-service-add:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+/* 역할별 모델: 64px rows on a Stage card (16px corners, 28px in from the sides), no rules between them. */
+.settings-view .ai-roles {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 28px;
+	border-radius: 16px;
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .ai-roles .linear-row {
+	align-items: center;
+	min-height: 64px;
+	padding: 12px 0;
+	border-bottom: 0;
+}
+
+.settings-view .ai-roles .linear-row-name {
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .ai-roles .linear-row-label small {
+	margin-top: 4px;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .ai-roles .settings-split {
+	align-items: center;
+	gap: 4px;
+	height: auto;
+	border: 0;
+	background: none;
+}
+
+.settings-view .ai-roles .settings-trigger {
+	width: 152px;
+	min-width: 0;
+	height: 36px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .ai-roles .settings-trigger > svg:last-child {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .ai-roles .settings-trigger.is-broken {
+	border-color: var(--danger-text);
+}
+
+.settings-view .ai-roles .settings-split .settings-icon-btn {
+	width: 36px;
+	height: 36px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .ai-role-alert {
+	width: 12px;
 	color: var(--danger-text);
+	font-size: 12px;
+	font-weight: var(--weight-bold);
+	line-height: 12px;
+	text-align: center;
+}
+
+/* Figma 409:11077: the service's 31px letter or logo tile on the input grey, and a bare 20px "…" in the faint ink. */
+.settings-view .ai-service-row .settings-app-icon {
+	width: 31px;
+	height: 31px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+}
+
+.settings-view .ai-service-more {
+	width: 24px;
+	height: 24px;
+	color: var(--text-faint);
+}
+
+.settings-view .ai-service-more:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+/* ---------------------------------------------- 내 계정 (Figma 412:11464) -- */
+
+/* An outlined 32px action (로그인 ↗, 사용하기): white, the Border grey, 8px corners, 12px medium body text. */
+.settings-view .settings-outline-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .settings-outline-btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.settings-view .settings-outline-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Figma 412:11464: the 계정 rows centre the button on the two lines; the first row sits 8px under the
+   section title and ends 14px down, the second is a 64px row (14px top and bottom). */
+.settings-view .account-rows .settings-plain-row {
+	align-items: center;
+	min-height: 64px;
+	padding: 14px 0;
+}
+
+.settings-view .account-rows .settings-plain-row:first-child {
+	min-height: 0;
+	padding: 8px 0 14px;
+}
+
+/* The rule sits 24px from 계정 and from 약관 및 정책. */
+.settings-view .account-divider {
+	margin: 24px 0;
+}
+
+.settings-view .account-legal {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.settings-view .account-legal-title {
+	margin: 0;
+	color: var(--text-body);
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 21px;
+}
+
+.settings-view .account-legal-links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+/* Text links split by 12px rules. */
+.settings-view .account-legal-link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.settings-view .account-legal-link + .account-legal-link {
+	padding-left: 12px;
+	border-left: 1px solid var(--border-divider);
+}
+
+.settings-view .account-legal-link:hover {
+	color: var(--text-primary);
+	text-decoration: underline;
+}
+
+/* ------------------------------------------- 요금제 및 사용량 (Figma 415:11812) -- */
+
+.settings-view .plan-usage {
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-view .plan-usage-title {
+	margin: 0;
+	padding: 8px 0 14px;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+}
+
+/* The stage card: the reset countdown and the share used on one line, the 6px meter under it. */
+.settings-view .plan-usage-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 20px 24px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .plan-usage-line {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.settings-view .plan-usage-reset {
+	color: var(--text-primary);
+}
+
+.settings-view .plan-usage-percent {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .plan-usage-meter {
+	background: var(--border);
+}
+
+/* ----------------------------------------------- 일반 (Figma 416:12228) -- */
+
+/* Titled groups of plain rows, 28px from the rule between them. */
+.settings-view .plain-sections {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	margin-top: 40px;
+}
+
+.settings-view .plain-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-view .plain-section-title {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .plain-section-rows {
+	margin-top: 0;
+}
+
+.settings-view .plain-section-rows .settings-plain-row {
+	align-items: center;
+	padding: 14px 0;
+}
+
+.settings-view .plain-section-rows .settings-plain-row:first-child {
+	padding-top: 0;
+}
+
+.settings-view .plain-section-rows .settings-plain-row:last-child {
+	padding-bottom: 0;
+}
+
+/* A select sits on the row's first line (화면 모드, 앱 언어). */
+.settings-view .plain-section-rows.is-top .settings-plain-row {
+	align-items: flex-start;
+}
+
+/* A note under a row (the quick-search chord is taken) belongs to that row: 8px under its hint, in the hint's 12px. */
+.settings-view .plain-section-rows .settings-note {
+	margin-top: -6px;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .plain-section-rows .settings-note svg {
+	margin-top: 0;
+}
+
+.settings-view .plain-section-divider {
+	width: 100%;
+	height: 1px;
+	margin: 0;
+	border: 0;
+	background: var(--border-divider);
+}
+
+/* The quick-search chord as a keycap: Stage fill, the Divider grey, 6px corners, 12px ink. */
+.settings-view .plain-section-rows .shortcut-recorder-btn {
+	height: auto;
+	min-width: 0;
+	padding: 5px 8px;
+	border-color: var(--border-divider);
+	background: var(--bg-subtle-alt);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-regular);
+	line-height: 16px;
+}
+
+
+/* ---------------------------------------------- 단축키 (Figma 445:2249) -- */
+
+.settings-view .shortcuts-page {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	margin-top: 40px;
+}
+
+/* 빠른 구성 under the search: its label, then the presets with the two actions. */
+.settings-view .shortcuts-quick {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .shortcuts-quick-label {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .shortcuts-quick-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-view .shortcuts-segmented {
+	display: inline-flex;
+	padding: 2px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+}
+
+.settings-view .shortcuts-segment {
+	padding: 4px 12px;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-segment.is-active {
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+}
+
+/* 사용자 지정 before anything was set by hand: the app's disabled 50%. */
+.settings-view .shortcuts-segment:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.settings-view .shortcuts-quick-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+/* The page's Small buttons: outlined (Secondary) and filled (Primary), Figma 435:8582. */
+.settings-view .shortcuts-outline-btn {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-outline-btn.is-active {
+	border-color: var(--accent);
+	color: var(--accent-text);
+}
+
+.settings-view .shortcuts-primary-btn {
+	border: 0;
+	border-radius: var(--radius-6);
+	background: var(--accent);
+	color: var(--on-accent);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 8px 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .shortcuts-search:focus-within {
+	border-color: var(--accent);
+}
+
+.settings-view .shortcuts-search__icon {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-search__input {
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.settings-view .shortcuts-search__input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .shortcuts-search__clear {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-empty {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+/* A group: its 12px grey title over a bordered card of 10px-high rows. */
+.settings-view .shortcuts-group {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .shortcuts-group-title {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .shortcuts-card {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view .shortcuts-card > * + * {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .shortcuts-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+}
+
+.settings-view .shortcuts-row-name {
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 18px;
+	white-space: nowrap;
+}
+
+.settings-view .shortcuts-row.is-locked .shortcuts-row-name {
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-row-lock {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-row-spacer {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .shortcuts-badge {
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .shortcuts-reset {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-reset:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+/* The chord: white, the Border grey, 7px corners; each key a Stage cap. While editing, the accent wash and a 1.5px accent ring. */
+.settings-view .shortcuts-keycaps {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	padding: 3px 6px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--bg-window);
+	font: inherit;
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-keycaps.is-editing {
+	padding: 2.5px 5.5px;
+	border: 1.5px solid var(--accent);
+	background: var(--accent-soft);
+}
+
+.settings-view .shortcuts-keycaps.is-locked {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.settings-view .shortcuts-keycaps .shortcut-keycap {
+	min-width: 0;
+	height: auto;
+	padding: 1px 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-4);
+	background: var(--bg-subtle-alt);
+	color: var(--text-body);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-regular);
+	line-height: 16px;
+}
+
+/* Recording: the keycaps hold the modifiers held so far and the prompt, 12px in the accent; the chord applies on its key. */
+.settings-view .shortcuts-keycaps .shortcut-keycap-seq.is-recording {
+	gap: 4px;
+	min-height: 20px;
+}
+
+.settings-view .shortcuts-recording-prompt {
+	padding: 0 2px;
+	color: var(--accent-text);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .shortcuts-feedback {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 16px;
+	background: var(--bg-subtle-alt);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .shortcuts-feedback.is-conflict {
+	color: var(--danger-text);
+}
+
+.settings-view .shortcuts-feedback-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .shortcuts-row-wrap > * + * {
+	border-top: 1px solid var(--border-divider);
+}
+
+/* ---------------------------------------------- 사이드바 (Figma 467:2293) -- */
+
+.settings-view .sidebar-page {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	margin-top: 40px;
+}
+
+/* 빠른 구성 on one line: label, the 전체 / 핵심만 segments, then 기본값으로 복원 at the end. */
+.settings-view .sidebar-quick {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.settings-view .sidebar-quick-label {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-page .sidebar-sections-stack {
+	gap: 28px;
+}
+
+/* A section: its head (handle, 14px title, badge, count, switch) 8px over a bordered card. */
+.settings-view .sidebar-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	border-radius: var(--radius-12);
+}
+
+/* While dragged, the box leaves its slot as a dashed accent outline over its faded content; the box itself follows
+   the pointer as the drag image and the others slide out of its way (reorder.tsx). */
+.settings-view .sidebar-section.is-dragging {
+	outline: 1.5px dashed var(--accent);
+	outline-offset: 4px;
+}
+
+.settings-view .sidebar-section.is-dragging > * {
+	opacity: 0.4;
+}
+
+.settings-view .sidebar-section-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 16px 0 12px;
+}
+
+.settings-view .sidebar-section-title {
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-section.is-collapsed .sidebar-section-title {
+	color: var(--text-muted);
+}
+
+.settings-view .sidebar-always-badge {
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--accent-soft);
+	color: var(--accent-text);
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-always-badge.is-plain {
+	background: var(--bg-input);
+	color: var(--text-muted);
+}
+
+.settings-view .sidebar-section-count {
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-card {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view .sidebar-card > * + * {
+	border-top: 1px solid var(--border-divider);
+}
+
+/* A 49px row: handle (or lock), icon and 13px name, the grey path, then the switch. */
+.settings-view .sidebar-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 49px;
+	padding: 10px 16px;
+	box-sizing: border-box;
+}
+
+.settings-view .sidebar-row.is-dragging {
+	background: var(--accent-soft);
+	box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.settings-view .sidebar-row.is-dragging > * {
+	opacity: 0.4;
+}
+
+.settings-view .sidebar-row.is-add {
+	padding-left: 34px;
+}
+
+.settings-view .sidebar-row-label {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.settings-view .sidebar-row-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-body);
+}
+
+.settings-view .sidebar-row-icon.is-accent {
+	color: var(--accent);
+}
+
+.settings-view .sidebar-row-name {
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 18px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-row.is-muted .sidebar-row-name,
+.settings-view .sidebar-row.is-muted .sidebar-row-icon {
+	color: var(--text-faint);
+}
+
+.settings-view .sidebar-row-path {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-row-spacer {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .sidebar-row.is-locked .sidebar-row-name {
+	/* A row that cannot be changed reads a tone down, as on 단축키 and 우클릭 메뉴. */
+	color: var(--text-muted);
+}
+
+/* The drag handle (and the lock in its place on fixed rows); a non-movable row keeps the column empty. */
+.settings-view .sidebar-grip,
+.settings-view .sidebar-grip-space {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+}
+
+.settings-view .sidebar-grip {
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	cursor: grab;
+}
+
+.settings-view .sidebar-grip:hover {
+	color: var(--text-body);
+}
+
+.settings-view .sidebar-grip:active {
+	cursor: grabbing;
+}
+
+.settings-view .sidebar-card-empty {
+	margin: 0;
+	padding: 16.5px 16px;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+/* -------------------------------------------- 우클릭 메뉴 (Figma 472:2581) -- */
+
+/* A titled block (나만의 매직 액션, 우클릭 메뉴 섹션 및 항목): 14px bold title, 12px muted line 4px under it. */
+.settings-view .cmenu-block {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.settings-view .cmenu-block-title {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .cmenu-block-desc {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .cmenu-block-card {
+	margin-top: 6px;
+}
+
+/* 빠른 구성 sits under the 우클릭 메뉴 섹션 및 항목 title and line, 16px below it, as the sidebar page's sits over its sections. */
+.settings-view .cmenu-block-quick {
+	margin-top: 12px;
+}
+
+/* The magic-action list's empty line sits in a 36px row above its add row. */
+.settings-view .sidebar-card-empty.is-compact {
+	padding: 10px 16px;
+}
+
+/* A built-in item: 13px name, the lock on 태그, the item's shortcut in faint 12px, then the switch. */
+.settings-view .sidebar-row.cmenu-row.is-locked .sidebar-row-name {
+	color: var(--text-muted);
+}
+
+.settings-view .cmenu-row-lock {
+	flex: none;
+	color: var(--text-faint);
+}
+
+.settings-view .cmenu-note {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .cmenu-note svg {
+	flex: none;
+}
+
+/* ------------------------------------------ MCP 서버 (Figma 525:9533 / 527:9672) -- */
+
+/* 다른 에이전트에서 Dazzi 쓰기: the agent tabs, what to paste, and its hint with the copy button, 8px apart. */
+.settings-view .mcp-connect {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.settings-view .mcp-connect .settings-seg {
+	align-self: flex-start;
+	margin: 0;
+}
+
+.settings-view .mcp-connect .settings-snippet {
+	padding: 14px 16px;
+	border-color: transparent;
+	border-radius: var(--radius-12);
+	background: var(--bg-input);
+}
+
+.settings-view .mcp-connect .settings-snippet:hover {
+	border-color: var(--border-strong);
+}
+
+.settings-view .mcp-connect .settings-snippet-foot {
+	margin-top: 0;
+}
+
+/* Dazzi에서 외부 서버 쓰기: the trust note, then the server card, 12px apart. */
+.settings-view .mcp-servers {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .mcp-trust {
+	align-items: flex-start;
+}
+
+.settings-view .mcp-trust svg {
+	margin-top: 1px;
+}
+
+/* A server: name, kind badge and its command or address on one line; a configuration problem in red under it. */
+.settings-view .mcp-server-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.settings-view .mcp-server-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.settings-view .mcp-server-line .sidebar-row-name,
+.settings-view .mcp-server-line .sidebar-always-badge {
+	flex: none;
+}
+
+.settings-view .mcp-server-problem {
+	color: var(--danger-text);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	overflow-wrap: anywhere;
+}
+
+/* No drag handles on this card, so its add row starts at the rows' 16px. */
+.settings-view .sidebar-row.is-add.mcp-add-row {
+	padding-left: 16px;
+}
+
+/* ---------------------------------------- 인덱싱 + 검색 범위 (Figma 532:9970) -- */
+
+/* The map sits in the page's 32px rhythm; its heading and the activity card come first, 12px apart. */
+.settings-view .indexing-sections .index-map-panel {
+	margin-top: 0;
+}
+
+.settings-view .index-map-head {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+/* 검색할 폴더: 전체 and each folder with its progress; the one in view is washed with the accent. */
+.settings-view .scope-row.is-pickable {
+	min-height: 48px;
+	cursor: pointer;
+}
+
+.settings-view .scope-row.is-pickable:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .scope-row.is-pickable.is-selected {
+	background: var(--accent-soft);
+}
+
+.settings-view .scope-row-icon.is-accent {
+	color: var(--accent);
+}
+
+.settings-view .scope-row-name {
+	flex: 1;
+	min-width: 0;
+	color: var(--text-primary);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .scope-row-bar {
+	flex: none;
+	width: 80px;
+	height: 5px;
+	overflow: hidden;
+	border-radius: 3px;
+	background: var(--bg-input);
+}
+
+.settings-view .scope-row-bar i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--accent);
+	transition: width var(--dur-color) var(--ease-out);
+}
+
+.settings-view .scope-row-percent {
+	flex: none;
+	width: 36px;
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.settings-view .scope-row-count {
+	flex: none;
+	width: 92px;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.settings-view .scope-row-remove-space {
+	flex: none;
+	width: 24px;
+}
+
+/* The path to the folder in view; every part but the last goes back to it. */
+.settings-view .index-map-crumbs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .index-map-crumb {
+	padding: 1px 2px;
+	border: 0;
+	border-radius: var(--radius-4);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	cursor: pointer;
+}
+
+.settings-view .index-map-crumb:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .index-map-crumb.is-current {
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+	cursor: default;
+}
+
+.settings-view .index-map-crumb-sep {
+	flex: none;
+	color: var(--text-faint);
+}
+
+.settings-view .index-map-hint {
+	margin: 0;
+	padding: 8px 10px;
+	border-radius: var(--radius-8);
+	background: var(--bg-code);
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+/* Pointing at a row or a sector dims everything outside it; 제외 waits at the row's right until then. */
+.settings-view .index-map-sector,
+.settings-view .index-map-row {
+	transition: opacity var(--dur-color) var(--ease-out);
+}
+
+.settings-view .index-map-sector[data-dimmed="true"] {
+	opacity: 0.25;
+}
+
+.settings-view .index-map-folders .index-map-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-right: 6px;
+	border-radius: var(--radius-6);
+}
+
+.settings-view .index-map-folders .index-map-row[data-hovered="true"] {
+	background: var(--bg-hover);
+}
+
+.settings-view .index-map-folders .index-map-row[data-dimmed="true"] {
+	opacity: 0.4;
+}
+
+.settings-view .index-map-folders .index-map-row-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .index-map-folders .index-map-row-main:hover {
+	background: transparent;
+}
+
+.settings-view .index-map-folders .index-map-row-main:disabled {
+	color: var(--text-primary);
+	cursor: default;
+}
+
+.settings-view .index-map-row[data-state="excluded"] .index-map-row-main span {
+	color: var(--text-faint);
+}
+
+.settings-view .index-map-row-badge {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+	font-style: normal;
+	line-height: 16px;
+}
+
+.settings-view .index-map-folders .index-map-row-action {
+	flex: none;
+	width: auto;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--dur-color) var(--ease-out);
+}
+
+.settings-view .index-map-row:hover .index-map-row-action,
+.settings-view .index-map-row:focus-within .index-map-row-action,
+.settings-view .index-map-row-action.is-shown {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.settings-view .index-map-folders .index-map-row-action:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--bg-window);
+	color: var(--text-primary);
+}
+
+.settings-view .index-map-folders .index-map-row-chevron {
+	flex: none;
+	color: var(--text-faint);
+	visibility: hidden;
+}
+
+.settings-view .index-map-folders .index-map-row-chevron[data-shown="true"] {
+	visibility: visible;
+}
+
+/* 앱 연결: the last row of 최신으로 유지, to the page where apps are connected. */
+.settings-view .settings-sync-add {
+	width: 100%;
+	border: 0;
+	background: transparent;
+	color: var(--text-body);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-sync-add .settings-list-title {
+	flex: 1;
+}
+
+.settings-view .settings-sync-add:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .settings-sync-name {
+	cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .index-map-sector,
+	.settings-view .index-map-row,
+	.settings-view .index-map-folders .index-map-row-action {
+		transition: none;
+	}
+}
+
+/* Figma 532:9970 (revised): the chart at 340px beside the folder's contents in a card of 40px rows; no rule under
+   the legend, no hint box; the refresh sources in a card of 60px rows. */
+.settings-view .indexing-sections .index-map-legend {
+	margin: 0 0 24px;
+	padding: 0;
+	border-bottom: 0;
+}
+
+.settings-view .indexing-sections .index-map-body {
+	/* The contents column is 30% narrower than the 340px-chart layout left it; the chart takes the room, square. */
+	grid-template-columns: minmax(340px, 1fr) calc((100% - 364px) * 0.7);
+	gap: 24px;
+	align-items: start;
+	height: auto;
+}
+
+.settings-view .indexing-sections .index-map-stage {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1;
+}
+
+.settings-view .indexing-sections .index-map-sidebar {
+	gap: 12px;
+	padding: 0;
+	border-left: 0;
+}
+
+.settings-view .indexing-sections .index-map-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 0;
+}
+
+.settings-view .indexing-sections .index-map-summary h3 {
+	margin: 4px 0 0;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .indexing-sections .index-map-summary p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .indexing-sections .index-map-folders {
+	flex: none;
+	max-height: 404px;
+	padding: 0;
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+/* Too narrow for the chart and the contents side by side: the contents go under the chart, full width, instead of
+   squeezing into a tall thin column. */
+.settings-view .indexing-sections .index-map-panel { container: index-map / inline-size; }
+@container index-map (max-width: 620px) {
+	.settings-view .indexing-sections .index-map-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+	.settings-view .indexing-sections .index-map-stage { max-width: 420px; margin-inline: auto; }
+	.settings-view .indexing-sections .index-map-folders { max-height: 320px; }
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row {
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 12px;
+	border-radius: 0;
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row + .index-map-row {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row-main {
+	gap: 8px;
+	height: 39px;
+	padding: 0;
+	font-size: 13px;
+}
+
+.settings-view .indexing-sections .index-map-folders small {
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row-action {
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .indexing-sections .index-map-center small {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list-row {
+	min-height: 60px;
+	padding: 12px 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list-row:last-child {
+	border-bottom: 0;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-sync-add {
+	min-height: 44px;
+}
+
+.settings-view .settings-sync-live {
+	flex: none;
+	width: 128px;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	text-align: center;
+}
+
+/* Figma 532:9970: the groups are 28px apart. */
+.settings-view .scope-page.indexing-sections {
+	gap: 28px;
+}
+
+/* A folder's whole row goes into it; the pointer says so over its counts and chevron too. */
+.settings-view .index-map-folders .index-map-row[data-opens="true"] {
+	cursor: pointer;
+}
+
+/* 제외됨 sits right after the name, not at the far end of the row. */
+.settings-view .index-map-folders .index-map-row-main span {
+	flex: 0 1 auto;
+}
+
+/* 최신화: the cadence select is not a button, so it drops the fill and takes the stronger line. */
+.settings-view [data-index-scope="refresh"] .settings-select-compact {
+	border-color: var(--border-strong);
+	background: transparent;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-select-compact:hover {
+	background: transparent;
+}
+
+/* The breadcrumb's chevron sits 2px from each part. */
+.settings-view .index-map-crumb-sep {
+	margin: 0 2px;
+}
+
+/* ------------------------------------------------------ Search ranking (ltr) -- */
+
+/* The page is plain rows like the others; only the verdict chips, the model list and the result line are its own. */
+
+.settings-view .settings-ltr .ltr-caveat,
+.settings-view .settings-ltr .ltr-empty {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-ltr .ltr-result {
+	margin: 0;
+	padding: var(--space-8) var(--space-12);
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-ltr .ltr-result.is-trained {
+	background: var(--ok-bg-soft);
+	color: var(--ok-text);
+}
+
+.settings-view .settings-ltr .ltr-result.is-rejected,
+.settings-view .settings-ltr .ltr-result.is-insufficient {
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .settings-ltr .ltr-result.is-failed {
+	background: var(--danger-bg-soft);
+	color: var(--danger-text);
+}
+
+.settings-view .settings-ltr .ltr-reason {
+	display: block;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	overflow-wrap: anywhere;
+}
+
+/* A model is a row, not a card: when and how it scored on the left, its actions on the right, a rule between rows. */
+.settings-view .settings-ltr .ltr-model {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-12);
+	padding: var(--space-12) 0;
+}
+
+.settings-view .settings-ltr .ltr-model + .ltr-model {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .settings-ltr .ltr-model-main {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+.settings-view .settings-ltr .ltr-model-title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+	color: var(--text-primary);
+	font-size: var(--font-size-body);
+}
+
+.settings-view .settings-ltr .ltr-model-meta {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-ltr .ltr-model-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-8);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-ltr .ltr-verdict {
+	padding: 1px var(--space-8);
+	border-radius: var(--radius-6);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-passed {
+	background: var(--ok-bg);
+	color: var(--ok-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-rejected {
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-use {
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-pinned {
+	background: var(--bg-hover);
+	color: var(--text-body);
+}
+
+.settings-view .settings-ltr .ltr-ask {
+	color: var(--text-body);
+}
+
+.settings-view .settings-ltr .ltr-number {
+	width: 64px;
+	text-align: right;
+}
+
+.settings-view .settings-ltr .ltr-unit {
+	margin-left: var(--space-6);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+/* A text link in a sentence or under the list (open AI settings, back to the newest model). */
+.settings-view .settings-ltr .ltr-link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent-text);
+	font: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	align-self: flex-start;
+}
+
+/* What the assistant asks outside the chat: a masked field for a secret, or a yes/no that lists what will happen. */
+.customizer-prompt {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 8px;
+	padding: 12px;
+	border: 1px solid var(--border-strong);
+	border-radius: 10px;
+	background: var(--surface-raised, var(--window));
+}
+.customizer-prompt__title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink);
+}
+.customizer-prompt__detail,
+.customizer-prompt__hint {
+	margin: 0;
+	font-size: 12px;
+	color: var(--ink-muted);
+}
+.customizer-prompt__hint {
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+.customizer-prompt__lines {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 12px;
+	color: var(--ink-body, var(--ink));
+	overflow-wrap: anywhere;
+}
+.customizer-prompt__field {
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--border-strong);
+	border-radius: 8px;
+	background: var(--window);
+	color: var(--ink);
+	font-size: 13px;
+}
+.customizer-prompt__field:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.customizer-prompt__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
 }

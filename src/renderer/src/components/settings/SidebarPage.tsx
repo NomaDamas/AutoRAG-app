@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	AppWindow,
 	Box,
-	ChevronDown,
-	ChevronUp,
 	Clock,
 	Cloud,
 	Download,
@@ -20,35 +18,31 @@ import {
 	Monitor,
 	Music,
 	Package,
-	Plug,
-	RotateCcw,
+	Plus,
 	Server,
 	Sparkles,
-	Star,
-	Tag,
 	Trash2,
 	X,
 	Zap,
 	type LucideIcon,
 } from "lucide-react";
-import dazziMark from "../../assets/dazzi-mark.png";
 import { RECENTS_PATH, type FsBridge, type FsLocation, type FsLocationIcon, type FsTag } from "../../../../shared/fs-contract";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	cloudSidebarItemId,
 	connectionSidebarItemId,
 	customSidebarItemId,
-	DEFAULT_SIDEBAR_SETTINGS,
-	isDefaultSidebarSettings,
 	locationSidebarItemId,
-	MINIMAL_HIDDEN_FAVORITE_IDS,
 	normalizeSidebarSettings,
 	placeSidebarItemId,
+	sidebarPresetLayout,
+	sidebarPresetOf,
 	STANDARD_FAVORITE_KINDS,
 	tagSidebarItemId,
 	type HideableSidebarSectionId,
 	type SidebarSectionId,
 	type SidebarSettings,
+	withSidebarLayout,
 } from "../../../../shared/sidebar-contract";
 import {
 	sortByFavoritesOrder,
@@ -60,7 +54,10 @@ import { hostPlatform } from "../../lib/shortcuts";
 import { basename, normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
 import { TagDotMark } from "../primitives/TagDot";
-import { PromptModal, Section, SettingsPageHead } from "./SettingsKit";
+import { PromptModal, SettingsPageHead } from "./SettingsKit";
+import { useReorder, useSlideAnimation } from "./reorder";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 type SidebarBridgeWindow = Window & {
 	readonly autorag?: {
@@ -100,13 +97,6 @@ const KIND_ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
 	network: Server,
 };
 
-const SECTION_ICONS: Readonly<Record<SidebarSectionId, LucideIcon>> = {
-	favorites: Star,
-	cloud: Cloud,
-	connections: Plug,
-	locations: HardDrive,
-	tags: Tag,
-};
 
 interface FavoriteRowModel {
 	readonly id: string;
@@ -120,15 +110,10 @@ export function SidebarPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	customizerOpen,
-	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
-	readonly customizerOpen: boolean;
-	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
@@ -222,8 +207,9 @@ export function SidebarPage({
 		void updateSidebar({ ...sidebar, hiddenItems: [...nextHidden] });
 	};
 
-	const moveFavorite = (index: number, delta: -1 | 1): void => {
-		const next = withFavoriteMoved(sidebar, favoriteRows.map((row) => row.id), index, index + delta);
+	const moveFavoriteTo = (from: number, to: number): void => {
+		if (to < 0 || to >= favoriteRows.length || to === from) return;
+		const next = withFavoriteMoved(sidebar, favoriteRows.map((row) => row.id), from, to);
 		if (next !== sidebar) void updateSidebar(next);
 	};
 
@@ -256,15 +242,21 @@ export function SidebarPage({
 		void updateSidebar({ ...sidebar, hiddenSections: [...next] });
 	};
 
-	const moveSection = (index: number, delta: -1 | 1): void => {
-		const targetIndex = index + delta;
-		if (targetIndex < 0 || targetIndex >= sidebar.sectionOrder.length) return;
+	const moveSectionTo = (from: number, to: number): void => {
+		if (to < 0 || to >= sidebar.sectionOrder.length || to === from) return;
 		const order = [...sidebar.sectionOrder];
-		const [moved] = order.splice(index, 1);
+		const [moved] = order.splice(from, 1);
 		if (moved === undefined) return;
-		order.splice(targetIndex, 0, moved);
+		order.splice(to, 0, moved);
 		void updateSidebar({ ...sidebar, sectionOrder: order });
 	};
+
+	// Drag and drop by the handles (Figma 467:2293): a favorite moves among favorites, a section among sections; the
+	// others slide out of the way while it is dragged.
+	const reorder = useReorder();
+	const pageRef = useRef<HTMLDivElement>(null);
+	useSlideAnimation(pageRef);
+	const sectionCount = sidebar.sectionOrder.length;
 
 	const sectionLabel = (sectionId: SidebarSectionId): string => {
 		switch (sectionId) {
@@ -319,127 +311,81 @@ export function SidebarPage({
 		};
 	};
 
-	const isDefault = isDefaultSidebarSettings(sidebar);
-	const isMinimalActive =
-		MINIMAL_HIDDEN_FAVORITE_IDS.every((id) => hiddenItems.has(id)) &&
-		sidebar.hiddenItems.length === MINIMAL_HIDDEN_FAVORITE_IDS.length;
-	const isShowAllActive = sidebar.hiddenItems.length === 0 && sidebar.hiddenSections.length === 0;
+	// 전체 표시 is the default layout, so it doubles as the reset; 사용자 지정 is the last layout arranged by hand.
+	const activePreset = sidebarPresetOf(sidebar);
+	const customLayout = sidebar.custom;
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.sidebar")} description={t("settingsCore.sidebar.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.sidebar")} />
 
-			{customizerOpen ? null : (
-				<div className="sidebar-ai-hero">
-					<div className="sidebar-ai-hero__body">
-						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-						</span>
-						<div className="sidebar-ai-hero__copy">
-							<div className="sidebar-ai-hero__title">{t("settingsCore.sidebar.aiHeroTitle")}</div>
-							<p className="sidebar-ai-hero__desc">{t("settingsCore.sidebar.aiHeroDesc")}</p>
-						</div>
+			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 / 사용자 지정), then each section as a head over a bordered card. */}
+			<div className="sidebar-page" ref={pageRef}>
+				<div className="sidebar-quick" role="group" aria-label={t("settingsCore.sidebar.presetsTitle")}>
+					<span className="sidebar-quick-label">{t("settingsCore.sidebar.presetsTitle")}</span>
+					<div className="shortcuts-segmented">
+						<button
+							type="button"
+							className={cn("shortcuts-segment", activePreset === "all" && "is-active")}
+							data-action="sidebar-preset-all"
+							aria-pressed={activePreset === "all"}
+							onClick={() => void updateSidebar(withSidebarLayout(sidebar, sidebarPresetLayout("all")))}
+						>
+							{t("settingsCore.sidebar.presetShowAll")}
+						</button>
+						<button
+							type="button"
+							className={cn("shortcuts-segment", activePreset === "minimal" && "is-active")}
+							data-action="sidebar-preset-minimal"
+							aria-pressed={activePreset === "minimal"}
+							onClick={() => void updateSidebar(withSidebarLayout(sidebar, sidebarPresetLayout("minimal")))}
+						>
+							{t("settingsCore.sidebar.presetMinimal")}
+						</button>
+						<button
+							type="button"
+							className={cn("shortcuts-segment", activePreset === null && "is-active")}
+							data-action="sidebar-preset-custom"
+							aria-pressed={activePreset === null}
+							disabled={customLayout === undefined}
+							title={customLayout === undefined ? t("settingsCore.sidebar.presetCustomEmpty") : undefined}
+							onClick={() => {
+								if (customLayout !== undefined && activePreset !== null) void updateSidebar(withSidebarLayout(sidebar, customLayout));
+							}}
+						>
+							{t("settingsCore.sidebar.presetCustom")}
+						</button>
 					</div>
-					<button
-						type="button"
-						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-						data-action="open-app-customizer"
-						onClick={onOpenCustomizer}
-					>
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-						<span>{t("settingsCore.sidebar.aiHeroButton")}</span>
-					</button>
 				</div>
-			)}
 
-			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.sidebar.presetsTitle")}>
-				<span className="sidebar-presets-bar__label">{t("settingsCore.sidebar.presetsTitle")}</span>
-				<div className="sidebar-presets-bar__actions">
-					<button
-						type="button"
-						className={`sidebar-preset-pill${isShowAllActive ? " is-active" : ""}`}
-						data-action="sidebar-preset-all"
-						onClick={() => void updateSidebar({ ...sidebar, hiddenItems: [], hiddenSections: [] })}
-					>
-						{t("settingsCore.sidebar.presetShowAll")}
-					</button>
-					<button
-						type="button"
-						className={`sidebar-preset-pill${isMinimalActive ? " is-active" : ""}`}
-						data-action="sidebar-preset-minimal"
-						onClick={() => void updateSidebar({ ...sidebar, hiddenItems: [...MINIMAL_HIDDEN_FAVORITE_IDS] })}
-					>
-						{t("settingsCore.sidebar.presetMinimal")}
-					</button>
-					<button
-						type="button"
-						className="sidebar-preset-pill is-reset"
-						data-action="sidebar-reset-default"
-						disabled={isDefault}
-						onClick={() => void updateSidebar(DEFAULT_SIDEBAR_SETTINGS)}
-					>
-						<RotateCcw size={11} aria-hidden="true" />
-						<span>{t("settingsCore.sidebar.resetDefault")}</span>
-					</button>
-				</div>
-			</div>
-
-			<Section title={t("settingsCore.sidebar.sectionsTitle")} description={t("settingsCore.sidebar.sectionsDesc")}>
-				<div className="sidebar-sections-stack">
-					{sidebar.sectionOrder.map((sectionId, idx) => {
+				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
+					{reorder.order("section", sidebar.sectionOrder).map((idx) => {
+						const sectionId = sidebar.sectionOrder[idx]!;
 						const isFav = sectionId === "favorites";
 						const sectionVisible = isFav ? true : !hiddenSections.has(sectionId);
 						const label = sectionLabel(sectionId);
-						const SectionIcon = SECTION_ICONS[sectionId];
 						const counts = sectionCounts(sectionId);
 
 						return (
-							<div
+							<section
 								key={sectionId}
-								className={`sidebar-section-card${sectionVisible ? "" : " is-collapsed"}`}
+								className={cn("sidebar-section", !sectionVisible && "is-collapsed", reorder.isDragging("section", idx) && "is-dragging")}
 								data-sidebar-section={sectionId}
+								data-reorder-key={`section:${sectionId}`}
+								{...reorder.target("section", idx, sectionCount, moveSectionTo)}
 							>
-								<div className="sidebar-section-card__head">
-									<div className="sidebar-custom-row__order">
-										<button
-											type="button"
-											className="sidebar-order-btn"
-											data-action={`move-section-up-${sectionId}`}
-											disabled={idx === 0}
-											title={t("settingsCore.sidebar.moveUp", { name: label })}
-											aria-label={t("settingsCore.sidebar.moveUp", { name: label })}
-											onClick={() => moveSection(idx, -1)}
-										>
-											<ChevronUp size={12} />
-										</button>
-										<button
-											type="button"
-											className="sidebar-order-btn"
-											data-action={`move-section-down-${sectionId}`}
-											disabled={idx === sidebar.sectionOrder.length - 1}
-											title={t("settingsCore.sidebar.moveDown", { name: label })}
-											aria-label={t("settingsCore.sidebar.moveDown", { name: label })}
-											onClick={() => moveSection(idx, 1)}
-										>
-											<ChevronDown size={12} />
-										</button>
-									</div>
-									<span className="sidebar-section-card__glyph" aria-hidden="true">
-										<SectionIcon size={15} />
-									</span>
-									<div className="sidebar-section-card__title-wrap">
-										<span className="sidebar-section-card__title">{label}</span>
-										{isFav ? (
-											<span className="sidebar-custom-badge is-locked" title={t("settingsCore.sidebar.sectionAlwaysShown")}>
-												{t("settingsCore.sidebar.lockedBadge")}
-											</span>
-										) : null}
-										{counts !== null && sectionVisible ? (
-											<span className="sidebar-section-card__count">
-												{t("settingsCore.sidebar.sectionCount", counts)}
-											</span>
-										) : null}
-									</div>
+								<div className="sidebar-section-head">
+									{reorder.grip({ kind: "section", index: idx, length: sectionCount, id: `section:${sectionId}`, label: t("settingsCore.sidebar.dragHint", { name: label }), attr: "data-sidebar-grip", onMove: moveSectionTo })}
+									<span className="sidebar-section-title">{label}</span>
+									{isFav ? (
+										<span className="sidebar-always-badge" title={t("settingsCore.sidebar.sectionAlwaysShown")}>
+											{t("settingsCore.sidebar.lockedBadge")}
+										</span>
+									) : null}
+									<span className="sidebar-row-spacer" />
+									{counts !== null && sectionVisible ? (
+										<span className="sidebar-section-count">{t("settingsCore.sidebar.sectionCount", counts)}</span>
+									) : null}
 									<Switch
 										checked={sectionVisible}
 										disabled={isFav}
@@ -452,263 +398,143 @@ export function SidebarPage({
 								</div>
 
 								{sectionVisible && sectionId === "favorites" ? (
-									<div className="sidebar-section-card__items">
-										<div className="sidebar-custom-row is-locked" title={t("settingsCore.sidebar.lockedHint")}>
-											<div className="sidebar-custom-row__order" aria-hidden="true">
-												<Lock size={12} className="sidebar-custom-row__lock-glyph" />
+									<div className="sidebar-card" {...reorder.zone("favorite", moveFavoriteTo)}>
+										{([
+											["app:aiSearch", t("places.aiSearch"), Sparkles],
+											["app:automations", t("places.automations"), Zap],
+										] as const).map(([id, name, AppIcon]) => (
+											<div key={id} className="sidebar-row is-locked" title={t("settingsCore.sidebar.lockedHint")}>
+												<span className="sidebar-grip-space" aria-hidden="true">
+													<Lock size={14} strokeWidth={1.5} />
+												</span>
+												<span className="sidebar-row-label">
+													<AppIcon size={14} strokeWidth={1.5} className="sidebar-row-icon is-accent" aria-hidden="true" />
+													<span className="sidebar-row-name">{name}</span>
+												</span>
+												<span className="sidebar-row-spacer" />
+												<Switch checked={true} disabled={true} dataSwitchId={id} ariaLabel={name} onChange={() => undefined} />
 											</div>
-											<span className="sidebar-custom-row__icon is-accent" aria-hidden="true">
-												<Sparkles size={15} />
-											</span>
-											<div className="sidebar-custom-row__main">
-												<span className="sidebar-custom-row__name">{t("places.aiSearch")}</span>
-												<span className="sidebar-custom-badge is-locked">{t("settingsCore.sidebar.lockedBadge")}</span>
-											</div>
-											<Switch
-												checked={true}
-												disabled={true}
-												dataSwitchId="app:aiSearch"
-												ariaLabel={t("places.aiSearch")}
-												onChange={() => undefined}
-											/>
-										</div>
+										))}
 
-										<div className="sidebar-custom-row is-locked" title={t("settingsCore.sidebar.lockedHint")}>
-											<div className="sidebar-custom-row__order" aria-hidden="true">
-												<Lock size={12} className="sidebar-custom-row__lock-glyph" />
-											</div>
-											<span className="sidebar-custom-row__icon is-accent" aria-hidden="true">
-												<Zap size={15} />
-											</span>
-											<div className="sidebar-custom-row__main">
-												<span className="sidebar-custom-row__name">{t("places.automations")}</span>
-												<span className="sidebar-custom-badge is-locked">{t("settingsCore.sidebar.lockedBadge")}</span>
-											</div>
-											<Switch
-												checked={true}
-												disabled={true}
-												dataSwitchId="app:automations"
-												ariaLabel={t("places.automations")}
-												onChange={() => undefined}
-											/>
-										</div>
-
-										{favoriteRows.map((row, index) => {
+										{reorder.order("favorite", favoriteRows.map((row) => row.id)).map((index) => {
+											const row = favoriteRows[index]!;
 											const Icon = row.icon;
 											const visible = !hiddenItems.has(row.id);
 											return (
-												<div key={row.id} className={`sidebar-custom-row${visible ? "" : " is-muted"}`} data-sidebar-row={row.id}>
-													<div className="sidebar-custom-row__order">
-														<button
-															type="button"
-															className="sidebar-order-btn"
-															data-action={`move-up-${row.id}`}
-															disabled={index === 0}
-															title={t("settingsCore.sidebar.moveUp", { name: row.label })}
-															aria-label={t("settingsCore.sidebar.moveUp", { name: row.label })}
-															onClick={() => moveFavorite(index, -1)}
-														>
-															<ChevronUp size={12} />
-														</button>
-														<button
-															type="button"
-															className="sidebar-order-btn"
-															data-action={`move-down-${row.id}`}
-															disabled={index === favoriteRows.length - 1}
-															title={t("settingsCore.sidebar.moveDown", { name: row.label })}
-															aria-label={t("settingsCore.sidebar.moveDown", { name: row.label })}
-															onClick={() => moveFavorite(index, 1)}
-														>
-															<ChevronDown size={12} />
-														</button>
-													</div>
-													<span className="sidebar-custom-row__icon" aria-hidden="true">
-														<Icon size={15} />
+												<div
+													key={row.id}
+													className={cn("sidebar-row", !visible && "is-muted", reorder.isDragging("favorite", index) && "is-dragging")}
+													data-sidebar-row={row.id}
+													data-reorder-key={`favorite:${row.id}`}
+													{...reorder.target("favorite", index, favoriteRows.length, moveFavoriteTo)}
+												>
+													{reorder.grip({ kind: "favorite", index, length: favoriteRows.length, id: row.id, label: t("settingsCore.sidebar.dragHint", { name: row.label }), attr: "data-sidebar-grip", onMove: moveFavoriteTo })}
+													<span className="sidebar-row-label">
+														<Icon size={14} strokeWidth={1.5} className="sidebar-row-icon" aria-hidden="true" />
+														<span className="sidebar-row-name">{row.label}</span>
+														{row.customPath !== undefined ? (
+															<span className="sidebar-always-badge is-plain">{t("settingsCore.sidebar.customBadge")}</span>
+														) : null}
 													</span>
-													<div className="sidebar-custom-row__main">
-														<span className="sidebar-custom-row__name">{row.label}</span>
-														{row.customPath !== undefined ? (
-															<span className="sidebar-custom-badge">{t("settingsCore.sidebar.customBadge")}</span>
-														) : null}
-														{row.subtitle !== undefined ? (
-															<span className="sidebar-custom-row__path" title={row.subtitle}>
-																{row.subtitle}
-															</span>
-														) : null}
-													</div>
-													<div className="sidebar-custom-row__controls">
-														{row.customPath !== undefined ? (
-															<button
-																type="button"
-																className="sidebar-remove-btn"
-																data-action={`remove-custom-${row.customPath}`}
-																title={t("settingsCore.sidebar.removeCustom", { name: row.label })}
-																aria-label={t("settingsCore.sidebar.removeCustom", { name: row.label })}
-																onClick={() => removeCustomFavorite(row.customPath!)}
-															>
-																<X size={13} />
-															</button>
-														) : null}
-														<Switch
-															checked={visible}
-															dataSwitchId={row.id}
-															ariaLabel={row.label}
-															onChange={() => toggleItem(row.id)}
-														/>
-													</div>
+													{row.subtitle !== undefined ? (
+														<span className="sidebar-row-path" title={row.subtitle}>
+															{row.subtitle}
+														</span>
+													) : null}
+													<span className="sidebar-row-spacer" />
+													{row.customPath !== undefined ? (
+														<button
+															type="button"
+															className="shortcuts-reset"
+															data-action={`remove-custom-${row.customPath}`}
+															title={t("settingsCore.sidebar.removeCustom", { name: row.label })}
+															aria-label={t("settingsCore.sidebar.removeCustom", { name: row.label })}
+															onClick={() => removeCustomFavorite(row.customPath!)}
+														>
+															<X size={14} strokeWidth={1.5} />
+														</button>
+													) : null}
+													<Switch checked={visible} dataSwitchId={row.id} ariaLabel={row.label} onChange={() => toggleItem(row.id)} />
 												</div>
 											);
 										})}
 
-										<div className="sidebar-section-card__foot">
+										<div className="sidebar-row is-add">
 											<button
 												type="button"
-												className="linear-btn"
+												className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
 												data-action="add-custom-favorite"
 												onClick={() => setAddFolderOpen(true)}
 											>
+												<Plus aria-hidden="true" />
 												{t("settingsCore.sidebar.addCustomFolder")}
 											</button>
 										</div>
 									</div>
 								) : null}
 
-								{sectionVisible && sectionId === "cloud" ? (
-									<div className="sidebar-section-card__items">
-										{cloudRows.length === 0 ? (
-											<p className="sidebar-section-card__empty">{t("settingsCore.sidebar.emptyCloud")}</p>
+								{sectionVisible && sectionId !== "favorites" ? (
+									// 클라우드, 연결, 위치 and 태그 cannot be reordered, so their rows keep no empty grip slot: the icon starts at the row's padding.
+									<div className="sidebar-card">
+										{sectionId === "tags" ? (
+											tags.length === 0 ? (
+												<p className="sidebar-card-empty">{t("settingsCore.sidebar.emptyTags")}</p>
+											) : (
+												tags.map((tag) => {
+													const id = tagSidebarItemId(tag.name);
+													const visible = !hiddenItems.has(id);
+													return (
+														<div key={id} className={cn("sidebar-row", !visible && "is-muted")} data-sidebar-row={id}>
+															<span className="sidebar-row-label">
+																<span className="sidebar-row-icon" aria-hidden="true">
+																	<TagDotMark color={tag.color} size={10} />
+																</span>
+																<span className="sidebar-row-name">{tag.name}</span>
+															</span>
+															<span className="sidebar-row-spacer" />
+															<Switch checked={visible} dataSwitchId={id} ariaLabel={tag.name} onChange={() => toggleItem(id)} />
+														</div>
+													);
+												})
+											)
 										) : (
-											cloudRows.map((loc) => {
-												const id = cloudSidebarItemId(loc.path);
-												const Icon = KIND_ICONS[loc.icon];
-												const visible = !hiddenItems.has(id);
-												return (
-													<div key={id} className={`sidebar-custom-row${visible ? "" : " is-muted"}`} data-sidebar-row={id}>
-														<div className="sidebar-custom-row__order" aria-hidden="true" />
-														<span className="sidebar-custom-row__icon" aria-hidden="true">
-															<Icon size={15} />
-														</span>
-														<div className="sidebar-custom-row__main">
-															<span className="sidebar-custom-row__name">{loc.name}</span>
-															<span className="sidebar-custom-row__path" title={loc.path}>
+											(() => {
+												const rows = sectionId === "cloud" ? cloudRows : sectionId === "connections" ? connectionRows : locationRows;
+												const idOf = sectionId === "cloud" ? cloudSidebarItemId : sectionId === "connections" ? connectionSidebarItemId : locationSidebarItemId;
+												const empty =
+													sectionId === "cloud"
+														? t("settingsCore.sidebar.emptyCloud")
+														: sectionId === "connections"
+															? t("settingsCore.sidebar.emptyConnections")
+															: t("settingsCore.sidebar.emptyLocations");
+												if (rows.length === 0) return <p className="sidebar-card-empty">{empty}</p>;
+												return rows.map((loc) => {
+													const id = idOf(loc.path);
+													const Icon = KIND_ICONS[loc.icon];
+													const visible = !hiddenItems.has(id);
+													return (
+														<div key={id} className={cn("sidebar-row", !visible && "is-muted")} data-sidebar-row={id}>
+															<span className="sidebar-row-label">
+																<Icon size={14} strokeWidth={1.5} className="sidebar-row-icon" aria-hidden="true" />
+																<span className="sidebar-row-name">{loc.name}</span>
+															</span>
+															<span className="sidebar-row-path" title={loc.path}>
 																{loc.path}
 															</span>
+															<span className="sidebar-row-spacer" />
+															<Switch checked={visible} dataSwitchId={id} ariaLabel={loc.name} onChange={() => toggleItem(id)} />
 														</div>
-														<Switch
-															checked={visible}
-															dataSwitchId={id}
-															ariaLabel={loc.name}
-															onChange={() => toggleItem(id)}
-														/>
-													</div>
-												);
-											})
+													);
+												});
+											})()
 										)}
 									</div>
 								) : null}
-
-								{sectionVisible && sectionId === "connections" ? (
-									<div className="sidebar-section-card__items">
-										{connectionRows.length === 0 ? (
-											<p className="sidebar-section-card__empty">{t("settingsCore.sidebar.emptyConnections")}</p>
-										) : (
-											connectionRows.map((loc) => {
-												const id = connectionSidebarItemId(loc.path);
-												const Icon = KIND_ICONS[loc.icon];
-												const visible = !hiddenItems.has(id);
-												return (
-													<div key={id} className={`sidebar-custom-row${visible ? "" : " is-muted"}`} data-sidebar-row={id}>
-														<div className="sidebar-custom-row__order" aria-hidden="true" />
-														<span className="sidebar-custom-row__icon" aria-hidden="true">
-															<Icon size={15} />
-														</span>
-														<div className="sidebar-custom-row__main">
-															<span className="sidebar-custom-row__name">{loc.name}</span>
-															<span className="sidebar-custom-row__path" title={loc.path}>
-																{loc.path}
-															</span>
-														</div>
-														<Switch
-															checked={visible}
-															dataSwitchId={id}
-															ariaLabel={loc.name}
-															onChange={() => toggleItem(id)}
-														/>
-													</div>
-												);
-											})
-										)}
-									</div>
-								) : null}
-
-								{sectionVisible && sectionId === "locations" ? (
-									<div className="sidebar-section-card__items">
-										{locationRows.length === 0 ? (
-											<p className="sidebar-section-card__empty">{t("settingsCore.sidebar.emptyLocations")}</p>
-										) : (
-											locationRows.map((loc) => {
-												const id = locationSidebarItemId(loc.path);
-												const Icon = KIND_ICONS[loc.icon];
-												const visible = !hiddenItems.has(id);
-												return (
-													<div key={id} className={`sidebar-custom-row${visible ? "" : " is-muted"}`} data-sidebar-row={id}>
-														<div className="sidebar-custom-row__order" aria-hidden="true" />
-														<span className="sidebar-custom-row__icon" aria-hidden="true">
-															<Icon size={15} />
-														</span>
-														<div className="sidebar-custom-row__main">
-															<span className="sidebar-custom-row__name">{loc.name}</span>
-															<span className="sidebar-custom-row__path" title={loc.path}>
-																{loc.path}
-															</span>
-														</div>
-														<Switch
-															checked={visible}
-															dataSwitchId={id}
-															ariaLabel={loc.name}
-															onChange={() => toggleItem(id)}
-														/>
-													</div>
-												);
-											})
-										)}
-									</div>
-								) : null}
-
-								{sectionVisible && sectionId === "tags" ? (
-									<div className="sidebar-section-card__items">
-										{tags.length === 0 ? (
-											<p className="sidebar-section-card__empty">{t("settingsCore.sidebar.emptyTags")}</p>
-										) : (
-											tags.map((tag) => {
-												const id = tagSidebarItemId(tag.name);
-												const visible = !hiddenItems.has(id);
-												return (
-													<div key={id} className={`sidebar-custom-row${visible ? "" : " is-muted"}`} data-sidebar-row={id}>
-														<div className="sidebar-custom-row__order" aria-hidden="true" />
-														<span className="sidebar-custom-row__icon" aria-hidden="true">
-															<TagDotMark color={tag.color} size={10} />
-														</span>
-														<div className="sidebar-custom-row__main">
-															<span className="sidebar-custom-row__name">{tag.name}</span>
-														</div>
-														<Switch
-															checked={visible}
-															dataSwitchId={id}
-															ariaLabel={tag.name}
-															onChange={() => toggleItem(id)}
-														/>
-													</div>
-												);
-											})
-										)}
-									</div>
-								) : null}
-							</div>
+							</section>
 						);
 					})}
 				</div>
-			</Section>
+			</div>
 
 			{addFolderOpen ? (
 				<PromptModal

@@ -47,11 +47,11 @@ export function normalizeIntent(value: unknown): string | undefined {
 }
 
 function intentDescription(language: ReplyLanguage): string {
-	return `One short plain phrase in ${LANGUAGE_NAME[language]} saying what you are checking or doing right now (shown to the user as live progress; no file paths, commands or jargon).`;
+	return `One short plain phrase in the language the person is writing in, saying what you are checking or doing right now (if they have not written anything yet, use ${LANGUAGE_NAME[language]}; shown to the user as live progress; no file paths, commands or jargon).`;
 }
 
 export function intentPromptLine(language: ReplyLanguage): string {
-	return `Every tool takes a short \`${INTENT_FIELD}\` argument first: one short plain phrase in ${LANGUAGE_NAME[language]} saying what you are checking or doing right now (no file paths, shell commands or jargon). It is shown to the person as live progress, so do not write separate progress notes.`;
+	return `Every tool takes a short \`${INTENT_FIELD}\` argument first: one short plain phrase in the language the person is writing in, saying what you are checking or doing right now (if they have not written anything yet, use ${LANGUAGE_NAME[language]}; no file paths, shell commands or jargon). It is shown to the person as live progress, so do not write separate progress notes.`;
 }
 
 export interface WithIntentToolsOptions {

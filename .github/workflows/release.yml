@@ -77,7 +77,7 @@ jobs:
       - name: Test packaging runtime
         env:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
-        run: bunx vitest run test/bundled-tools.test.ts test/refresh-schedule.test.ts
+        run: bunx vitest run test/bundled-tools.test.ts test/refresh-schedule.test.ts test/release-pins.test.ts test/release-version-floors.test.ts
       - name: Build app
         env:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
@@ -223,7 +223,7 @@ jobs:
       - name: Test packaging runtime
         env:
           AUTORAG_SKIP_DUPEY_CHECK: "1"
-        run: bunx vitest run test/bundled-tools.test.ts test/refresh-schedule.test.ts
+        run: bunx vitest run test/bundled-tools.test.ts test/refresh-schedule.test.ts test/release-pins.test.ts test/release-version-floors.test.ts
       - name: Build app
         env:
           AUTORAG_SKIP_DUPEY_CHECK: "1"

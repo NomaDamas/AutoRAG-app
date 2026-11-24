@@ -130,7 +130,7 @@ describe("Settings → Remote Access page", () => {
 		expect(container.querySelector('input[aria-label="Browser Address"]')).toBeNull();
 		expect(container.querySelector('input[aria-label="Port"]')).toBeNull();
 		expect(container.textContent).not.toContain("Connect a Device");
-		expect(container.textContent).not.toContain("Paired Devices");
+		expect(container.textContent).not.toContain("Connected Devices");
 	});
 
 	it("pairs through the chosen route: the QR link follows the route address, one code for every route", async () => {
@@ -146,7 +146,7 @@ describe("Settings → Remote Access page", () => {
 
 		// Same Wi-Fi is the default when only a LAN address works.
 		expect(routeAddress()).toBe("http://192.168.0.42:47833");
-		await click(button("Get Pairing Code"));
+		await click(button("Make Connection Code"));
 		expect(mockRemote.remote.startPairing).toHaveBeenCalledTimes(1);
 		expect(container.querySelector('[data-testid="remote-pairing-code"]')?.textContent).toBe("482 910");
 		expect(container.querySelector("svg.settings-remote-qr")).not.toBeNull();
@@ -162,15 +162,18 @@ describe("Settings → Remote Access page", () => {
 		expect(mockRemote.remote.startPairing).toHaveBeenCalledTimes(1);
 	});
 
-	it("keeps the token address and the port behind Details", async () => {
+	it("keeps the token address, masked, and the port behind Advanced, below the connect card", async () => {
 		mockRemote.remote.status.mockResolvedValue(activeStatus());
 		await render({ remoteAccess: true });
 
 		const details = container.querySelector("details.settings-remote-details") as HTMLDetailsElement;
 		expect(details.open).toBe(false);
-		const address = details.querySelector('input[aria-label="Browser Address"]') as HTMLInputElement;
-		expect(address.value).toBe("http://localhost:47833/?token=sec-tok");
+		// The token is masked on screen; 주소 복사 still copies the real address.
+		const address = details.querySelector('[data-testid="remote-browser-address"]') as HTMLElement;
+		expect(address.textContent).toBe("http://localhost:47833/?token=••••••••");
+		expect(address.textContent).not.toContain("sec-tok");
 		expect(details.querySelector('input[aria-label="Port"]')).not.toBeNull();
+		expect(details.closest(".settings-remote-card")).toBeNull();
 	});
 
 	it("own domain: rejects a non-hostname, saves a normalized one, and asks for a Cloudflare sign-in before starting", async () => {

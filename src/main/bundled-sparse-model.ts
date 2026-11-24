@@ -1,6 +1,7 @@
 import { constants, copyFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import sparseModel from "../shared/sparse-model.json";
+import { inlModelCacheRoot } from "./inl-paths";
 
 /**
  * MinSync's SPLADE encoder (`nlpai-lab/KURE-Sparse-nano`, Apache-2.0, 299 MB) ranks every local search, on every
@@ -9,11 +10,11 @@ import sparseModel from "../shared/sparse-model.json";
  * (`<resources>/tools/models/<repoDir>`, staged by `scripts/release/stage-tools.mjs` from the same pin), so search
  * works offline from the first launch.
  *
- * MinSync reads models only from its own cache (`~/.cache/minsync/models`, `%LOCALAPPDATA%\minsync\models`,
- * or `FASTEMBED_CACHE_DIR`) in the Hugging Face hub layout, so the bundled copy is seeded there under the same
- * repo id and revision: the index's sparse identity stays `native:nlpai-lab/KURE-Sparse-nano`, and every MinSync
- * process (the app, its refresh job, the MCP server, a CLI) finds it. On APFS the copy is a clone and costs no
- * space.
+ * MinSync reads models only from the shared im-not-llm (`inl`) weight cache (`~/.cache/im-not-llm/models`,
+ * `%LOCALAPPDATA%\im-not-llm\models`, or `INL_CACHE_DIR`) in the Hugging Face hub layout, so the bundled copy is
+ * seeded there under the same repo id and revision: the index's sparse identity stays
+ * `native:nlpai-lab/KURE-Sparse-nano`, and every MinSync/inl process (the app, its refresh job, the MCP server,
+ * a CLI) finds it. On APFS the copy is a clone and costs no space.
  */
 
 export interface SparseModelFile {
@@ -30,26 +31,6 @@ export const SPARSE_MODEL: {
 } = sparseModel;
 
 export type SparseModelSeedResult = "present" | "seeded" | "not-bundled" | "failed";
-
-/**
- * Where `minsync`'s native encoders (`apply_cache_dir` in `native.rs`) look for cached Hugging Face models:
- * `FASTEMBED_CACHE_DIR` when set, else `%LOCALAPPDATA%\minsync\models` on Windows and `~/.cache/minsync/models`
- * everywhere else. The dense Qwen3 download and the bundled SPLADE seed both write here.
- */
-export function minSyncModelCacheRoot(options: {
-	readonly platform?: NodeJS.Platform;
-	readonly home: string;
-	readonly env?: NodeJS.ProcessEnv;
-}): string {
-	const override = options.env?.FASTEMBED_CACHE_DIR?.trim();
-	if (override !== undefined && override.length > 0) return override;
-	if ((options.platform ?? process.platform) === "win32") {
-		const localAppData = options.env?.LOCALAPPDATA?.trim();
-		const root = localAppData !== undefined && localAppData.length > 0 ? localAppData : join(options.home, "AppData", "Local");
-		return join(root, "minsync", "models");
-	}
-	return join(options.home, ".cache", "minsync", "models");
-}
 
 function sizeOf(path: string): number | null {
 	try {
@@ -68,9 +49,9 @@ export function sparseModelPresent(cacheRoot: string): boolean {
 }
 
 /**
- * Copy the bundled model from `<tools>/models` into MinSync's model cache when the cache does not already hold
+ * Copy the bundled model from `<tools>/models` into the inl weight cache when the cache does not already hold
  * it. Each file is copied to a temporary name and renamed into place, and `refs/main` is written last, so an
- * interrupted copy never looks complete to MinSync. Any failure leaves the cache as it was: MinSync then
+ * interrupted copy never looks complete to the daemon. Any failure leaves the cache as it was: MinSync then
  * downloads the model itself, as it would without a bundle.
  */
 export function seedBundledSparseModel(input: {
@@ -81,7 +62,7 @@ export function seedBundledSparseModel(input: {
 }): SparseModelSeedResult {
 	const bundled = join(input.toolsRoot, "models", SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision);
 	if (!SPARSE_MODEL.files.every((file) => sizeOf(join(bundled, file.name)) === file.bytes)) return "not-bundled";
-	const cacheRoot = minSyncModelCacheRoot({ home: input.home, env: input.env, ...(input.platform === undefined ? {} : { platform: input.platform }) });
+	const cacheRoot = inlModelCacheRoot({ home: input.home, env: input.env, ...(input.platform === undefined ? {} : { platform: input.platform }) });
 	if (sparseModelPresent(cacheRoot)) return "present";
 	const repo = join(cacheRoot, SPARSE_MODEL.repoDir);
 	const snapshot = join(repo, "snapshots", SPARSE_MODEL.revision);

@@ -7,7 +7,7 @@ describe("connectorDefaultsFor", () => {
 	});
 
 	it("leaves every other connection type with no preset connector", () => {
-		for (const type of ["discord", "telegram", "whatsapp", "obsidian", "mailcrawl", "github", "unknown-type"]) {
+		for (const type of ["discord", "telegram", "whatsapp", "obsidian", "mailcrawl", "github", "wombat", "unknown-type"]) {
 			expect(connectorDefaultsFor(type)).toBeNull();
 		}
 	});
@@ -31,5 +31,12 @@ describe("newDatasourceEntry", () => {
 		const first = newDatasourceEntry("slack", "slack");
 		const second = newDatasourceEntry("slack", "slack-2");
 		expect(first.connector).not.toBe(second.connector);
+	});
+});
+
+describe("AI Sessions (wombat) connections", () => {
+	it("starts empty: the librarian reads the CLI's own default stores, so there is nothing to preset", () => {
+		expect(newDatasourceEntry("wombat", "wombat")).toEqual({});
+		expect(newDatasourceEntry("wombat", "ai-sessions")).toEqual({ type: "wombat" });
 	});
 });

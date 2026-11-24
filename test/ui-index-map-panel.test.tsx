@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import { IndexMapPanel, type IndexMapPanelProps } from "../src/renderer/src/components/settings/index-map/IndexMapPanel";
+import { IndexMapPanel, type IndexMapPanelProps, type MapScope } from "../src/renderer/src/components/settings/index-map/IndexMapPanel";
 import { resetIndexActivityForTests } from "../src/renderer/src/hooks/useIndexActivity";
 import { IDLE_INDEX_ACTIVITY, type IndexActivitySnapshot } from "../src/shared/index-activity-contract";
 import { buildIndexMap, type ScanDir, type ScanFile } from "../src/main/index-map";
@@ -71,6 +71,13 @@ const pointer = (element: Element, type: "pointerover" | "pointerout"): Promise<
 	element.dispatchEvent(new MouseEvent(type, { bubbles: true, relatedTarget: null }));
 });
 const action = (name: "exclude" | "include"): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>(`[data-action="index-map-${name}"]`);
+const row = (path: string): HTMLElement => {
+	const found = host.querySelector<HTMLElement>(`.index-map-row[data-path="${path}"]`);
+	expect(found, path).not.toBeNull();
+	return found!;
+};
+const rowAction = (path: string, name: "exclude" | "include"): HTMLButtonElement | null => row(path).querySelector<HTMLButtonElement>(`[data-action="index-map-${name}"]`);
+const crumbs = (): string[] => [...host.querySelectorAll(".index-map-crumbs > *:not(svg)")].map((crumb) => crumb.textContent ?? "");
 
 const reactKeyWarnings = (): string[] =>
 	errors.mock.calls.map((call) => call.map(String).join(" ")).filter((text) => /same key|unique "key"|unique key/iu.test(text));
@@ -101,67 +108,131 @@ describe("IndexMapPanel", () => {
 		expect(reactKeyWarnings()).toEqual([]);
 		expect(host.querySelectorAll('.index-map-chart path[data-kind="parcel"]').length).toBe(map.nodes.filter((node) => node.kind === "parcel").length);
 		// The side list shows the same parcels, each once.
-		expect(host.querySelectorAll(".index-map-folders > button").length).toBeGreaterThan(1);
+		expect(host.querySelectorAll(".index-map-folders > .index-map-row").length).toBeGreaterThan(1);
 	});
 
-	it("offers to leave a folder out once it is picked, and passes its path", async () => {
+	it("puts 제외 at the right of every row that can be left out, and passes its path", async () => {
 		const onExclude = vi.fn();
 		await open(scopeMap(), { onExclude });
-		expect(action("exclude")).toBeNull();
 
-		await click(sector("/r/notes"));
-
-		expect(action("exclude")).not.toBeNull();
-		await click(action("exclude")!);
+		expect(rowAction("/r/notes", "exclude")).not.toBeNull();
+		expect(rowAction("/r/top.md", "exclude")).not.toBeNull();
+		await click(rowAction("/r/notes", "exclude")!);
 		expect(onExclude).toHaveBeenCalledExactlyOnceWith("/r/notes");
 	});
 
-	it("previews what the pointer is over, and returns to the picked folder, with its action, when it leaves the chart", async () => {
+	it("dims everything but the row pointed at, in the chart and the list, also while the pointer is on its 제외", async () => {
 		await open(scopeMap());
-		await click(sector("/r/notes"));
-		const heading = (): string | null | undefined => host.querySelector(".index-map-details h4")?.textContent;
-		expect(heading()).toBe("notes");
+		const lit = (): string[] => [...host.querySelectorAll('.index-map-chart path[data-node-id]:not([data-dimmed="true"])')].map((path) => path.getAttribute("data-path") ?? "");
+		expect(host.querySelectorAll('[data-dimmed="true"]')).toHaveLength(0);
 
-		await pointer(sector("/r/notes/b.md"), "pointerover");
-		expect(heading()).toBe("b.md");
+		await pointer(rowAction("/r/notes", "exclude")!, "pointerover");
 
-		await pointer(host.querySelector(".index-map-chart")!, "pointerout");
-		expect(heading()).toBe("notes");
-		expect(action("exclude")).not.toBeNull();
+		expect(new Set(lit())).toEqual(new Set(["/r/notes", "/r/notes/a.md", "/r/notes/b.md"]));
+		expect(row("/r/notes").dataset.dimmed).toBeUndefined();
+		expect(row("/r/notes").dataset.hovered).toBe("true");
+		expect(row("/r/top.md").dataset.dimmed).toBe("true");
+
+		await pointer(host.querySelector(".index-map-folders")!, "pointerout");
+		expect(host.querySelectorAll('[data-dimmed="true"]')).toHaveLength(0);
+	});
+
+	it("dims the same way when a sector is pointed at", async () => {
+		await open(scopeMap());
+		await pointer(sector("/r/top.md"), "pointerover");
+
+		expect(sector("/r/top.md").dataset.dimmed).toBeUndefined();
+		expect(sector("/r/notes").dataset.dimmed).toBe("true");
+		expect(row("/r/notes").dataset.dimmed).toBe("true");
 	});
 
 	it("offers to bring back a folder that was left out on its own, and passes its path", async () => {
 		const onInclude = vi.fn();
 		await open(scopeMap(), { excludePaths: ["/r/off"], onInclude });
-		await click(sector("/r/off"));
 
-		expect(action("exclude")).toBeNull();
-		await click(action("include")!);
+		expect(rowAction("/r/off", "exclude")).toBeNull();
+		expect(row("/r/off").querySelector(".index-map-row-badge")).not.toBeNull();
+		await click(rowAction("/r/off", "include")!);
 		expect(onInclude).toHaveBeenCalledExactlyOnceWith("/r/off");
 	});
 
-	it("offers nothing for a folder that is out only because a folder above it is", async () => {
+	it("does not open a folder that is left out, so nothing under it can be changed on its own; it can be brought back whole", async () => {
 		await open(scopeMap(), { excludePaths: ["/r/off-parent"] });
-		await click(sector("/r/off-parent/deep"));
+		await click(row("/r/off-parent").querySelector(".index-map-row-main")!);
 
-		expect(host.querySelector(".index-map-details h4")?.textContent).toBe("deep");
-		expect(action("exclude")).toBeNull();
-		expect(action("include")).toBeNull();
+		expect(crumbs()).toEqual(["All"]);
+		expect(host.querySelector('.index-map-row[data-path="/r/off-parent/deep"]')).toBeNull();
+		expect(rowAction("/r/off-parent", "include")).not.toBeNull();
 	});
 
 	it("offers nothing for a search root: it is removed from the folder list, not left out of itself", async () => {
-		await open(scopeMap());
-		await click(sector("/r"));
+		await open(buildIndexMap({ roots: [folder("/r", [file("/r/a.md", "indexed")]), folder("/x", [file("/x/b.md", "unindexed")])], truncated: false }), { searchPaths: ["/r", "/x"] });
 
-		expect(action("exclude")).toBeNull();
-		expect(action("include")).toBeNull();
+		expect(rowAction("/r", "exclude")).toBeNull();
+		expect(rowAction("/x", "exclude")).toBeNull();
+		expect(rowAction("/r", "include")).toBeNull();
 	});
 
 	it("does not let a second change start while one is being saved", async () => {
 		await open(scopeMap(), { busy: true });
-		await click(sector("/r/notes"));
 
-		expect(action("exclude")?.disabled).toBe(true);
+		expect(rowAction("/r/notes", "exclude")?.disabled).toBe(true);
+	});
+
+	it("goes into a folder from its row or its sector, and back to any part of the path from the breadcrumbs", async () => {
+		await open(buildIndexMap({ roots: [folder("/r", [file("/r/top.md", "indexed")], [folder("/r/a", [file("/r/a/x.md", "indexed")], [folder("/r/a/b", [file("/r/a/b/c.md", "unindexed")])])])], truncated: false }));
+		expect(crumbs()).toEqual(["All"]);
+
+		await click(row("/r/a").querySelector(".index-map-row-main")!);
+		await click(row("/r/a/b").querySelector(".index-map-row-main")!);
+		expect(crumbs()).toEqual(["All", "a", "b"]);
+		expect(row("/r/a/b/c.md")).not.toBeNull();
+
+		await click(host.querySelector('.index-map-crumb[data-crumb="/r/a"]')!);
+		expect(crumbs()).toEqual(["All", "a"]);
+		expect(row("/r/a/b")).not.toBeNull();
+
+		await click(host.querySelector('.index-map-crumb[data-crumb=""]')!);
+		expect(crumbs()).toEqual(["All"]);
+
+		await click(sector("/r/a/b"));
+		expect(crumbs()).toEqual(["All", "a", "b"]);
+		expect(host.querySelector(".index-map-crumb.is-current")?.getAttribute("aria-current")).toBe("location");
+	});
+
+	it("goes into a folder from anywhere on its row, its counts and chevron too, but not from its 제외", async () => {
+		const onExclude = vi.fn();
+		await open(buildIndexMap({ roots: [folder("/r", [file("/r/top.md", "indexed")], [folder("/r/a", [file("/r/a/x.md", "indexed")], [folder("/r/a/b", [file("/r/a/b/c.md", "unindexed")])])])], truncated: false }), { onExclude });
+
+		await click(rowAction("/r/a", "exclude")!);
+		expect(onExclude).toHaveBeenCalledExactlyOnceWith("/r/a");
+		expect(crumbs()).toEqual(["All"]);
+
+		await click(row("/r/a").querySelector("small")!);
+		expect(crumbs()).toEqual(["All", "a"]);
+
+		await click(row("/r/a/b").querySelector(".index-map-row-chevron")!);
+		expect(crumbs()).toEqual(["All", "a", "b"]);
+
+		await click(row("/r/a/b/c.md"));
+		expect(crumbs()).toEqual(["All", "a", "b"]);
+	});
+
+	it("tells the folder list above it each search folder's progress and which one is in view, and follows its pick", async () => {
+		let seen: MapScope | null = null;
+		const header = (scope: MapScope): null => {
+			seen = scope;
+			return null;
+		};
+		await open(buildIndexMap({ roots: [folder("/r", [file("/r/a.md", "indexed"), file("/r/b.md", "unindexed")]), folder("/x", [file("/x/c.md", "indexed")])], truncated: false }), { searchPaths: ["/r", "/x"], header });
+
+		expect(seen!.counts("/r")).toEqual({ indexed: 1, targets: 2 });
+		expect(seen!.totals).toEqual({ indexed: 2, targets: 3 });
+		expect(seen!.selected).toBeNull();
+
+		await act(async () => seen!.select("/x"));
+		expect(seen!.selected).toBe("/x");
+		expect(crumbs()).toEqual(["All", "x"]);
 	});
 
 	it("asks for a new read when the folders or the exclusions it describes change, and not when the same ones come again", async () => {
@@ -184,14 +255,13 @@ describe("IndexMapPanel", () => {
 	it("goes back to the whole scope when the search folders change, and stays put when only exclusions do", async () => {
 		await open(scopeMap());
 		await click(sector("/r/notes"));
-		expect(host.querySelector('[data-action="index-map-parent"]')).not.toBeNull();
+		expect(crumbs()).toEqual(["All", "notes"]);
 
 		await act(async () => root.render(<IndexMapPanel {...props({ excludePaths: ["/r/other"] })} />));
-		expect(host.querySelector('[data-action="index-map-parent"]')).not.toBeNull();
+		expect(crumbs()).toEqual(["All", "notes"]);
 
 		await act(async () => root.render(<IndexMapPanel {...props({ searchPaths: ["/r", "/x"] })} />));
-		expect(host.querySelector('[data-action="index-map-parent"]')).toBeNull();
-		expect(host.querySelector(".index-map-details h4")?.textContent).not.toBe("notes");
+		expect(crumbs()).toEqual(["All"]);
 	});
 
 	describe("while the local folders are being indexed", () => {
@@ -230,7 +300,7 @@ describe("IndexMapPanel", () => {
 			expect(host.querySelector('.index-map-chart path[data-path="/r/notes/a.md"][data-kind="file"]')?.getAttribute("data-state")).toBe("unindexed");
 			expect(host.querySelector('.index-map-legend li[data-state="progress"]')).not.toBeNull();
 			// The list names the folder it happened in; one it did not touch stays plain.
-			const rows = [...host.querySelectorAll<HTMLElement>(".index-map-folders > button")];
+			const rows = [...host.querySelectorAll<HTMLElement>(".index-map-folders > .index-map-row")];
 			expect(rows.find((row) => row.textContent?.includes("notes"))?.hasAttribute("data-progress")).toBe(true);
 			expect(rows.find((row) => row.textContent?.includes("other"))?.hasAttribute("data-progress")).toBe(false);
 		});

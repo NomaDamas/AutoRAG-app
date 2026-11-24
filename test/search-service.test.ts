@@ -16,6 +16,7 @@ import {
 	type LiveAgentEvent,
 } from "../src/main/search-service";
 import { setAppLanguage, t } from "../src/shared/i18n/core";
+import type { AnswerRevision } from "../src/shared/answer-revision";
 import { SEARCH_CHANNELS, type ChatRecord, type IndexNotice, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
@@ -39,6 +40,7 @@ interface TestResponse {
 type TestStreamEvent =
 	| { readonly type: "progress"; readonly sessionId: string; readonly query: string; readonly text: string }
 	| { readonly type: "preliminary"; readonly response: TestResponse }
+	| { readonly type: "revision"; readonly revision: AnswerRevision }
 	| { readonly type: "complete"; readonly response: TestResponse };
 
 const tempDirs: string[] = [];
@@ -201,9 +203,8 @@ describe("createSearchService", () => {
 		expect(agent.listeners.size).toBe(0);
 	});
 
-	it("withdraws the draft of a message that turns out to end on a tool call", async () => {
-		// A message that ends on a tool call is a progress note ("checking X next"),
-		// not the answer. It streams like one, so it is only known afterwards.
+	it("keeps what a message wrote before a tool call on screen, and the answer after it below it", async () => {
+		// A message that ends on a tool call streams like an answer; the person has read it, so it stays.
 		const update = (delta: string): LiveAgentEvent => ({
 			type: "message_update",
 			assistantMessageEvent: { type: "text_delta", delta },
@@ -226,38 +227,49 @@ describe("createSearchService", () => {
 
 		expect(events.filter((event) => event.type === "deep-draft")).toEqual([
 			{ type: "deep-draft", searchId: "search-note", text: "Checking the July review." },
-			{ type: "deep-draft", searchId: "search-note", text: "" },
-			{ type: "deep-draft", searchId: "search-note", text: "Final answer." },
+			{ type: "deep-draft", searchId: "search-note", text: "Checking the July review.\n\nFinal answer." },
 		]);
+		// The answer that lands carries the same text, so nothing the person read is replaced by a shorter one.
+		expect(events.find((event) => event.type === "quick" || event.type === "deep")).toMatchObject({
+			phase: { answer: "Checking the July review.\n\nFinal answer." },
+		});
+		const record = await service.historyGet("chat-note");
+		expect(record?.messages.at(-1)).toMatchObject({ role: "assistant", quick: { answer: "Checking the July review.\n\nFinal answer." } });
 	});
 
-	it("withdraws a progress note's draft as soon as the tool call starts, not when the message ends", async () => {
-		// The tool runs after message_end, which can be seconds away; the note must
-		// not sit in the answer area for that long.
+	it("stops the note's own progress line from repeating the text the answer already shows", async () => {
 		const { events, send } = collectEvents();
-		let eventsAtToolStart = -1;
 		const agent = createFakeAgent(async function*(live) {
-			live({ type: "agent_start" });
 			live({ type: "agent_start" });
 			live({ type: "message_start", message: { role: "assistant" } });
 			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Checking the July review." } });
 			live({ type: "message_update", assistantMessageEvent: { type: "toolcall_start" } });
-			// Everything the mapper emitted up to this point, before message_end is sent.
-			eventsAtToolStart = events.filter((event) => event.type === "deep-draft").length;
 			live({ type: "message_end", message: { role: "assistant", stopReason: "toolUse" } });
+			yield { type: "progress", sessionId: "s", query: "q", text: "Checking the July review." };
+			yield { type: "progress", sessionId: "s", query: "q", text: "Listing the folder" };
 			yield { type: "complete", response: createResponse("session-tool", "Final answer.", 1) };
 		});
 		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
 
 		await service.start("search-tool", "chat-tool", "refund approval", []);
 
-		// The note, then its withdrawal, were both out before message_end was sent.
-		expect(eventsAtToolStart).toBe(2);
-		const drafts = events.filter((event) => event.type === "deep-draft");
-		expect(drafts).toEqual([
-			{ type: "deep-draft", searchId: "search-tool", text: "Checking the July review." },
-			{ type: "deep-draft", searchId: "search-tool", text: "" },
-		]);
+		expect(events.filter((event) => event.type === "progress").map((event) => event.text)).toEqual(["", "Listing the folder"]);
+	});
+
+	it("takes back only a message that failed", async () => {
+		const { events, send } = collectEvents();
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Half an ans" } });
+			live({ type: "message_end", message: { role: "assistant", stopReason: "error" } });
+			yield { type: "complete", response: createResponse("session-fail", "Final answer.", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-fail", "chat-fail", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick-draft").map((event) => event.text)).toEqual(["Half an ans", ""]);
 	});
 
 	it("hides the librarian's citation markers in drafts, including a marker still being typed", async () => {
@@ -540,6 +552,75 @@ describe("createSearchService", () => {
 		);
 		const record = await service.historyGet("chat-attach");
 		expect(record?.messages[0]).toMatchObject({ role: "user", text: "who signs off refund exceptions?", attachments });
+	});
+
+	it("hands the image files among the attachments to the agent as pictures, never in the query", async () => {
+		const agent = Object.assign(createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-img", "a screenshot", 1) };
+		}), { setAttachmentImages: vi.fn((_images: readonly unknown[]) => undefined) });
+		const picture = { type: "image" as const, data: "AAAA", mimeType: "image/png" };
+		const attachmentImages = vi.fn(async () => [picture]);
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now, attachmentImages });
+		const attachments = [{ kind: "file" as const, id: "/tmp/pasted-image-1.png", name: "pasted-image-1.png" }];
+
+		await service.start("search-img", "chat-img", "what is this?", attachments);
+
+		expect(attachmentImages).toHaveBeenCalledWith(attachments);
+		expect(agent.setAttachmentImages).toHaveBeenCalledWith([picture]);
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("what is this?");
+		expect((await service.historyGet("chat-img"))?.messages[0]).toMatchObject({ attachments });
+	});
+
+	it("keeps a pasted image only when the model takes images, and says nothing otherwise", async () => {
+		const saved = { kind: "file" as const, id: "/data/pasted-images/pasted-image-ab.png", name: "pasted-image-ab.png" };
+		const pastedImages = { save: vi.fn(async () => saved), clear: vi.fn(async () => undefined) };
+		const base = { agentFactory: () => createFakeAgent(async function*() {}), send: () => undefined, now, pastedImages };
+
+		const vision = createSearchService({ ...base, chatStore: await createStore(), acceptsImages: async () => true });
+		expect(await vision.pasteImage("image/png", "AAAA")).toEqual(saved);
+		expect(pastedImages.save).toHaveBeenCalledWith("image/png", "AAAA");
+
+		pastedImages.save.mockClear();
+		const textOnly = createSearchService({ ...base, chatStore: await createStore(), acceptsImages: async () => false });
+		expect(await textOnly.pasteImage("image/png", "AAAA")).toBeNull();
+		expect(pastedImages.save).not.toHaveBeenCalled();
+
+		const broken = createSearchService({ ...base, chatStore: await createStore(), acceptsImages: async () => { throw new Error("no model"); } });
+		expect(await broken.pasteImage("image/png", "AAAA")).toBeNull();
+	});
+
+	it("deletes the pasted images with the history", async () => {
+		const pastedImages = { save: vi.fn(), clear: vi.fn(async () => undefined) };
+		const service = createSearchService({ agentFactory: () => createFakeAgent(async function*() {}), chatStore: await createStore(), send: () => undefined, now, pastedImages });
+		await service.historyClear();
+		expect(pastedImages.clear).toHaveBeenCalledTimes(1);
+	});
+
+	it("tells the agent the folder the person has open, as a hint, without touching the query or the stored message", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-folder", "여기 있어요", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+		await service.start("search-folder", "chat-folder", "이 폴더 경로가 뭐야?", [], "/Users/me/Documents/월간 보고");
+
+		const context = agent.setAttachmentContext.mock.calls[0]?.[0] ?? "";
+		expect(context).toContain(JSON.stringify("/Users/me/Documents/월간 보고"));
+		expect(context).toContain("not a restriction");
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("이 폴더 경로가 뭐야?");
+		const record = await service.historyGet("chat-folder");
+		expect(record?.messages[0]).toMatchObject({ role: "user", text: "이 폴더 경로가 뭐야?", attachments: [] });
+	});
+
+	it("sends no folder context when no folder is in view", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-nofolder", "답", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+		await service.start("search-nofolder", "chat-nofolder", "질문", []);
+
+		expect(agent.setAttachmentContext).toHaveBeenCalledWith("");
 	});
 
 	it("never starts the agent when the run is cancelled while attachments are read", async () => {
@@ -835,6 +916,179 @@ describe("createSearchService", () => {
 		expect(await service.historySearch("approval")).toHaveLength(1);
 		await service.historyClear();
 		expect(await service.historyList()).toEqual([]);
+	});
+});
+
+describe("createSearchService revisions of the first answer", () => {
+	const FIRST = "- 환불은 팀장 승인이 필요합니다 [1]\n- 한도는 50만 원입니다 [1]";
+	const replacement = "- 환불은 이사 승인이 필요합니다 [2]";
+	const fix: AnswerRevision = {
+		op: "replace",
+		claimId: "c1",
+		original: "- 환불은 팀장 승인이 필요합니다 [1]",
+		replacement,
+		reason: "7월 정책 개정",
+	};
+	const corrected = `${replacement}\n- 한도는 50만 원입니다 [1]`;
+
+	function twoSources(sessionId: string, answer: string): TestResponse {
+		const base = createResponse(sessionId, answer, 2);
+		return {
+			...base,
+			results: [
+				...base.results,
+				{
+					number: 2,
+					title: "Director memo",
+					summary: "Directors approve since July.",
+					evidence: [{ excerpt: "Directors approve refund exceptions since July." }],
+					confidence: 0.9,
+					source: "/Users/jeff/Documents/director-memo.md",
+				},
+			],
+		};
+	}
+
+	it("forwards each correction as its own event, between the Quick answer and the end of the run", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		expect(events.map((event) => event.type)).toEqual(["quick", "revision", "deep", "done"]);
+		expect(events.find((event) => event.type === "revision")).toEqual({ type: "revision", searchId: "search-rev", revision: fix });
+	});
+
+	it("keeps the Quick answer as the person read it and stores the corrections beside it", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: collectEvents().send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const assistant = (await store.get("chat-rev"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.quick?.answer).toBe(FIRST);
+		expect(assistant.revisions).toEqual([fix]);
+	});
+
+	it("sends no Deep text when the final answer is only the corrected first answer, but still sends the sources the correction cites", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("");
+		expect(deep.phase.evidence.map((item) => item.number)).toEqual([1, 2]);
+	});
+
+	it("sends what the final answer adds after the corrected first answer as the Deep text", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", `${corrected}\n\n재무팀 서명도 필요합니다 [2].`) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("재무팀 서명도 필요합니다 [2].");
+	});
+
+	it("falls back to the whole final answer when it does not start with the corrected first answer, so nothing is lost", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", "전혀 다르게 쓴 답변입니다 [2].") };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("전혀 다르게 쓴 답변입니다 [2].");
+	});
+
+	it("treats a run that only confirmed claims like one with no corrections: the model's own reply is the Deep text", async () => {
+		const confirm: AnswerRevision = { op: "confirm", claimId: "c1", original: "- 환불은 팀장 승인이 필요합니다 [1]", reason: "맞음" };
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: confirm };
+			yield { type: "complete", response: createResponse("s-rev", "첫 답변이 맞습니다.", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("첫 답변이 맞습니다.");
+	});
+
+	it("does not store corrections for a run that made none", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-none", "빠른 답", 1) };
+			yield { type: "complete", response: createResponse("s-none", "확인한 답", 1) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: collectEvents().send, now });
+
+		await service.start("search-none", "chat-none", "refund approval", []);
+
+		const assistant = (await store.get("chat-none"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.revisions).toBeUndefined();
+	});
+
+	it("seeds a later conversation with the corrected answer, not the one that was struck out", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: collectEvents().send, now });
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const seeds: (readonly { readonly question: string; readonly answer: string }[])[] = [];
+		const seedAgent = {
+			...createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("s-2", "다음 답", 1) };
+			}),
+			openSession: vi.fn(async (options: { resumeFile?: string | undefined; seed?: readonly { readonly question: string; readonly answer: string }[] | undefined } = {}) => {
+				seeds.push(options.seed ?? []);
+				return { sessionFile: "/sessions/chat-rev.jsonl", resumed: false, seeded: options.seed?.length ?? 0 };
+			}),
+			closeSession: vi.fn(async () => undefined),
+		};
+		// No conversation file is kept for this chat, so the later question starts one from what the chat holds.
+		const sessions = { fileFor: vi.fn(async () => null), remember: vi.fn(async () => undefined), clear: vi.fn(async () => undefined) };
+		const next = createSearchService({ agentFactory: () => seedAgent, chatStore: store, send: collectEvents().send, now, sessions });
+		await next.start("search-next", "chat-rev", "한도는?", []);
+
+		expect(seeds[0]?.[0]?.answer).toBe(corrected);
 	});
 });
 
@@ -1307,6 +1561,34 @@ describe("createSearchService conversations", () => {
 			{ resumeFile: undefined, seed: [] },
 			{ resumeFile: "/sessions/chat-1.jsonl", seed: [] },
 		]);
+	});
+
+	it("rebuilds an agent that was answering when the credentials changed on the chat's next question, never mid-answer", async () => {
+		const release = Promise.withResolvers<void>();
+		const slow = {
+			...createFakeAgent(async function*() {
+				await release.promise;
+				yield { type: "complete", response: createResponse("session-s", "Slow answer", 1) };
+			}),
+			openSession: vi.fn(async () => ({ sessionFile: "/sessions/chat-1.jsonl", resumed: false, seeded: 0 })),
+			closeSession: vi.fn(async () => undefined),
+		};
+		const { agent: next } = conversationAgent("/sessions/chat-1.jsonl");
+		const factory = vi.fn().mockReturnValueOnce(slow).mockReturnValue(next);
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: factory, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+
+		const running = service.start("search-1", "chat-1", "first", []);
+		await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
+		await service.resetAgents();
+		// The answer in flight is not cut off.
+		expect(slow.closeSession).not.toHaveBeenCalled();
+		release.resolve();
+		await running;
+
+		await service.start("search-2", "chat-1", "second", []);
+		expect(factory).toHaveBeenCalledTimes(2);
+		expect(slow.closeSession).toHaveBeenCalledTimes(1);
 	});
 
 	it("opens a chat that has history but no conversation with its earlier turns already in it", async () => {
@@ -1784,5 +2066,55 @@ describe("createSearchService conversation context (issue #389)", () => {
 			{ type: "error", searchId: "search-thrown", message: "Error: Prompt is too long: 213462 tokens > 200000 maximum", action: "new-chat" },
 			{ type: "error", searchId: "search-other", message: "500 Internal Server Error" },
 		]);
+	});
+});
+
+describe("createSearchService learning-to-rank training", () => {
+	it("asks for automatic training once an answered search has finished", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-train", "Answer", 3) };
+		});
+		const { events, send } = collectEvents();
+		const afterSearch = vi.fn(() => undefined);
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, afterAnsweredSearch: afterSearch });
+
+		await service.start("search-train", "chat-train", "refund approval", []);
+
+		expect(afterSearch).toHaveBeenCalledTimes(1);
+		// The answer reaches the window before anything else runs: the hook comes after `done`.
+		expect(events.at(-1)).toEqual({ type: "done", searchId: "search-train" });
+	});
+
+	it("does not ask after a search that failed or was stopped", async () => {
+		const failing = createFakeAgent(async function*() {
+			throw new Error("500 Internal Server Error");
+		});
+		const { send } = collectEvents();
+		const afterSearch = vi.fn(() => undefined);
+		const service = createSearchService({ agentFactory: () => failing, chatStore: await createStore(), send, now, afterAnsweredSearch: afterSearch });
+
+		await service.start("search-fail", "chat-fail", "q", []);
+
+		expect(afterSearch).not.toHaveBeenCalled();
+	});
+
+	it("never lets a throwing or rejecting hook fail the search it follows", async () => {
+		for (const hook of [
+			() => {
+				throw new Error("boom");
+			},
+			() => Promise.reject(new Error("boom")),
+		]) {
+			const agent = createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("session-hook", "Answer", 1) };
+			});
+			const { events, send } = collectEvents();
+			const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, afterAnsweredSearch: hook });
+
+			await service.start("search-hook", "chat-hook", "q", []);
+
+			expect(events.some((event) => event.type === "error")).toBe(false);
+			expect(events.at(-1)).toEqual({ type: "done", searchId: "search-hook" });
+		}
 	});
 });

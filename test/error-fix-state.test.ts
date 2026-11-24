@@ -59,7 +59,7 @@ describe("reduceErrorFixRun", () => {
 describe("actionLabel", () => {
 	it("uses the agent's own label or names the button after its destination when blank", () => {
 		expect(actionLabel({ kind: "settings", target: "scope", label: "검색 폴더 다시 고르기" }, t)).toBe("검색 폴더 다시 고르기");
-		expect(actionLabel({ kind: "settings", target: "scope", label: "" }, t)).toBe(t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }));
+		expect(actionLabel({ kind: "settings", target: "scope", label: "" }, t)).toBe(t("appError.fix.openSettings", { page: t("settingsCore.nav.indexing") }));
 		expect(actionLabel({ kind: "source", target: "kakao", label: "" }, t)).toBe(t("appError.fix.openSource", { name: "kakao" }));
 	});
 });

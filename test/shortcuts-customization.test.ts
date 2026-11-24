@@ -43,7 +43,8 @@ describe("shortcuts-contract fixed catalog & normalization", () => {
 
 		expect(normalizeShortcutActionId("이름 변경")).toBe("rename");
 		expect(normalizeShortcutActionId("새 폴더")).toBe("newFolder");
-		expect(normalizeShortcutActionId("AI 검색")).toBe("focusComposer");
+		expect(normalizeShortcutActionId("AI 채팅")).toBe("focusComposer");
+		expect(normalizeShortcutActionId("AI 에이전트")).toBe("focusComposer");
 		expect(normalizeShortcutActionId("훑어보기")).toBe("quickLook");
 		expect(normalizeShortcutActionId("다시 실행")).toBe("redo");
 
@@ -191,7 +192,8 @@ describe("shortcuts-contract fixed catalog & normalization", () => {
 
 		await service.set({ shortcuts: { overrides: { focusSearch: "Mod+P" } } });
 		const rawOnDisk = JSON.parse(await readFile(file, "utf8"));
-		expect(rawOnDisk.settings.shortcuts).toEqual({ overrides: { focusSearch: "Mod+P" } });
+		// Bindings set by hand are also the remembered 사용자 지정.
+		expect(rawOnDisk.settings.shortcuts).toEqual({ overrides: { focusSearch: "Mod+P" }, custom: { focusSearch: "Mod+P" } });
 	});
 });
 

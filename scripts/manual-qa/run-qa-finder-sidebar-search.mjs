@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
  *   4. Enter commits a filename search over the whole machine (scope bar, rows);
  *   5. the scope bar's folder pill narrows the commit to the folder in view;
  *   6. the whole search shows its group tabs (file names, document content), the content tab its own panel, and
- *      "Ask AI Search" hands the same query to a new AI Search tab;
+ *      "Ask AI Chat" hands the same query to a new AI Chat tab;
  *   7. ⌘F focuses the sidebar field;
  *   8. the toolbar's right cluster holds Share only, and the inspector hides from its own head.
  *
@@ -109,7 +109,7 @@ try {
 	check("the folder pill narrows the commit to the folder in view", scopedButton !== ALL_LABEL, scopedButton);
 	await page.screenshot({ path: join(EVIDENCE, "04-folder-scope.png") });
 
-	// 6. The whole search: group tabs, the content panel, and the AI Search hand-off.
+	// 6. The whole search: group tabs, the content panel, and the AI Chat hand-off.
 	await search.fill("approval notes");
 	await search.press("Enter");
 	await groupTab("files").waitFor({ timeout: 10000 });
@@ -131,7 +131,7 @@ try {
 	await page.locator(".search-ask").click();
 	await page.locator(".user-msg .user-bubble-wrap").first().waitFor({ timeout: 10000 });
 	const bubble = await page.locator(".user-msg .bubble").first().innerText();
-	check("Ask AI Search opens an AI Search tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
+	check("Ask AI Chat opens an AI Chat tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
 	await sleep(400);
 	await page.screenshot({ path: join(EVIDENCE, "06-ask-ai.png") });
 
@@ -146,7 +146,7 @@ try {
 	await page.locator('.inspector-head [aria-label="Hide inspector"]').waitFor({ timeout: 5000 });
 	check("the inspector head exposes its hide button", (await page.locator('.inspector-head [aria-label="Hide inspector"]').count()) === 1);
 	const cluster = await page.locator(".toolbar .tgroup button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
-	check("the toolbar's right cluster has no AI Search or inspector button", JSON.stringify(cluster) === JSON.stringify(isMac ? ["Share"] : []), JSON.stringify(cluster));
+	check("the toolbar's right cluster has no AI Chat or inspector button", JSON.stringify(cluster) === JSON.stringify(isMac ? ["Share"] : []), JSON.stringify(cluster));
 	// The Share item opens the OS share sheet, so it is shown on macOS only.
 	const share = page.locator('.toolbar [aria-label="Share"]');
 	check("the toolbar exposes Share on macOS only", (await share.count()) === (isMac ? 1 : 0), `count=${await share.count()}`);

@@ -28,8 +28,8 @@
 	},
 	"dependencies": {
 		"@autorag/librarian": "file:./.upstream/librarian-package",
-		"@earendil-works/pi-ai": "1.4.0",
-		"@earendil-works/pi-coding-agent": "1.4.0",
+		"@earendil-works/pi-ai": "1.5.2",
+		"@earendil-works/pi-coding-agent": "1.5.2",
 		"@parcel/watcher": "^2.6.0",
 		"@sentry/electron": "^8.3.0",
 		"ag-psd": "^34.1.0",
@@ -46,6 +46,7 @@
 		"pdf-lib": "1.17.1",
 		"posthog-node": "^5.60.0",
 		"typebox": "1.4.3",
+		"yaml": "2.9.0",
 		"zod": "^4.6.7"
 	},
 	"devDependencies": {
