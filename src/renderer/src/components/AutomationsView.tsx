@@ -834,19 +834,16 @@ function AllRuns({ rules, history, onOpen }: { readonly rules: readonly Automati
  */
 function DaemonOffBanner({ busy, onTurnOn }: { readonly busy: boolean; readonly onTurnOn: () => void }): ReactElement {
 	const { t } = useTranslation();
+	// Figma 641:13722: the same compact warning card as the index notice.
 	return (
-		<div role="status" data-daemon className="flex items-center gap-10 rounded-12 bg-warn-bg px-14 py-10 text-meta leading-[18px] text-warn-text">
-			<WarningIcon className="flex-none" aria-hidden="true" />
-			<span className="min-w-0 flex-1">{t("automations.daemon.offBanner")}</span>
-			<button
-				type="button"
-				disabled={busy}
-				data-action="automation-daemon-on"
-				className="inline-flex h-28 flex-none items-center rounded-6 border-0 bg-window px-10 text-meta font-medium text-ink cursor-pointer hover:opacity-80 disabled:cursor-default disabled:opacity-50"
-				onClick={onTurnOn}
-			>
-				{busy ? t("automations.daemon.busy") : t("automations.daemon.turnOn")}
-			</button>
+		<div data-daemon>
+			<NoticeCard
+				compact
+				role="status"
+				tone="warning"
+				title={t("automations.daemon.offBanner")}
+				actions={[{ label: busy ? t("automations.daemon.busy") : t("automations.daemon.turnOn"), disabled: busy, onClick: onTurnOn }]}
+			/>
 		</div>
 	);
 }
