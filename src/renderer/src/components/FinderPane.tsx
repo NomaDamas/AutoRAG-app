@@ -24,6 +24,7 @@ import { FileList } from "./FileList";
 import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
 import { IconGrid } from "./IconGrid";
 import { IndexProblemBanner } from "./IndexProblemBanner";
+import { OutdatedDaemonBanner } from "./OutdatedDaemonBanner";
 import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./list-scroll";
 import { PathBar } from "./PathBar";
 import { TabStrip } from "./TabStrip";
@@ -389,6 +390,12 @@ export const FinderPane = memo(function FinderPane({
 							onFixEmbedding={() => {
 								// The embedding choice lives on Settings > AI.
 								requestSettingsCategory("ai");
+								finder.openSettings();
+							}}
+						/>
+						<OutdatedDaemonBanner
+							onOpenAbout={() => {
+								requestSettingsCategory("about");
 								finder.openSettings();
 							}}
 						/>

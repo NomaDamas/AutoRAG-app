@@ -276,7 +276,7 @@ check("the approval card is inside the sidebar chat", (await inspector.locator('
 check("the card replaces the composer", (await inspector.locator("textarea").count()) === 0);
 check("the card names the call", (await approval.innerText()).includes(`rm ${shellPath(file("old-draft.txt"))}`), (await approval.innerText()).slice(0, 200));
 await shot("04-approval-in-sidebar");
-await approval.getByRole("button", { name: "Deny", exact: true }).click();
+await approval.getByRole("button", { name: "Skip", exact: true }).click();
 await idle();
 check("Deny keeps the file", existsSync(file("old-draft.txt")));
 check("the model was told it was denied", toolResults().some((text) => /denied/i.test(text)), JSON.stringify(toolResults()));
@@ -306,6 +306,8 @@ check("the question replaces the composer", (await inspector.locator("textarea")
 check("it shows its text and options", (await question.innerText()).includes("Which report should I summarize?") && (await question.innerText()).includes("report-q4.txt"), (await question.innerText()).slice(0, 200));
 await shot("05-question-in-sidebar");
 await question.getByRole("radio", { name: /Q4 report/ }).click();
+// Picking marks the option; Send answers (Figma 625:7022).
+await question.getByRole("button", { name: "Send" }).click();
 await idle();
 check("the pick reaches the model as the tool result", toolResults().some((text) => text === "User answered: Q4 report"), JSON.stringify(toolResults()));
 
@@ -323,6 +325,42 @@ await question.getByRole("button", { name: "Stop" }).click();
 await idle();
 check("Stop closes the question and returns the composer", (await question.count()) === 0 && (await chatInput.count()) === 1);
 check("nothing stays open in the main process", (await pending()).length === 0, JSON.stringify(await pending()));
+
+// ── 5. A batch of questions must stay inside the thin sidebar. ─────────────
+const BATCH = {
+	question: "Convert the videos",
+	questions: [
+		{ question: "Which videos should I convert?", options: [{ title: "All six", description: "1.mp4 through 6.mp4 in the current folder" }, { title: "Only the selected" }] },
+		{
+			question: "Where should the converted GIFs be saved?",
+			options: [
+				{ title: "Same folder as the original", description: "Save next to each original file with the same name and a .gif extension (the default; originals stay untouched)" },
+				{ title: "A separate gif folder", description: "Create a gif/ subfolder inside each original folder and collect only the converted files there" },
+			],
+		},
+	],
+};
+script([{ text: "Checking." }, { tool: "ask_user", args: BATCH }, { text: "Done." }]);
+await askFresh("convert them to gif");
+await question.waitFor();
+await question.getByRole("radio", { name: /All six/ }).click();
+await question.getByRole("button", { name: "Next" }).click();
+await shot("06-batch-in-sidebar");
+const geometry = await page.evaluate(() => {
+	const root = document.querySelector(".inspector-chat");
+	const card = document.querySelector('.inspector-chat [role="dialog"]');
+	const bounds = root.getBoundingClientRect();
+	const outside = [...card.querySelectorAll("button, textarea, span, strong")]
+		.map((el) => ({ text: (el.textContent ?? "").trim().slice(0, 24), rect: el.getBoundingClientRect() }))
+		.filter(({ rect }) => rect.width > 0 && (rect.right > bounds.right + 0.5 || rect.left < bounds.left - 0.5));
+	return { outside: outside.map((o) => `${o.text}@${Math.round(o.rect.right)}>${Math.round(bounds.right)}`), scrollOverflow: card.scrollWidth - card.clientWidth };
+});
+check("nothing in the batch card leaves the sidebar", geometry.outside.length === 0 && geometry.scrollOverflow <= 0, JSON.stringify(geometry));
+check("the send button is reachable", await question.getByRole("button", { name: "Send" }).isVisible());
+await question.getByRole("radio", { name: /separate gif folder/ }).click();
+await question.getByRole("button", { name: "Send" }).click();
+await idle();
+check("the batch answers reach the model", toolResults().some((text) => text.includes("All six") && text.includes("A separate gif folder")), JSON.stringify(toolResults()));
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);
 await app?.close().catch(() => undefined);

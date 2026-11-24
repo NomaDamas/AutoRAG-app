@@ -1,13 +1,17 @@
 import { homedir } from "node:os";
-import { access, open, readdir, readFile, stat } from "node:fs/promises";
+import { access, open, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { inlModelCacheRoot } from "./inl-paths";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
+import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
+import toolPins from "../shared/tool-pins.json";
+import { createToolVersionsService } from "./tool-versions";
 import {
 	app,
+	autoUpdater as nativeAutoUpdater,
 	BrowserWindow,
 	clipboard,
 	ClipboardItem,
@@ -28,8 +32,7 @@ import {
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
-import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
-import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG } from "../shared/onboarding-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
@@ -37,21 +40,26 @@ import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
-import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, resolveConfigReadOnly, writeDefaultConfig } from "@autorag/librarian";
+import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
+import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { autoragHome } from "./autorag-home";
 import { seedFromLaunchFolder, withoutRootWorkspace } from "./workspace-seed";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { createDemoService } from "./demo-service";
+import { DEMO_CHANNELS } from "../shared/demo-contract";
+import { createLtrService } from "./ltr-service";
 import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
-import { LOCAL_ITEM, sourceItem } from "./index-activity-journal";
+import { runQuitCleanup, whenQuitting } from "./quit-signal";
+import { LOCAL_ITEM } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { createRefreshQueue } from "./refresh-queue";
 import { createIndexProblemService } from "./index-problem-service";
@@ -66,15 +74,17 @@ import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
 import { createFinderTags } from "./finder-tags";
 import { createPlaces } from "./places";
 import type { KnownFolders } from "../shared/fs-worker-contract";
-import { hasErrorCode, pathExists } from "./fs-entry";
+import { hasErrorCode } from "./fs-entry";
 import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
 import { terminateMinSyncChildren } from "./minsync-watchdog";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
 import { createAccountService } from "./account-service";
+import { resolveAnonymousDeviceId } from "./device-id";
+import { readDazziGuestCredential } from "./dazzi-plan-credential";
 import { quotaBlock } from "./quota-guard";
-import { createOnboardingService, type OnboardingService } from "./onboarding-service";
-import { closeDecision, completesOnClose } from "./onboarding-window";
-import { detectSources } from "./onboarding-sources";
+import { createFirstRunService, type FirstRunService } from "./first-run-service";
+import { createDemoQuestionJudge } from "./demo-question-judge";
+import { closeDecision } from "./onboarding-window";
 import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
@@ -88,28 +98,34 @@ import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs
 import { createRemoteHost, type RemoteHost } from "./remote/host";
 import { REMOTE_CHANNELS, type RemoteAccessStatus } from "../shared/remote-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
-import { ACCOUNT_CHANNELS } from "../shared/account-contract";
+import { ACCOUNT_CHANNELS, AUTORAG_PROVIDER_ID } from "../shared/account-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
 import { SERVICES_CHANNELS } from "../shared/services-contract";
 import { createAutoRagConfigService } from "./autorag-config-service";
-import { createModelStatusService } from "./model-status";
+import { createModelStatusService, modelAcceptsImages } from "./model-status";
+import { createPastedImageStore } from "./pasted-images";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
-import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
+import {
+	configureEmbeddingDaemon,
+	DEFAULT_LOCAL_EMBEDDING_MODEL,
+	embeddingDaemonStatus,
+	ensureEmbeddingForConfig,
+	localEmbeddingModel,
+	restartEmbeddingDaemon,
+	stopEmbeddingDaemon,
+} from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
-import { createDefaultAgentFactory, createSearchService } from "./search-service";
+import { answerQuestion, createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
-import { resolveConfiguredSessionModel, resolveSessionModel } from "@autorag/librarian/profiles";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
-import { checkModelHealth } from "./model-health";
-import { createSmartIndexingService } from "./smart-indexing-service";
+import { openPlanRuntime, resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
@@ -124,8 +140,11 @@ import {
 	registerAppCustomizerIpcHandlers,
 	registerMagicActionIpcHandlers,
 	registerAppUpdateIpcHandlers,
+	registerToolVersionsIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
+	registerDemoIpcHandlers,
+	registerLtrIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
 	registerErrorFixIpcHandlers,
@@ -136,7 +155,6 @@ import {
 	registerOsRequestIpcHandlers,
 	registerSearchIpcHandlers,
 	registerServicesIpcHandlers,
-	registerSmartIndexingIpcHandlers,
 	registerSettingsIpcHandlers,
 	registerVoiceIpcHandlers,
 } from "./ipc";
@@ -159,8 +177,9 @@ import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
 import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
-import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay, type WindowPhase } from "./window-chrome";
+import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
+import { createElectronRevealBackdrop } from "./reveal-backdrop";
 
 const execFileAsync = promisify(execFile);
 
@@ -264,16 +283,16 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 	}
 }
 
-function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, phase: WindowPhase): BrowserWindow {
+function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, pending: boolean): BrowserWindow {
 	const workArea = screen.getPrimaryDisplay().workAreaSize;
-	const windowSize = appWindowSize(workArea, phase);
+	const windowSize = appWindowSize(workArea, "finder");
 	const window = new BrowserWindow({
 		...windowSize,
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
 		// The native title strip is gone on every OS (see `window-chrome.ts`): macOS keeps its traffic lights, Windows/Linux get the window controls only.
-		...mainWindowChrome(process.platform, appearance, phase),
+		...mainWindowChrome(process.platform, appearance, "finder"),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			contextIsolation: true,
@@ -282,7 +301,8 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 			additionalArguments: [
 				...(devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`]),
 				`--autorag-appearance=${appearance}`,
-				...(phase === "onboarding" ? [ONBOARDING_PENDING_FLAG] : []),
+				// The renderer's first-run layer mounts only while the flag is present; `load` is authoritative.
+				...(pending ? [ONBOARDING_PENDING_FLAG] : []),
 			],
 		},
 	});
@@ -297,8 +317,7 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 	});
 
 	loadRendererPage(window, "index.html");
-	// Only the Finder previews files; the onboarding window has nothing to preview.
-	if (phase === "finder") attachQuickLook(window, quickLookOptions(appearance));
+	attachQuickLook(window, quickLookOptions(appearance));
 	return window;
 }
 
@@ -322,23 +341,20 @@ let providerAuthService: ProviderAuthService | null = null;
 let currentQuickLookChord = "Space";
 /** The system-wide quick-search shortcut; null until startup built the launcher it summons. */
 let quickSearchShortcut: QuickSearchShortcut | null = null;
-/** The Finder window: always open, whether or not first-run onboarding is still going. */
+/** The one app window: the Finder, which also hosts the first-run overlay while onboarding is unfinished. */
 let mainWindow: BrowserWindow | null = null;
-/** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
-let onboardingWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
 /** The app's own windows that are still open (never a Quick Look panel). */
 function appWindows(): BrowserWindow[] {
-	return [mainWindow, onboardingWindow].filter((window): window is BrowserWindow => window !== null && !window.isDestroyed());
+	return [mainWindow].filter((window): window is BrowserWindow => window !== null && !window.isDestroyed());
 }
-/** The window-controls overlay of each window is as tall as that page's top bar. */
+/** The window-controls overlay of the window is as tall as that page's top bar. */
 function syncWindowControls(): void {
 	if (!hasInWindowMenuBar(process.platform)) return;
 	if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, "finder"));
-	if (onboardingWindow !== null && !onboardingWindow.isDestroyed()) onboardingWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, "onboarding"));
 }
 let currentLanguage: AppSettings["language"] = "ko";
-/** One push to every window of the app: the Finder and, during first-run onboarding, the onboarding window. */
+/** One push to the app's window (the Finder, which also hosts the first-run overlay) and any remote session. */
 function sendToMainWindow(channel: string, payload: unknown): void {
 	for (const window of appWindows()) window.webContents.send(channel, payload);
 	remoteHost?.push(channel, payload);
@@ -367,83 +383,6 @@ async function probeFullDiskAccess(home: string): Promise<boolean> {
 		}
 	}
 	return false;
-}
-
-/** Windows firewall/network gate: a plain request to a public 204 endpoint. */
-async function checkNetworkReachability(): Promise<NetworkCheck> {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), 5000).unref();
-	try {
-		const response = await fetch("https://www.gstatic.com/generate_204", { signal: controller.signal });
-		return { ok: response.ok || response.status === 204, error: response.ok || response.status === 204 ? null : `HTTP ${response.status}` };
-	} catch (error) {
-		return { ok: false, error: error instanceof Error ? error.message : String(error) };
-	} finally {
-		clearTimeout(timer);
-	}
-}
-
-/**
- * Source probes log in to IMAP (himalaya) and walk app containers (telecrawl); run
- * together they were measured at 1-6s, so the default 5s deadline silently dropped
- * signed-in accounts. A hung probe still costs at most this long.
- */
-const SOURCE_PROBE_TIMEOUT_MS = 15_000;
-
-/** Longest the onboarding model check waits for the chosen model to answer one short prompt. */
-const MODEL_CHECK_TIMEOUT_MS = 30_000;
-
-/**
- * The question-splitting model with its credentials, resolved exactly as the
- * answer model is: the shared config with `queryDecomposition.model` standing in
- * for `model`. `false` (split with the answer model) checks the answer model.
- */
-function resolveDecompositionModel(): ReturnType<typeof resolveConfiguredSessionModel> {
-	const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
-	const decomposition = config.queryDecomposition === false ? undefined : config.queryDecomposition?.model;
-	return resolveSessionModel(decomposition === undefined ? config : { ...config, model: decomposition }, process.env, process.cwd(), getAgentDir());
-}
-
-/** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
-function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
-	const { promise, resolve, reject } = Promise.withResolvers<string>();
-	execFile(command, [...args], { timeout: timeoutMs, windowsHide: true }, (error, stdout, stderr) => {
-		if (error !== null) {
-			const detail = stderr.trim();
-			reject(new Error(detail.length > 0 ? detail : error.message));
-			return;
-		}
-		resolve(stdout);
-	});
-	return promise;
-}
-
-/**
- * Real system notification. `failed` is what macOS reports when this app has no
- * notification permission (UNErrorDomain 1 / "not allowed"), which is always the
- * case for the unsigned dev Electron binary and for a build the user denied, so it
- * is the signal to send the user to System Settings.
- */
-function showSystemNotification(): Promise<boolean> {
-	if (!Notification.isSupported()) return Promise.resolve(false);
-	return new Promise<boolean>((resolve) => {
-		const notification = new Notification({ title: APP_FULL_NAME, body: t("main.dialogs.notificationBody") });
-		let settled = false;
-		const done = (value: boolean): void => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			resolve(value);
-		};
-		const timer = setTimeout(() => done(false), 5000);
-		notification.on("show", () => done(true));
-		notification.on("failed", () => done(false));
-		try {
-			notification.show();
-		} catch {
-			done(false);
-		}
-	});
 }
 
 /** macOS cloud placeholders under a root, batched into one `find`; local roots short-circuit. */
@@ -515,9 +454,10 @@ app.whenReady().then(async () => {
 			(error: unknown) => console.error("[cli] installing the dazzi command failed:", error),
 		);
 	}
-	// The local embedding model is served by MinSync's own `minsync serve`, which the app runs while it is open
-	// and stops on quit. It never starts before the model is downloaded (`modelDownload`), because `minsync serve`
-	// would fetch the 1.2 GB itself without any way to show progress.
+	// The local embedding model is served by the shared im-not-llm (`inl`) loopback daemon, which the app runs
+	// while it is open and stops on quit (preferring `inl`, else the bundled MinSync, same crates and root). It
+	// never starts before the model is downloaded (`modelDownload`), because the daemon would fetch the 1.2 GB
+	// itself without any way to show progress.
 	configureEmbeddingDaemon({
 		env: process.env,
 		home: homedir(),
@@ -528,11 +468,14 @@ app.whenReady().then(async () => {
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
+	const rawFixtureHome = !app.isPackaged ? (process.env.AUTORAG_ONBOARDING_FIXTURE_HOME?.trim() ?? "") : "";
+	const fixtureHome = rawFixtureHome !== "" && isAbsolute(rawFixtureHome) ? rawFixtureHome : null;
 	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
 	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.
 	// A profile without a resolvable known folder (a throwaway USERPROFILE) makes
 	// app.getPath throw; that must fall back to `<home>\<Folder>`, never abort startup.
 	const knownFolder = (name: Parameters<typeof app.getPath>[0], fallback: string): string => {
+		if (fixtureHome !== null) return fallback;
 		try {
 			return app.getPath(name);
 		} catch (error) {
@@ -540,7 +483,7 @@ app.whenReady().then(async () => {
 			return fallback;
 		}
 	};
-	const home = app.getPath("home");
+	const home = fixtureHome ?? app.getPath("home");
 	const knownFolders: KnownFolders | undefined =
 		process.platform === "win32"
 			? {
@@ -568,6 +511,7 @@ app.whenReady().then(async () => {
 		config: {
 			userDataDir: app.getPath("userData"),
 			...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
+			...(fixtureHome === null ? {} : { homeDir: fixtureHome }),
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
 		shell,
@@ -642,10 +586,23 @@ app.whenReady().then(async () => {
 	});
 	// Each chat's model conversation is a pi session file; the index remembers which file is whose.
 	const chatSessionsDirectory = join(app.getPath("userData"), "chat-sessions");
+	// One store for AI 에이전트's history: the search service writes its chats, a magic action's 대화 기록에 저장 adds one.
+	const chatStore = createChatStore({ directory: join(app.getPath("userData"), "chat-history") });
+	// Learning to rank: the librarian's `autorag ltr`, run in a child process so fitting a model never freezes this one.
+	const ltr = createLtrService({
+		run: (args, options) => {
+			const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
+			return runLibrarianCli(librarian.command, [...librarian.args, ...args], process.env, options);
+		},
+		onTraining: (running) => sendToMainWindow(LTR_CHANNELS.training, running),
+	});
 	const searchService = createSearchService({
+		afterAnsweredSearch: () => ltr.autoTrainIfDue(),
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
-		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
+		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
+		pastedImages: createPastedImageStore({ directory: join(app.getPath("userData"), "pasted-images") }),
+		acceptsImages: () => modelAcceptsImages({ env: process.env, cwd: process.cwd() }),
 		send: sendToMainWindow,
 		analytics,
 		interaction: interactionHub,
@@ -655,21 +612,29 @@ app.whenReady().then(async () => {
 		indexReadiness: () => indexReadiness(),
 		// A run on the Dazzi plan's model with the week's credits used up is not sent: the server would refuse every request of it.
 		preflight: async () => {
+			const configPath = autoragConfigPath();
+			const model = existsSync(configPath) ? readRawConfigObject(configPath).model : undefined;
+			const provider = isJsonObject(model) && typeof model.provider === "string" ? model.provider : undefined;
 			const block = await quotaBlock({
-				modelProvider: async () => {
-					const configPath = autoragConfigPath();
-					const model = existsSync(configPath) ? readRawConfigObject(configPath).model : undefined;
-					return isJsonObject(model) && typeof model.provider === "string" ? model.provider : undefined;
-				},
+				modelProvider: async () => provider,
 				account: accountService,
 				now: () => new Date(),
 			});
-			return block === null
-				? null
-				: {
-						message: t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) }),
-						action: "open-plan",
-					};
+			if (block !== null) {
+				return {
+					message: t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) }),
+					action: "open-plan",
+				};
+			}
+			// The signed-out trial runs on a guest credential with its own device cap; when it is
+			// used up or already claimed, hold the run and offer to sign in/upgrade, as above.
+			const guestRelevant = provider === AUTORAG_PROVIDER_ID || (provider === undefined && (await readDazziGuestCredential(getAgentDir())) !== null);
+			if (!guestRelevant) return null;
+			const guestState = await accountService.guestQuotaStatus();
+			if (guestState === "exhausted" || guestState === "claimed") {
+				return { message: t(guestState === "claimed" ? "main.search.guestAlreadyClaimed" : "main.search.guestQuotaExhausted"), action: "open-plan" };
+			}
+			return null;
 		},
 	});
 	registerSearchIpcHandlers(searchService);
@@ -727,7 +692,7 @@ app.whenReady().then(async () => {
 	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
 	// the whole app, so a download started in one place shows its progress everywhere.
 	const modelDownload = createModelDownloadService({
-		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
+		cacheRoot: inlModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 		spec: nativeQwen3Spec(),
 		onChange: (status) => {
 			sendToAllWindows(MODEL_DOWNLOAD_CHANNELS.changed, status);
@@ -932,6 +897,16 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerAutomationIpcHandlers(automations);
+	registerDemoIpcHandlers(
+		createDemoService({
+			home: homedir(),
+			downloads: knownFolder("downloads", join(homedir(), "Downloads")),
+			platform: process.platform,
+			automations,
+			settings: settingsService,
+		}),
+	);
+	registerLtrIpcHandlers(ltr);
 	const stopAutomations = automations.start((snapshot) => {
 		sendToMainWindow(AUTOMATION_CHANNELS.changed, snapshot);
 	});
@@ -947,16 +922,17 @@ app.whenReady().then(async () => {
 		settings: SETTINGS_CHANNELS,
 		search: SEARCH_CHANNELS,
 		interaction: INTERACTION_CHANNELS,
-		smartIndexing: SMART_INDEXING_CHANNELS,
 		account: ACCOUNT_CHANNELS,
 		modelDownload: MODEL_DOWNLOAD_CHANNELS,
 		errorFix: ERROR_FIX_CHANNELS,
 		appCustomizer: APP_CUSTOMIZER_CHANNELS,
 		magicAction: MAGIC_ACTION_CHANNELS,
 		automations: AUTOMATION_CHANNELS,
+		demo: DEMO_CHANNELS,
 		indexActivity: INDEX_ACTIVITY_CHANNELS,
 		indexProblem: INDEX_PROBLEM_CHANNELS,
 		appUpdate: APP_UPDATE_CHANNELS,
+		toolVersions: TOOL_VERSIONS_CHANNELS,
 		onboarding: ONBOARDING_CHANNELS,
 		osRequests: OS_REQUEST_CHANNELS,
 		services: SERVICES_CHANNELS,
@@ -1043,45 +1019,58 @@ app.whenReady().then(async () => {
 	registerAppUpdateIpcHandlers(appUpdater);
 	installCheckForUpdatesMenuItem(appUpdater);
 	appUpdater.start();
+	const readLibrarianVersion = (): string => {
+		try {
+			const pkg = JSON.parse(readFileSync(join(app.getAppPath(), "node_modules", "@autorag", "librarian", "package.json"), "utf8")) as { version?: string };
+			if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
+		} catch {
+			// fall back to pin
+		}
+		return toolPins.librarian.version;
+	};
+	const toolVersions = createToolVersionsService({
+		appVersion: app.isPackaged ? app.getVersion() : APP_VERSION,
+		librarianVersion: readLibrarianVersion(),
+		resourcesPath: process.resourcesPath,
+		env: process.env,
+		getModel: async () => {
+			try {
+				const raw = JSON.parse(readFileSync(autoragConfigPath(), "utf8")) as Record<string, unknown>;
+				return localEmbeddingModel(raw) ?? DEFAULT_LOCAL_EMBEDDING_MODEL;
+			} catch {
+				return DEFAULT_LOCAL_EMBEDDING_MODEL;
+			}
+		},
+		daemonStatus: embeddingDaemonStatus,
+		restartDaemon: restartEmbeddingDaemon,
+	});
+	registerToolVersionsIpcHandlers(toolVersions);
+	// Check tools/manifest.json vs pins and running daemon health on launch; never kills user-started daemons or reindexes.
+	void toolVersions.get().then(
+		(snapshot) => {
+			if (snapshot.manifestDrift.length > 0) {
+				console.warn(
+					`[tools] manifest drift vs pins: ${snapshot.manifestDrift.map((d) => `${d.name} (pinned ${d.pinned}, manifest ${d.manifest ?? "missing"})`).join(", ")}`,
+				);
+			}
+			if (snapshot.daemon.outdated) {
+				console.warn(
+					`[tools] running embedding daemon ${snapshot.daemon.version} is older than pinned ${snapshot.daemon.pinnedVersion} (owned=${snapshot.daemon.owned}, port=${snapshot.daemon.port})`,
+				);
+			}
+		},
+		() => undefined,
+	);
 	const userDataDir = app.getPath("userData");
 	const supportedExtensions = supportedExtensionsFromRegistry(createDefaultParserRegistry());
+	const scanOptions = { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES };
 	const scanCoordinator = createFolderScanCoordinator({
-		options: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
+		options: scanOptions,
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
-		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
+		// Nothing streams a scan to the renderer any more: the first run waits for the totals it feeds.
+		emit: () => undefined,
 	});
-	const listCloudDrives = async (): Promise<readonly { readonly path: string; readonly name: string }[]> => {
-		if (process.platform === "darwin") {
-			const root = join(home, "Library", "CloudStorage");
-			const names = await readdir(root).catch(() => [] as string[]);
-			// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
-			return names
-				.filter((name) => !name.startsWith("."))
-				.map((name) => {
-					const dash = name.indexOf("-");
-					return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
-				});
-		}
-		if (process.platform === "win32") {
-			const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
-			return locations
-				.filter((location) => location.section === "cloud" && location.available)
-				.map((location) => ({ path: location.path, name: location.name }));
-		}
-		return [];
-	};
-	registerSmartIndexingIpcHandlers(
-		createSmartIndexingService({
-			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
-			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
-			agentDir: getAgentDir(),
-			env: process.env,
-			language: () => currentLanguage,
-			cloudRoots: async () => (await listCloudDrives()).map((drive) => drive.path),
-			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
-		}),
-	);
-	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	// "AI로 해결하기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
 	registerErrorFixIpcHandlers(
 		createErrorFixService({
 			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),
@@ -1120,6 +1109,7 @@ app.whenReady().then(async () => {
 		homeDir: home,
 		language: () => currentLanguage,
 		settings: settingsService,
+		importCustomProvider: (input) => providerAuth.importCustom(input),
 		listLocations: () => customizerPlaces.list().catch(() => []),
 		listTags: () => customizerTags.catalog().then((catalog) => catalog.tags.filter((tag) => tag.sidebar), () => []),
 	});
@@ -1134,17 +1124,27 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		settings: settingsService,
 	});
-	registerMagicActionIpcHandlers(magicActionService);
+	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
+	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
+	let deviceIdPromise: Promise<string> | null = null;
+	const getDeviceId = (): Promise<string> => {
+		deviceIdPromise ??= resolveAnonymousDeviceId({ platform: process.platform, home, env: process.env, packaged: app.isPackaged });
+		return deviceIdPromise;
+	};
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,
 		cachePath: join(app.getPath("userData"), "account.json"),
 		configPath: autoragConfigPath(),
+		deviceId: getDeviceId,
 		openExternal: (url) => shell.openExternal(url),
 		send: sendToMainWindow,
 		// The picker lists the plan's models from the runtime's persisted catalog.
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
+		// A chat agent built on the guest key keeps that key for Jev, rerank and decomposition; sign-in, sign-out or a dropped
+		// guest key must reach the next question, so idle agents are rebuilt (their conversation resumes from its file).
+		onCredentialChanged: () => void searchService.resetAgents(),
 	});
 	registerAccountIpcHandlers(accountService);
 	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone permission.
@@ -1159,10 +1159,16 @@ app.whenReady().then(async () => {
 			}),
 		}),
 	);
-	void accountService.refresh().catch(() => undefined);
+	// A fresh, unauthenticated launch provisions anonymous guest access so the plan's models work before sign-in.
+	void accountService
+		.refresh()
+		.then((status) => {
+			if (status.state === "signedOut") void accountService.ensureGuestAccess().catch(() => undefined);
+		})
+		.catch(() => undefined);
 	app.once("will-quit", () => void accountService.dispose());
 
-	const onboardingService: OnboardingService = createOnboardingService({
+	const firstRun: FirstRunService = createFirstRunService({
 		userDataDir,
 		env: process.env,
 		cwd: process.cwd(),
@@ -1172,88 +1178,45 @@ app.whenReady().then(async () => {
 			desktop: knownFolder("desktop", join(home, "Desktop")),
 			documents: knownFolder("documents", join(home, "Documents")),
 			downloads: knownFolder("downloads", join(home, "Downloads")),
-			pictures: knownFolder("pictures", join(home, "Pictures")),
 		},
-		iCloudDrivePath:
-			process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
-		cloudDrives: listCloudDrives,
-		localSpec,
-		ocrEnabled: async () => {
-			try {
-				const raw = readRawConfigObject(autoragConfigPath());
-				const parserOptions = isJsonObject(raw.parserOptions) ? raw.parserOptions : {};
-				const ocr = isJsonObject(parserOptions.ocr) ? parserOptions.ocr : {};
-				return ocr.enabled === true;
-			} catch {
-				return false;
-			}
-		},
+		iCloudDrivePath: fixtureHome === null && process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
+		// A fixture home offers only its own folders, like iCloud Drive above.
+		...(fixtureHome === null ? {} : { cloudFolders: () => [] }),
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
-		ensureLocalModel,
 		refresh: (methods) => runLocalIndex("onboarding-index", methods, busyResult(methods)),
 		recordIndex: (outcome) => indexProblem.record(outcome),
-		// Opening Dazzi after a failed first index: index the keywords now, which needs no embedder (not recorded: it says nothing about the embedder).
-		refreshKeyword: () => runLocalIndex("onboarding-index", ["parsed", "jikji"], () => null),
-		syncDatasources: async (aliases) => {
-			let pending = [...aliases];
-			while (pending.length > 0) {
-				const deferredAliases: string[] = [];
-				await Promise.all(
-					pending.map(async (alias) => {
-						const outcome = await refreshQueue.enqueue({
-							item: sourceItem(alias),
-							owner: "onboarding-datasources",
-							work: () => dataSources.sync(alias),
-							onBusy: () => ({ ok: false as const, error: "__LOCKED__" }),
-						});
-						if ("error" in outcome && outcome.error === "__LOCKED__") deferredAliases.push(alias);
-					}),
-				);
-				if (deferredAliases.length === 0) return;
-				pending = deferredAliases;
-				const wait = Promise.withResolvers<void>();
-				setTimeout(wait.resolve, 1_000);
-				await wait.promise;
-			}
+		// The first run indexes its folders and, on the same run, scans them for duplicates so the tour can show a family.
+		scanFolders: (paths) => scanCoordinator.start(paths),
+		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
+		scanFailed: (path) => scanCoordinator.cached(path)?.error !== null && scanCoordinator.cached(path)?.error !== undefined,
+		refreshDuplicates: async () => {
+			await workerHost.client.call("refreshVersionFamilies");
 		},
-		credentials,
-		settings: settingsService,
-		detectSources: (onFound) =>
-			detectSources(
-				{
-					platform: process.platform,
-					home,
-					env: process.env,
-					run: (command, args) => runCommand(command, args, SOURCE_PROBE_TIMEOUT_MS),
-					pathExists,
-					readDirNames: (path) => readdir(path).catch(() => [] as string[]),
-					readFileText: (path) => readFile(path, "utf8"),
-				},
-				onFound,
-			),
-		useManagedModel: () => accountService.useManagedModel(),
-		gitToken: async () => {
-			try {
-				const token = (await runCommand("gh", ["auth", "token"])).trim();
-				return token.length > 0 ? token : null;
-			} catch {
-				return null;
-			}
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		// Through Pi's runtime, which authenticates the plan's OAuth credential; a bare `completeSimple` has no key for it.
+		complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
+		// The tour's question is verified with model-free keyword retrieval over the config the app actually runs with.
+		retrieve: async (query, options) => {
+			const { config } = await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() });
+			const { results } = await new AutoRAGLite(config).retrieve(query, options);
+			return results;
 		},
-		checkModel: (role) =>
-			checkModelHealth({
-				resolveModel: () => (role === "decomposition" ? resolveDecompositionModel() : resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir())),
-				complete: completeSimple,
-				timeoutMs: MODEL_CHECK_TIMEOUT_MS,
-				now: Date.now,
-			}),
+		// Jev scores each question (a real person would recognise it as theirs, and only their own document answers it).
+		judgeDemoQuestions: createDemoQuestionJudge({
+			env: process.env,
+			agentDir: getAgentDir(),
+			model: () => {
+				const jev = existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()).jev : undefined;
+				return typeof jev === "object" && jev !== null && "backend" in jev && jev.backend === "dazzi" && "model" in jev && typeof jev.model === "string" ? jev.model : undefined;
+			},
+		}),
+		// The tour's question is answered by the real AI Search agent before it is offered, so what the tour types is proven to answer.
+		answerDemoQuestion: (question, signal) => answerQuestion(createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }), question, signal),
+		scanOptions,
+		language: () => currentLanguage,
 		send: sendToMainWindow,
 		openExternal: (url) => shell.openExternal(url),
-		relaunch: () => {
-			app.relaunch();
-			app.exit(0);
-		},
 		pickPaths: async (kind) => {
 			const options: OpenDialogOptions = {
 				title: t("main.dialogs.chooseExcludeTitle"),
@@ -1273,27 +1236,33 @@ app.whenReady().then(async () => {
 				buttonLabel: t("main.dialogs.addButton"),
 				properties: ["openDirectory", "multiSelections", "createDirectory"],
 			};
-			const parent = onboardingWindow ?? mainWindow;
+			const parent = mainWindow;
 			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
 			return result.canceled ? [] : result.filePaths;
 		},
-		showNotification: showSystemNotification,
-		notificationsSupported: () => Notification.isSupported(),
-		loginItemApplied,
 		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
 		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
 		probeFullDiskAccess: () => probeFullDiskAccess(home),
-		checkNetwork: checkNetworkReachability,
-		startScans: (paths) => scanCoordinator.start(paths),
-		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
+		// A fresh unauthenticated launch provisions the guest credential + plan models before indexing and the tour.
+		ensureModelAccess: () => accountService.ensureGuestAccess(),
 		onComplete: () => {
 			analytics.track("onboarding_completed", {});
 		},
 	});
-	registerOnboardingIpcHandlers(onboardingService);
+	const revealBackdrop = createElectronRevealBackdrop(() => mainWindow);
+	registerOnboardingIpcHandlers(firstRun, (opacity) => revealBackdrop.setOpacity(opacity));
+	app.on("before-quit", () => revealBackdrop.clear());
+	let quittingApp = false;
+	let quittingForUpdate = false;
+	whenQuitting(() => {
+		quittingApp = true;
+	});
+	nativeAutoUpdater.once("before-quit-for-update", () => {
+		quittingForUpdate = true;
+	});
 	/** Closing the last window while the first index runs would stop it, so that close asks first. */
 	const confirmLastClose = (window: BrowserWindow, event: Electron.Event): void => {
-		const decision = closeDecision({ pending: onboardingService.pending(), indexing: onboardingService.isIndexing(), windowsOpen: appWindows().length });
+		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length, updating: quittingForUpdate });
 		if (decision === "allow") return;
 		event.preventDefault();
 		void dialog
@@ -1310,7 +1279,8 @@ app.whenReady().then(async () => {
 			});
 	};
 	const openFinderWindow = (): BrowserWindow => {
-		const window = createAppWindow(devLabel, currentAppearance, "finder");
+		// The flag only reaches a window opened while the first run is still pending; `load` stays authoritative.
+		const window = createAppWindow(devLabel, currentAppearance, firstRun.pending());
 		const clearWatchSet = (): void => {
 			void workerHost.client.call("setWatchSet", [[]]);
 		};
@@ -1319,30 +1289,21 @@ app.whenReady().then(async () => {
 		window.on("close", (event) => confirmLastClose(window, event));
 		return window;
 	};
-	const openOnboardingWindow = (): BrowserWindow => {
-		const window = createAppWindow(devLabel, currentAppearance, "onboarding");
-		window.on("close", (event) => confirmLastClose(window, event));
-		window.on("closed", () => {
-			onboardingWindow = null;
-			// Closed on a first index that stopped: that ends onboarding and gives the Finder its keyword index.
-			void onboardingService.indexStatus().then(({ state }) => {
-				if (completesOnClose({ pending: onboardingService.pending(), state })) void onboardingService.complete();
-			});
-		});
-		return window;
-	};
-	/** Open whatever the app needs on screen: the Finder, and the onboarding window while onboarding is unfinished. */
+	/** Open the Finder if it is not on screen (never while the app is quitting/updating). */
 	const openWindows = (): void => {
+		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
-		if (onboardingService.pending() && (onboardingWindow === null || onboardingWindow.isDestroyed())) onboardingWindow = openOnboardingWindow();
 	};
 	openWindows();
-	// A Dock click only brings windows back when none is left; a closed onboarding window is not forced open again.
+	// A first index the person left running behind the app (they started it early) and a quit cut short carries on here.
+	firstRun.resumeIndexing();
+	// A Dock click only brings the window back when none is left.
 	app.on("activate", () => {
-		if (appWindows().length === 0) openWindows();
+		if (!quittingApp && appWindows().length === 0) openWindows();
 	});
 	// Menu requests: queue the cold-start request, then serve the ones the running app receives.
 	onOsRequestQueued = () => {
+		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) {
 			mainWindow = openFinderWindow();
 		} else {
@@ -1412,9 +1373,11 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()])
-			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
-			.finally(() => app.exit(0));
+		void runQuitCleanup({
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()],
+			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
+			onExit: () => app.exit(0),
+		});
 	});
 });
 

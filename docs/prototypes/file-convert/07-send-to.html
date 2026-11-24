@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 7 · 보낼 곳</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 7: nobody wants "DOCX". They want "something my 팀장 / 관공서 / 카톡 can open".
+		 * Pick the destination; format, size and quality are derived. The derivation is shown, never hidden. */
+		.send {
+			position: absolute; right: 12px; top: 56px; z-index: 40; width: 340px; display: flex; flex-direction: column;
+			background: var(--bg-window); border: 1px solid var(--border); border-radius: var(--radius-12); box-shadow: var(--shadow-menu); overflow: hidden;
+		}
+		.send-head { padding: 12px 14px 8px; }
+		.send-head b { color: var(--text-primary); font-size: 13px; }
+		.send-head p { margin: 1px 0 0; color: var(--text-muted); font-size: 11.5px; }
+		.dest { display: flex; flex-direction: column; padding: 0 6px 6px; max-height: 330px; overflow-y: auto; }
+		.d { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: var(--radius-8); background: transparent; text-align: left; color: var(--text-primary); }
+		.d:hover { background: var(--bg-hover); }
+		.d.on { background: var(--accent-wash); }
+		.d .gl { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-8); background: var(--bg-hover-strong); color: var(--text-muted); }
+		.d.on .gl { background: var(--accent); color: var(--text-on-accent); }
+		.d b { display: block; font-size: 12.5px; font-weight: 600; }
+		.d small { display: block; margin-top: 1px; color: var(--text-muted); font-size: 11px; }
+		.d .recent { color: var(--text-faint); font-size: 10.5px; }
+		.plan { border-top: 1px solid var(--border-divider); background: var(--bg-subtle-alt); padding: 10px 14px; }
+		.plan h5 { margin: 0 0 7px; color: var(--text-faint); font-size: 10.5px; font-weight: 600; }
+		.step { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; min-height: 26px; font-size: 12px; }
+		.step .ck { color: var(--ok-dot); }
+		.step .ck .icon { width: 14px; height: 14px; }
+		.step span:nth-child(2) { color: var(--text-body); }
+		.step .res { font: 600 11px var(--font-sans); color: var(--text-primary); }
+		.step .res.was { color: var(--text-muted); text-decoration: line-through; font-weight: 400; margin-right: 6px; }
+		.send-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-divider); }
+		.send-foot .grow { flex: 1; color: var(--text-muted); font-size: 11.5px; min-width: 0; }
+		.send-foot .grow b { color: var(--text-primary); }
+		.override { margin-left: auto; border: 0; background: transparent; color: var(--accent-text); font-size: 11.5px; padding: 0; }
+		.override:hover { text-decoration: underline; }
+		.cases { display: flex; gap: 6px; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* Destinations map to constraints. Each plan step is a real conversion decision the person would otherwise make blind. */
+		const FILE = { ...FILES[1], size: "9.4 MB", name: "계약서_최종.docx" };
+		const DEST = [
+			{ id: "gov", glyph: "file-check", name: "관공서·학교 제출", sub: "PDF · 20MB 이하", recent: "최근", steps: [["편집 불가 형식으로", "DOCX", "PDF"], ["글꼴을 파일에 포함", null, "포함됨"], ["용량 맞추기", "9.4 MB", "6.1 MB"]] },
+			{ id: "mail", glyph: "mail", name: "메일 첨부", sub: "받는 사람이 바로 열 수 있게 · 25MB", recent: "", steps: [["누구나 여는 형식으로", "DOCX", "PDF"], ["용량 맞추기", "9.4 MB", "6.1 MB"], ["메일 앱에 첨부", null, "Mail"]] },
+			{ id: "kakao", glyph: "smartphone", name: "카카오톡·메신저", sub: "휴대폰에서 바로 보이게", recent: "", steps: [["휴대폰에서 열리는 형식", "DOCX", "PDF"], ["페이지를 이미지로도", null, "선택"], ["용량 맞추기", "9.4 MB", "3.2 MB"]] },
+			{ id: "edit", glyph: "pencil", name: "한글(HWP) 쓰는 분께", sub: "수정할 수 있게 한글 문서로", recent: "", steps: [["한글 문서로", "DOCX", "HWPX"], ["서식 보존 점검", null, "표 2개 확인"], ["용량", "9.4 MB", "9.1 MB"]] },
+			{ id: "print", glyph: "printer", name: "인쇄", sub: "고해상도 · 여백 유지", recent: "", steps: [["인쇄용 PDF로", "DOCX", "PDF"], ["이미지 해상도", null, "300 dpi"], ["용량", "9.4 MB", "14 MB"]] },
+			{ id: "link", glyph: "link", name: "링크로 공유", sub: "내 클라우드 폴더에 올리고 링크 복사", recent: "", steps: [["보기 전용 형식으로", "DOCX", "PDF"], ["iCloud Drive에 복사", null, "문서/공유"], ["링크 복사", null, "준비됨"]] },
+		];
+		let pick = "gov"; let done = false;
+
+		function render() {
+			const d = DEST.find((x) => x.id === pick);
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 7", "형식 대신 “누구에게 보내나”를 고릅니다. 형식·용량·글꼴 처리는 그 결과로 정해지고, 무엇을 했는지 그대로 보여줍니다.", "07-send-to.html", "“이거 PDF로 바꿔서 팀장님께 메일로 보내야 해” — 사람은 형식이 아니라 받는 사람과 제한(용량·열람 환경)을 떠올립니다") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml({ extra: `<button class="tb-btn on" aria-label="보내기" title="보내기용으로 변환">${icon("file-output")}</button>` })}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${FILES.map((f) => rowHtml(f.id === "b" ? FILE : f, f.id === "b" ? "sel" : "")).join("")}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(FILE, baseChips())}
+				<div class="send" role="dialog" aria-label="보낼 곳">
+					<div class="send-head"><b>어디에 쓰실 건가요?</b><p>${FILE.name} · ${FILE.size}</p></div>
+					<div class="dest">${DEST.map((x) => `<button class="d ${x.id === pick ? "on" : ""}" data-d="${x.id}"><span class="gl">${icon(x.glyph)}</span><span><b>${x.name}</b><small>${x.sub}</small></span><span class="recent">${x.recent}</span></button>`).join("")}</div>
+					<div class="plan"><h5>이렇게 준비해요</h5>
+						${d.steps.map(([label, from, to]) => `<div class="step"><span class="ck">${icon("check")}</span><span>${label}</span><span>${from ? `<span class="res was">${from}</span>` : ""}<span class="res">${to}</span></span></div>`).join("")}
+					</div>
+					<div class="send-foot"><div class="grow">${done ? `<b>${FILE.name.replace(/\.[^.]+$/, "")}.${d.id === "edit" ? "hwpx" : "pdf"}</b> 준비됐어요` : `원본은 그대로 · 결과는 원본 옆에`}</div><button class="override" id="ov">직접 고르기…</button><button class="btn primary" id="go">${d.id === "mail" ? "만들고 메일 쓰기" : d.id === "link" ? "만들고 링크 복사" : "만들기"}</button></div>
+				</div>
+			</div></div></div>`;
+			wireChrome();
+			document.querySelectorAll("[data-d]").forEach((b) => (b.onclick = () => { pick = b.dataset.d; done = false; render(); }));
+			document.getElementById("ov").onclick = () => toast("형식을 직접 고르는 1번 팝오버로 이동", "info");
+			document.getElementById("go").onclick = () => { done = true; render(); toast(d.id === "mail" ? "메일 앱에 첨부했어요" : d.id === "link" ? "링크를 복사했어요" : "PDF를 만들었어요", "circle-check"); };
+		}
+		render();
+	</script>
+</body>
+</html>

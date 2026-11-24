@@ -37,26 +37,44 @@ describe("i18n configuration and locale keys", () => {
 	/** Names that read the same in every language: products, brands, plan tiers, URLs, and bare placeholders. */
 	const NAME_ONLY = /^(?:[\s\W\d]|KakaoTalk|Slack|Discord|Telegram|WhatsApp|GitHub|Notion|Obsidian|Anthropic|OpenAI|OpenRouter|Google|Ollama|Free|Air|Pro|Max|BYOK|https?:\/\/\S+|\{\{\w+\}\})*$/u;
 
-	it("translates every onboarding string in ja and zh instead of leaving English or Korean copy behind", () => {
+	it("translates every first-run string in ja and zh instead of leaving English or Korean copy behind", () => {
 		const english = leaves(resources.en.translation);
 		for (const lang of ["ja", "zh"] as const) {
 			const other = leaves(resources[lang].translation);
 			const untranslated = [...other]
-				.filter(([key, text]) => key.startsWith("onboarding.") && text === english.get(key) && !NAME_ONLY.test(text))
+				.filter(([key, text]) => key.startsWith("firstRun.") && text === english.get(key) && !NAME_ONLY.test(text))
 				.map(([key]) => key);
 			expect(untranslated, lang).toEqual([]);
 		}
 	});
 
-	it("keeps English prose words out of the Korean onboarding copy", () => {
-		const prose = [...ko].filter(([key, text]) => key.startsWith("onboarding.") && /\b(?:Settings|System Settings|Budget summary|operating cost|provider|runtime|workspace)\b/u.test(text));
+	it("keeps English prose words out of the Korean first-run copy", () => {
+		const prose = [...ko].filter(([key, text]) => key.startsWith("firstRun.") && /\b(?:Settings|System Settings|Budget summary|operating cost|provider|runtime|workspace)\b/u.test(text));
 		expect(prose.map(([key]) => key)).toEqual([]);
 	});
 
-	it("keeps English prose words out of the ja and zh onboarding copy", () => {
+	it("keeps English prose words out of the ja and zh first-run copy", () => {
 		for (const lang of ["ja", "zh"] as const) {
-			const prose = [...leaves(resources[lang].translation)].filter(([key, text]) => key.startsWith("onboarding.") && /\b(?:Settings|provider|runtime|workspace|Budget summary|operating cost)\b/iu.test(text));
+			const prose = [...leaves(resources[lang].translation)].filter(([key, text]) => key.startsWith("firstRun.") && /\b(?:Settings|provider|runtime|workspace|Budget summary|operating cost)\b/iu.test(text));
 			expect(prose.map(([key]) => key), lang).toEqual([]);
+		}
+	});
+
+	it("never tells the person a question is being made or is ready, before or on the early-start card", () => {
+		// The tour's question is found while files are read; the person is only told they can start, and what is still going on.
+		const mentionsQuestion: Record<"ko" | "en" | "ja" | "zh", RegExp> = {
+			ko: /질문/u,
+			en: /question/iu,
+			ja: /質問/u,
+			zh: /问题/u,
+		};
+		const keys = ["firstRun.early.start", "firstRun.setup.stage.preparing", "firstRun.tour.typingHint", "firstRun.tour.ask.title", "firstRun.tour.ask.body", "main.onboarding.noQuestion"];
+		for (const lang of ["ko", "en", "ja", "zh"] as const) {
+			const text = leaves(resources[lang].translation);
+			for (const key of keys) {
+				expect(text.get(key), `${lang} ${key}`).toBeDefined();
+				expect(mentionsQuestion[lang].test(text.get(key) ?? ""), `${lang} ${key}`).toBe(false);
+			}
 		}
 	});
 
@@ -66,7 +84,7 @@ describe("i18n configuration and locale keys", () => {
 		expect(t("places.aiSearch")).toBe("AI 에이전트");
 		expect(t("places.favorites")).toBe("즐겨찾기");
 		expect(t("places.settings")).toBe("설정");
-		expect(t("contextMenu.rename")).toBe("이름 변경");
+		expect(t("contextMenu.rename")).toBe("이름 바꾸기");
 		await setAppLanguage("en");
 		expect(t("common.save")).toBe("Save");
 		expect(t("contextMenu.rename")).toBe("Rename");
@@ -101,5 +119,12 @@ describe("i18n configuration and locale keys", () => {
 		expect(t("toolbar.viewAs", { label: "列表", shortcut: "⌘2" })).toBe("以列表显示 (⌘2)");
 
 		await setAppLanguage("ko");
+	});
+
+	it("names the wombat datasource AI Sessions in the datasource summaries of every language", () => {
+		for (const lang of ["ko", "en", "ja", "zh"] as const) {
+			const summary = leaves(resources[lang].translation).get("settingsSources.templates.wombat.summary");
+			expect(summary, lang).toBeTruthy();
+		}
 	});
 });

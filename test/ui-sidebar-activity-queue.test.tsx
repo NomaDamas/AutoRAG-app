@@ -181,12 +181,16 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 		// Hovering over the queue container expands the stack upward and reveals all 7 items!
 		const container = host.querySelector<HTMLElement>('[data-testid="sidebar-activity-queue"]');
 		expect(container).not.toBeNull();
+		// No stacked-card lip above the card: the primary card is the queue's only child, collapsed or expanded,
+		// so hovering never moves it.
+		expect([...(container?.children ?? [])].map((el) => el.tagName)).toEqual(["BUTTON"]);
 		act(() => {
 			container?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
 		});
 
 		const popover = host.querySelector('[data-testid="sidebar-activity-popover"]');
 		expect(popover).not.toBeNull();
+		expect(container?.lastElementChild?.tagName).toBe("BUTTON");
 		const expandedCards = host.querySelectorAll<HTMLButtonElement>(".sidebar__activity");
 		expect(expandedCards).toHaveLength(7);
 
@@ -197,10 +201,10 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 		expect(allText).toContain("demo.mp4");
 		expect(allText).toContain("이 컴퓨터용 모델");
 		// Verbose sub-descriptions stay in tooltips instead of crowding the narrow sidebar cards.
-		expect(allText).not.toContain("검색 색인 만드는 중");
+		expect(allText).not.toContain("검색 인덱스 만드는 중");
 		expect(allText).not.toContain("진행 및 대기열");
 		const localCard = [...expandedCards].find((card) => card.textContent?.includes("로컬 폴더"));
-		expect(localCard?.getAttribute("title")).toContain("검색 색인 만드는 중");
+		expect(localCard?.getAttribute("title")).toContain("검색 인덱스 만드는 중");
 
 		// Clicking individual cards routes to their respective owners.
 		const modelCard = [...expandedCards].find((card) => card.textContent?.includes("이 컴퓨터용 모델"));

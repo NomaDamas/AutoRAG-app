@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DuplicatesPage, ReadingPage } from "../src/renderer/src/components/settings/ConfigPages";
+import { DuplicatesPage } from "../src/renderer/src/components/settings/ConfigPages";
+import { LanguageSettings } from "../src/renderer/src/components/settings/LanguageSettings";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AutoRagConfigSnapshot, JsonObject } from "../src/shared/settings-contract";
 import { selectFieldText } from "./select-field-driver";
@@ -37,16 +38,21 @@ afterEach(() => {
 	host.remove();
 });
 
-describe("Settings → 문서 읽기 (Figma 403:8347 / 403:8920)", () => {
+/** 문서 언어 as 일반 draws it, between 화면 and 파일. */
+const DocumentLanguages = ({ config }: { readonly config: Record<string, unknown> }): ReturnType<typeof LanguageSettings> => (
+	<LanguageSettings snapshot={snapshotOf(config)} path={["languages"]} name="Document languages" hint="" onSaved={() => undefined} fallback={["ko", "en"]} />
+);
+
+describe("Settings → 일반 → 문서 언어 (Figma 403:8347 / 403:8920)", () => {
 	it("starts from Korean and English, with no 기본값으로 변경 while nothing is stored", async () => {
-		await act(async () => root.render(<ReadingPage snapshot={snapshotOf({})} onSaved={() => undefined} />));
+		await act(async () => root.render(<DocumentLanguages config={{}} />));
 		expect(chips()).toEqual(["한국어", "English"]);
 		expect(host.querySelector(".language-combobox__field input")?.getAttribute("placeholder")).toBe("Select a language…");
 		expect(button("Reset to default")).toBeNull();
 	});
 
 	it("offers 기본값으로 변경 once the list is stored, and it removes the stored list", async () => {
-		await act(async () => root.render(<ReadingPage snapshot={snapshotOf({ languages: ["ko", "en", "ja"] })} onSaved={() => undefined} />));
+		await act(async () => root.render(<DocumentLanguages config={{ languages: ["ko", "en", "ja"] }} />));
 		expect(chips()).toEqual(["한국어", "English", "日本語"]);
 		await act(async () => button("Reset to default")?.click());
 		expect(bridge.settings.configPatch).toHaveBeenCalledWith([{ path: ["languages"], remove: true }]);

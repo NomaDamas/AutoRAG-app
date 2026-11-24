@@ -150,7 +150,7 @@ describe("AutomationInspector", () => {
 		expect(text()).toContain(actionShort(shown));
 		expect(text()).toContain(ruleTitle(shown));
 		expect(text()).toContain("3분 전 실행 · 성공");
-		expect(button("AI로 편집")).toBeDefined();
+		expect(button("AI에게 요청")).toBeDefined();
 		expect(button("삭제")).toBeDefined();
 		expect(text()).toContain("요약");
 		expect(value("언제")).toBe(whenText(shown));
@@ -237,7 +237,7 @@ describe("AutomationInspector", () => {
 		const edits: AutomationRule[] = [];
 		const deletes: AutomationRule[] = [];
 		act(() => root.render(<AutomationInspector rule={shown} onEdit={(next) => edits.push(next)} onDelete={(next) => deletes.push(next)} />));
-		click(button("AI로 편집"));
+		click(button("AI에게 요청"));
 		click(button("삭제"));
 		expect(edits).toEqual([shown]);
 		expect(deletes).toEqual([shown]);
@@ -249,7 +249,7 @@ describe("AutomationInspector", () => {
 		act(() => root.render(<AutomationInspector rule={shown} onEdit={noop} onDelete={noop} />));
 		expect(text()).toContain("Downloads");
 		expect(text()).toContain("Ran 3 minutes ago · succeeded");
-		expect(button("Edit with AI")).toBeDefined();
+		expect(button("Ask AI")).toBeDefined();
 		expect(button("Delete")).toBeDefined();
 		expect(value("When")).toBe(whenText(shown));
 		expect(value("Does")).toBe(whatText(shown));
@@ -307,13 +307,13 @@ describe("AutomationRulesSection", () => {
 
 		click(more);
 		expect(more?.getAttribute("aria-expanded")).toBe("true");
-		expect([...host.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(["수정하기", "삭제하기"]);
-		click(menuItem(row, "수정하기"));
+		expect([...host.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(["수정", "삭제"]);
+		click(menuItem(row, "수정"));
 		expect(edits).toEqual([shown]);
 		expect(host.querySelector('[role="menu"]')).toBeNull();
 
 		click(more);
-		click(menuItem(row, "삭제하기"));
+		click(menuItem(row, "삭제"));
 		expect(deletes).toEqual([shown]);
 		expect(edits).toEqual([shown]);
 	});
@@ -367,7 +367,7 @@ describe("Inspector's folder automations", () => {
 
 		const row = ruleRow(ruleTitle(parentRule));
 		click(row?.querySelector('button[aria-label="더보기"]'));
-		click(menuItem(row, "수정하기"));
+		click(menuItem(row, "수정"));
 		expect(edits).toEqual([parentRule]);
 	});
 

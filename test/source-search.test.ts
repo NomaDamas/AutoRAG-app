@@ -146,4 +146,69 @@ describe("datasource hit rows", () => {
 		const hit = sourceHit(result("s", 1, { timestamp: "1732757337" }), "x");
 		expect([hit.title, hit.timestamp]).toEqual(["src:s", 1732757337000]);
 	});
+
+	describe("AI Sessions (wombat) hits", () => {
+		const label = "[claude-code:sess-1 | turns 3-4 | 2026-10-22 | Release flow | /work/app]";
+		const wombat = (metadata: Record<string, unknown> = {}, body = "we cut the patch release from main after CI is green") =>
+			result("w", 1, { datasourceId: "wombat", agent: "claude-code", sessionKey: "claude-code:sess-1", title: "Release flow", startedAt: "2026-10-22T12:06:50Z", ...metadata }, `${label}\n${body}`);
+
+		it("is named by the session's title, written by the agent that ran it, and dated from its start", () => {
+			const hit = sourceHit(wombat(), "patch release");
+			expect([hit.title, hit.author, hit.timestamp, hit.url]).toEqual(["Release flow", "claude-code", Date.parse("2026-10-22T12:06:50Z"), null]);
+		});
+
+		it("shows the conversation, not the label line the model needs and a person already reads in the title", () => {
+			const hit = sourceHit(wombat(), "patch release");
+			expect(hit.snippet).toBe("we cut the patch release from main after CI is green");
+			expect(hit.content).toBe("we cut the patch release from main after CI is green");
+			expect(hit.snippet).not.toContain("claude-code:sess-1");
+		});
+
+		const firstChunk = [
+			"claude-code/work-alpha/s1__a719d1b96e4d.md",
+			"# Session claude-code:s1",
+			"- agent: claude-code",
+			"- session_id: s1",
+			"- source_path: /Users/me/.claude/projects/p/s1.jsonl",
+			"- cwd: /work/alpha",
+			"- started_at: 2026-10-16T01:00:00Z",
+			"",
+			"## Turn 1 | User | 2026-10-16T01:00:00Z [src:L1]",
+			"",
+			"how do I stop the ingress from dropping long uploads",
+			"",
+			"## Turn 2 | Assistant | 2026-10-16T01:00:10Z [src:L2]",
+			"",
+			"Raise the proxy read timeout on the ingress controller.",
+		].join("\n");
+
+		it("drops wombat's mirror header, so a row never prints a file path or the session's bookkeeping", () => {
+			const hit = sourceHit(wombat({}, firstChunk), "ingress");
+			expect(hit.content).toBe("User: how do I stop the ingress from dropping long uploads Assistant: Raise the proxy read timeout on the ingress controller.");
+			for (const noise of ["source_path", "/Users/me", "session_id", ".md", "[src:", "2026-10-16T01"]) expect(hit.content, noise).not.toContain(noise);
+			expect(hit.snippet).not.toContain("source_path");
+		});
+
+		it("also cleans a later chunk, which starts with the path and the session heading instead of the header block", () => {
+			const later = ["claude-code/work-alpha/s1__a719d1b96e4d.md > Session claude-code:s1", "## Turn 50 | Assistant | 2026-10-16T01:24:10Z [src:L50]", "", "answer 24: raise the timeout"].join("\n");
+			expect(sourceHit(wombat({}, later), "timeout").content).toBe("Assistant: answer 24: raise the timeout");
+		});
+
+		it("keeps a turn's own text that merely contains such markers", () => {
+			const body = "## Turn 1 | User | x [src:L1] is how a mirror marks a turn";
+			expect(sourceHit(wombat({}, `claude-code/a.md\n${body}`), "mirror").content).toContain("is how a mirror marks a turn");
+		});
+
+		it("falls back to the session key when the session has no title, and keeps a body that merely looks like a label", () => {
+			expect(sourceHit(wombat({ title: "" }), "x").title).toBe("claude-code:sess-1");
+			const body = "[not a label] this is the message";
+			const hit = sourceHit(result("w2", 1, { datasourceId: "wombat", agent: "codex", title: "T" }, body), "message");
+			expect(hit.snippet).toBe(body);
+		});
+
+		it("leaves every other datasource's content untouched, even when it starts with a bracket", () => {
+			const hit = sourceHit(result("k", 1, { chatName: "room" }, "[공지] 내일 회의"), "회의");
+			expect(hit.content).toBe("[공지] 내일 회의");
+		});
+	});
 });

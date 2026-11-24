@@ -47,6 +47,20 @@ export interface IndexProblemView {
 	readonly primary: IndexProblemAction | null;
 	/** The quieter second action, `null` when the problem offers no alternative. */
 	readonly secondary: IndexProblemAction | null;
+	/** The banner over the file list; its own copy where a problem words it apart from the sidebar block. */
+	readonly banner: IndexProblemBanner;
+}
+
+/** What the banner over the file list shows under its title. */
+export interface IndexProblemBanner {
+	/** A problem that leaves search working (keyword search, or the files that were read) is a warning, not an error. */
+	readonly tone: "error" | "warning";
+	/** The line under the title. */
+	readonly detail: string | null;
+	/** The accent button; `null` while a retry runs. */
+	readonly primary: IndexProblemAction | null;
+	/** The second button; `null` shows 나중에, which dismisses the banner. */
+	readonly secondary: IndexProblemAction | null;
 }
 
 /** The reasons that speak through a copy block; `folder-unreadable` names its own folder instead. */
@@ -131,9 +145,11 @@ function failureView(failure: IndexFailure, t: TFunction): IndexProblemView {
 			folderName: row.name,
 			primary: action(plan.primary, retryKey, t),
 			secondary: plan.secondary === null ? null : action(plan.secondary, retryKey, t),
+			banner: { tone: "error", detail: row.detail, primary: action(plan.primary, retryKey, t), secondary: null },
 		};
 	}
 	const copy = COPY_KEY[reason];
+	const primary = action(plan.primary, retryKey, t);
 	return {
 		retrying: false,
 		tone: "error",
@@ -145,8 +161,22 @@ function failureView(failure: IndexFailure, t: TFunction): IndexProblemView {
 		itemTitle: t("indexProblem.item.embedding"),
 		itemDetail: t(`${copy}.detail`),
 		folderName: null,
-		primary: action(plan.primary, retryKey, t),
+		primary,
 		secondary: plan.secondary === null ? null : action(plan.secondary, retryKey, t),
+		banner: reason === "embedder-config" ? embedderConfigBanner(t) : { tone: "error", detail: t(`${copy}.sideDetail`), primary, secondary: null },
+	};
+}
+
+/**
+ * Semantic search is off but keyword search still answers (Figma 430:8644): a warning that says so, with
+ * 다시 시도 beside 설정 열기 instead of 나중에, since the close button already dismisses it.
+ */
+function embedderConfigBanner(t: TFunction): IndexProblemBanner {
+	return {
+		tone: "warning",
+		detail: t("indexProblem.embedderConfig.bannerDetail"),
+		primary: { kind: "fixEmbedding", label: t("indexProblem.embedderConfig.bannerAction") },
+		secondary: { kind: "retry", label: t(RETRY_KEY["embedder-config"]) },
 	};
 }
 
@@ -165,6 +195,7 @@ function skippedView(skipped: number, t: TFunction): IndexProblemView {
 		folderName: null,
 		primary: { kind: "retry", label: t("indexProblem.action.retryNow") },
 		secondary: null,
+		banner: { tone: "warning", detail: t("indexProblem.skipped.sideDetail"), primary: { kind: "retry", label: t("indexProblem.action.retryNow") }, secondary: null },
 	};
 }
 
@@ -189,5 +220,6 @@ export function describeIndexProblem(problem: IndexProblem, t: TFunction): Index
 		cardTone: "run",
 		primary: null,
 		secondary: null,
+		banner: { ...view.banner, primary: null, secondary: null },
 	};
 }

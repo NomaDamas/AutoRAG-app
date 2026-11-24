@@ -123,7 +123,9 @@ describe("smart indexing profile", () => {
 
 		expect(prompt).toContain(root);
 		expect(prompt).toContain(other);
-		expect(prompt).toContain("Japanese");
+		expect(prompt).toMatch(/language the person writes in/iu);
+		expect(prompt).toContain("if it is unclear, write it in Japanese");
+		expect(prompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		expect(prompt).toContain("node_modules");
 		expect(prompt).toContain("propose_exclusions");
 	});

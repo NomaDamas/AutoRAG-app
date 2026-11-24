@@ -34,7 +34,6 @@
     "tags": "标签",
     "tagColorsDenied": "显示标签颜色",
     "tagColorsDeniedHint": "macOS 把 Finder 的标签颜色放在“完全磁盘访问权限”之后。允许后重新启动应用即可显示。",
-    "tagColorsGrantToast": "请允许“完全磁盘访问权限”，然后重新启动 Dazzi。",
     "home": "个人主页",
     "applications": "应用程序",
     "desktop": "桌面",
@@ -145,9 +144,9 @@
       "replace": "替换原文件",
       "replaceHint": "替换后，原文件会移到废纸篓。",
       "working": "正在转换为“{{newName}}”…",
-      "workingHint": "首次转换时需要下载转换引擎，可能会花更长时间。",
+      "workingHint": "首次转换时需要下载转换工具，可能会花更长时间。",
       "progressAria": "转换进行中",
-      "unsupported": "不支持从 {{from}} 转换为 {{to}}，因此名称没有更改。",
+      "unsupported": "{{from}} 文件无法转换为 {{to}} 格式。名称保持不变。",
       "replaced": "{{name}} — 已转换，原文件已移到废纸篓"
     },
     "reduce": {
@@ -226,12 +225,12 @@
   },
   "inspector": {
     "title": "简介",
-    "evidence": "依据",
+    "evidence": "来源",
     "generalInfo": "常规信息",
     "imageInfo": "图像信息",
     "versions": "版本",
     "latestVersion": "最新版本",
-    "showMore": "详细",
+    "showMore": "查看详细",
     "clickToCopy": "点按以拷贝",
     "showLess": "简略",
     "totalSize": "总大小",
@@ -294,12 +293,13 @@
       "contains": "包含版本"
     },
     "evidencePanel": {
-      "emptyTitle": "回答的依据\n将显示在此处。",
+      "emptyTitle": "回答的来源\n将显示在此处。",
       "excerpts": "依据摘录",
       "openInBrowser": "在浏览器中打开",
-      "evidenceFolder": "依据文件夹",
-      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件",
-      "openPreview": "在预览中查看引用段落"
+      "evidenceFolder": "来源文件夹",
+      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的来源文件",
+      "openPreview": "在预览中查看引用段落",
+      "newSource": "新来源 {{number}}"
     },
     "chat": {
       "title": "AI 智能体",
@@ -309,7 +309,7 @@
       "placeholderFollowUp": "继续提问",
       "send": "发送",
       "stop": "停止",
-      "busy": "正在等待上一个问题的回答",
+      "busy": "正在回答上一个问题。",
       "justNow": "刚刚",
       "minutesAgo": "{{count}} 分钟前",
       "hoursAgo": "{{count}} 小时前",
@@ -345,14 +345,14 @@
     "emptyPromptTitle": "想查找什么内容？",
     "emptyPromptDesc": "在文件、邮件和消息中全局搜索，同时提供快速回答与深度回答。",
     "generatingDeep": "正在撰写深度回答…",
-    "askDazzi": "向 Dazzi 提问",
+    "askDazzi": "询问 AI",
     "stop": "停止",
     "openPlan": "打开订阅与用量",
     "indexNotice": {
-      "indexing": "索引尚未建完，搜索可能无法正常工作。还没有收录的文档会搜不到。",
-      "failed": "上一次建立索引没有完成，搜索可能无法正常工作。",
-      "empty": "没有已建立索引的文档，搜索可能无法正常工作。",
-      "few": "仅有 {{count}} 份文档已建立索引，搜索可能无法正常工作。",
+      "indexing": "Dazzi 仍在读取文档。尚未读完的文档无法找到。",
+      "failed": "上一次文档读取中途停止了。请在设置 → 索引中更新。",
+      "empty": "Dazzi 还没有读取任何文档，可能找不到答案。请在设置 → 索引中添加文件夹。",
+      "few": "Dazzi 只读取了 {{count}} 份文档，查找范围较窄。",
       "manage": "管理索引"
     },
     "thinking": "思考中…",
@@ -372,17 +372,17 @@
     "voiceUnavailable": "此设备没有可用的麦克风。",
     "voiceFailed": "无法转写语音：{{message}}",
     "micPermission": {
-      "title": "请允许使用麦克风",
-      "body": "要用语音提问，Dazzi 需要使用麦克风。只有在你按下麦克风按钮后才会录音。",
+      "title": "需要麦克风权限。",
+      "body": "要用语音提问，Dazzi 需要麦克风权限。只有在你按下麦克风按钮时才会录音。",
       "stepsMac": "请在“系统设置 › 隐私与安全性 › 麦克风”中打开 Dazzi。",
       "stepsWindows": "请在“设置 › 隐私和安全性 › 麦克风”中打开“麦克风访问权限”和“允许桌面应用访问你的麦克风”。",
       "openMac": "打开系统设置",
       "openWindows": "打开 Windows 设置",
       "notNow": "以后再说",
-      "waiting": "在设置中打开后回到 Dazzi，就会立即开始录音。",
-      "stillDenied": "麦克风仍处于关闭状态。请在设置中打开后再回来。"
+      "waiting": "在设置中打开麦克风后回到 Dazzi，就会立即开始录音。",
+      "stillDenied": "麦克风仍处于关闭状态。请在设置中打开后回到 Dazzi。"
     },
-    "steerHintLead": "搜索时也可以输入",
+    "steerHintLead": "搜索时也可以输入。",
     "steerHintEnter": "纠正",
     "steerHintAltEnter": "下一个问题",
     "steerPending": "等待中 · 将在下一步送达",
@@ -399,9 +399,9 @@
     },
     "context": {
       "compacting": "对话较长，正在总结之前的内容…",
-      "compacted": "已总结之前的对话",
-      "compactedHint": "之前的对话现在只以摘要形式提供给模型。如仍需要具体细节，请再次告诉它。",
-      "trimmed": "过大的搜索结果只使用了一部分"
+      "compacted": "已总结之前的对话。",
+      "compactedHint": "之前的对话以摘要形式记住。如有遗漏的内容，请再告诉一次。",
+      "trimmed": "搜索结果较长，只读取了其中一部分。"
     }
   },
   "appError": {
@@ -412,31 +412,31 @@
     "hideDetails": "收起详情",
     "other": {
       "title": "出现了问题",
-      "hint": "AI 可以查找原因并尝试为你修复。"
+      "hint": "AI 智能体可以查找原因并尝试为你修复。"
     },
     "modelMissing": {
-      "title": "尚未设置可用的 AI 模型",
-      "hint": "选择模型或登录后即可使用。请在模型设置中检查模型、登录状态和订阅。"
+      "title": "尚未选择 AI 模型",
+      "hint": "请在模型设置中检查模型、登录状态和订阅。"
     },
     "modelCredentials": {
-      "title": "无法使用 AI 模型：认证失败",
-      "hint": "API 密钥或登录可能已过期或不正确。请在模型设置中重新登录或检查密钥，并确认订阅是否有效。"
+      "title": "无法登录 AI 模型",
+      "hint": "API 密钥或登录可能已过期。请在模型设置中重新登录或检查密钥。另请确认订阅是否有效。"
     },
     "modelSubscription": {
       "title": "订阅或用量额度导致无法使用 AI 模型",
       "hint": "订阅可能已到期，或用量已用完。请查看订阅与用量，或在模型设置中选择其他模型。"
     },
     "modelPlan": {
-      "title": "所选的 AI 模型不在当前套餐内",
-      "hint": "该模型仅限更高级的套餐使用。请升级套餐，或在模型设置中选择当前套餐可用的模型。",
-      "hintNamed": "该模型仅限 {{plan}} 套餐使用。请升级到 {{plan}} 套餐，或在模型设置中选择当前套餐可用的模型。"
+      "title": "当前套餐无法使用此 AI 模型",
+      "hint": "该模型需更高级的套餐才能使用。请升级套餐，或在模型设置中选择其他模型。",
+      "hintNamed": "该模型需 {{plan}} 套餐才能使用。请升级到 {{plan}} 套餐，或在模型设置中选择其他模型。"
     },
     "modelNotFound": {
       "title": "找不到所选的 AI 模型",
       "hint": "该模型可能已下线或已改名。请在模型设置中选择其他模型。"
     },
     "rateLimit": {
-      "title": "请求过多，暂时受限",
+      "title": "请求过多",
       "hint": "请稍后再试。如果持续出现，请在模型设置中选择其他模型。"
     },
     "network": {
@@ -499,14 +499,16 @@
     "answeredCount": "已回答 {{answered}} / {{total}}",
     "showMore": "显示更多",
     "showLess": "收起",
-    "writeOwn": "自己输入答案",
+    "writeOwn": "直接输入",
     "answerPlaceholder": "输入你的答案",
     "questionAria": "Dazzi 的提问",
     "approval": {
-      "headlineChange": "Dazzi 想更改你的文件——允许吗？",
-      "headlineRun": "Dazzi 想运行这个——允许吗？",
-      "headlineUnclassified": "Dazzi 想运行这条命令——允许吗？",
-      "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定。"
+      "headlineChange": "允许这次文件更改吗？",
+      "headlineRun": "Dazzi 想运行一项任务。允许吗？",
+      "headlineUnclassified": "Dazzi 想运行这条命令。允许吗？",
+      "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定是否允许。",
+      "command": "要执行的命令",
+      "copy": "复制命令"
     },
     "category": {
       "delete": "删除",
@@ -518,14 +520,16 @@
     },
     "allowOnce": "仅允许这一次",
     "allowSession": {
-      "categories": "本会话允许此类全部更改",
-      "unclassified": "本会话允许所有无法分类的调用",
-      "all": "本会话允许所有此类调用"
+      "categories": "本会话中始终允许",
+      "unclassified": "本会话允许未分类调用",
+      "all": "本会话允许同类调用"
     },
     "deny": "拒绝",
     "denyWithNote": "拒绝并告诉模型…",
     "notePlaceholder": "应该改做什么？（例如：在副本上操作）",
-    "sendNote": "发送"
+    "sendNote": "发送",
+    "prevQuestion": "上一个问题",
+    "nextQuestion": "下一个问题"
   },
   "automations": {
     "list": "自动化规则",
@@ -563,7 +567,7 @@
     },
     "inspector": {
       "empty": "选择一条规则后\n摘要会显示在这里。",
-      "edit": "用 AI 编辑",
+      "edit": "请 AI 处理",
       "delete": "删除",
       "summary": "摘要",
       "showAll": "全部信息",
@@ -601,9 +605,9 @@
       "action": "删除"
     },
     "toast": {
-      "deleted": "已删除规则“{{title}}”",
+      "deleted": "已删除规则“{{title}}”。",
       "undo": "撤销",
-      "restored": "已恢复规则“{{title}}”"
+      "restored": "已恢复规则“{{title}}”。"
     },
     "kinds": {
       "screenshot": "截图",
@@ -770,7 +774,9 @@
       "title": "无法使用语义搜索",
       "side": "语义搜索准备已中止",
       "sideDetail": "需要检查嵌入设置",
-      "detail": "需要检查设置"
+      "detail": "需要检查设置",
+      "bannerDetail": "请检查文档理解模型设置。关键词搜索仍可使用。",
+      "bannerAction": "打开设置"
     },
     "embedderOffline": {
       "title": "正在等待连接",
@@ -806,7 +812,7 @@
       "title": "跳过了 {{count}} 个文件",
       "side": "已跳过 {{count}} 个文件",
       "sideDetail": "下次刷新时重试",
-      "row": "{{count}} 个 · 下次刷新时会自动重试"
+      "row": "{{count}} 个 · 下次刷新时重试"
     }
   },
   "confirm": {
@@ -817,8 +823,8 @@
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
-    "closeEvidenceFolderTitle": "关闭依据文件夹",
-    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时依据文件夹，原始文件不会受到影响。确定要关闭吗？",
+    "closeEvidenceFolderTitle": "关闭来源文件夹",
+    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时来源文件夹，原始文件不会受到影响。确定要关闭吗？",
     "closeEvidenceFolderAction": "关闭"
   },
   "settings": {
@@ -853,7 +859,7 @@
       "showHiddenFiles": "显示隐藏文件",
       "showHiddenFilesHint": "显示以点(.)开头的文件。",
       "dedupInterval": "重复文件扫描间隔",
-      "dedupIntervalHint": "dupey 版本家族扫描周期。",
+      "dedupIntervalHint": "可以设置 dupey 扫描版本家族的周期。",
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在下次应用重启时应用更新。",
       "telemetry": "分享匿名诊断数据",
@@ -864,378 +870,7 @@
     }
   },
   "onboarding": {
-    "footerBack": "返回",
-    "step": {
-      "welcome": "介绍",
-      "permissions": "权限",
-      "account": "账户",
-      "folders": "文件夹",
-      "smartScan": "智能浏览",
-      "smartScope": "智能索引",
-      "embedding": "嵌入",
-      "sources": "数据源",
-      "plan": "套餐",
-      "model": "AI 模型",
-      "roles": "检索辅助模型",
-      "indexing": "索引"
-    },
-    "stepLabel": {
-      "welcome": "继续",
-      "permissions": "继续",
-      "account": "继续",
-      "folders": "继续",
-      "smartScan": "继续",
-      "smartScope": "按此范围继续",
-      "embedding": "继续",
-      "sources": "继续",
-      "model": "继续",
-      "roles": "继续",
-      "indexing": "继续"
-    },
-    "welcome": {
-      "title": "找文件，现在交给 {{app}}",
-      "usageStats": "发送匿名使用统计以帮助改进 Dazzi。统计在设计上不包含文件、搜索词或文档内容，可随时在设置中关闭。",
-      "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。报告在设计上不包含文件路径、文件名和文档内容，可随时在设置中更改。",
-      "usageStatsPolicy": "隐私政策",
-      "chat": {
-        "user": "上一季度的成本为什么下降了？",
-        "replyLead": "营销成本比上季度下降了",
-        "replyTail": "。"
-      }
-    },
-    "feature": {
-      "ai": {
-        "title": "AI 智能体",
-        "sub": "有问题尽管问，回答会附上出处。"
-      },
-      "versions": {
-        "title": "版本整理",
-        "sub": "像 final_真的最终版.docx 这样的文件也会自动整理。"
-      },
-      "sources": {
-        "title": "应用连接",
-        "sub": "分散在 Notion、Slack、GitHub 等处的资料也能一次找到。"
-      },
-      "hybrid": {
-        "title": "混合搜索",
-        "sub": "即使用词不同，只要意思相近也能找到。"
-      }
-    },
-    "hybrid": {
-      "keyword": "关键词",
-      "semantic": "语义",
-      "rerank": "重排"
-    },
-    "versions": {
-      "latest": "最新版",
-      "near": "相似版",
-      "exact": "相同版"
-    },
-    "account": {
-      "eyebrow": "账户",
-      "title": "用账户\n开始使用",
-      "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
-      "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
-      "signedIn": "登录完成",
-      "signedInNote": "正在进入下一步",
-      "otherAccount": "使用其他账户登录",
-      "cardTitle": "Dazzi 账户",
-      "cardSub": "管理套餐和用量",
-      "busy": "正在浏览器中登录…",
-      "busyNote": "认证完成后会自动返回。",
-      "signIn": "在浏览器中登录",
-      "cancel": "取消",
-      "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
-      "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
-      "getStarted": "开始使用",
-      "continueGoogle": "使用 Google 继续",
-      "continueApple": "使用 Apple 继续",
-      "continueGithub": "使用 GitHub 继续",
-      "or": "或",
-      "emailLabel": "邮箱",
-      "emailPlaceholder": "mingzi@example.cn",
-      "continueEmail": "使用邮箱继续",
-      "codeLabel": "验证码",
-      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
-      "sendingCode": "正在发送验证码…",
-      "verifyCode": "验证并继续",
-      "verifyingCode": "正在验证…",
-      "resendCode": "重新发送验证码",
-      "resendIn": "{{seconds}} 秒后重发",
-      "useDifferentEmail": "使用其他邮箱",
-      "guest": "以访客身份继续",
-      "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
-      "agreeTerms": "服务条款",
-      "agreePrivacy": "隐私政策",
-      "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐",
-      "leadPc": "套餐和用量与账户关联。文件和搜索索引保存在这台电脑上。"
-    },
-    "permissions": {
-      "eyebrow": "权限",
-      "title": "请确认允许的权限",
-      "leadMac": "macOS 要求应用在读取受保护文件前获得你的许可。\n允许之后，要搜索的文件夹仍在下一步由你自己选择。",
-      "leadWindows": "请先确认需要的权限。\n所有项目都可以跳过，之后也可在设置中更改。",
-      "titleWindows": "请确认允许的权限",
-      "note": "Dazzi 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
-      "required": "必需",
-      "optional": "可选",
-      "setting": "设置",
-      "granted": "已允许",
-      "restartNeeded": "需要重启",
-      "restartNow": "立即重启",
-      "openSettings": "打开系统设置",
-      "footnote": "开启后才能继续。",
-      "fda": {
-        "name": "完全磁盘访问权限",
-        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。"
-      },
-      "notifications": {
-        "name": "通知",
-        "desc": "提前请求通知权限。要接收哪些通知可在设置中选择。",
-        "allow": "允许通知",
-        "openWindows": "打开 Windows 设置"
-      },
-      "login": {
-        "name": "登录时启动",
-        "desc": "开机后应用会自动启动。可随时在设置中关闭。"
-      },
-      "network": {
-        "name": "网络",
-        "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
-        "allow": "允许网络"
-      }
-    },
-    "smartScan": {
-      "title": "正在查找要排除的子文件夹",
-      "done": "探索完成",
-      "failedTitle": "探索失败",
-      "lead": "不打开文件内容，只查看文件夹名称和结构。",
-      "back": "返回选择文件夹",
-      "manual": "不使用推荐，手动选择",
-      "retry": "重试",
-      "looking": "正在查看：{{path}}"
-    },
-    "folders": {
-      "eyebrow": "索引范围",
-      "title": "请选择要索引的文件夹",
-      "lead": "我们会处理所选文件夹中的文档，以便 AI 进行搜索。",
-      "suggested": "推荐文件夹",
-      "selectAll": "全选",
-      "add": "直接添加文件夹",
-      "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
-      "scanning": "统计中…",
-      "scanError": "无法读取",
-      "suggestTitle": "获取建议排除的子文件夹",
-      "suggestLine": "继续后，AI 会查看所选文件夹的子文件夹并推荐可排除的项目。结果将在下一个画面中确认。"
-    },
-    "smartScope": {
-      "policy": {
-        "title": "请确认索引范围",
-        "lead": "拖动文件夹即可纳入或排除。",
-        "eta": "约 {{minutes}} 分钟"
-      },
-      "include": {
-        "title": "要纳入的上级文件夹",
-        "meta": "{{count}} 个文件夹",
-        "all": "全部"
-      },
-      "exclude": {
-        "title": "要排除的子文件夹",
-        "group": "{{name}} ({{count}})",
-        "noDocs": "无文档",
-        "refused": {
-          "isRoot": "不能排除所选文件夹本身，请选择其中的子文件夹。",
-          "outside": "只能排除所选文件夹内的子文件夹。",
-          "covered": "该文件夹已被排除。"
-        },
-        "empty": "没有已排除的子文件夹。\n拖动文件夹即可排除。",
-        "aiTag": "AI 推荐"
-      },
-      "criteria": {
-        "label": "推荐标准",
-        "includeTitle": "包含的内容",
-        "includeBody": "你撰写、下载或收集的文档(报告、笔记、合同、论文、讲义等),以及以项目、人名、日期等命名的文件夹。",
-        "excludeTitle": "排除的内容",
-        "excludeBody": "程序自动生成的日志、应用下载或导出的文件、缓存/临时/冲突文件、构建和自动生成的产物、安装包和应用备份,以及堆积大量相似名称文件的文件夹。"
-      },
-      "summary": {
-        "eta": "首次索引预计时间",
-        "total": "总计"
-      },
-      "rescan": "重新推荐"
-    },
-    "embedding": {
-      "title": "要如何分析文档？",
-      "groupLabel": "嵌入方式",
-      "card": {
-        "none": {
-          "name": "按关键词查找",
-          "line": "只查找包含所输入词语的文档。"
-        },
-        "cloud": {
-          "name": "在服务器上分析",
-          "line": "文档内容会发送到 AutoRAG 服务器进行分析。"
-        },
-        "local": {
-          "nameMac": "在我的 Mac 上分析",
-          "namePc": "在我的 PC 上分析",
-          "lineMac": "所有分析都在这台 Mac 上完成，\n文档不会离开设备。",
-          "linePc": "所有分析都在这台 PC 上完成，\n文档不会离开设备。"
-        }
-      },
-      "meter": {
-        "performance": "所需性能",
-        "accuracy": "准确度",
-        "low": "低",
-        "high": "高",
-        "meh": "略逊",
-        "good": "好"
-      },
-      "meterAria": "{{label}}: {{value}}",
-      "prepTime": "预计索引时间",
-      "about": "约",
-      "minutes": "{{minutes}} 分钟",
-      "cached": "已就绪",
-      "downloadUnknown": "检查中",
-      "cloudConsentRequired": "(必填)",
-      "cloudConsent": "我同意将文档正文发送到服务器。",
-      "cloudConsentCheck": "我同意",
-      "pausedNotice": {
-        "config": "所选嵌入方式不可用，已暂停",
-        "disk": "存储空间不足，无法下载模型",
-        "default": "嵌入无法继续"
-      }
-    },
-    "sources": {
-      "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
-      "checking": "正在检查可添加的其他来源…",
-      "connectMore": "需要准备的数据源可稍后在设置中连接。",
-      "name": {
-        "kakao": "KakaoTalk",
-        "slack": "Slack",
-        "discord": "Discord",
-        "telegram": "Telegram",
-        "whatsapp": "WhatsApp",
-        "mailcrawl": "邮件 (mailcrawl)",
-        "github": "GitHub",
-        "notion": "Notion",
-        "obsidian": "Obsidian"
-      },
-      "detail": {
-        "kakao": "检测到 KakaoTalk 应用数据",
-        "slack": "已连接 {{workspaces}} 个工作区",
-        "discord": "检测到 Discord 应用消息 {{messages}} 条",
-        "telegram": "检测到 Telegram 应用数据",
-        "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
-        "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
-        "github": "已登录 gh · Issues 和 Pull Requests",
-        "notion": "发现 Notion 应用数据",
-        "obsidian": "发现 {{vaults}} 个 Vault"
-      }
-    },
-    "plan": {
-      "title": "要使用哪个套餐？",
-      "titleReady": "套餐已就绪",
-      "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
-      "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
-      "badgeTrial": "试用进行中",
-      "badgeSubscribed": "已订阅",
-      "perMonth": "/ 月",
-      "continue": "继续",
-      "checkoutPro": "开始 7 天免费试用",
-      "checkoutAir": "继续使用 Air",
-      "noteHeld": "此账户正在使用",
-      "noteTrialing": "试用中 · 至 {{date}}",
-      "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
-      "signInFirst": "付费套餐需要先登录。",
-      "signInAction": "登录",
-      "plan": {
-        "free": {
-          "name": "Free",
-          "price": "免费",
-          "tag": "适合注册后想立即体验的用户",
-          "training": "输入与输出可能用于改进服务",
-          "features": "能理解文件内容的 AI 智能体\n像聊天一样向文件提问\n5 款轻量聊天模型\n每周自动补充的免费额度"
-        },
-        "air": {
-          "name": "Air",
-          "price": "$4",
-          "note": "每月 $4 · 随时取消",
-          "tag": "适合想把已有 AI 订阅接入 Dazzi 的用户",
-          "features": "包含 Free 的全部功能，另有\n直接用你订阅的 AI 模型聊天\n搜索所需的 AI 由 Dazzi 提供\n比 Free 更多的每周额度"
-        },
-        "pro": {
-          "name": "Pro",
-          "price": "$20",
-          "note": "绑定银行卡可免费 7 天，之后每月 $20",
-          "tag": "适合不订阅其他 AI、只想用 Dazzi 的用户",
-          "trial": "7 天免费试用",
-          "features": "包含 Air 的全部功能，另有\n无需连接订阅，内置高性能聊天模型\n比 Air 更快的请求速度和更多额度\n7 天免费试用"
-        },
-        "max": {
-          "name": "Max",
-          "price": "$200",
-          "note": "每月 $200 · 随时取消",
-          "tag": "适合同时处理大型文件夹和多项任务的高级用户",
-          "features": "包含 Pro 的全部功能，另有\nMax 专属高级模型\n为长时间任务准备的最高每周额度"
-        },
-        "byok": {
-          "name": "BYOK",
-          "price": "仅 API 费用",
-          "tag": "用自己的 API 密钥直接连接"
-        }
-      },
-      "checkoutMax": "继续使用 Max",
-      "promo": {
-        "prompt": "有优惠码？",
-        "label": "优惠码",
-        "invalid": "仅限字母、数字、- 和 _。"
-      },
-      "tierLabel": "套餐",
-      "byokLead": "已有 API 密钥？",
-      "byokLink": "用自己的 API 密钥直接连接",
-      "startFree": "免费开始"
-    },
     "model": {
-      "title": "连接要使用的 AI 模型",
-      "lead": "连接你正在使用的 AI 服务，然后为每个角色指定要使用的模型。\n可以连接 API 密钥、订阅账户或这台电脑上的模型服务器，设置之后可随时更改。",
-      "connectedTitle": "已连接的服务",
-      "rolesTitle": "按角色指定模型",
-      "connect": "连接服务",
-      "pick": "选择模型",
-      "auto": "自动设置",
-      "searchServices": "搜索服务",
-      "searchModels": "搜索模型",
-      "noMatch": "没有搜索结果。",
-      "noModels": "暂无可用于此角色的模型。请选择自动设置，或连接提供该模型的服务。",
-      "addCustom": "添加 OpenAI 兼容服务",
-      "addLocal": "添加这台电脑上的服务器",
-      "disconnect": "断开 {{name}}",
-      "status": {
-        "checking": "检查中",
-        "ok": "连接成功",
-        "failed": "连接失败"
-      },
-      "role": {
-        "answer": {
-          "name": "生成回答",
-          "desc": "撰写问题的回答并总结文档。"
-        },
-        "decomposition": {
-          "name": "拆分问题",
-          "desc": "将冗长复杂的问题拆分为多个搜索词。"
-        },
-        "jev": {
-          "name": "判断是否检索 (Jev)",
-          "desc": "决定是直接回答，还是先检索你的文档。"
-        },
-        "rerank": {
-          "name": "结果重排",
-          "desc": "把与问题最相关的文档排到前面。"
-        }
-      },
       "server": {
         "body": "连接公司网关，或使用 OpenAI API 格式的服务器。\n输入的密钥会加密保存在这台电脑上。",
         "namePlaceholder": "显示名称",
@@ -1243,148 +878,6 @@
         "urlInvalid": "地址无效，请重新检查。",
         "keyInvalid": "API 密钥无效，请重新检查。"
       }
-    },
-    "indexing": {
-      "tip": "小技巧",
-      "prevTip": "上一条技巧",
-      "nextTip": "下一条技巧",
-      "tipDot": "技巧 {{index}}",
-      "done": "索引完成",
-      "doneDetail": "{{files}} 个文件 · {{sources}} 个数据源",
-      "waiting": "等待开始",
-      "waitingNote": "正在准备首次索引。",
-      "running": "{{phase}}…",
-      "detailParsing": "正在读取文档",
-      "detailEmbedding": "正在构建向量索引",
-      "detailFinalizing": "正在优化搜索索引",
-      "phaseLabel": {
-        "parsed": "正在读取文档",
-        "minsync": "正在嵌入",
-        "finalizing": "正在整理"
-      },
-      "title": "Dazzi 正在读取你的文件",
-      "titleDone": "一切就绪",
-      "metaDone": "正在确认总用时",
-      "metaTotal": "总计 {{minutes}} 分钟",
-      "metaFiles": "{{count}} 个文件",
-      "metaEstimating": "正在计算剩余时间",
-      "gateOkTitle": "现在可以退出了",
-      "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
-      "gateTitleMac": "请勿退出 Dazzi 或关闭 Mac",
-      "gateTitlePc": "请勿退出 Dazzi 或关闭电脑",
-      "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
-      "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
-      "skipped": "已跳过 {{count}} 个文件",
-      "gateOkDetailPartial": "其余文件均可搜索。新更改的文件会在后台继续读取。",
-      "pause": {
-        "config": {
-          "title": "无法使用嵌入",
-          "line": "请检查嵌入设置"
-        },
-        "offline": {
-          "title": "连接已断开",
-          "line": "连接恢复后会自动继续"
-        },
-        "model": {
-          "title": "无法下载模型",
-          "line": "连接恢复后会继续下载"
-        },
-        "disk": {
-          "title": "存储空间不足",
-          "line": "腾出空间后即可继续下载"
-        },
-        "unknown": {
-          "title": "嵌入已停止",
-          "line": "可以重试，或更改嵌入方式"
-        },
-        "folder": {
-          "title": "无法读取“{{folder}}”文件夹",
-          "titleMany": "无法读取 {{count}} 个文件夹",
-          "line": "连接驱动器后会自动继续"
-        },
-        "exit": {
-          "retry": "重试",
-          "retryNow": "立即重试",
-          "recheck": "重新检查",
-          "resume": "继续下载",
-          "resumeDisk": "已腾出空间，继续下载",
-          "changeEmbedding": "更改嵌入方式",
-          "exclude": "跳过“{{folder}}”继续",
-          "excludeMany": "跳过无法读取的文件夹继续"
-        },
-        "line": {
-          "retrying": "正在重试",
-          "countdown": "{{seconds}} 秒后自动重试",
-          "exhausted": "已停止自动重试 · 请手动重试",
-          "again": "又因同样的原因停止了"
-        }
-      }
-    },
-    "tips": {
-      "1": {
-        "title": "一次 {{shortcut}} 即可提问",
-        "body": "从任何界面都能跳转到 AI 智能体 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
-      },
-      "2": {
-        "title": "点击答案中的编号即可预览依据",
-        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接预览依据文件的内容。",
-        "bubble": "营销成本比上季度下降了 18%。"
-      },
-      "3": {
-        "title": "用 Space 不打开也能浏览",
-        "body": "选中文件后按 Space 即可用快速查看预览。无需切换应用即可查看内容。"
-      },
-      "4": {
-        "title": "把文件拖入提问",
-        "body": "将 Finder 中的条目或其他应用的文件、文件夹拖入 AI 智能体，即以该范围为基准提问。",
-        "pill": "概括这个文件"
-      },
-      "5": {
-        "title": "相似文件归为一组",
-        "body": "像 proposal-final 和 proposal-v3 这样的相似文件会归组，并标记为最新版、相似版、相同版。不必再纠结选哪个版本。",
-        "latest": "最新版",
-        "near": "相似版",
-        "exact": "相同版"
-      },
-      "6": {
-        "title": "用 {{shortcut}} 搜索文件",
-        "body": "直接跳转到搜索框。同时查看关键词和语义，并按重排排列顺序。"
-      },
-      "7": {
-        "title": "用 {{shortcut}} · 2 · 3 切换视图",
-        "body": "用键盘在图标、列表和分栏视图之间切换。最后选择的视图在下次启动时仍会保留。"
-      },
-      "8": {
-        "title": "Slack 和 GitHub 也能用同样的问题",
-        "body": "已连接的数据源会与文件一同搜索。可随时在设置中添加或关闭数据源。"
-      },
-      "9": {
-        "title": "随时用 {{shortcut}} 重新配置",
-        "body": "文件夹范围、AI 模型和数据源可在设置中更改。只有嵌入位置一旦更改就会从头重新索引。"
-      }
-    },
-    "overlay": {
-      "later": "稍后",
-      "pay": {
-        "title": "{{plan}} 结算",
-        "lead": "付款在浏览器的结算页面完成。不会在此应用中输入银行卡信息。",
-        "waiting": "完成付款后，此窗口会自动更新。",
-        "reopen": "重新打开结算页面",
-        "check": "确认付款",
-        "checking": "确认中…"
-      }
-    },
-    "toast": {
-      "signedIn": "已登录。",
-      "notificationsOn": "已获得通知权限。",
-      "notificationsOff": "请在系统设置中允许通知。",
-      "loginFailed": "无法添加到登录项。",
-      "networkOk": "已确认网络连接。",
-      "networkFail": "无法连接到网络。",
-      "fdaPending": "重新打开应用后权限将生效。",
-      "planActive": "{{plan}} 套餐已生效。",
-      "signInFailed": "无法登录。",
-      "notIndexed": "索引完成后才能打开 Dazzi。"
     }
   },
   "finderComponents": {
@@ -1398,8 +891,8 @@
     "expand": "展开",
     "collapse": "折叠",
     "newName": "新名称",
-    "indexIncluded": "已包含在 AI 智能体索引中",
-    "indexExcluded": "已从 AI 智能体索引中排除",
+    "indexIncluded": "用于 AI 智能体的回答",
+    "indexExcluded": "不用于 AI 智能体的回答",
     "stackToggle": "另外 {{count}} 个版本 · 点击展开",
     "webImage": "网络图片",
     "image": "图片",
@@ -1409,8 +902,8 @@
     "sortBy": "按{{label}}排序",
     "resizeColumn": "调整{{label}}大小",
     "columnsMenu": "列",
-    "evidenceNotFound": "找不到证据 {{number}} 的信息",
-    "searchTitle": "搜索结果 — “{{query}}”",
+    "evidenceNotFound": "找不到来源 {{number}} 的信息",
+    "searchTitle": "搜索结果：“{{query}}”",
     "resizeSidebar": "调整边栏大小",
     "resizeInspector": "调整检查器大小",
     "removeAttachment": "移除附件",
@@ -1558,7 +1051,9 @@
       "no": "否"
     },
     "search": {
-      "quotaExhausted": "Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。"
+      "quotaExhausted": "Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。",
+      "guestQuotaExhausted": "本设备的 Dazzi 免费试用额度已用完，因此没有发送请求。创建账户即可继续使用。",
+      "guestAlreadyClaimed": "本设备的免费试用已绑定到某个账户，无法再使用。登录后即可继续使用。"
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
@@ -1629,7 +1124,6 @@
       "invalidVoiceRequest": "语音输入请求无效。"
     },
     "dialogs": {
-      "notificationBody": "通知已开启。",
       "openWithTitle": "打开方式",
       "openButton": "打开",
       "chooseFolderTitle": "选择文件夹",
@@ -1641,10 +1135,9 @@
       "chooseExcludeTitle": "选择要排除的项目"
     },
     "onboarding": {
-      "apiKeyRequired": "需要 API 密钥。",
-      "baseUrlRequired": "需要服务器地址(base URL)。",
       "indexingFailed": "建立索引失败。",
-      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}"
+      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}",
+      "noQuestion": "未能完成准备。重试时会跳过已读取的文件,从中断处继续。"
     },
     "lock": {
       "scheduledBusy": "后台刷新正在运行。完成后请重试。",
@@ -1659,8 +1152,8 @@
       "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
       "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
-      "batchSkipped": "由于同步失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
-      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。",
+      "batchSkipped": "由于更新失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
+      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解”中下载。",
       "preflightMissingKey": "嵌入器 {{id}} 需要 API 密钥,但未设置 {{env}}。请在建立索引前设置。",
       "preflightKeyEnvIgnored": "嵌入器 {{id}} 的 apiKeyEnv 指定为 {{configured}},但索引器只从 {{env}} 读取密钥,而 {{env}} 未设置。请把密钥放进 {{env}}。",
       "preflightBaseUrlV1": "{{url}} 处的嵌入器返回了 404。索引器会自行追加 /v1/embeddings,因此以 /v1 结尾的基础 URL 会使路径重复。请改用 {{suggested}}。",
@@ -1729,9 +1222,10 @@
         "larkNotApplicable": "Lark 仅使用远程 API 搜索，拒绝本地嵌入。",
         "defaultNotApplicable": "此数据源使用自己的关键词/解析索引，不使用全局嵌入器。",
         "mailcrawlSharedEmbedder": "mailcrawl 使用与 Dazzi 相同的嵌入服务器。模型更改后，会在下一次索引时自动重建。",
-        "sidecarSharedEmbedder": "聊天存档之上的只读 sidecar 使用共享嵌入器为消息生成嵌入;更改嵌入器后会在下一次同步时重新嵌入。",
-        "githubGistSharedEmbedder": "GitHub Gist 向量索引使用共享嵌入器;更改嵌入器后会在下一次同步时重新嵌入。",
-        "obsidianSharedEmbedder": "Obsidian 保管库直接沿用所选的嵌入模型(MinSync 在保管库专用的工作区中建立索引)。"
+        "sidecarSharedEmbedder": "对话存档之上的只读 sidecar 使用共享嵌入器为消息生成嵌入;更改嵌入器后会在下一次更新时重新嵌入。",
+        "githubGistSharedEmbedder": "GitHub Gist 向量索引使用共享嵌入器;更改嵌入器后会在下一次更新时重新嵌入。",
+        "obsidianSharedEmbedder": "Obsidian 保管库直接沿用所选的嵌入模型(MinSync 在保管库专用的工作区中建立索引)。",
+        "wombatSharedEmbedder": "AI 会话使用与 Dazzi 相同的 MinSync 模型。模型更改后，会在下一次索引时自动重建。"
       },
       "actions": {
         "discordConfig": "由 datasources.<id> 管理的 discrawl config.toml"
@@ -1821,6 +1315,16 @@
     },
     "smartIndexing": {
       "cloudReason": "云同步文件夹。文件可能只存在于线上，因此默认不纳入索引。如需纳入，请拖回左侧。"
+    },
+    "demo": {
+      "folder": "Dazzi 体验",
+      "samples": "练习文件",
+      "sampleName": "周报（示例）.txt",
+      "sampleBody": "周报（示例）\n\n本周完成：新功能 QA、3 次客户访谈\n下周计划：发布准备、整理文档\n阻碍：无\n",
+      "glanceLabel": "快速查看内容",
+      "glanceDesc": "显示所选文本文件的大小和开头几行。（Dazzi 体验用示例）",
+      "photos": "练习照片",
+      "gray": "黑白"
     }
   },
   "quickLook": {
@@ -2195,11 +1699,13 @@
       "contextMenu": "右键菜单",
       "shortcuts": "快捷键",
       "remote": "远程访问",
+      "about": "关于",
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
-      "reading": "文档读取",
+      "reading": "文档语言",
       "duplicates": "重复文件整理",
+      "ltr": "搜索排序学习",
       "apps": "全部连接",
       "group": {
         "account": "账户",
@@ -2211,16 +1717,17 @@
       "keywords": {
         "account": "账户 登录 邮箱 名称 个人资料",
         "plan": "套餐 付款 额度 用量 订阅 billing",
-        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言",
+        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言 文档语言 读取 解析器 OCR",
         "sidebar": "侧边栏 个人收藏 云盘 位置 标签 文件夹 隐藏 显示 顺序 自定义 AI",
         "contextMenu": "右键 上下文菜单 魔法动作 脚本 自动化 智能体 扩展名 标签 自定义 AI",
         "shortcuts": "快捷键 键盘 热键 按键 录制 自定义 AI shortcut hotkey",
         "remote": "远程访问 手机 移动 浏览器 配对码 二维码 QR Cloudflare 隧道 域名 设备 remote",
+        "about": "关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
-        "indexing": "更新 同步 增量 索引 更新周期 sync 搜索范围 文件夹 排除 路径",
-        "reading": "文档读取 语言 解析器 OCR",
+        "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径",
         "duplicates": "重复文件 版本 整理 dupey",
+        "ltr": "排序学习 ltr 排名 模型 训练 重排 xgboost 日志 搜索记录 训练数据 reranker",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
         "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体 claude codex gemini cursor 复制"
       },
@@ -2235,18 +1742,15 @@
       "backToApp": "返回应用"
     },
     "sidebar": {
-      "description": "设置侧边栏显示的项目及其顺序。拖动手柄即可重新排序，也可以告诉 AI 助手。",
-      "aiHeroTitle": "用 AI 整理边栏",
-      "aiHeroDesc": "只需提出要求，例如“隐藏音乐和影片，把下载移到最上面”。",
-      "aiHeroButton": "请 AI 处理",
       "presetsTitle": "快速预设",
       "presetShowAll": "全部显示",
       "presetMinimal": "仅显示核心项",
-      "resetDefault": "恢复默认设置",
+      "presetCustom": "自定义",
+      "presetCustomEmpty": "更改任何设置后，你的配置会保存在这里",
       "favoritesTitle": "个人收藏项目",
-      "favoritesDesc": "设置常用文件夹的显示状态与排列顺序。AI 智能体与自动化为核心功能，始终保持显示。",
+      "favoritesDesc": "设置常用文件夹的显示与排列顺序。AI 智能体与自动化无法隐藏。",
       "lockedBadge": "始终显示",
-      "lockedHint": "AI 智能体与自动化是核心必选项，无法隐藏。",
+      "lockedHint": "AI 智能体与自动化无法隐藏。",
       "customBadge": "自定义文件夹",
       "removeCustom": "移除 {{name}}",
       "addCustomFolder": "添加文件夹",
@@ -2262,10 +1766,10 @@
       "emptyLocations": "未找到已挂载的磁盘。",
       "emptyTags": "没有固定的 Finder 标签。",
       "assistant": {
-        "title": "AI 应用定制助手",
+        "title": "应用定制 AI 智能体",
         "newChat": "新对话",
         "emptyTitle": "您希望如何定制 Dazzi？",
-        "emptyDesc": "可以更改侧边栏显示的文件夹及其顺序",
+        "emptyDesc": "可以更改侧边栏显示的文件夹及其顺序。",
         "placeholder": "告诉我你想要怎样的布局",
         "promptHideMedia": "把工作中用不到的音乐、影片和图片文件夹从侧边栏隐藏",
         "promptReorder": "把下载和文稿移到个人收藏的最上方",
@@ -2275,30 +1779,26 @@
         "stop": "停止",
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "应用定制服务不可用。",
-        "inputLabel": "告诉助手你的需求"
+        "inputLabel": "告诉 AI 智能体你的需求"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects 或 C:\\Work",
-      "dragHint": "调整 {{name}} 的顺序：拖动或按 ↑↓ 键"
+      "dragHint": "可拖动或按 ↑↓ 键调整 {{name}} 的顺序。"
     },
     "contextMenu": {
-      "description": "配置右键点击文件或文件夹时显示的菜单项，以及专属魔法动作（Shell 脚本与 AI 智能体循环）。",
-      "aiHeroTitle": "用 AI 配置右键菜单",
-      "aiHeroDesc": "只需说出来即可添加或编辑，例如“做一个右键点按 PDF 时用三行总结的操作”。",
+      "aiHeroTitle": "用 AI 创建右键菜单",
+      "aiHeroDesc": "可以用说的来创建菜单，例如“右键点按 PDF 时用三行总结”。",
       "aiHeroButton": "请 AI 处理",
       "presetsTitle": "快速预设",
       "presetShowAll": "全部显示",
       "presetMinimal": "仅显示核心项",
-      "resetDefault": "恢复默认设置",
+      "presetCustom": "自定义",
+      "presetCustomEmpty": "更改任何设置后，你的配置会保存在这里",
       "shortcutNote": "内置菜单项的键盘快捷键保持 Finder 标准设置，无法在此处更改。",
       "magicTitle": "自定义魔法动作",
-      "magicDesc": "将右键选中的文件作为输入运行任意脚本，或启动 AI 智能体循环完成总结、转换与整理。",
-      "magicEmpty": "暂无魔法动作。您可以直接让 AI 助手创建，或手动添加。",
+      "magicEmpty": "暂无魔法动作。您可以请 AI 处理，或手动创建。",
       "addMagicAction": "添加魔法动作",
       "editMagicAction": "编辑 {{name}}",
       "removeMagicAction": "删除 {{name}}",
-      "badgeAgentRead": "AI 分析",
-      "badgeAgentOrganize": "AI 操作",
-      "badgeScript": "脚本",
       "condSingle": "单个项目",
       "condMultiple": "多项批量",
       "condAnySelection": "单选或多选",
@@ -2309,7 +1809,6 @@
       "condSkills": "技能",
       "condMcp": "MCP",
       "sectionsTitle": "右键菜单分区与项目",
-      "sectionsDesc": "统一管理各分区的排列顺序及内置菜单项的显示状态。标签为核心必选项，始终保持显示。",
       "lockedBadge": "始终显示",
       "lockedHint": "标签为必选核心功能，无法隐藏。",
       "sectionAlwaysShown": "标签分区始终保持显示",
@@ -2349,14 +1848,13 @@
       "editor": {
         "createTitle": "添加魔法动作",
         "editTitle": "编辑魔法动作",
-        "desc": "配置以所选文件为输入运行的脚本命令或 AI 智能体提示词。",
         "labelField": "按钮名称",
-        "labelPlaceholder": "例如：PDF 三句话总结、计算 SHA-256 哈希",
+        "labelPlaceholder": "魔法操作名称",
         "descriptionField": "说明（可选）",
         "descriptionPlaceholder": "在设置页面显示的简短备注",
-        "executionField": "执行方式",
-        "kindAgent": "AI 智能体循环",
-        "kindScript": "代码 / Shell 脚本",
+        "executionField": "处理方式",
+        "kindAgent": "AI 任务",
+        "kindScript": "脚本",
         "agentModeField": "智能体权限",
         "modeRead": "仅读取与分析（总结·审阅·问答）",
         "modeOrganize": "允许创建与操作文件（转换·编辑·整理·脚本）",
@@ -2369,16 +1867,47 @@
         "commandField": "执行的命令 / 脚本",
         "commandPlaceholder": "例如：shasum -a 256 \"$@\" 或 python3 ~/scripts/process.py \"$@\"",
         "commandHint": "所选文件路径会通过位置参数 (\"$@\") 以及环境变量 DAZZI_FILES_JSON、DAZZI_FILE、DAZZI_FILE_COUNT 传入。",
-        "selectionField": "选中数量条件",
-        "targetKindField": "目标类型",
-        "extensionsField": "扩展名筛选（可选）",
-        "extensionsPlaceholder": "留空允许全部 · 例如：pdf, docx, md",
+        "selectionField": "选择数量",
+        "targetKindField": "类型",
+        "extensionsField": "扩展名",
+        "extensionsPlaceholder": "输入扩展名后按 Enter",
         "save": "保存",
         "commandPlaceholderWindows": "例如：Get-FileHash -Algorithm SHA256 -LiteralPath $args 或 python ~\\scripts\\process.py @args",
-        "commandHintWindows": "在 Windows PowerShell 中运行，所选文件路径会通过 $args 数组以及环境变量 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT 传入。"
+        "commandHintWindows": "在 Windows PowerShell 中运行，所选文件路径会通过 $args 数组以及环境变量 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT 传入。",
+        "labelHint": "将以此名称显示在右键菜单中",
+        "modeReadShort": "仅读取",
+        "modeOrganizeShort": "允许修改文件",
+        "targetRow": "显示对象",
+        "targetFile": "文件",
+        "targetFolder": "文件夹",
+        "targetBoth": "两者",
+        "selectionAny": "不限",
+        "selectionSingle": "一个",
+        "selectionMultiple": "多个",
+        "removeExtension": "移除 {{ext}}",
+        "advancedRow": "高级设置",
+        "advancedUses": "使用{{list}}",
+        "advancedNone": "不使用",
+        "targetSummary": {
+          "any": {
+            "file": "右键单击{{ext}}文件时",
+            "folder": "右键单击文件夹时",
+            "any": "右键单击文件或文件夹时"
+          },
+          "single": {
+            "file": "右键单击一个{{ext}}文件时",
+            "folder": "右键单击一个文件夹时",
+            "any": "右键单击一个文件或文件夹时"
+          },
+          "multiple": {
+            "file": "右键单击多个{{ext}}文件时",
+            "folder": "右键单击多个文件夹时",
+            "any": "右键单击多个文件或文件夹时"
+          }
+        }
       },
       "assistant": {
-        "title": "AI 右键菜单与魔法动作助手",
+        "title": "右键菜单与魔法动作 AI 智能体",
         "emptyTitle": "想在右键菜单里加入什么功能？",
         "emptyDesc": "可以随心设置右键点击文件时出现的菜单。",
         "placeholder": "告诉我要做什么功能",
@@ -2390,13 +1919,11 @@
       "dragHint": "调整 {{name}} 的顺序：拖动或按 ↑↓ 键"
     },
     "shortcuts": {
-      "description": "可以直接按下按键或与 AI 对话来编辑 Dazzi 的默认快捷键。",
-      "aiHeroTitle": "用 AI 更改快捷键",
-      "aiHeroDesc": "只需说出来即可轻松更改，例如“把重命名改成 F2”。",
-      "aiHeroButton": "请 AI 处理",
       "presetsTitle": "快速预设",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows 文件资源管理器",
+      "presetCustom": "自定义",
+      "presetCustomEmpty": "更改任何设置后，你的配置会保存在这里",
       "filterPlaceholder": "按操作名称或快捷键搜索",
       "filterEmpty": "没有匹配的快捷键项目。",
       "customizedBadge": "已修改",
@@ -2448,7 +1975,7 @@
         "aiToggleHistory": "切换对话历史"
       },
       "assistant": {
-        "title": "AI 快捷键定制助手",
+        "title": "快捷键定制 AI 智能体",
         "emptyTitle": "您想更改哪些快捷键？",
         "emptyDesc": "可以把 26 个默认快捷键改成你想要的按键。",
         "placeholder": "告诉我要修改哪个快捷键",
@@ -2460,12 +1987,11 @@
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "快捷键定制服务不可用。"
       },
-      "resetAll": "全部恢复默认",
+      "resetAll": "恢复默认设置",
       "changedOnly": "仅显示已更改项（{{count}}）",
       "recorderPrompt": "请按下按键"
     },
     "general": {
-      "description": "设置 Dazzi 的外观、快速搜索、启动与更新，以及个人信息的发送。",
       "screenTitle": "界面",
       "appearanceName": "显示模式",
       "appearanceHint": "选择浅色或深色主题。",
@@ -2501,42 +2027,71 @@
       "errorReporting": "发送错误报告",
       "errorReportingHint": "应用卡住或出错时，将原因信息发送给开发团队。不会发送文件路径、文件名和文档内容。",
       "usageAnalytics": "发送使用统计",
-      "usageAnalyticsHint": "以匿名方式向开发团队发送各功能的使用频率。不会发送文件路径、文件名、搜索词、问题、文档内容和账户信息；关闭后匿名 ID 也会被删除。",
+      "usageAnalyticsHint": "以匿名方式向开发团队发送各功能的使用频率。不会发送文件路径、文件名、搜索词、问题、文档内容和账户信息。关闭后匿名 ID 也会被删除。",
       "osMenuError": "无法设置右键菜单：{{error}}",
       "quickSearchTitle": "快速搜索",
       "quickSearchEnabled": "使用快速搜索快捷键",
       "quickSearchEnabledHint": "按下快捷键，在任何地方都能打开搜索窗口。再次按下或按 Esc 即可关闭。",
       "quickSearchShortcut": "快捷键",
-      "quickSearchShortcutHint": "点击按钮后，输入要使用的组合键。",
+      "quickSearchShortcutHint": "点击按钮后，按下要使用的组合键。",
       "quickSearchNeedsModifier": "此快捷键在所有应用中生效，请与 ⌘/Ctrl 或 ⌥/Alt 一起按下。",
       "quickSearchTaken": "{{shortcut}} 已被其他应用或系统占用，请选择其他组合键。"
+    },
+    "about": {
+      "description": "查看 Dazzi、核心库、固定版本工具以及共享本地嵌入守护进程的解析版本。",
+      "daemonTitle": "嵌入守护进程",
+      "daemonName": "本地嵌入服务",
+      "daemonRunning": "{{owner}} ({{engine}} {{version}}，端口 {{port}})",
+      "daemonRunningUnknownVersion": "{{owner}} (端口 {{port}})",
+      "daemonStopped": "{{owner}} 未运行 (固定 {{engine}} {{pinned}})",
+      "daemonOutdatedOwned": "端口 {{port}} 上运行的 {{engine}} {{version}} 低于固定版本 {{pinned}}。重启即可切换到新版本，不会重建索引。",
+      "daemonOutdatedExternal": "端口 {{port}} 上运行的 {{engine}} {{version}} 低于固定版本 {{pinned}}，且由 Dazzi 外部启动。请手动重启更新，Dazzi 不会停止它。",
+      "daemonInstance": "实例 {{instance}} (PID {{pid}})",
+      "daemonOwned": "由 Dazzi 管理",
+      "daemonExternal": "由外部启动",
+      "restartDaemon": "重启守护进程",
+      "restartingDaemon": "正在重启…",
+      "restartFailed": "无法重启嵌入守护进程：{{message}}",
+      "refresh": "刷新",
+      "versionsTitle": "组件版本",
+      "pinnedHint": "固定 {{version}}",
+      "bundledAndPinnedHint": "内置 {{bundled}} (固定 {{pinned}})",
+      "notBundled": "未内置 (固定 {{pinned}})",
+      "pathMismatch": "PATH 中的版本为 {{pathVersion}} ({{path}}) — 与 {{expected}} 不一致",
+      "manifestMismatch": "内置清单 {{bundled}} 与固定版本 {{pinned}} 不一致",
+      "manifestDriftTitle": "内置工具与固定版本不一致",
+      "manifestDriftDetail": "tools/manifest.json 与应用固定版本文件存在差异：{{tools}}。",
+      "bannerTitle": "嵌入守护进程有可用更新",
+      "bannerOwnedDetail": "当前运行的嵌入守护进程 ({{version}}，端口 {{port}}) 低于固定版本 {{pinned}}。重启即可生效，不会重建索引。",
+      "bannerExternalDetail": "检测到由 Dazzi 外部启动的旧版嵌入守护进程 ({{version}}，端口 {{port}}，固定版本 {{pinned}})。请在方便时手动重启。",
+      "openAbout": "打开关于"
     },
     "remote": {
       "description": "可在其他电脑或手机的浏览器中使用这台电脑上的 Dazzi。",
       "unavailable": "无法在此窗口中设置远程访问。",
-      "securityHint": "*连接未加密。请仅在可信的网络中使用。",
+      "securityHint": "*连接未加密。请在可信的网络中使用。",
       "access": "允许远程访问",
-      "address": "浏览器地址",
+      "address": "在此电脑上打开",
       "stopped": "已停止",
       "port": "端口",
-      "portHint": "默认端口为 47833。设为 0 可选择可用端口。更改后会立即在新端口上重新启动。",
+      "portHint": "更改后地址会变化，已连接的设备需要用新地址重新打开。",
       "copyAddress": "复制地址",
       "addressCopied": "地址已复制",
       "copyError": "无法复制地址。请选中地址后手动复制。",
       "statusError": "无法读取远程访问状态：{{error}}",
       "settingsError": "无法保存远程访问设置：{{error}}",
-      "pairStart": "生成配对码",
-      "pairNewCode": "新配对码",
-      "pairExpires": "剩余 {{time}}",
+      "pairStart": "生成连接码",
+      "pairNewCode": "生成新连接码",
+      "pairExpires": "{{time}} 后过期",
       "pairExpired": "配对码已过期。",
-      "pairQrLabel": "配对码 {{code}} 的二维码",
-      "pairLinkCopy": "复制配对链接",
+      "pairQrLabel": "连接码 {{code}} 的二维码",
+      "pairLinkCopy": "复制连接链接",
       "pairLinkCopied": "链接已复制",
       "tunnelStart": "启动隧道",
       "tunnelStarting": "正在启动…",
       "tunnelStop": "停止隧道",
-      "devicesTitle": "已配对设备",
-      "devicesEmpty": "暂无已配对设备。",
+      "devicesTitle": "已连接设备",
+      "devicesEmpty": "暂无已连接设备。",
       "deviceCurrent": "当前设备",
       "deviceLastSeen": "最近访问：{{when}}",
       "deviceJustNow": "刚刚",
@@ -2552,22 +2107,22 @@
       "devicesRevokeAll": "撤销全部设备",
       "devicesRevokeAllConfirm": "确认撤销全部",
       "viaToken": "当前通过访问令牌连接。",
-      "viaDevice": "当前作为已配对设备连接。",
+      "viaDevice": "当前作为已连接设备访问。",
       "accessHint": "开启后，同一网络中的其他设备可以通过访问地址进入。",
       "starting": "正在启动远程访问服务器…",
       "connectTitle": "连接设备",
-      "connectHint": "选择连接途径，在新设备上打开该地址，然后输入配对码。",
+      "connectHint": "在新设备的浏览器中打开地址，然后输入连接码。",
       "routeLabel": "1. 连接途径",
       "routeLan": "同一 Wi-Fi",
       "routeInternet": "外部网络",
       "routeAddress": "访问地址",
-      "routeLanHint": "与此电脑处于同一 Wi-Fi 或内网的设备可以直接打开的地址。",
+      "routeLanHint": "与此电脑连接同一 Wi-Fi 或内网的设备可以打开的地址。",
       "lanMissing": "未找到此电脑的 Wi-Fi/LAN 地址。请检查网络连接。",
-      "pairTitle": "2. 配对码",
-      "pairHint": "无论哪种途径，每台设备只需首次输入一次。二维码同时包含上方地址和配对码。",
-      "pairNoAddress": "上方途径有可用地址后会显示二维码。现在也可以直接输入配对码。",
-      "details": "详细信息",
-      "addressHint": "在此电脑上打开 Dazzi 的地址。其中包含访问令牌，请勿分享。",
+      "pairTitle": "2. 连接码",
+      "pairHint": "每台设备只需首次输入一次。扫描二维码即可，无需另外输入地址和连接码。",
+      "pairNoAddress": "上方途径有可用地址后会显示二维码。现在也可以直接输入连接码。",
+      "details": "高级设置",
+      "addressHint": "无需连接码即可直接打开的地址。其中包含访问权限，请勿与他人分享。",
       "tunnelQuickTitle": "Cloudflare 临时地址",
       "tunnelCustomTitle": "自有域名：{{hostname}}",
       "tunnelQuickHint": "无需账号即可生成 https://….trycloudflare.com 形式的临时地址。每次启动隧道地址都会变化，Cloudflare 不保证可用性。",
@@ -2590,7 +2145,6 @@
       "retryStart": "重试"
     },
     "account": {
-      "description": "管理 Dazzi 账户的登录状态和所用模型。",
       "profileTitle": "账户",
       "accountName": "Dazzi 账户",
       "signingIn": "正在浏览器中登录…",
@@ -2599,11 +2153,10 @@
       "signOut": "退出登录",
       "signIn": "登录",
       "signInBrowser": "登录",
-      "managedDesc": "将 Dazzi 账户的托管模型用于 AI 智能体。",
+      "managedDesc": "将 Dazzi 账户提供的模型用于 AI 智能体。",
       "managedName": "使用 Dazzi 提供的模型",
-      "managedHint": "在 AI 智能体中使用 Dazzi 账户包含的模型。登录后即可设置。",
-      "useManaged": "使用",
-      "planDescription": "当前套餐和 AI 用量。",
+      "managedHint": "使用 Dazzi 账户包含的模型运行 AI 智能体。请先登录。",
+      "useManaged": "使用此模型",
       "trialing": " · 试用中",
       "cancelScheduled": "已预约取消。在 {{date}} 之前仍可使用当前套餐。",
       "pastDue": "支付失败。请在结算门户中检查支付方式。",
@@ -2626,7 +2179,6 @@
       "usedPercent": "已使用 {{percent}}%"
     },
     "ai": {
-      "description": "连接 AI 服务，并为每个角色选择模型。",
       "kind": {
         "runtime": "运行时提供商",
         "local": "本机服务器",
@@ -2662,15 +2214,15 @@
       "servicesTitle": "已连接的服务",
       "servicesDesc": "可登录 OpenAI、Anthropic 等服务，或填入 API 密钥进行连接。",
       "rolesTitle": "按角色的模型",
-      "rolesDesc": "Dazzi 可以为每项工作使用不同的模型。",
+      "rolesDesc": "Dazzi 可以为执行的每项任务使用不同的模型。",
       "subSearchAssistant": "搜索辅助",
       "answerModel": "生成回答",
-      "answerHint": "撰写问题的回答并总结文档。",
+      "answerHint": "回答问题并总结文档。",
       "decompositionHint": "把又长又复杂的问题拆成多个搜索词。",
       "jevModel": "是否搜索的判断 (Jev)",
       "jevHint": "决定是直接回答，还是先搜索你的文档。",
       "jevSllm": "不设置",
-      "rerankModel": "结果重排",
+      "rerankModel": "搜索结果排序",
       "rerankHint": "把与问题最相关的文档排在前面。",
       "subDocUnderstanding": "文档理解",
       "selectRole": "选择 {{label}}",
@@ -2745,13 +2297,13 @@
       },
       "auto": "自动",
       "defaultValue": "默认值",
-      "embeddingModel": "文档理解模型",
+      "embeddingModel": "文档理解",
       "embeddingHint": "分析文档的含义。选择“这台电脑”时，文档不会离开本机。",
       "pickModel": "选择模型",
-      "roleBroken": "此模型的服务未连接。请重新连接或选择其他模型。"
+      "roleBroken": "提供此模型的服务未连接。请重新连接或选择其他模型。"
     },
     "embedding": {
-      "title": "文档理解模型",
+      "title": "文档理解",
       "hint": "分析文档含义。选择本机时,嵌入时不会将文档发送到外部。",
       "body": "选择分析文档含义的嵌入模型在哪里运行。模型固定为 Qwen3 Embedding 0.6B,任何会将文档内容发送到本机之外的选择都需要您同意。",
       "dimension": "{{count}} 维",
@@ -2801,13 +2353,13 @@
       "enabledAria": "使用 {{name}}",
       "exposureLabel": "工具提供方式",
       "exposure": {
-        "codemode": "通过脚本调用",
+        "codemode": "代码模式",
         "deferred": "按需加载",
         "direct": "直接提供给模型",
         "hidden": "隐藏"
       },
       "exposureHint": {
-        "codemode": "模型通过简短脚本调用工具(默认)。",
+        "codemode": "工具较多的服务器使用代码模式更快、更准确。",
         "deferred": "仅将通过 tool_search 找到的工具提供给模型。",
         "direct": "像内置工具一样把全部工具提供给模型。",
         "hidden": "无法访问这些工具。"
@@ -2818,28 +2370,39 @@
         "addTitle": "添加 MCP 服务器",
         "editTitle": "编辑 MCP 服务器",
         "name": "名称",
-        "namePlaceholder": "例如：filesystem",
+        "namePlaceholder": "服务器名称",
         "kind": "连接方式",
         "kindStdio": "运行命令(stdio)",
         "kindHttp": "HTTP 地址",
         "command": "命令",
         "commandPlaceholder": "npx",
-        "args": "参数(每行一个)",
+        "args": "参数",
         "url": "地址",
         "urlPlaceholder": "https://example.com/mcp",
         "headers": "请求头(每行一个，名称: 值)",
         "env": "环境变量(每行一个，名称=值)",
         "envHint": "值中可以用 ${NAME} 引用环境变量。",
-        "description": "说明(让模型知道何时使用)",
+        "description": "说明",
         "save": "保存",
         "advanced": "此条目包含应用无法编辑的设置，会原样保留。",
         "badLine": "无法读取这一行：\"{{line}}\"。",
         "removeTitle": "删除 \"{{name}}\"？",
-        "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。"
+        "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。",
+        "argsHint": "每行输入一个。",
+        "envFormatHint": "每行输入一个，格式为 名称=值。\n值中可以用 ${NAME} 引用其他环境变量。",
+        "descriptionHint": "AI 会参考它来判断何时使用此服务器。",
+        "nameHint": "将以此名称显示在 MCP 服务器列表中",
+        "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem",
+        "envRow": "环境变量",
+        "headersRow": "请求头",
+        "noneValue": "无",
+        "envPlaceholder": "API_KEY=${MY_API_KEY}",
+        "headersPlaceholder": "Authorization: Bearer ${TOKEN}",
+        "headersFormatHint": "每行一个，格式为 名称: 值。\n值中可用 ${NAME} 引用环境变量。"
       },
       "connect": {
         "title": "在其他智能体中使用 Dazzi",
-        "desc": "让 Claude Code、Codex 等智能体搜索 Dazzi 的索引。选择智能体后，注册下面的内容。",
+        "desc": "让 Claude Code、Codex 等智能体通过 Dazzi 查找文档。选择智能体后，注册下面的内容。",
         "tabsAria": "选择智能体",
         "tabManual": "手动填写",
         "copy": "复制",
@@ -2862,6 +2425,161 @@
         "readOnlyHint": "智能体只能搜索，不能刷新索引或保存报告。"
       },
       "openFile": "打开配置文件"
+    },
+    "assistants": {
+      "general": {
+        "title": "AI 常规设置助手",
+        "emptyTitle": "要更改哪项设置？",
+        "emptyDesc": "只需提出要求，就能更改外观、语言、启动方式和快速搜索快捷键。",
+        "placeholder": "告诉我想更改的设置",
+        "prompt1": "把外观改成深色模式",
+        "prompt2": "把应用语言改成英语",
+        "prompt3": "开机时自动打开",
+        "heroTitle": "用 AI 更改常规设置",
+        "heroDesc": "只需提出要求，例如“改成深色模式并显示隐藏文件”。",
+        "heroButton": "请 AI 处理"
+      },
+      "ai": {
+        "title": "AI 模型助手",
+        "emptyTitle": "想使用哪个模型？",
+        "emptyDesc": "可以为回答、拆分问题、判断和重新排序分别选择已连接服务的模型。",
+        "placeholder": "告诉我想换成哪个模型",
+        "prompt1": "告诉我现在能用哪些模型",
+        "prompt2": "回答时让它思考得更深入",
+        "prompt3": "关闭重新排序",
+        "heroTitle": "用 AI 选择模型",
+        "heroDesc": "只需提出要求，例如“回答时多思考一会儿”。",
+        "heroButton": "请 AI 处理"
+      },
+      "web": {
+        "title": "AI 网页搜索助手",
+        "emptyTitle": "想怎样使用网页搜索？",
+        "emptyDesc": "可以开启或关闭网页搜索，也可以选择使用的搜索服务。",
+        "placeholder": "告诉我想怎样更改网页搜索",
+        "prompt1": "关闭网页搜索",
+        "prompt2": "搜索服务改用 DuckDuckGo",
+        "prompt3": "也开启读取网页内容",
+        "heroTitle": "用 AI 设置网页搜索",
+        "heroDesc": "只需提出要求，例如“网页搜索用 DuckDuckGo”。",
+        "heroButton": "请 AI 处理"
+      },
+      "indexing": {
+        "title": "AI 搜索范围助手",
+        "emptyTitle": "要搜索哪些文件夹？",
+        "emptyDesc": "可以添加或移除搜索的文件夹，设置要排除的项目，并更改更新频率。",
+        "placeholder": "告诉我想怎样更改搜索范围",
+        "prompt1": "把我的文档文件夹加入搜索",
+        "prompt2": "每小时自动更新一次",
+        "prompt3": "备份文件夹不要参与搜索",
+        "heroTitle": "用 AI 整理搜索范围",
+        "heroDesc": "只需提出要求，例如“加入文档文件夹，排除备份文件夹”。",
+        "heroButton": "请 AI 处理"
+      },
+      "duplicates": {
+        "title": "AI 重复文件助手",
+        "emptyTitle": "要怎样处理重复文件？",
+        "emptyDesc": "可以更改查找相同文件和不同版本文件的方式，以及检查的频率。",
+        "placeholder": "告诉我想怎样更改重复文件设置",
+        "prompt1": "相同的文件不要参与搜索",
+        "prompt2": "关闭查找不同版本的文件",
+        "prompt3": "每天只检查一次",
+        "heroTitle": "用 AI 设置重复文件",
+        "heroDesc": "只需提出要求，例如“每天只检查一次”。",
+        "heroButton": "请 AI 处理"
+      },
+      "mcp": {
+        "title": "AI MCP 服务器助手",
+        "emptyTitle": "要处理哪个工具服务器？",
+        "emptyDesc": "可以开启或关闭已连接的 MCP 服务器、更改显示方式，也可以添加新服务器。",
+        "placeholder": "告诉我想怎样更改 MCP 服务器",
+        "prompt1": "显示已连接的 MCP 服务器",
+        "prompt2": "关闭不用的服务器",
+        "prompt3": "添加 https://example.com/mcp 这个服务器",
+        "heroTitle": "用 AI 管理 MCP 服务器",
+        "heroDesc": "只需提出要求，例如“关闭不用的服务器”。",
+        "heroButton": "请 AI 处理"
+      },
+      "apps": {
+        "title": "AI 已连接应用助手",
+        "emptyTitle": "要更改哪个应用的连接？",
+        "emptyDesc": "可以开启或关闭已连接的应用，并更改说明和更新频率。",
+        "placeholder": "告诉我想怎样更改应用连接",
+        "prompt1": "告诉我已连接应用的状态",
+        "prompt2": "Slack 每小时更新一次",
+        "prompt3": "关闭不用的应用",
+        "heroTitle": "用 AI 管理已连接的应用",
+        "heroDesc": "只需提出要求，例如“Slack 每小时更新一次”。",
+        "heroButton": "请 AI 处理"
+      }
+    },
+    "assistantPrompt": {
+      "yes": "允许",
+      "no": "不允许",
+      "save": "保存",
+      "secretPlaceholder": "在此粘贴"
+    }
+  },
+  "settingsLtr": {
+    "title": "搜索排序学习",
+    "description": "从你自己的搜索记录中学习哪些文档更常被用于回答，并把它们排到前面。",
+    "rerankNeeded": {
+      "text": "“搜索结果排序”已关闭，因此不会记录可用于训练的搜索。",
+      "open": "打开 AI 模型设置"
+    },
+    "section": {
+      "train": "训练",
+      "use": "使用",
+      "models": "已训练的模型"
+    },
+    "log": {
+      "name": "记录搜索",
+      "hint": "每次搜索后，仅在这台电脑上记录候选文档的排名和被引用情况。不会保存文档正文。"
+    },
+    "train": {
+      "name": "立即训练",
+      "hint": "用已记录的 {{count}} 次搜索训练，并在最新的搜索上检查是否优于当前顺序。",
+      "needMore": "已记录 {{count}} 次搜索 · 训练还需要 {{missing}} 次。",
+      "button": "开始训练",
+      "running": "训练中…",
+      "trained": "训练完成，已通过标准。",
+      "rejected": "训练已完成，但未优于当前顺序，因此不会使用。",
+      "insufficient": "可用于训练的数据不足。",
+      "failed": "训练失败。"
+    },
+    "use": {
+      "name": "使用训练好的模型",
+      "hint": "在排序模型排好的顺序上再做调整。不会增加或删除文档。",
+      "hintOff": "已关闭，搜索顺序保持不变。",
+      "hintNoModel": "还没有通过标准的模型，顺序不会改变。",
+      "hintActive": "正在用训练好的模型调整顺序。",
+      "hintUnusable": "所选模型无法使用，因此保持当前顺序。"
+    },
+    "auto": {
+      "name": "自动重新训练",
+      "hint": "积累足够新的搜索后，在回答结束后于后台重新训练。",
+      "every": "重新训练的搜索数",
+      "everyHint": "自上次训练后新记录这么多次时重新训练。",
+      "unit": "次",
+      "invalid": "请输入不小于 1 的整数。"
+    },
+    "model": {
+      "none": "还没有训练过的模型。",
+      "passed": "通过",
+      "rejected": "未通过",
+      "inUse": "使用中",
+      "pinned": "已选择",
+      "score": "得分：当前 {{from}} → 训练后 {{to}}",
+      "queries": "验证 {{count}} 次",
+      "use": "使用此模型",
+      "useLatest": "使用最新的通过模型",
+      "delete": "删除",
+      "deleteAsk": "删除此模型？",
+      "deleteConfirm": "确认删除",
+      "cancel": "取消",
+      "caveat": "“通过”只表示在已记录的搜索上优于当前顺序，并不保证回答会更好。"
+    },
+    "error": {
+      "read": "无法读取状态：{{reason}}"
     }
   },
   "settingsSources": {
@@ -2916,6 +2634,9 @@
       },
       "spotlight": {
         "summary": "使用 macOS Spotlight (mdfind) 实时查询本地文件。"
+      },
+      "wombat": {
+        "summary": "通过 wombat 搜索您与 Claude Code、Codex 等 AI 编程代理的历史对话。"
       }
     },
     "groups": {
@@ -2939,7 +2660,8 @@
       "rss": "RSS / News",
       "hister": "Hister (浏览器历史记录)",
       "calendar": "Apple 日历与提醒事项 (EventKit MCP)",
-      "spotlight": "Spotlight (mdfind)"
+      "spotlight": "Spotlight (mdfind)",
+      "aiSessions": "AI 会话"
     },
     "fields": {
       "binaryPath": "可执行文件路径",
@@ -3025,7 +2747,11 @@
         "histerSemantic": "需要 Hister 服务器开启语义搜索 (autorag setup --sync-hister)。",
         "requireWriteConfirmation": "开启后，未经确认不会修改日程或提醒事项 (--require-write-confirmation)。",
         "mcpExposure": "direct 直接向模型暴露工具，codemode 通过脚本调用。",
-        "calendarCommand": "留空则使用 npx 启动 mcp-server-apple-events。"
+        "calendarCommand": "留空则使用 npx 启动 mcp-server-apple-events。",
+        "agents": "留空则读取所有已安装的代理（Claude Code、Codex、OpenCode、Gemini、Kiro 等 20 种）。例如：claude-code, codex",
+        "includeSubagents": "同时为子代理和侧链对话建立索引。默认关闭。",
+        "includeEphemeral": "同时为无头模式、基准测试或临时文件夹中运行的会话建立索引。默认关闭。",
+        "wombatDataDir": "wombat 保存对话副本和索引的文件夹。留空则使用 ~/.wombat。"
       },
       "envError": {
         "object": "环境变量必须是 JSON 对象。",
@@ -3047,7 +2773,10 @@
         "removeAt": "删除订阅源 {{index}}",
         "addAria": "添加订阅源",
         "addLabel": "+ 添加订阅源"
-      }
+      },
+      "agents": "代理",
+      "includeSubagents": "包含子代理会话",
+      "includeEphemeral": "包含临时会话"
     },
     "cadence": {
       "min5": "5 分钟",
@@ -3062,7 +2791,8 @@
     "units": {
       "message": "消息",
       "document": "文档",
-      "image": "图片"
+      "image": "图片",
+      "session": "个会话"
     },
     "common": {
       "manual": "手动",
@@ -3090,21 +2820,20 @@
     },
     "indexing": {
       "title": "索引",
-      "desc": "管理要搜索的文件夹、索引进度和更新周期。",
       "progress": "进度",
       "refreshStatus": "更新状态",
       "localFolder": "本地文件夹",
       "localIntervalAria": "本地文件夹更新间隔",
-      "refreshLocalAria": "立即刷新本地文件夹",
-      "refreshTitle": "立即刷新",
+      "refreshLocalAria": "立即更新本地文件夹",
+      "refreshTitle": "立即更新",
       "rowIntervalAria": "{{id}} 更新间隔",
       "rowRefreshAria": "立即更新 {{id}}",
       "rowRefreshTitle": "立即更新",
-      "localUpdating": "刷新中…",
+      "localUpdating": "更新中…",
       "syncAll": "全部更新",
       "scheduleTitle": "自动刷新条件",
       "scheduleAcOnlyName": "仅在接通电源时",
-      "scheduleAcOnlyHint": "使用电池时不会自动更新。随时可以用刷新按钮更新。",
+      "scheduleAcOnlyHint": "使用电池时会跳过自动更新。随时可以手动更新。",
       "scheduleWindowName": "仅在设定时段",
       "scheduleWindowHint": "只在设定的时段内自动更新，时段开始后的首次检查时执行。",
       "scheduleWindowStart": "开始时间",
@@ -3114,19 +2843,19 @@
       "diagnostics": " · {{count}} 项诊断",
       "scheduleUnsupported": "这台电脑在应用关闭时无法自动更新。",
       "scheduleRegisterFailed": "无法注册自动更新：{{error}}",
-      "scheduleNotRegistered": "自动更新尚未注册。重新选择周期即可注册。",
-      "scheduleConflicts": "这台电脑上已有另一个更新 Dazzi 的计划任务（{{list}}）。请只使用其中一个，以免同一文件夹被处理两次。",
+      "scheduleNotRegistered": "自动更新尚未注册。请重新选择周期。",
+      "scheduleConflicts": "这台电脑上已有另一个更新 Dazzi 的计划任务（{{list}}）。请只保留其中一个，以免同一文件夹被读取两次。",
       "scheduleActive": "即使应用已关闭，也会每 {{minutes}} 分钟检查一次，只更新到期的项目。",
       "scheduleLastCheck": "上次检查 {{ago}}。",
       "scheduleNever": "尚未运行过。",
-      "schedulePausedBattery": "正在等待接通电源：只在接通电源时自动更新（{{ago}}已暂缓）。",
+      "schedulePausedBattery": "接通电源后将继续自动更新（{{ago}}已暂缓）。",
       "schedulePausedWindow": "正在等待允许的时段：已按计划暂缓 {{ago}} 的更新。",
       "schedulePausedDay": "正在等待允许的日期：已按计划暂缓 {{ago}} 的更新。",
       "keepTitle": "更新",
-      "keepDesc": "设置重新获取变更内容的周期。点按刷新按钮可立即更新。",
+      "keepDesc": "设置重新获取变更内容的频率。",
       "connectApp": "连接应用",
       "connectAppHint": "在“全部连接”中选择",
-      "liveLabel": "实时查询"
+      "liveLabel": "实时"
     },
     "apps": {
       "title": "已连接应用",
@@ -3135,6 +2864,7 @@
       "groups": {
         "messengers": "即时通讯",
         "docsNotes": "文档与笔记",
+        "aiSessions": "AI 编程代理",
         "mail": "邮件",
         "cloudDev": "云端与开发",
         "newsOther": "新闻与其他"
@@ -3191,7 +2921,7 @@
       "addFolder": "添加文件夹",
       "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
       "excludeTitle": "已排除的项目",
-      "excludeDesc": "已从索引中排除的文件夹和文件。从列表中删除后会重新建立索引。",
+      "excludeDesc": "Dazzi 不读取的文件夹和文件。从列表中删除后会重新读取。",
       "autoWatch": "即时反映文件名",
       "autoWatchHintOff": "文件搜索已关闭，无法使用。",
       "autoWatchHintOn": "文件新增或更改时会立即反映到名称搜索中。文档内容按更新周期刷新。",
@@ -3212,7 +2942,7 @@
       "addExclusion": "添加排除项",
       "excludePick": "选择文件夹或文件",
       "excludeType": "输入路径",
-      "devExcluded": "开发用文件夹已自动排除",
+      "devExcluded": "开发用文件夹会自动排除",
       "devMore": "详情",
       "devLess": "收起",
       "devDotNote": "名称以句点(.)开头的文件夹也会全部排除。",
@@ -3262,8 +2992,7 @@
       "fetchHintOff": "网页搜索已关闭。"
     },
     "reading": {
-      "title": "文档阅读",
-      "desc": "设定读取和搜索文档时优先使用的语言。",
+      "title": "文档语言",
       "langHint": "可以选择多个。"
     },
     "duplicates": {
@@ -3274,7 +3003,7 @@
       "versionsName": "归并相似版本",
       "versionsHint": "报告_最终、报告_最终2 这类仅名称不同的文件会合并为一行显示。",
       "intervalName": "重复检查间隔",
-      "intervalHint": "重新检查文件变化的间隔。",
+      "intervalHint": "可以设置重新检查文件变化的周期。",
       "intervals": {
         "min15": "每 15 分钟",
         "min30": "每 30 分钟",
@@ -3346,6 +3075,9 @@
     "close": "关闭",
     "copyOutput": "复制结果",
     "copied": "已复制",
+    "saveToHistory": "保存到对话记录",
+    "savedToHistory": "已保存",
+    "saveFailed": "无法保存到对话记录。",
     "emptyOutput": "已完成，无文本输出。",
     "targetsCount": "共 {{count}} 项",
     "sidebarOpen": "查看魔法动作结果"
@@ -3358,9 +3090,9 @@
       "recent": "最近使用",
       "names": "文件名",
       "content": "内容",
-      "ask": "询问 Dazzi"
+      "ask": "询问 AI"
     },
-    "askRow": "询问 Dazzi：“{{query}}”",
+    "askRow": "询问 AI：“{{query}}”",
     "emptyRecents": "输入内容开始搜索。最近打开的文件会显示在这里。",
     "noResults": "没有匹配的文件。",
     "contentOff": "仅关键词模式下内容搜索已关闭。",
@@ -3375,8 +3107,8 @@
       "showInApp": "在 Dazzi 中显示",
       "copyFile": "复制文件",
       "copyPath": "复制路径",
-      "askAbout": "就此文件询问 Dazzi",
-      "askQuery": "询问 Dazzi"
+      "askAbout": "就此文件询问 AI",
+      "askQuery": "询问 AI"
     },
     "hints": {
       "preview": "预览",
@@ -3406,7 +3138,7 @@
     "emptyFolder": "空文件夹",
     "emptyFolderHint": "用 + 新建文件夹，或从此设备上传文件",
     "emptyTrash": "废纸篓是空的",
-    "loadFailed": "无法打开此文件夹：{{message}}",
+    "loadFailed": "无法打开文件夹。{{message}}",
     "loading": "正在加载…",
     "sort": {
       "title": "排序方式",
@@ -3477,7 +3209,7 @@
     },
     "confirm": {
       "emptyTrash": "清倒废纸篓？",
-      "emptyTrashBody": "废纸篓中的项目将被永久删除，且无法撤销。",
+      "emptyTrashBody": "将永久删除废纸篓中的所有项目，且无法撤销。",
       "emptyTrashOk": "清倒废纸篓"
     },
     "toast": {
@@ -3488,7 +3220,7 @@
       "created": "已创建“{{name}}”",
       "renamed": "已重命名为“{{name}}”",
       "uploaded": "已上传“{{name}}”",
-      "uploadFailed": "无法上传“{{name}}”",
+      "uploadFailed": "无法上传“{{name}}”。",
       "uploadedMany": "已上传 {{count}} 个文件",
       "magicStarted": "正在运行“{{name}}”",
       "failed": "失败：{{message}}"
@@ -3503,7 +3235,7 @@
       "indexed": "纳入 AI 智能体",
       "indexedOn": "可以按内容查找",
       "indexedOff": "只能按名称查找",
-      "indexLocked": "遵循上级文件夹的设置",
+      "indexLocked": "沿用上级文件夹中设定的设置。",
       "versions": "版本",
       "versionsFoot": "dupey 找到的同一文稿的其他版本。",
       "latest": "最新",
@@ -3524,10 +3256,10 @@
       "clear": "清除",
       "results": "{{machine}} 全部 · {{count}} 项",
       "none": "没有名为“{{query}}”的文件",
-      "noneHint": "要按内容查找，请询问 AI 智能体",
+      "noneHint": "询问 AI 智能体，也可以按内容查找。",
       "askAi": "向 AI 智能体询问“{{query}}”",
-      "askAiHint": "搜索文件内容、邮件和即时通讯",
-      "typeHint": "搜索此电脑上的文件名",
+      "askAiHint": "还能查找文件内容、邮件和即时通讯对话。",
+      "typeHint": "搜索此电脑上的文件名。",
       "exit": "关闭搜索"
     },
     "recents": {
@@ -3547,9 +3279,9 @@
       "open": "进行中和排队的任务"
     },
     "rules": {
-      "add": "在 AI 智能体中添加规则",
+      "add": "用 AI 智能体创建规则",
       "section": "规则",
-      "foot": "设定文件新建或变更时 Dazzi 自动执行的操作。规则在 AI 智能体中用自然语言创建和修改。",
+      "foot": "设定文件新建或变更时 Dazzi 要执行的操作。规则可以通过 AI 智能体设置。",
       "daemonToggle": "在后台运行"
     },
     "ai": {
@@ -3577,5 +3309,243 @@
       "showInFolder": "在文件夹中显示",
       "preview": "预览"
     }
+  },
+  "notifications": {
+    "title": "通知",
+    "open": "打开通知",
+    "openUnread": "打开通知（有新通知）",
+    "clearPast": "清除过去的通知",
+    "needsAction": "需要处理",
+    "past": "过去的通知",
+    "empty": "没有通知。",
+    "hide": "隐藏",
+    "dismiss": "删除通知",
+    "justNow": "刚刚",
+    "sourceTitle": "{{name}} 连接需要处理",
+    "openConnection": "打开连接",
+    "settings": "通知设置",
+    "viewInCenter": "在通知中心查看"
+  },
+  "firstRun": {
+    "folders": {
+      "title": "{{app}} 将读取这些文件夹",
+      "lead": "这里的文件马上就能搜索。不想包含的文件夹，点一下即可关闭。",
+      "groupLabel": "要读取的文件夹",
+      "kind": {
+        "desktop": "桌面",
+        "documents": "文档",
+        "downloads": "下载"
+      },
+      "start": "读取 {{count}} 个文件夹",
+      "startNone": "请选择文件夹"
+    },
+    "setup": {
+      "title": "正在浏览你的文件",
+      "lead": "只要让 {{app}} 保持打开，就会自动完成。",
+      "stage": {
+        "idle": "正在开始",
+        "scanning": "正在查看文件夹",
+        "planning": "正在挑选需要的文件",
+        "duplicates": "正在查找重复文件",
+        "indexing": "正在读取文件",
+        "preparing": "正在收尾",
+        "ready": "已就绪",
+        "failed": "已停止"
+      },
+      "files": "{{processed}} / {{total}} 个文件",
+      "remaining": "大约还需 {{minutes}} 分钟",
+      "failedTitle": "准备已暂停",
+      "failedLead": "重试后会从停下的地方继续。",
+      "retry": "重试"
+    },
+    "game": {
+      "invite": "点我试试",
+      "hint": "插旗：右键或 Shift+点击",
+      "remaining": "剩余徽标",
+      "time": "用时",
+      "seconds": "{{time}} 秒",
+      "close": "关闭游戏",
+      "board": "找徽标游戏",
+      "won": "徽标全部找到啦!",
+      "record": "新纪录!",
+      "lost": "哎呀,这里藏着徽标",
+      "again": "再玩一次"
+    },
+    "ready": {
+      "title": "文件已全部读取",
+      "lead": "现在可以在 {{count}} 个文件中查找任何内容。",
+      "start": "开始使用"
+    },
+    "early": {
+      "start": "立即开始"
+    },
+    "background": {
+      "counts": "正在后台读取文件 · {{processed}} / {{total}} 个",
+      "reading": "正在后台读取文件"
+    },
+    "cinema": {
+      "title": "欢迎来到 {{name}}",
+      "subtitleMac": "你的 AI 访达",
+      "subtitleWindows": "你的 AI 文件资源管理器"
+    },
+    "tour": {
+      "next": "下一步",
+      "skip": "跳过",
+      "finish": "完成",
+      "clickHint": "直接点击试试",
+      "sendHint": "直接发送试试",
+      "typingHint": "正在输入…",
+      "progress": "{{index}} / {{count}}",
+      "ask": {
+        "title": "像这样提问就可以",
+        "body": "先用刚读取的文件试一下。点击发送按钮,或改成你想问的内容再发送。"
+      },
+      "cite": {
+        "title": "答案来了 — 点击依据编号试试",
+        "body": "答案只以你的文件为依据。点击蓝色编号即可打开对应的原文件。",
+        "waitingTitle": "正在寻找答案",
+        "waitingBody": "正在阅读文件里的内容。",
+        "noCiteTitle": "答案来了",
+        "noCiteBody": "答案只以你的文件为依据。",
+        "failedTitle": "这次没有找到答案",
+        "failedBody": "可以换个说法再问一次。"
+      },
+      "evidence": {
+        "title": "依据都汇集在这里",
+        "body": "原文中对应的段落原样呈现。点击标题即可前往文件所在位置。"
+      },
+      "duplicates": {
+        "title": "点击归在一起的文档试试",
+        "body": "副本和旧版本合并为一行了。点击即可展开全部版本。"
+      },
+      "versions": {
+        "title": "在这里确认最新版",
+        "body": "相同和几乎相同的文档并排显示。点击即可跳转到该文件。"
+      }
+    },
+    "signin": {
+      "title": "开始使用 {{app}}",
+      "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
+      "leadPc": "套餐和用量与账户关联。文件和搜索索引保存在这台电脑上。",
+      "busy": "正在浏览器中登录…",
+      "busyNote": "认证完成后会自动返回。",
+      "cancel": "取消",
+      "or": "或",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "mingzi@example.cn",
+      "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
+      "signedIn": "登录完成",
+      "otherAccount": "使用其他账户登录",
+      "offline": "无法连接服务器，显示的是上次确认的信息。",
+      "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
+      "agreeTerms": "服务条款",
+      "agreePrivacy": "隐私政策",
+      "agreeUse": "可接受使用政策",
+      "google": "使用 Google 继续",
+      "github": "使用 GitHub 继续",
+      "later": "以后再说",
+      "continue": "开始使用"
+    }
+  },
+  "tutorials": {
+    "later": "以后再说",
+    "waitingHint": "请稍等…",
+    "rightClickHint": "右键点击这个文件",
+    "automations": {
+      "askText": "当 {{folder}} 里出现新照片时，把它的黑白副本保存到 {{gray}}。原图保持不变。请用文件转换（filee-cli 的 grayscale 预设）来创建命令规则。开启 appendFiles，让新文件路径作为命令参数传入，并把黑白文件夹里的文件排除在规则之外，这样副本不会再次触发规则。",
+      "intro": {
+        "title": "自动化是用说的来创建",
+        "body": "没有设置界面。告诉 AI 你想要什么，它会帮你创建规则。现在就请它：“下载文件夹里出现照片时，转成黑白并保存到黑白文件夹。”",
+        "action": "请 AI 创建"
+      },
+      "send": {
+        "title": "点击发送",
+        "body": "我们已经把请求写好了。可以修改，也可以直接发送。"
+      },
+      "asking": {
+        "title": "AI 正在创建规则",
+        "body": "正在设置监视文件夹并把照片保存为黑白副本的规则。如果询问是否批准，请选择允许。"
+      },
+      "rule": {
+        "title": "规则已创建",
+        "body": "自动化列表里多了一条新规则。一行里能看到监视的文件夹、何时运行以及要做什么。即使关闭应用，它也会在后台继续监视。",
+        "action": "下一步"
+      },
+      "panes": {
+        "title": "现在来亲眼看看",
+        "body": "把窗口分成两半：左边是下载文件夹，右边是练习照片文件夹。把照片移到左边就行。",
+        "action": "分屏"
+      },
+      "drag": {
+        "title": "把照片拖进下载文件夹",
+        "body": "把右边的 IMG_0001.jpg 拖到左边的下载文件夹。按住 Option（Alt）拖动则是复制。放下后规则马上就会发现。"
+      },
+      "result": {
+        "title": "黑白照片生成了！",
+        "body": "下载文件夹里的“黑白”文件夹中出现了黑白副本。以后每张进入下载文件夹的照片都会这样处理。这条规则仅供练习，可以随意删除。"
+      }
+    },
+    "contextMenu": {
+      "intro": {
+        "title": "给右键菜单加一个自己的按钮",
+        "body": "现在就做一个名为“快速查看内容”的魔法操作。右键点击文本文件，就会立刻显示大小和开头几行。",
+        "action": "创建示例"
+      },
+      "sample": {
+        "title": "右键点击练习文件",
+        "body": "我们已经打开了“练习文件”文件夹。右键点击文件，刚创建的按钮就会出现在菜单里。"
+      },
+      "pick": {
+        "title": "就在这里",
+        "body": "你创建的魔法操作只会在右键点击匹配的文件时出现。点击它来运行。"
+      },
+      "result": {
+        "title": "结果立刻出现",
+        "body": "脚本读取了所选文件的大小和开头几行。让 AI 做摘要的操作也是同样的做法。"
+      },
+      "more": {
+        "title": "创建更多自己的操作",
+        "body": "在 设置 › 右键菜单 中，可以用描述的方式创建操作，也可以隐藏和调整项目顺序。这个示例仅供练习，可以随意删除。",
+        "action": "打开设置"
+      }
+    },
+    "remoteAccess": {
+      "offer": {
+        "title": "了解一下远程访问？",
+        "body": "在手机或另一台电脑的浏览器中直接打开这台电脑上的 Dazzi。在你亲自开启之前不会开放任何内容。",
+        "action": "了解一下"
+      },
+      "toggle": {
+        "title": "开启即可使用",
+        "body": "开启后，Dazzi 会在这台电脑上运行一个小型 Web 服务器。在你亲自开启之前不会开放任何内容。"
+      },
+      "security": {
+        "title": "仅限可信网络",
+        "body": "连接使用未加密的 HTTP。请只在家庭或公司等可信网络中，或通过加密隧道开启。"
+      },
+      "connect": {
+        "title": "设备通过配对码连接",
+        "body": "开启后，下方会显示连接方式。在新设备上打开地址并输入这里显示的配对码即可登记。已登记的设备可在下方列表中重命名或移除。"
+      }
+    },
+    "dragHint": "把照片拖过去"
+  },
+  "fullDiskAccess": {
+    "title": "请允许完全磁盘访问权限",
+    "titleGranted": "已允许完全磁盘访问权限",
+    "leadTagColors": "访达标签颜色保存在受 macOS 保护的位置。请在系统设置中打开 Dazzi,出现提示时选择“退出并重新打开”。",
+    "leadSource": "此数据源需要读取其他应用的数据。请在系统设置中开启 Dazzi 的完全磁盘访问权限,出现提示时选择“退出并重新打开”。",
+    "granted": "已确认获得权限,可以继续了。",
+    "open": "打开系统设置",
+    "confirm": "确认并继续",
+    "rowName": "完全磁盘访问权限"
   }
 }

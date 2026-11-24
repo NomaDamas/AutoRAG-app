@@ -82,7 +82,10 @@ describe("pinFolders", () => {
 	it("writes the same pin Settings > Sidebar writes", () => {
 		const next = pinFolders(settings(), LOCATIONS, ["/Users/me/Work"], null);
 		expect(next.customFavorites).toEqual(withCustomFavorite(settings(), "/Users/me/Work").customFavorites);
-		expect(normalizeSidebarSettings(next)).toEqual(next);
+		// Normalizing adds only the remembered 사용자 지정: a pin moves the favorites, so the layout is the person's own.
+		const { custom, ...normalized } = normalizeSidebarSettings(next);
+		expect(normalized).toEqual(next);
+		expect(custom?.favoritesOrder).toEqual(next.favoritesOrder);
 	});
 
 	it("does not pin a folder twice", () => {
