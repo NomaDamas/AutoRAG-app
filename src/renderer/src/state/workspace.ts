@@ -16,6 +16,7 @@
 import {
 	AI_SEARCH_PATH,
 	AUTOMATIONS_PATH,
+	documentEditorPath,
 	createTabsState,
 	evacuateTabs,
 	exitVirtualTab,
@@ -565,6 +566,14 @@ export function openOrSelectFolderInWorkspace(ws: Workspace, path: string): Work
 	const existing = allTabs(ws).find((tab) => tab.path === path);
 	if (existing !== undefined) return focusTab(ws, existing.id);
 	return updatePaneTabs(ws, ws.focusedPaneId, (state) => openOrSelectFolderTab(state, path));
+}
+
+/** Quick Look pen button or Option/Alt+click: focus the existing editor tab for `filePath`, else open a new one in the focused pane. */
+export function openOrSelectDocumentEditorInWorkspace(ws: Workspace, filePath: string): Workspace {
+	const targetPath = documentEditorPath(filePath);
+	const existing = allTabs(ws).find((tab) => tab.path === targetPath);
+	if (existing !== undefined) return focusTab(ws, existing.id);
+	return updatePaneTabs(ws, ws.focusedPaneId, (state) => openTabAt(state, targetPath));
 }
 
 /**

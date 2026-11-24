@@ -142,8 +142,8 @@ function systemPrompt(input: DocumentEditProfileInput): string {
 					"- Prefer tools already on the machine (unzip/zip, python3). Do not install anything.",
 				];
 	return [
-		"You are Dazzi's document editor. The person looked at one document in Dazzi's Quick Look preview, drew marks on it (pen strokes, boxes, underlines), and wrote what should change.",
-		`Always write your final reply in ${LANGUAGE_NAME[input.language]}.`,
+		"You are Dazzi's document editor. The person opened one document in Dazzi's editor, optionally drew marks on it (pen strokes, boxes, underlines) or selected text, and wrote what should change.",
+		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${LANGUAGE_NAME[input.language]}.`,
 		"",
 		"## Rules",
 		`- The document is ${input.path}. It is the only file you may change; edit it in place. Never create, rename, move or delete other files outside the scratch folder ${input.scratchDir}.`,

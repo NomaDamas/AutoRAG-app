@@ -50,6 +50,14 @@ import type { ServicesService } from "./services-service";
 import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
+import type { DocumentEditService } from "./document-edit-service";
+import { openDocumentForEditor, saveDocumentText } from "./document-editor-io";
+import { isDocumentEditRequest, type DocumentEditEvent } from "../preview/shared/annotation";
+import {
+	DOCUMENT_EDITOR_CHANNELS,
+	isDocumentEditorAiCapture,
+	isDocumentEditorSaveRequest,
+} from "../shared/document-editor-contract";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -517,4 +525,56 @@ export function registerAppUpdateIpcHandlers(service: AppUpdaterService): void {
 export function registerToolVersionsIpcHandlers(service: ToolVersionsService): void {
 	ipcMain.handle(TOOL_VERSIONS_CHANNELS.get, () => service.get());
 	ipcMain.handle(TOOL_VERSIONS_CHANNELS.restartDaemon, () => service.restartDaemon());
+}
+
+/** The widest screenshot of an editor tab handed to the AI document-edit model. */
+const EDITOR_SCREENSHOT_WIDTH = 1600;
+
+/** Document Editor tab: open/save editable files, and run/cancel/undo the AI document-edit agent. */
+export function registerDocumentEditorIpcHandlers(
+	service: DocumentEditService,
+	sendEvent: (event: DocumentEditEvent) => void,
+): void {
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.open, (_event, filePath: unknown) => {
+		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
+		return openDocumentForEditor(filePath);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.save, (_event, request: unknown) => {
+		if (!isDocumentEditorSaveRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
+		return saveDocumentText(request);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiStart, async (event, runId: unknown, request: unknown, capture: unknown) => {
+		if (typeof runId !== "string" || runId === "" || !isDocumentEditRequest(request)) {
+			throw new Error(t("quickLook.errors.invalidEdit"));
+		}
+		if (capture !== undefined && !isDocumentEditorAiCapture(capture)) {
+			throw new Error(t("quickLook.errors.invalidEdit"));
+		}
+		const sender = event.sender;
+		const screenshot = async (): Promise<Buffer | null> => {
+			if (sender === undefined || sender === null || sender.isDestroyed()) return null;
+			const rect =
+				capture !== undefined && isDocumentEditorAiCapture(capture) && capture.rect !== undefined
+					? {
+							x: Math.max(0, Math.round(capture.rect.x)),
+							y: Math.max(0, Math.round(capture.rect.y)),
+							width: Math.max(1, Math.round(capture.rect.width)),
+							height: Math.max(1, Math.round(capture.rect.height)),
+						}
+					: undefined;
+			const image = rect === undefined ? await sender.capturePage() : await sender.capturePage(rect);
+			if (image.isEmpty()) return null;
+			const { width } = image.getSize();
+			return (width > EDITOR_SCREENSHOT_WIDTH ? image.resize({ width: EDITOR_SCREENSHOT_WIDTH, quality: "good" }) : image).toPNG();
+		};
+		return service.start(runId, request, { send: sendEvent, screenshot });
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiCancel, async (_event, runId: unknown) => {
+		if (typeof runId !== "string" || runId === "") return;
+		await service.cancel(runId);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiUndo, async (_event, runId: unknown) => {
+		if (typeof runId !== "string" || runId === "") return false;
+		return service.undo(runId, sendEvent);
+	});
 }

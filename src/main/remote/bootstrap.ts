@@ -6,6 +6,7 @@ import { APP_UPDATE_CHANNELS } from "../../shared/update-contract";
 import { AUTOMATION_CHANNELS } from "../../shared/automation-contract";
 import { LTR_CHANNELS } from "../../shared/ltr-contract";
 import { ERROR_FIX_CHANNELS } from "../../shared/error-fix-contract";
+import { DOCUMENT_EDITOR_CHANNELS } from "../../shared/document-editor-contract";
 import { MAGIC_ACTION_CHANNELS } from "../../shared/magic-actions-contract";
 import { INDEX_ACTIVITY_CHANNELS } from "../../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../../shared/index-problem-contract";
@@ -43,6 +44,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"automations.onChange": AUTOMATION_CHANNELS.changed,
 	"ltr.onTraining": LTR_CHANNELS.training,
 	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
+	"documentEditor.onAiEvent": DOCUMENT_EDITOR_CHANNELS.aiEvent,
 	"magicAction.onEvent": MAGIC_ACTION_CHANNELS.event,
 	"indexActivity.onChange": INDEX_ACTIVITY_CHANNELS.changed,
 	"indexProblem.onChange": INDEX_PROBLEM_CHANNELS.changed,
@@ -73,6 +75,7 @@ const TARGETS = [
 	"services",
 	"conversion",
 	"errorFix",
+	"documentEditor",
 	"appCustomizer",
 	"magicAction",
 	"account",

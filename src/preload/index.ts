@@ -16,6 +16,7 @@ import { QUICK_SEARCH_CHANNELS, type QuickSearchSettingsBridge } from "../shared
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
 import { createErrorFixBridge } from "./error-fix-bridge";
+import { createDocumentEditorBridge } from "./document-editor-bridge";
 import { createMagicActionBridge } from "./magic-action-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
@@ -64,6 +65,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	interaction: createInteractionBridge(ipcRenderer),
 	indexProblem: createIndexProblemBridge(ipcRenderer),
 	errorFix: createErrorFixBridge(ipcRenderer),
+	documentEditor: createDocumentEditorBridge(ipcRenderer),
 	magicAction: createMagicActionBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),

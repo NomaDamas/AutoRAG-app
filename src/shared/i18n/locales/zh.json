@@ -3571,5 +3571,71 @@
     "open": "打开系统设置",
     "confirm": "确认并继续",
     "rowName": "完全磁盘访问权限"
+  },
+  "documentEditor": {
+    "unsupportedFile": "{{name}} 无法在 Dazzi 中直接编辑。",
+    "loading": "正在加载文档…",
+    "loadFailed": "无法打开文档：{{message}}",
+    "saveFailed": "无法保存：{{message}}",
+    "conflict": "此文件已在外部被修改。请重新加载或覆盖保存。",
+    "reload": "重新加载",
+    "overwrite": "覆盖保存",
+    "truncatedWarning": "文件超过 4MB，仅显示部分内容。为防止数据丢失，已禁用直接保存。",
+    "autosave": "自动保存",
+    "status": {
+      "saved": "已保存",
+      "saving": "正在保存…",
+      "unsaved": "未保存",
+      "error": "保存失败"
+    },
+    "modes": {
+      "rich": "富文本",
+      "source": "源码"
+    },
+    "toolbar": {
+      "bold": "粗体",
+      "italic": "斜体",
+      "strike": "删除线",
+      "code": "行内代码",
+      "h1": "标题 1",
+      "h2": "标题 2",
+      "h3": "标题 3",
+      "bulletList": "无序列表",
+      "orderedList": "有序列表",
+      "taskList": "待办清单",
+      "quote": "引用",
+      "codeBlock": "代码块",
+      "table": "插入表格",
+      "rule": "分隔线",
+      "undo": "撤销",
+      "redo": "重做",
+      "save": "保存",
+      "aiToggle": "AI 编辑",
+      "markupToggle": "批注后 AI 编辑"
+    },
+    "placeholder": "开始输入内容…",
+    "ai": {
+      "title": "与 AI 一起编辑",
+      "selectionBadge": "已附带选区（{{chars}} 字符）",
+      "marksBadge": "{{count}} 处标记",
+      "placeholder": "告诉 AI 需要修改什么…（按 Enter 应用）",
+      "send": "应用",
+      "working": "AI 正在编辑文档…",
+      "changed": "文档已更新。",
+      "unchanged": "未作任何更改。",
+      "undo": "撤销 AI 编辑",
+      "undone": "已撤销 AI 编辑。",
+      "cancelled": "已取消 AI 编辑。",
+      "failed": "AI 编辑失败：{{message}}"
+    },
+    "package": {
+      "hint": "用画笔、方框或下划线在文档上标记，并让 AI 进行修改。",
+      "openExternal": "使用默认应用打开"
+    },
+    "footer": {
+      "lines": "{{count}} 行",
+      "words": "{{count}} 词",
+      "chars": "{{count}} 字符"
+    }
   }
 }

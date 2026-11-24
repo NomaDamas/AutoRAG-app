@@ -150,6 +150,11 @@ let documentEdit: DocumentEditService | null = null;
 export function setQuickLookDocumentEdit(service: DocumentEditService | null): void {
 	documentEdit = service;
 }
+let onQuickLookEditHandoff: ((path: string, owner: BrowserWindow) => void) | null = null;
+
+export function setQuickLookEditHandoff(handler: ((path: string, owner: BrowserWindow) => void) | null): void {
+	onQuickLookEditHandoff = handler;
+}
 
 /** The widest screenshot of the marked-up preview handed to the model. */
 const EDIT_SCREENSHOT_WIDTH = 1600;
@@ -627,6 +632,17 @@ async function act(state: Session, action: QuickLookAction): Promise<void> {
 		case "reveal":
 			if (state.current !== null) shell.showItemInFolder(state.current.path);
 			return;
+		case "edit": {
+			if (state.current === null) return;
+			const filePath = state.current.path;
+			hide(state, true);
+			if (onQuickLookEditHandoff !== null && live(state.owner)) {
+				onQuickLookEditHandoff(filePath, state.owner);
+			} else if (live(state.owner)) {
+				state.owner.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+			}
+			return;
+		}
 	}
 }
 

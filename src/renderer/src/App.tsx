@@ -64,7 +64,7 @@ import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
-import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
+import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { windowColumns } from "./state/window-layout";
 import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
@@ -656,14 +656,20 @@ export function App(): ReactElement {
 	}, [prefetchPath, prefetchMtime, prefetchSize]);
 
 	const moveSelectionBy = finder?.moveSelectionBy;
+	const openDocumentEditor = finder?.openDocumentEditor;
 	useEffect(() => {
 		const offClosed = autorag.preview.onClosed(() => setPreview(null));
 		const offNavigate = autorag.preview.onNavigate((delta) => moveSelectionBy?.(delta));
+		const offOpenEdit = autorag.preview.onOpenEdit?.((filePath) => {
+			setPreview(null);
+			openDocumentEditor?.(filePath);
+		});
 		return () => {
 			offClosed();
 			offNavigate();
+			offOpenEdit?.();
 		};
-	}, [moveSelectionBy]);
+	}, [moveSelectionBy, openDocumentEditor]);
 
 	useEffect(() => {
 		const applySettings = (settings: AppSettings): void => {
@@ -868,6 +874,7 @@ export function App(): ReactElement {
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
 	});
+	const editedDocPath = editorFilePathOf(path);
 	const toolbarTitle =
 		path === SETTINGS_PATH
 			? t("settings.title")
@@ -875,12 +882,13 @@ export function App(): ReactElement {
 				? t("places.automations")
 				: aiTabActive
 					? t("places.aiSearch")
-					: finder?.searching === true
-						? t("finderComponents.searchToolbarTitle")
-						: finder?.inTrashLocation === true
-							? t("places.trash")
-							: isTagPath(path) ? tagNameOf(path) : basename(path);
-
+					: editedDocPath !== null
+						? basename(editedDocPath)
+						: finder?.searching === true
+							? t("finderComponents.searchToolbarTitle")
+							: finder?.inTrashLocation === true
+								? t("places.trash")
+								: isTagPath(path) ? tagNameOf(path) : basename(path);
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
 		hovered: aiNavDropHover,

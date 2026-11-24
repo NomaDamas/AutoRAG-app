@@ -47,6 +47,10 @@ export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.navigate, (delta) => {
 				if (isNavigateDelta(delta)) listener(delta);
 			}),
+		onOpenEdit: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.openEdit, (path) => {
+				if (typeof path === "string" && path.length > 0) listener(path);
+			}),
 	};
 }
 

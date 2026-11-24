@@ -968,14 +968,19 @@ runs user-defined right-click Magic Actions on selected files and folders — ei
 or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
 (`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
 per action) with live `i` intent progress and streamed Markdown output. The `document-edit` helper
-(`src/main/agents/profiles/document-edit.ts`, `src/main/document-edit-service.ts`, `src/preview/shared/annotation.ts`) is
-the Quick Look pen button: it gets the marked-up file's path, the marks (tool, page, text under the mark, position as
-fractions of the page) and the instruction, plus a capture of the Quick Look window when the model takes images. Its
-`read`/`ls`/`find`/`grep` refuse credential files and the agent dir outside `skills/`; `edit`/`write` reach only that one
-file and a per-run scratch folder. Text documents (Markdown, plain text, code, HTML, CSV) get no shell; Office, HWPX and
-OpenDocument packages get `bash` in the scratch folder to unpack, edit the XML and repack, and that shell is only kept
-away from the agent dir, not fenced for writes. The service keeps the original bytes of a changed file under
-`<userData>/document-edit-backups` for Undo, refuses Undo once the file changed again, and deletes the backups at quit.
+(`src/main/agents/profiles/document-edit.ts`, `src/main/document-edit-service.ts`, `src/main/document-editor-io.ts`,
+`src/shared/document-editor-contract.ts`, `src/renderer/src/components/DocumentEditorTab.tsx`) powers Dazzi's in-app
+**Document Editor tab** (`DocumentEdit:<path>`). It opens either by clicking the pen button in Quick Look (which closes
+Quick Look and hands the file to a new tab in the Finder window) or by **Option+click** (macOS) / **Alt+click**
+(Windows/Linux) on a file row or tile in Finder. Text documents (Markdown, HTML, plain text) open in a TipTap v3 WYSIWYG
+editor (`WysiwygDocumentEditor.tsx`, Rich/Source switch) and code/CSV/TSV files open in a monospace source editor, both
+with debounced autosave, `⌘S`/`Ctrl+S`, mtime conflict detection, and docked AI editing (`documentEditor:*`). Office,
+HWP/HWPX and OpenDocument packages render their preview inside the tab with an interactive SVG mark-up layer
+(`EditorMarkupOverlay.tsx`: pen, box, underline) feeding the `document-edit` agent. Its `read`/`ls`/`find`/`grep` refuse
+credential files and the agent dir outside `skills/`; `edit`/`write` reach only that one file and a per-run scratch
+folder. Text documents get no shell; packages get `bash` in the scratch folder to unpack, edit XML and repack (kept away
+from the agent dir, not fenced for writes). The service keeps original bytes under `<userData>/document-edit-backups`
+for Undo, refuses Undo once the file changed again, and deletes the backups at quit.
 The rest of Settings has its own assistants in the right
 sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`APP_CUSTOMIZER_SURFACES`) in `app-customizer-service.ts` and built on
 `src/main/agents/profiles/customizer-kit.ts` (change log with 4-language summaries, cancel guard): `general-customizer` (Settings → 일반:

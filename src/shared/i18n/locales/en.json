@@ -3571,5 +3571,71 @@
     "open": "Open System Settings",
     "confirm": "Confirm and continue",
     "rowName": "Full Disk Access"
+  },
+  "documentEditor": {
+    "unsupportedFile": "{{name}} cannot be edited directly in Dazzi.",
+    "loading": "Loading document…",
+    "loadFailed": "Couldn't open the document: {{message}}",
+    "saveFailed": "Couldn't save: {{message}}",
+    "conflict": "This file changed on disk outside Dazzi. Reload or overwrite it.",
+    "reload": "Reload",
+    "overwrite": "Overwrite",
+    "truncatedWarning": "This file is larger than 4 MB and is shown partially. Direct saving is disabled to prevent data loss.",
+    "autosave": "Autosave",
+    "status": {
+      "saved": "Saved",
+      "saving": "Saving…",
+      "unsaved": "Unsaved",
+      "error": "Save failed"
+    },
+    "modes": {
+      "rich": "Rich",
+      "source": "Source"
+    },
+    "toolbar": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "strike": "Strikethrough",
+      "code": "Inline code",
+      "h1": "Heading 1",
+      "h2": "Heading 2",
+      "h3": "Heading 3",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "taskList": "Checklist",
+      "quote": "Quote",
+      "codeBlock": "Code block",
+      "table": "Insert table",
+      "rule": "Divider",
+      "undo": "Undo",
+      "redo": "Redo",
+      "save": "Save",
+      "aiToggle": "Edit with AI",
+      "markupToggle": "Mark up for AI"
+    },
+    "placeholder": "Start writing…",
+    "ai": {
+      "title": "Edit with AI",
+      "selectionBadge": "Selection attached ({{chars}} chars)",
+      "marksBadge": "{{count}} marks",
+      "placeholder": "Tell AI what to change… (Enter to apply)",
+      "send": "Apply",
+      "working": "AI is editing the document…",
+      "changed": "Document updated.",
+      "unchanged": "No changes were made.",
+      "undo": "Undo AI edit",
+      "undone": "AI edit undone.",
+      "cancelled": "AI edit cancelled.",
+      "failed": "AI edit failed: {{message}}"
+    },
+    "package": {
+      "hint": "Draw with pen, box, or underline on the document and tell AI what to change.",
+      "openExternal": "Open in default app"
+    },
+    "footer": {
+      "lines": "{{count}} lines",
+      "words": "{{count}} words",
+      "chars": "{{count}} chars"
+    }
   }
 }
