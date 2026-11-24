@@ -883,7 +883,9 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-48">
+				{/* The page reads one size up from the rest of the window (13px body to 14px, 12px to 13px), and its spacing and
+					    icons scale with it, so it holds its own beside the 파일 and AI 에이전트 tabs. The head bar keeps their size. */}
+				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-48 [zoom:1.077]">
 				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
 						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
