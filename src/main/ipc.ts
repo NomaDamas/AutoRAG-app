@@ -26,8 +26,10 @@ import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automatio
 import { DEMO_CHANNELS, type DemoBridge } from "../shared/demo-contract";
 import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
+import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
+import type { ToolVersionsService } from "./tool-versions";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
@@ -509,4 +511,10 @@ export function registerAppUpdateIpcHandlers(service: AppUpdaterService): void {
 	ipcMain.handle(APP_UPDATE_CHANNELS.check, () => service.check());
 	ipcMain.handle(APP_UPDATE_CHANNELS.download, () => service.download());
 	ipcMain.handle(APP_UPDATE_CHANNELS.install, () => service.install());
+}
+
+/** Resolved versions of the app, librarian, bundled tools, and embedding daemon. */
+export function registerToolVersionsIpcHandlers(service: ToolVersionsService): void {
+	ipcMain.handle(TOOL_VERSIONS_CHANNELS.get, () => service.get());
+	ipcMain.handle(TOOL_VERSIONS_CHANNELS.restartDaemon, () => service.restartDaemon());
 }

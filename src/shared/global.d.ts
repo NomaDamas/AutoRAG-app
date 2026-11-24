@@ -25,6 +25,7 @@ import type { AppUpdateBridge } from "./update-contract";
 import type { AutomationBridge } from "./automation-contract";
 import type { DemoBridge } from "./demo-contract";
 import type { LtrBridge } from "./ltr-contract";
+import type { ToolVersionsBridge } from "./tool-versions-contract";
 
 declare global {
 	interface Window {
@@ -34,6 +35,7 @@ declare global {
 			readonly analytics: AnalyticsBridge;
 			readonly appCustomizer: AppCustomizerBridge;
 			readonly appUpdate: AppUpdateBridge;
+			readonly toolVersions: ToolVersionsBridge;
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;
 			readonly demo: DemoBridge;
