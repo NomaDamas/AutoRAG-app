@@ -1108,7 +1108,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						/>
 					)}
 
-					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={() => onOpenSettings("indexing")} />}
+					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={() => onOpenSettings("indexing")} onClose={() => setIndexNotice(null)} />}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />

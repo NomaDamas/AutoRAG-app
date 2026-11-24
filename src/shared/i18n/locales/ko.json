@@ -558,7 +558,6 @@
     "daemon": {
       "on": "백그라운드에서 실행 중",
       "off": "꺼짐 · 규칙이 실행되지 않습니다",
-      "offBanner": "자동화가 꺼져 있어 규칙이 실행되지 않습니다.",
       "unknown": "백그라운드 실행 상태를 확인할 수 없습니다",
       "turnOn": "켜기",
       "turnOff": "끄기",
@@ -621,11 +620,15 @@
     "confirm": {
       "title": "‘{{title}}’ 규칙을 삭제할까요?",
       "message": "규칙만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
-      "action": "삭제",
-      "deleting": "삭제 중…"
+      "action": "삭제"
     },
     "toast": {
       "deleted": "‘{{title}}’ 규칙을 삭제했습니다.",
+      "creating": "자동화를 만드는 중…",
+      "created": "자동화를 만들었습니다.",
+      "saving": "변경 사항을 저장하는 중…",
+      "saved": "변경 사항을 저장했습니다.",
+      "deleting": "‘{{title}}’ 규칙을 삭제하는 중…",
       "undo": "실행 취소",
       "restored": "‘{{title}}’ 규칙을 되돌렸습니다."
     },
@@ -692,6 +695,7 @@
     "mine": "내 자동화",
     "create": {
       "new": "+ 새 자동화",
+      "headButton": "새 자동화",
       "title": "새 자동화",
       "when": "언제",
       "task": "Dazzi가 할 일",

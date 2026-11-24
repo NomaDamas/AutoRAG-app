@@ -25,6 +25,11 @@ export interface AutomationsShellDeps {
 	readonly onError: (message: string) => void;
 	/** The names people gave their rules; passed so the list redraws when one changes. */
 	readonly names?: Readonly<Record<string, string>>;
+	/**
+	 * Turn the background service on by itself when there are rules and it is off (the desktop window). The phone
+	 * layout keeps its own switch and leaves this off, so a person who switched it off there is not overruled.
+	 */
+	readonly autoStartService?: boolean;
 	/** Store a rule's name (an empty one goes back to the derived title). */
 	readonly renameRule?: (id: string, name: string) => Promise<void>;
 }
@@ -38,7 +43,8 @@ export interface AutomationsShell {
 	readonly preview: AutomationRule | null;
 	readonly confirm: AutomationRule | null;
 	readonly menu: { readonly cursor: { readonly x: number; readonly y: number }; readonly entries: readonly FinderMenuEntry[] } | null;
-	readonly undoToast: { readonly message: string; readonly onUndo: () => Promise<void> } | null;
+	/** While the confirmed delete runs, the toast reads 삭제 중… with no undo (`onUndo` null); then the undo toast. */
+	readonly undoToast: { readonly message: string; readonly onUndo: (() => Promise<void>) | null; readonly busy?: boolean } | null;
 	/** The toast's close button: the delete stands, the undo is gone. */
 	readonly dismissUndoToast: () => void;
 	/** Edit (AI draft) a rule: shared by the list, Quick Look, and the inspectors. */
@@ -82,11 +88,36 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState(false);
+	// The 삭제 중… toast, shown while the delete runs; the window stays usable meanwhile (no modal over it).
+	const [deletingMessage, setDeletingMessage] = useState<string | null>(null);
+	// Making or saving a rule says so in the toast (만드는 중… → 만들었습니다), not on the card's button, so the window stays free.
+	const [progress, setProgress] = useState<{ readonly message: string; readonly busy: boolean } | null>(null);
+	const progressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const showProgress = useCallback((message: string, busy: boolean) => {
+		clearTimeout(progressTimer.current);
+		setProgress({ message, busy });
+		if (!busy) progressTimer.current = setTimeout(() => setProgress(null), UNDO_MS);
+	}, []);
+	const clearProgress = useCallback(() => {
+		clearTimeout(progressTimer.current);
+		setProgress(null);
+	}, []);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
 	const [undoMessage, setUndoMessage] = useState<string | null>(null);
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const latest = useRef(deps);
 	latest.current = deps;
+
+	// No rule runs while the service is off, so the window turns it on once there is something to run: once per
+	// launch, so a failure (shown as a toast) or a later 끄기 is not fought over.
+	const autoStarted = useRef(false);
+	const daemon = view.state.daemon;
+	useEffect(() => {
+		if (deps.autoStartService !== true || autoStarted.current || view.daemonBusy) return;
+		if (!view.state.ready || rules.length === 0 || daemon === null || daemon.running === true) return;
+		autoStarted.current = true;
+		store.setDaemon(true).catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
+	}, [deps.autoStartService, view.state.ready, rules.length, daemon?.running, daemon === null, view.daemonBusy]);
 
 	const byId = useCallback((id: string | null): AutomationRule | null => (id === null ? null : (rules.find((rule) => rule.id === id) ?? null)), [rules]);
 	// A rule deleted elsewhere (the agent, another window) leaves nothing selected, previewed, or asked about.
@@ -118,9 +149,13 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	const confirmDelete = useCallback(async () => {
 		const rule = byId(confirmId);
+		setConfirmId(null);
 		if (rule === null || deleting) return;
 		const index = rules.findIndex((candidate) => candidate.id === rule.id);
 		setDeleting(true);
+		clearUndoTimer();
+		setUndoMessage(null);
+		setDeletingMessage(t("automations.toast.deleting", { title: ruleTitle(rule) }));
 		try {
 			await store.remove(rule.id);
 		} catch (cause) {
@@ -128,7 +163,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			return;
 		} finally {
 			setDeleting(false);
-			setConfirmId(null);
+			setDeletingMessage(null);
 		}
 		const left = rules.filter((candidate) => candidate.id !== rule.id);
 		// A rule deleted from its own page leaves for the list.
@@ -145,6 +180,9 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	}, [byId, confirmId, deleting, rules, store, clearUndoTimer]);
 
 	const dismissUndoToast = useCallback(() => {
+		setDeletingMessage(null);
+		clearTimeout(progressTimer.current);
+		setProgress(null);
 		clearUndoTimer();
 		setUndoMessage(null);
 		store.clearUndo();
@@ -243,9 +281,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 					if (selectedRule !== null) askDelete(selectedRule);
 					return;
 				case "dismiss":
-					if (confirmId !== null) {
-						if (!deleting) setConfirmId(null);
-					}
+					if (confirmId !== null) setConfirmId(null);
 					else if (menuState !== null) setMenuState(null);
 					else setPreviewId(null);
 					return;
@@ -271,23 +307,31 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		},
 		onAdd: add,
 		onCreate: async (draft) => {
+			showProgress(t("automations.toast.creating"), true);
 			try {
 				const id = await store.create(draft);
 				if (id !== null) setSelectedId(id);
+				if (id !== null) showProgress(t("automations.toast.created"), false);
+				else clearProgress();
 				return id !== null;
 			} catch (cause) {
+				clearProgress();
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 				return false;
 			}
 		},
 		editing: byId(editingId),
 		onUpdate: async (id, next) => {
+			showProgress(t("automations.toast.saving"), true);
 			try {
 				const ok = await store.update(id, next);
 				// Saving keeps the rule's page open: its 실행 기록 is right under the card.
 				if (ok) setSelectedId(id);
+				if (ok) showProgress(t("automations.toast.saved"), false);
+				else clearProgress();
 				return ok;
 			} catch (cause) {
+				clearProgress();
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 				return false;
 			}
@@ -335,7 +379,14 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		preview,
 		confirm,
 		menu,
-		undoToast: undoMessage === null ? null : { message: undoMessage, onUndo: undo },
+		undoToast:
+			deletingMessage !== null
+				? { message: deletingMessage, onUndo: null, busy: true }
+				: progress !== null
+					? { message: progress.message, onUndo: null, busy: progress.busy }
+					: undoMessage === null
+						? null
+						: { message: undoMessage, onUndo: undo },
 		dismissUndoToast,
 		edit,
 		askDelete,
@@ -346,9 +397,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		},
 		closePreview: () => setPreviewId(null),
 		confirmDelete,
-		cancelDelete: () => {
-			if (!deleting) setConfirmId(null);
-		},
+		cancelDelete: () => setConfirmId(null),
 		deleting,
 		menuSelect,
 		closeMenu,

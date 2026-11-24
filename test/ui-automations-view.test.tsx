@@ -139,7 +139,7 @@ describe("AutomationsView list", () => {
 		await setAppLanguage("en");
 		render(props());
 		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations 3", "Suggested Automations"]);
-		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("+ New automation");
+		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation");
 		expect([...host.querySelectorAll('[data-automation-tabs] [role="tab"]')].map((tab) => tab.textContent)).toEqual(["Automations", "All runs"]);
 	});
 
@@ -186,41 +186,12 @@ describe("AutomationsView interaction", () => {
 	});
 });
 
-describe("AutomationsView background service banner", () => {
-	const banner = (): HTMLElement | null => host.querySelector("[data-daemon]");
-
-	it("says nothing while the service runs", () => {
+describe("AutomationsView background service", () => {
+	it("shows no banner or line about the service, off or on: the window turns it on by itself", () => {
+		render(props({ state: state([rule("a")], { daemon: { platform: "darwin", installed: false, running: false } }) }));
+		expect(host.querySelector("[data-daemon]")).toBeNull();
 		render(props());
-		expect(banner()).toBeNull();
-	});
-
-	it("says no rule runs while the service is off, and turns it on from the banner", () => {
-		const p = props({ state: state([rule("a")], { daemon: { platform: "darwin", installed: false, running: false } }) });
-		render(p);
-		expect(text(banner())).toContain("자동화가 꺼져 있어 규칙이 실행되지 않습니다.");
-		expect(banner()?.querySelector("button")?.textContent).toBe("켜기");
-		act(() => banner()?.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		expect(p.onSetDaemon).toHaveBeenCalledWith(true);
-	});
-
-	it("treats a registered but stopped service as off", () => {
-		render(props({ state: state([rule("a")], { daemon: { platform: "darwin", installed: true, running: false } }) }));
-		expect(banner()).not.toBeNull();
-	});
-
-	it("disables 켜기 while the service is being changed", () => {
-		render(props({ daemonBusy: true, state: state([rule("a")], { daemon: { platform: "darwin", installed: false, running: false } }) }));
-		const button = banner()?.querySelector("button");
-		expect(button?.disabled).toBe(true);
-		expect(button?.textContent).toBe("처리 중…");
-	});
-
-	it("shows no banner while the service's state is unknown, or when there are no rules to run", () => {
-		render(props({ state: state([rule("a")], { daemon: null }) }));
-		expect(banner()).toBeNull();
-		render(props({ state: state([], { daemon: { platform: "darwin", installed: false, running: false } }) }));
-		expect(banner()).toBeNull();
-		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
+		expect(host.querySelector("[data-daemon]")).toBeNull();
 	});
 });
 
@@ -473,5 +444,20 @@ describe("AutomationsView 새 자동화 card", () => {
 			await Promise.resolve();
 		});
 		expect(p.onCreate).toHaveBeenCalledWith({ paths: ["/Users/jeffrey/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
+	});
+
+	it("hides + 새 자동화 while there are no rules, and 취소 empties a card a 추천 자동화 filled", async () => {
+		render(props({ state: state([]) }));
+		await settle();
+		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
+		// The empty card has nothing to undo.
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
+		click(host.querySelector('[data-template="refresh"]'));
+		await settle();
+		expect(task().value).toBe("검색에 바로 반영해 줘");
+		click(host.querySelector('[data-action="automation-cancel-edit"]'));
+		await settle();
+		expect(task().value).toBe("");
+		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
 	});
 });

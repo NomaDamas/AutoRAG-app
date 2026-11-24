@@ -54,8 +54,9 @@ interface Harness {
 	bridge: AutomationBridge;
 }
 
-async function mount(initial: readonly AutomationRule[], options: { active?: boolean; removeFails?: boolean } = {}): Promise<Harness> {
+async function mount(initial: readonly AutomationRule[], options: { active?: boolean; removeFails?: boolean; serviceOff?: boolean; autoStartService?: boolean } = {}): Promise<Harness> {
 	let current = snapshot(initial);
+	if (options.serviceOff === true) current = { ...current, daemon: { platform: "darwin", installed: false, running: false } };
 	let removed: AutomationRule | undefined;
 	let removedIndex = 0;
 	const bridge: AutomationBridge = {
@@ -76,7 +77,10 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 			current = snapshot(next);
 			return current;
 		},
-		setDaemon: async () => current,
+		setDaemon: vi.fn(async (enabled: boolean) => {
+			current = { ...current, daemon: { platform: "darwin", installed: enabled, running: enabled } };
+			return current;
+		}),
 		onChange: () => () => {},
 	};
 	const store = createAutomationsStore(bridge);
@@ -84,7 +88,7 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 	let latest: AutomationsShell | undefined;
 	function Probe(): null {
 		const view = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-		const shellDeps: AutomationsShellDeps = { store, view, active: options.active ?? true, ...deps };
+		const shellDeps: AutomationsShellDeps = { store, view, active: options.active ?? true, autoStartService: options.autoStartService ?? false, ...deps };
 		latest = useAutomationsShell(shellDeps);
 		return null;
 	}
@@ -223,7 +227,7 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules).toHaveLength(2);
 	});
 
-	it("keeps the confirm up as 삭제 중… until the delete is done, and Esc cannot close it meanwhile", async () => {
+	it("closes the confirm at once and says 삭제 중… in the toast until the delete is done, then offers undo", async () => {
 		const h = await mount([rule("a"), rule("b")]);
 		const remove = h.bridge.remove;
 		let finish: () => void = () => undefined;
@@ -241,16 +245,49 @@ describe("deleting", () => {
 			done = h.shell().confirmDelete();
 		});
 		expect(h.shell().deleting).toBe(true);
-		expect(h.shell().confirm?.id).toBe("a");
-		act(() => h.shell().cancelDelete());
-		expect(h.shell().confirm?.id).toBe("a");
+		expect(h.shell().confirm).toBeNull();
+		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제하는 중…");
+		expect(h.shell().undoToast?.onUndo).toBeNull();
 		await act(async () => {
 			finish();
 			await done;
 		});
 		expect(h.shell().deleting).toBe(false);
-		expect(h.shell().confirm).toBeNull();
+		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제했습니다.");
+		expect(typeof h.shell().undoToast?.onUndo).toBe("function");
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["b"]);
+	});
+
+	it("turns the background service on by itself once there is a rule to run, only once and only where asked", async () => {
+		const off = await mount([rule("a")], { serviceOff: true });
+		expect(off.bridge.setDaemon).not.toHaveBeenCalled();
+		act(() => root.unmount());
+		root = createRoot(host);
+		const h = await mount([rule("a")], { serviceOff: true, autoStartService: true });
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		expect(h.bridge.setDaemon).toHaveBeenCalledTimes(1);
+		expect(h.bridge.setDaemon).toHaveBeenCalledWith(true);
+		expect(h.store.getSnapshot().state.daemon?.running).toBe(true);
+	});
+
+	it("says 만드는 중… in the toast while a rule is made, then 만들었습니다", async () => {
+		const h = await mount([rule("a")]);
+		let done: Promise<boolean> = Promise.resolve(false);
+		act(() => {
+			done = h.shell().props.onCreate({ paths: ["/x"], events: ["create"], include: [], run: ["autorag", "refresh"] });
+		});
+		expect(h.shell().undoToast).toMatchObject({ message: "자동화를 만드는 중…", busy: true, onUndo: null });
+		await act(async () => {
+			await done;
+		});
+		expect(h.shell().undoToast).toMatchObject({ message: "자동화를 만들었습니다.", busy: false });
+	});
+
+	it("leaves the service alone while there are no rules", async () => {
+		const h = await mount([], { serviceOff: true, autoStartService: true });
+		expect(h.bridge.setDaemon).not.toHaveBeenCalled();
 	});
 
 	it("deletes on confirm, selects the neighbour, and offers undo that expires", async () => {
@@ -283,7 +320,7 @@ describe("deleting", () => {
 		const h = await mount([rule("a"), rule("b")]);
 		act(() => h.shell().props.onAskDelete("a"));
 		await act(async () => h.shell().confirmDelete());
-		await act(async () => h.shell().undoToast?.onUndo());
+		await act(async () => h.shell().undoToast?.onUndo?.());
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["a", "b"]);
 		expect(h.shell().props.selectedId).toBe("a");
 		expect(h.shell().undoToast).toBeNull();

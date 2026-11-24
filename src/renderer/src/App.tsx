@@ -874,6 +874,7 @@ export function App(): ReactElement {
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
 		names: automationNames,
+		autoStartService: true,
 		renameRule: async (id, name) => {
 			const next: Record<string, string> = { ...ruleNamesNow() };
 			if (name.trim().length === 0) delete next[id];
@@ -1238,10 +1239,12 @@ export function App(): ReactElement {
 				{toast === null && automations.undoToast === null ? null : (
 					<Toast
 						message={automations.undoToast?.message ?? toast ?? ""}
-						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : "ok"}
+						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : automations.undoToast.busy === true ? "busy" : "ok"}
 						action={
 							automations.undoToast !== null
-								? { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }
+								? automations.undoToast.onUndo === null
+									? undefined
+									: { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo?.() }
 								: toastState?.tone === "error"
 									? {
 											label: t("notifications.viewInCenter"),
@@ -1339,7 +1342,6 @@ export function App(): ReactElement {
 					confirmLabel={t("automations.confirm.action")}
 					cancelLabel={t("common.cancel")}
 					danger
-					busyLabel={automations.deleting ? t("automations.confirm.deleting") : null}
 					onConfirm={() => void automations.confirmDelete()}
 					onCancel={automations.cancelDelete}
 				/>

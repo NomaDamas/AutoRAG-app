@@ -558,7 +558,6 @@
     "daemon": {
       "on": "Running in the background",
       "off": "Off · rules are not running",
-      "offBanner": "Automations are off, so no rules run.",
       "unknown": "Cannot tell whether the background service is running",
       "turnOn": "Turn on",
       "turnOff": "Turn off",
@@ -621,11 +620,15 @@
     "confirm": {
       "title": "Delete the rule “{{title}}”?",
       "message": "Only the rule is removed; the folder and its files stay as they are.",
-      "action": "Delete",
-      "deleting": "Deleting…"
+      "action": "Delete"
     },
     "toast": {
       "deleted": "Deleted the rule “{{title}}”.",
+      "creating": "Creating the automation…",
+      "created": "Automation created.",
+      "saving": "Saving your changes…",
+      "saved": "Changes saved.",
+      "deleting": "Deleting the rule ‘{{title}}’…",
       "undo": "Undo",
       "restored": "Restored the rule “{{title}}”."
     },
@@ -692,6 +695,7 @@
     "mine": "My Automations",
     "create": {
       "new": "+ New automation",
+      "headButton": "New automation",
       "title": "New Automation",
       "when": "When",
       "task": "What Dazzi does",

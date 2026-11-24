@@ -558,7 +558,6 @@
     "daemon": {
       "on": "正在后台运行",
       "off": "已关闭 · 规则不会运行",
-      "offBanner": "自动化已关闭，规则不会运行。",
       "unknown": "无法确认后台服务是否在运行",
       "turnOn": "开启",
       "turnOff": "关闭",
@@ -621,11 +620,15 @@
     "confirm": {
       "title": "要删除规则“{{title}}”吗？",
       "message": "只会删除这条规则，文件夹和文件保持不变。",
-      "action": "删除",
-      "deleting": "正在删除…"
+      "action": "删除"
     },
     "toast": {
       "deleted": "已删除规则“{{title}}”。",
+      "creating": "正在创建自动化…",
+      "created": "已创建自动化。",
+      "saving": "正在保存更改…",
+      "saved": "已保存更改。",
+      "deleting": "正在删除规则“{{title}}”…",
       "undo": "撤销",
       "restored": "已恢复规则“{{title}}”。"
     },
@@ -692,6 +695,7 @@
     "mine": "我的自动化",
     "create": {
       "new": "+ 新建自动化",
+      "headButton": "新建自动化",
       "title": "新建自动化",
       "when": "何时",
       "task": "Dazzi 要做的事",
