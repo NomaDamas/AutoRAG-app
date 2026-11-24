@@ -465,9 +465,8 @@ function NewAutomationCard({
 				}}
 			/>
 			<div className="flex items-center gap-6">
-				{run === null ? (
-					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
-				) : null}
+				{/* Shown on every card, a program rule (검색 바로 최신화) included, so the card keeps one shape. */}
+				<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
 				<span className="flex-1" />
 				{editing !== null && onDelete !== undefined ? (
 					<button

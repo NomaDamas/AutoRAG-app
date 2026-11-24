@@ -458,7 +458,8 @@ describe("AutomationsView 새 자동화 card", () => {
 		// The card opens with the row; its folder waits for the OS's folders to load.
 		await settle();
 		expect(task().value).toBe("검색에 바로 반영해 줘");
-		expect(host.querySelector('[data-testid="automation-new-mode"]')).toBeNull();
+		// The 읽기 / 파일 수정 허용 chip shows on this card too.
+		expect(host.querySelector('[data-testid="automation-new-mode"]')).not.toBeNull();
 		await act(async () => {
 			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
