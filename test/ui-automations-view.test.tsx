@@ -126,24 +126,36 @@ describe("AutomationsView list", () => {
 		expect(text(rows()[2])).toContain("데스크탑");
 	});
 
-	it("marks the selected row and tells a failed rule apart from a good one and one that never ran", () => {
+	it("marks the selected row, and draws the on/off switch and the arrow on every row (Figma 641:13493)", () => {
 		render(props({ selectedId: "hwp-to-pdf" }));
 		expect(rows().map((row) => row.getAttribute("aria-selected"))).toEqual(["false", "true", "false"]);
-		const tones = rows().map((row) => row.querySelector("[data-run-tone]")?.getAttribute("data-run-tone"));
-		expect(tones).toEqual(["ok", "fail", "never"]);
+		expect(rows().every((row) => row.querySelector('[data-sidebar-switch="automation-rule-on"]') !== null)).toBe(true);
+		// The run dot and the last-run words are gone from the row; the rule's page and 전체 기록 say how runs went.
+		expect(host.querySelector("[data-run-tone]")).toBeNull();
+		expect(host.querySelector("[data-rule-last-run]")).toBeNull();
 	});
 
-	it("names its sections in the interface language, with the 새 자동화 card folded into one line while there are rules", async () => {
+	it("names its sections in the interface language, counts the rules, and opens the 새 자동화 card from the header button", async () => {
 		await setAppLanguage("en");
 		render(props());
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations", "Suggested Automations"]);
-		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation");
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations 3", "Suggested Automations"]);
+		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("+ New automation");
 		expect([...host.querySelectorAll('[data-automation-tabs] [role="tab"]')].map((tab) => tab.textContent)).toEqual(["Automations", "All runs"]);
 	});
 
-	it("says how each rule's last run went, beside its name (Figma 621:4556)", () => {
+	it("outlines the suggestion whose words fill the 새 자동화 card, and 취소 beside 저장 closes the card", () => {
 		render(props());
-		expect(rows().map((row) => text(row.querySelector("[data-rule-last-run]")))).toEqual(["3분 전 · 성공", "19시간 전 · 실패", "아직 실행되지 않음"]);
+		const card = (id: string): HTMLElement | null => host.querySelector<HTMLElement>(`[data-template="${id}"]`);
+		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
+		expect(host.querySelector('[data-ai-glow]')).toBeNull();
+		click(card("pdf"));
+		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
+		expect(host.querySelector('[data-ai-glow]')).not.toBeNull();
+		expect(card("pdf")?.getAttribute("aria-pressed")).toBe("true");
+		expect(card("screenshot")?.getAttribute("aria-pressed")).toBe("false");
+		click(host.querySelector('[data-action="automation-cancel-edit"]'));
+		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
+		expect(card("pdf")?.getAttribute("aria-pressed")).toBe("false");
 	});
 });
 

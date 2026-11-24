@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon, WarningIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, WarningIcon } from "./icons";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -244,7 +244,8 @@ function NewAutomationCard({
 	onUpdate,
 	onCancelEdit,
 	onDraftChange,
-	onDelete,
+	pageMode = false,
+	onClose,
 	editing,
 	filled,
 }: {
@@ -252,8 +253,10 @@ function NewAutomationCard({
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onCancelEdit: AutomationsViewProps["onCancelEdit"];
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
-	/** On a rule's own page: the card is read until 수정, which leaves 취소 and 저장; 삭제 sits beside 수정. */
-	readonly onDelete?: (() => void) | undefined;
+	/** On a rule's own page: the fields can be changed at once, 취소 shows beside 저장 once something differs, and 저장 waits for it. */
+	readonly pageMode?: boolean;
+	/** On the list's 새 자동화 card: 취소, beside 저장, closes the card. Absent while there is no rule to go back to. */
+	readonly onClose?: (() => void) | undefined;
 	readonly editing: AutomationRule | null;
 	readonly filled: { readonly template: Template; readonly at: number } | null;
 }): ReactElement {
@@ -363,7 +366,7 @@ function NewAutomationCard({
 		}
 		load(editing);
 		// On a rule's own page the card is read first; only the list's card jumps to the instruction.
-		if (onDelete === undefined) {
+		if (!pageMode) {
 			cardRef.current?.scrollIntoView?.({ block: "nearest" });
 			taskRef.current?.focus();
 		}
@@ -396,7 +399,7 @@ function NewAutomationCard({
 		const ok = editing === null ? await onCreate(draft) : onUpdate === undefined ? false : await onUpdate(editing.id, draft);
 		setBusy(false);
 		if (ok && editing === null) reset();
-		if (ok && onDelete !== undefined) setChanged(false);
+		if (ok && pageMode) setChanged(false);
 	};
 
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
@@ -439,7 +442,7 @@ function NewAutomationCard({
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
 
 	return (
-		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] bg-window p-14", editing !== null && onDelete === undefined && "border border-accent")} data-testid="automation-new" data-editing={editing?.id}>
+		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] bg-window p-14", pageMode && "border border-border")} data-testid="automation-new" data-editing={editing?.id}>
 			<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.when")}</span>
 			<div className="flex flex-wrap items-center gap-8 py-4" data-testid="automation-new-when">
 				{sentence.map((part, index) =>
@@ -473,23 +476,19 @@ function NewAutomationCard({
 				{/* Shown on every card, a program rule (검색 바로 최신화) included, so the card keeps one shape. */}
 				<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
 				<span className="flex-1" />
-				{editing !== null && onDelete !== undefined ? (
-					<button
-						type="button"
-						data-action="automation-delete"
-						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
-						onClick={onDelete}
-					>
-						{t("automations.inspector.delete")}
-					</button>
-				) : null}
-				{editing === null || (onDelete !== undefined && !changed) ? null : (
+				{/* 취소 is a quiet word beside 저장 (Figma 641:13493, 641:13600): it closes the new-automation card, or undoes a change on a rule's page. */}
+				{(editing === null ? onClose !== undefined : !pageMode || changed) ? (
 					<button
 						type="button"
 						data-action="automation-cancel-edit"
-						className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
+						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
 						onClick={() => {
-							if (onDelete === undefined) {
+							if (editing === null) {
+								reset();
+								onClose?.();
+								return;
+							}
+							if (!pageMode) {
 								onCancelEdit?.();
 								return;
 							}
@@ -498,15 +497,15 @@ function NewAutomationCard({
 					>
 						{t("common.cancel")}
 					</button>
-				)}
+				) : null}
 				<button
 					type="button"
 					data-action={editing === null ? "automation-create" : "automation-update"}
-					disabled={!canSubmit || (onDelete !== undefined && !changed)}
+					disabled={!canSubmit || (pageMode && !changed)}
 					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
 					onClick={() => void submit()}
 				>
-					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : onDelete !== undefined ? t("common.save") : t("automations.create.submitEdit")}
+					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : pageMode ? t("common.save") : t("automations.create.submitEdit")}
 				</button>
 			</div>
 		</div>
@@ -515,7 +514,7 @@ function NewAutomationCard({
 
 /* ------------------------------------------------------------------ the list -- */
 
-/** A 내 자동화 row (Figma 621:4556): the run dot, the name over when it runs, how its last run went, and ›, which opens the rule's page. */
+/** A 내 자동화 row (Figma 641:13493): the name over when it runs, the on/off switch, and ›, which opens the rule's page. */
 function RuleRow({
 	rule,
 	selected,
@@ -535,8 +534,6 @@ function RuleRow({
 	useEffect(() => {
 		if (selected) ref.current?.scrollIntoView?.({ block: "nearest" });
 	}, [selected]);
-	const run = rule.lastRun;
-	const tone = runTone(run);
 	return (
 		<div
 			ref={ref}
@@ -545,7 +542,7 @@ function RuleRow({
 			data-rule-id={rule.id}
 			// Opening a rule selects it, and the selection outlives the trip back to
 			// the list, so it draws no fill: the row looks as it did before it was opened.
-			className="flex items-center gap-10 py-10 pl-12 pr-10 select-none cursor-pointer bg-window hover:bg-hover-row"
+			className="flex items-center gap-10 px-12 py-10 select-none cursor-pointer bg-window hover:bg-hover-row"
 			onClick={() => {
 				onSelect(rule.id);
 				onOpen(rule.id);
@@ -556,23 +553,31 @@ function RuleRow({
 				onContextMenu(rule.id, { x: event.clientX, y: event.clientY });
 			}}
 		>
-			<RunDot tone={tone} />
-			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-px">
-				<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
-				<span className="truncate text-meta leading-[16px] text-ink-muted">{whenText(rule)}</span>
+			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-2">
+				<span className="truncate text-[13px] leading-[21px] text-ink">{ruleTitle(rule)}</span>
+				<span className="truncate text-badge leading-[16px] text-ink-muted">{whenText(rule)}</span>
 			</div>
-			<span data-rule-last-run className={cn("flex-none text-meta leading-[16px]", tone === "fail" ? "text-error-orange-text" : "text-ink-muted")}>
-				{run === null ? t("automations.inspector.notRun") : `${relativeTime(run.startedAt)} · ${tone === "ok" ? t("automations.detail.ok") : t("automations.detail.failed")}`}
+			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
+			<span role="presentation" onClick={(event) => event.stopPropagation()}>
+				<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-rule-on" />
 			</span>
-			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
+			<ChevronRightIcon size={16} className="flex-none text-ink-faint" />
 		</div>
 	);
 }
 
-function Section({ title, children }: { readonly title: string; readonly children: ReactNode }): ReactElement {
+function Section({ title, aside, children }: { readonly title: string; readonly aside?: string; readonly children: ReactNode }): ReactElement {
 	return (
 		<section className="flex flex-col gap-8">
-			<h2 className="m-0 text-meta font-medium leading-[16px] text-ink-muted">{title}</h2>
+			<div className="flex items-center gap-8">
+				<h2 className="m-0 text-meta font-medium leading-[16px] text-ink-body">{title}</h2>
+				{aside === undefined ? null : (
+					<>
+						<span className="flex-1" />
+						<span className="text-badge leading-[16px] text-ink-muted">{aside}</span>
+					</>
+				)}
+			</div>
 			{children}
 		</section>
 	);
@@ -631,7 +636,7 @@ function runOutcome(run: AutomationRun, t: TFunction): string {
  * One line of 실행 기록 (Figma 621:4882): the dot, how many files it took over how it ended (the rule's name over its
  * outcome in 전체 기록), when, and the error a failed run left. The run log counts the files but does not name them.
  */
-function RunLine({ run, rule, onOpen }: { readonly run: AutomationRun; readonly rule?: AutomationRule; readonly onOpen?: () => void }): ReactElement {
+function RunLine({ run, rule, onOpen, flat = false }: { readonly run: AutomationRun; readonly rule?: AutomationRule; readonly onOpen?: () => void; readonly flat?: boolean }): ReactElement {
 	const { t } = useTranslation();
 	const tone = runTone(run);
 	const result = tone === "ok" ? t("automations.inspector.runDone") : failReason(run);
@@ -654,7 +659,8 @@ function RunLine({ run, rule, onOpen }: { readonly run: AutomationRun; readonly 
 			) : null}
 		</>
 	);
-	const row = "flex w-full flex-col items-start gap-6 border-0 bg-window px-14 py-10 text-left";
+	// On a rule's own page the runs are plain lines between hairlines (Figma 641:13600); in 전체 기록 they sit in the rounded list.
+	const row = cn("flex w-full flex-col items-start gap-6 border-0 py-10 text-left", flat ? "bg-transparent px-4" : "bg-window px-14");
 	return onOpen === undefined ? (
 		<div className={row} data-run={run.startedAt}>
 			{body}
@@ -701,7 +707,7 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 				value={name}
 				placeholder={derivedTitle(rule)}
 				aria-label={t("automations.row.rename")}
-				className="h-26 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[13px] font-medium leading-[20px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
+				className="h-28 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[17px] font-bold leading-[22px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
 				onFocus={(event) => event.currentTarget.select()}
 				onChange={(event) => setName(event.target.value)}
 				onKeyDown={(event) => {
@@ -719,11 +725,11 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 			data-action="automation-rename"
 			title={t("automations.row.rename")}
 			aria-label={`${ruleTitle(rule)} — ${t("automations.row.rename")}`}
-			className="group inline-flex h-26 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
+			className="group inline-flex h-28 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
 			onClick={start}
 		>
-			<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
-			<PencilIcon size={13} className="flex-none text-ink-faint group-hover:text-ink-muted" />
+			<span className="truncate text-[17px] font-bold leading-[22px] text-ink">{ruleTitle(rule)}</span>
+			<PencilIcon size={14} className="flex-none text-ink-faint group-hover:text-ink-muted" />
 		</button>
 	);
 }
@@ -751,33 +757,44 @@ function AutomationDetail({
 	const list = runs !== undefined && runs.length > 0 ? runs : rule.lastRun === null ? [] : [rule.lastRun];
 	return (
 		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
-			<div className="flex min-w-0 items-center gap-6">
+			<div className="flex flex-col gap-6">
 				<button
 					type="button"
 					data-action="automation-back"
-					className="inline-flex flex-none items-center gap-2 border-0 bg-transparent p-0 text-[13px] text-ink-muted cursor-pointer hover:text-ink"
+					className="inline-flex flex-none items-center gap-4 self-start border-0 bg-transparent p-0 text-[13px] leading-[21px] text-ink-muted cursor-pointer hover:text-ink"
 					onClick={onBack}
 				>
-					<ChevronLeftIcon size={14} />
+					<ChevronLeftIcon size={16} />
 					{t("places.automations")}
 				</button>
-				<span className="flex-none text-[13px] text-ink-faint" aria-hidden="true">/</span>
-				<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
+				<div className="flex min-w-0 items-center gap-8">
+					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
+					<span className="flex-1" />
+					{/* Figma 641:13600: drawn, not wired yet (the librarian's rule format has no on/off field). */}
+					<span className="flex-none text-badge leading-[16px] text-ink-muted">{t("automations.detail.runOn")}</span>
+					<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-detail-on" />
+				</div>
 			</div>
 			<Section title={t("automations.detail.settings")}>
-				<NewAutomationCard onCreate={async () => false} onUpdate={onUpdate} onCancelEdit={undefined} onDraftChange={onDraftChange} onDelete={onDelete} editing={rule} filled={null} />
+				<NewAutomationCard onCreate={async () => false} onUpdate={onUpdate} onCancelEdit={undefined} onDraftChange={onDraftChange} pageMode editing={rule} filled={null} />
 			</Section>
 			<Section title={list.length === 0 ? t("automations.detail.history") : `${t("automations.detail.history")} (${list.length})`}>
 				{list.length === 0 ? (
 					<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{t("automations.inspector.noRuns")}</p>
 				) : (
-					<ListBox label={t("automations.detail.history")}>
+					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} />
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} flat />
 						))}
-					</ListBox>
+					</div>
 				)}
 			</Section>
+			{/* The way out of a rule sits bottom right, away from 저장 (Figma 641:13600). */}
+			<div className="flex justify-end">
+				<button type="button" data-action="automation-delete" className="border-0 bg-transparent p-0 text-meta font-medium text-danger-text cursor-pointer hover:opacity-80" onClick={onDelete}>
+					{t("automations.detail.delete")}
+				</button>
+			</div>
 		</div>
 	);
 }
@@ -899,14 +916,27 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 						/>
 					) : (
 						<>
-							<Segmented
-								value={tab}
-								options={[
-									{ value: "mine", label: t("automations.tabs.rules") },
-									{ value: "all", label: t("automations.tabs.all") },
-								]}
-								onChange={setTab}
-							/>
+							<div className="flex items-center gap-12">
+								<Segmented
+									value={tab}
+									options={[
+										{ value: "mine", label: t("automations.tabs.rules") },
+										{ value: "all", label: t("automations.tabs.all") },
+									]}
+									onChange={setTab}
+								/>
+								<span className="flex-1" />
+								{tab === "mine" ? (
+									<button
+										type="button"
+										data-action="automation-composer-open"
+										className="inline-flex h-32 flex-none items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer hover:opacity-80"
+										onClick={() => setComposerOpen(true)}
+									>
+										{t("automations.create.new")}
+									</button>
+								) : null}
+							</div>
 							{tab === "all" ? (
 								<AllRuns rules={state.rules} history={history} onOpen={open} />
 							) : (
@@ -916,21 +946,6 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 											{/* The aurora behind the card (tokens.css §8): the place where Dazzi is asked to make something. */}
 											<div className="ai-glow-host" data-ai-glow>
 												<div className="ai-glow" aria-hidden="true" />
-												{state.rules.length === 0 ? null : (
-													<button
-														type="button"
-														data-action="automation-composer-close"
-														aria-label={t("common.close")}
-														title={t("common.close")}
-														className="absolute -top-26 right-0 flex size-20 items-center justify-center rounded-4 border-0 bg-transparent p-0 text-ink-muted cursor-pointer hover:bg-hover hover:text-ink"
-														onClick={() => {
-															setComposerOpen(false);
-															setFilled(null);
-														}}
-													>
-														<CloseIcon size={12} />
-													</button>
-												)}
 												<NewAutomationCard
 													onCreate={async (draft) => {
 														const ok = await onCreate(draft);
@@ -943,55 +958,57 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 													onUpdate={onUpdate}
 													onCancelEdit={onCancelEdit}
 													onDraftChange={onDraftChange}
+													onClose={
+														state.rules.length === 0
+															? undefined
+															: () => {
+																	setComposerOpen(false);
+																	setFilled(null);
+																}
+													}
 													editing={null}
 													filled={filled}
 												/>
 											</div>
 										</Section>
-									) : (
-										<div className="ai-glow-host" data-ai-glow>
-											<div className="ai-glow" aria-hidden="true" />
-											<button
-												type="button"
-												data-action="automation-composer-open"
-												className="relative flex w-full items-center gap-8 rounded-12 border border-accent bg-window px-14 py-12 text-left text-[13px] font-medium text-accent-text cursor-pointer hover:opacity-80"
-												onClick={() => setComposerOpen(true)}
-											>
-												<TabPlusIcon size={16} />
-												{t("automations.create.open")}
-											</button>
-										</div>
-									)}
+									) : null}
 									{state.rules.length === 0 ? null : (
-										<Section title={t("automations.mine")}>
-											<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
+										<Section title={`${t("automations.mine")} ${state.rules.length}`}>
+											<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
 												{state.rules.map((rule) => (
 													<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
 												))}
 											</div>
 										</Section>
 									)}
-									<Section title={t("automations.templates.title")}>
-										{/* Figma 611:4016: the same rounded list as 내 자동화, a title and its sentence per row. */}
-										<div className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>button+button]:border-t-[0.5px] [&>button+button]:border-divider">
-											{TEMPLATES.map((template) => (
-												<button
-													key={template.id}
-													type="button"
-													data-template={template.id}
-													className="group flex items-center gap-10 border-0 bg-transparent px-16 py-10 text-left cursor-pointer hover:bg-hover-row"
-													onClick={() => {
-														setFilled({ template, at: Date.now() });
-														setComposerOpen(true);
-													}}
-												>
-													<span className="flex min-w-0 flex-1 flex-col items-start gap-px">
-														<span className="text-[13px] font-medium leading-[20px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-														<span className="text-meta leading-[18px] text-ink-muted">{t(`automations.templates.${template.id}.desc` as LocaleKey)}</span>
-													</span>
-													<span className="flex-none text-meta text-accent-text opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">{t("automations.templates.add")}</span>
-												</button>
-											))}
+									<Section title={t("automations.templates.title")} aside={t("automations.templates.hint")}>
+										{/* Figma 641:13493: three cards side by side. The one whose words are in the card above is outlined, so it is clear what the card shows. */}
+										<div className="flex items-stretch gap-8">
+											{TEMPLATES.map((template) => {
+												const shown = filled?.template.id === template.id && (composerOpen || state.rules.length === 0);
+												return (
+													<button
+														key={template.id}
+														type="button"
+														data-template={template.id}
+														aria-pressed={shown}
+														className={cn(
+															"flex min-w-0 flex-1 flex-col items-stretch gap-4 rounded-12 border bg-subtle-alt px-14 py-10 text-left cursor-pointer transition-[border-color,box-shadow] duration-(--dur-color) hover:bg-hover-row",
+															shown ? "border-accent shadow-[0_0_0_3px_var(--accent-soft)]" : "border-transparent",
+														)}
+														onClick={() => {
+															setFilled({ template, at: Date.now() });
+															setComposerOpen(true);
+														}}
+													>
+														<span className="flex items-center gap-4">
+															<span className="min-w-0 flex-1 truncate text-[13px] leading-[21px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+															<ChevronRightIcon size={12} className="flex-none text-ink-faint" />
+														</span>
+														<span className="text-meta leading-[16px] text-ink-muted">{t(`automations.templates.${template.id}.desc` as LocaleKey)}</span>
+													</button>
+												);
+											})}
 										</div>
 									</Section>
 								</>

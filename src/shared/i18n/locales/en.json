@@ -687,6 +687,7 @@
     },
     "mine": "My Automations",
     "create": {
+      "new": "+ New automation",
       "title": "New Automation",
       "when": "When",
       "task": "What Dazzi does",
@@ -719,6 +720,7 @@
       "open": "New automation"
     },
     "templates": {
+      "hint": "Click to preview",
       "title": "Suggested Automations",
       "screenshot": {
         "title": "Tidy screenshot names",
@@ -743,6 +745,8 @@
       "delete": "Delete"
     },
     "detail": {
+      "delete": "Delete automation",
+      "runOn": "Running",
       "ok": "Succeeded",
       "failed": "Failed",
       "settings": "Settings",

@@ -687,6 +687,7 @@
     },
     "mine": "我的自动化",
     "create": {
+      "new": "+ 新建自动化",
       "title": "新建自动化",
       "when": "何时",
       "task": "Dazzi 要做的事",
@@ -719,6 +720,7 @@
       "open": "新建自动化"
     },
     "templates": {
+      "hint": "点击查看内容",
       "title": "推荐的自动化",
       "screenshot": {
         "title": "整理截图名称",
@@ -743,6 +745,8 @@
       "delete": "删除"
     },
     "detail": {
+      "delete": "删除自动化",
+      "runOn": "已开启运行",
       "ok": "成功",
       "failed": "失败",
       "settings": "设置",

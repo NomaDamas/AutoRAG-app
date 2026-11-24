@@ -687,6 +687,7 @@
     },
     "mine": "내 자동화",
     "create": {
+      "new": "+ 새 자동화",
       "title": "새 자동화",
       "when": "언제",
       "task": "Dazzi가 할 일",
@@ -719,6 +720,7 @@
       "open": "새 자동화 만들기"
     },
     "templates": {
+      "hint": "눌러서 내용 확인",
       "title": "추천 자동화",
       "screenshot": {
         "title": "스크린샷 이름 정리",
@@ -743,6 +745,8 @@
       "delete": "삭제하기"
     },
     "detail": {
+      "delete": "자동화 삭제",
+      "runOn": "실행 켜짐",
       "ok": "성공",
       "failed": "실패",
       "settings": "설정",
