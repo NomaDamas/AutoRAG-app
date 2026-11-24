@@ -59,7 +59,7 @@ if (KEY === null) {
 	console.error("An OpenRouter key is required: set QA_OPENROUTER_KEY or OPENROUTER_API_KEY.");
 	process.exit(2);
 }
-const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const MODELS = process.env.INL_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (!existsSync(MODELS)) {
 	console.log(`SKIP: no on-device sparse model cache at ${MODELS}; real indexing cannot run`);
 	process.exit(2);
@@ -69,8 +69,8 @@ const WORK = mkdtempSync(join(tmpdir(), "dazzi-qa-2138-"));
 const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 const WORKSPACE = join(WORK, "workspace");
-for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home", ".cache", "minsync")]) mkdirSync(dir, { recursive: true });
-if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "minsync", "models"));
+for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home", ".cache", "im-not-llm")]) mkdirSync(dir, { recursive: true });
+if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "im-not-llm", "models"));
 
 // One long manual whose every section talks about the topic, and six short notes that each mention it once.
 const TOPIC = "glacierbolt";
@@ -137,7 +137,7 @@ const env = {
 	OPENROUTER_API_KEY: KEY,
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
-	FASTEMBED_CACHE_DIR: MODELS,
+	INL_CACHE_DIR: MODELS,
 };
 
 /** The text of every tool result the model was shown, with the tool's name, from what passed the proxy. */

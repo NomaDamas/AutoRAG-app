@@ -34,7 +34,7 @@ export function seedFixtureHome(home) {
  * first run runs (parsed mirror + MinSync's SPLADE encoder). The first run then finds everything indexed and only
  * re-checks it. Throws with the CLI's own message when the refresh fails.
  */
-export function preindexFixture({ fixtureHome, autoragHome, configPath, minsyncCache }) {
+export function preindexFixture({ fixtureHome, autoragHome, configPath, modelCache }) {
 	const cli = join(ROOT, ".upstream", "autorag", "dist", "cli", "index.js");
 	if (!existsSync(cli)) throw new Error(`the librarian CLI is not built at ${cli}; run \`make setup\``);
 	const workspace = join(autoragHome, "workspace");
@@ -48,7 +48,7 @@ export function preindexFixture({ fixtureHome, autoragHome, configPath, minsyncC
 	const result = spawnSync("node", [cli, "refresh", "--json", "--method", "parsed,minsync"], {
 		encoding: "utf8",
 		timeout: 300_000,
-		env: { ...process.env, AUTORAG_HOME: autoragHome, AUTORAG_CONFIG: configPath, AUTORAG_WORKSPACE: workspace, FASTEMBED_CACHE_DIR: minsyncCache },
+		env: { ...process.env, AUTORAG_HOME: autoragHome, AUTORAG_CONFIG: configPath, AUTORAG_WORKSPACE: workspace, INL_CACHE_DIR: modelCache },
 	});
 	if (result.status !== 0) throw new Error(`indexing the fixture failed (exit ${String(result.status)}): ${(result.stderr || result.stdout || "").slice(-600)}`);
 }

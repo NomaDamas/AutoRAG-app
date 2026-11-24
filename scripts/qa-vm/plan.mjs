@@ -99,9 +99,9 @@ export function orphanVmNames(vms, holders, runPrefix) {
 export const DENSE_EMBEDDING_CACHE_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
 
 /**
- * Whether a job indexes for real and so needs the host's MinSync model cache
- * (`~/.cache/minsync/models`) in the guest. A fresh VM has none, so a real index
- * would download from Hugging Face inside the VM. Only the onboarding lane
+ * Whether a job indexes for real and so needs the host's shared embedding model
+ * cache (`~/.cache/im-not-llm/models`) in the guest. A fresh VM has none, so a real
+ * index would download from Hugging Face inside the VM. Only the onboarding lane
  * performs a real first index; the settings-redesign lane applies the "This
  * computer" embedding profile, whose model gate needs the cached model before
  * Apply unlocks. A sweep that runs every lane covers both; a script may index

@@ -2,16 +2,19 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { isJsonObject } from "../shared/settings-contract";
+import { inlServeStateRoot } from "./inl-paths";
 
 /**
- * The local embedding model's life cycle: `minsync serve` is MinSync's own loopback embedding server, and
- * it is the only thing in the app that holds the model weights. Everything that embeds (MinSync's own sync,
- * the librarian's memory, the chat sidecars, gist, discrawl, mailcrawl, lazykatok) finds it through the
- * discovery files it publishes under `<home>/.cache/minsync/serve/<instance>/`.
+ * The local embedding model's life cycle: the shared im-not-llm (`inl`) loopback embedding daemon holds the
+ * model weights, and everything that embeds (MinSync's own sync, the librarian's memory, the chat sidecars,
+ * gist, discrawl, mailcrawl, lazykatok) finds the same daemon through the discovery files published under
+ * `<home>/.cache/im-not-llm/serve/<instance>/`. The app prefers the `inl` executable when it is on `PATH`
+ * (the user's own `cargo install inl-server`, or a bundled `tools/bin/inl`) and otherwise launches the
+ * bundled MinSync, which links the same inl-server crates and publishes under the same root.
  *
  * The app starts it when the local model is in use and stops it when the app quits. It only ever stops a
  * server it started itself: either in this process, or in an earlier run that crashed and left its pid in
- * the owner file. A server somebody else runs (launchd, a terminal) is used but never stopped.
+ * the owner file. A server somebody else runs (launchd, a terminal, `inl serve`) is used but never stopped.
  */
 
 export const DEFAULT_LOCAL_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B";
@@ -47,12 +50,6 @@ export function localEmbeddingModel(raw: Record<string, unknown>): string | null
 	return id.startsWith("openai:") || id.startsWith("tei:") ? null : DEFAULT_LOCAL_EMBEDDING_MODEL;
 }
 
-/** Where `minsync serve` publishes its `host`/`port`/`pid` per model instance. */
-export function minSyncServeStateRoot(options: { readonly home: string; readonly platform: NodeJS.Platform; readonly env: NodeJS.ProcessEnv }): string {
-	if (options.platform === "win32") return join(options.env.LOCALAPPDATA ?? join(options.home, "AppData", "Local"), "minsync", "serve");
-	return join(options.home, ".cache", "minsync", "serve");
-}
-
 interface Served {
 	readonly baseUrl: string;
 	readonly dimension: number;
@@ -80,15 +77,15 @@ export interface EmbeddingDaemonOptions {
 	readonly ownerFile?: string;
 	readonly readyTimeoutMs?: number;
 	/**
-	 * Whether the weights of `model` are on this computer. `minsync serve` downloads a missing model by itself
-	 * with no way to report progress, so the app never starts it before the model is there: it is downloaded
-	 * first, with progress (`model-download.ts`). Left out, every model counts as present.
+	 * Whether the weights of `model` are on this computer. `inl serve`/`minsync serve` download a missing model
+	 * by themselves with no way to report progress, so the app never starts one before the model is there: it is
+	 * downloaded first, with progress (`model-download.ts`). Left out, every model counts as present.
 	 */
 	readonly modelPresent?: (model: string) => boolean;
 }
 
 export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): EmbeddingDaemon {
-	const stateRoot = minSyncServeStateRoot({ home: options.home, platform: process.platform, env: options.env });
+	const stateRoot = inlServeStateRoot({ home: options.home, platform: process.platform, env: options.env });
 	const pending = new Map<string, Promise<EmbeddingDaemonState>>();
 	let owned: { readonly pid: number; readonly model: string } | undefined;
 
@@ -100,7 +97,13 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 		}
 	};
 
-	/** A loopback server of exactly this model that answers `GET /health` now. Leftover files from a crashed server answer nothing. */
+	/**
+	 * A loopback server of exactly this (kind, model) that answers `GET /health` now. Leftover files from a
+	 * crashed server answer nothing. The app only ever wants the dense embedder, so a sparse, multimodal or
+	 * late daemon of the same model — or a dense daemon of another model — never matches; the match is on the
+	 * responding server's own `kind`/`model_id`, not on the instance directory name (which encodes device,
+	 * dtype, attention and max length that consumers do not know).
+	 */
 	const probe = async (model: string): Promise<Served | undefined> => {
 		let instances: string[];
 		try {
@@ -116,8 +119,10 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 			try {
 				const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
 				if (!response.ok) continue;
-				const health = (await response.json()) as { status?: string; model_id?: string; dimension?: number; pid?: number };
-				if (health.status !== "ok" || health.model_id?.toLowerCase() !== model.toLowerCase()) continue;
+				const health = (await response.json()) as { status?: string; kind?: string; model_id?: string; dimension?: number; pid?: number };
+				// `inl` reports the engine kind; a health body without it is a dense embedder (the inl default).
+				const kind = typeof health.kind === "string" ? health.kind : "dense";
+				if (health.status !== "ok" || kind !== "dense" || health.model_id?.toLowerCase() !== model.toLowerCase()) continue;
 				if (typeof health.dimension !== "number" || typeof health.pid !== "number") continue;
 				return { baseUrl, dimension: health.dimension, pid: health.pid };
 			} catch {
@@ -187,44 +192,60 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 		if (owned === undefined) await stopOwned();
 		if (options.modelPresent?.(model) === false) return { state: "unavailable", reason: `the weights of ${model} are not downloaded yet` };
 
-		const child = spawn("minsync", ["serve", "--format", "json", "--quiet", "--idle-timeout", "0", "--embedder", `native:${model}`], {
-			env: { ...options.env },
-			cwd: options.home,
-			windowsHide: true,
-			stdio: ["ignore", "ignore", "pipe"],
-		});
-		let stderr = "";
-		child.stderr?.setEncoding("utf8");
-		child.stderr?.on("data", (chunk: string) => {
-			stderr = (stderr + chunk).slice(-STDERR_LIMIT);
-		});
-		let spawnError: Error | undefined;
-		let exitCode: number | null | undefined;
-		child.on("error", (error) => {
-			spawnError = error;
-		});
-		child.on("exit", (code) => {
-			exitCode = code;
-		});
-		const detail = (): string => (stderr.trim().length > 0 ? `: ${stderr.trim()}` : "");
+		// Best first: the shared `inl` daemon when it is on PATH (the user's own build, or a bundled
+		// `tools/bin/inl`), else the bundled MinSync, which links the same inl-server crates and publishes
+		// under the same root. A launcher that is not installed is skipped for the next one.
+		const launchers: readonly { readonly name: string; readonly command: string; readonly args: readonly string[] }[] = [
+			{ name: "inl serve", command: "inl", args: ["serve", "--idle-timeout", "0", "--model", model] },
+			{ name: "minsync serve", command: "minsync", args: ["serve", "--format", "json", "--quiet", "--idle-timeout", "0", "--embedder", `native:${model}`] },
+		];
 
-		const timeoutMs = options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS;
-		const deadline = Date.now() + timeoutMs;
-		while (Date.now() < deadline) {
-			if (spawnError !== undefined) return { state: "unavailable", reason: `could not start \`minsync serve\`: ${spawnError.message}` };
-			const ready = await probe(model);
-			if (ready !== undefined) {
-				child.stderr?.destroy();
-				child.unref();
-				// A second `minsync serve` that found a running server exits 0 and the server it found answers.
-				if (exitCode === undefined) recordOwner(ready.pid, model);
-				return { state: "running", ...ready, started: exitCode === undefined };
+		for (const [index, launcher] of launchers.entries()) {
+			const child = spawn(launcher.command, launcher.args, {
+				env: { ...options.env },
+				cwd: options.home,
+				windowsHide: true,
+				stdio: ["ignore", "ignore", "pipe"],
+			});
+			let stderr = "";
+			child.stderr?.setEncoding("utf8");
+			child.stderr?.on("data", (chunk: string) => {
+				stderr = (stderr + chunk).slice(-STDERR_LIMIT);
+			});
+			let spawnError: Error | undefined;
+			let exitCode: number | null | undefined;
+			child.on("error", (error) => {
+				spawnError = error;
+			});
+			child.on("exit", (code) => {
+				exitCode = code;
+			});
+			const detail = (): string => (stderr.trim().length > 0 ? `: ${stderr.trim()}` : "");
+
+			const timeoutMs = options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS;
+			const deadline = Date.now() + timeoutMs;
+			while (Date.now() < deadline) {
+				if (spawnError !== undefined) break;
+				const ready = await probe(model);
+				if (ready !== undefined) {
+					child.stderr?.destroy();
+					child.unref();
+					// A second launcher that found a running server exits 0 and the server it found answers.
+					if (exitCode === undefined) recordOwner(ready.pid, model);
+					return { state: "running", ...ready, started: exitCode === undefined };
+				}
+				if (exitCode !== undefined) return { state: "unavailable", reason: `\`${launcher.name}\` exited with code ${exitCode} before it was ready${detail()}` };
+				await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 			}
-			if (exitCode !== undefined) return { state: "unavailable", reason: `\`minsync serve\` exited with code ${exitCode} before it was ready${detail()}` };
-			await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+			child.kill("SIGTERM");
+			if (spawnError !== undefined) {
+				// A launcher that is not installed falls through to the next; any other failure is final.
+				if ((spawnError as NodeJS.ErrnoException).code === "ENOENT" && index + 1 < launchers.length) continue;
+				return { state: "unavailable", reason: `could not start \`${launcher.name}\`: ${spawnError.message}` };
+			}
+			return { state: "unavailable", reason: `\`${launcher.name}\` was not ready within ${Math.round(timeoutMs / 1000)}s${detail()}` };
 		}
-		child.kill("SIGTERM");
-		return { state: "unavailable", reason: `\`minsync serve\` was not ready within ${Math.round(timeoutMs / 1000)}s${detail()}` };
+		return { state: "unavailable", reason: "no embedding daemon launcher is installed" };
 	};
 
 	return {
