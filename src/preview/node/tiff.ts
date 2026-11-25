@@ -1,7 +1,7 @@
 import type { PreviewDocument } from "../shared/contract";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { readPreviewFile } from "./read-file";
 import { convertWithSips, pixelSize, type PixelSize, type SipsConversion } from "./sips";
-
 /** The MIME type the converted bytes carry; the viewer keys on it to skip its own decoder. */
 export const TIFF_PREVIEW_MIME = "image/png";
 /**
@@ -21,6 +21,7 @@ export interface TiffDeps extends SipsConversion {
 	readonly decodeCap?: number;
 	/** The picture's pixel size; defaults to asking `sips`. */
 	readonly size?: (path: string) => Promise<PixelSize | null>;
+	readonly datalessThumbnail?: (path: string) => Promise<Uint8Array | null>;
 }
 
 /**
@@ -35,6 +36,10 @@ export interface TiffDeps extends SipsConversion {
  */
 export async function readTiffPreview(path: string, deps: TiffDeps = {}): Promise<PreviewDocument> {
 	const info = await readPreviewFile(path, 0);
+	if (deps.run === undefined && (await isDatalessFile(path))) {
+		const thumb = await (deps.datalessThumbnail ?? datalessQuickLookPng)(path);
+		if (thumb !== null) return { ...info, mime: TIFF_PREVIEW_MIME, bytes: thumb };
+	}
 	const size = (deps.platform ?? process.platform) === "darwin" ? await (deps.size ?? pixelSize)(path) : null;
 	const shrink = size !== null && Math.max(size.width, size.height) > TIFF_DECODE_MAX_SIDE;
 	const args = ["-s", "format", "png", ...(shrink ? ["--resampleHeightWidthMax", String(TIFF_DECODE_MAX_SIDE)] : [])];

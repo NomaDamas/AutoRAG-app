@@ -3,9 +3,9 @@ import type { PreviewDocument } from "../shared/contract";
 import { RAW_PHOTO_EXTENSIONS } from "../shared/raster-formats";
 import { readEmbeddedImage } from "./embedded-image";
 import type { EmbeddedThumbnail } from "./odf";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { readPreviewFile } from "./read-file";
 import { convertWithSips, pixelSize, type PixelSize, type SipsConversion } from "./sips";
-
 /** Longest side of a picture the OS decodes for the panel; the window never shows more than a screen of it. */
 export const RASTER_MAX_SIDE = 2048;
 /** sips `formatOptions` for the JPEGs it writes for a photograph: quality 0-100. */
@@ -42,6 +42,7 @@ export interface RasterDeps extends SipsConversion {
 	readonly size?: (path: string) => Promise<PixelSize | null>;
 	/** The file's own embedded image; defaults to the readers in `embedded-image.ts`. */
 	readonly embedded?: (path: string, ext: string) => Promise<EmbeddedThumbnail | null>;
+	readonly datalessThumbnail?: (path: string) => Promise<Uint8Array | null>;
 }
 
 /**
@@ -79,6 +80,10 @@ export async function readRasterPreview(path: string, deps: RasterDeps = {}): Pr
 	const ext = extname(path).slice(1).toLowerCase();
 	const route = ROUTES[ext];
 	if (route === undefined) return info;
+	if (deps.run === undefined && deps.embedded === undefined && (await isDatalessFile(path))) {
+		const thumb = await (deps.datalessThumbnail ?? datalessQuickLookPng)(path);
+		if (thumb !== null) return { ...info, mime: "image/png", bytes: thumb };
+	}
 	const warn = deps.warn ?? ((message: string) => console.warn(message));
 	const embedded = deps.embedded ?? readEmbeddedImage;
 	for (const source of route.order) {

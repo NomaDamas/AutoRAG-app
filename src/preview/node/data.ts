@@ -4,6 +4,7 @@ import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
 import { asyncBufferFromFile, parquetMetadataAsync, parquetReadObjects, parquetSchema, type SchemaTree } from "hyparquet";
 import { compressors } from "hyparquet-compressors";
 import type { DataCell, DataColumn, DataPreview, DataRows, DataTable } from "../shared/contract";
+import { withReadableFile } from "./provider-access";
 
 /** Rows the grid shows. */
 export const DATA_ROW_LIMIT = 100;
@@ -85,33 +86,35 @@ function readRows(db: DatabaseSync, entry: TableEntry): DataRows {
 }
 
 async function previewSqlite(path: string, table: string | null): Promise<DataPreview> {
-	const head = await readPrefix(path, SQLITE_MAGIC.length);
-	if (new TextDecoder("latin1").decode(head) !== SQLITE_MAGIC) return { kind: "unreadable", reason: "not-sqlite" };
 	let walPending = false;
 	try {
 		walPending = (await stat(`${path}-wal`)).size > 0;
 	} catch (error) {
 		if (!isMissing(error)) throw error;
 	}
-	// `immutable=1` makes SQLite skip locking and the `-wal`/`-shm` files entirely, so the
-	// preview can neither block a writer nor create or modify a sidecar file.
-	const uri = `${pathToFileURL(path).href}?mode=ro&immutable=1`;
-	let db: DatabaseSync | null = null;
-	try {
-		db = new DatabaseSync(uri, { readOnly: true, readBigInts: false, allowExtension: false });
-		// A stored view or trigger must not reach for functions an attacker-written schema could abuse.
-		db.exec("pragma trusted_schema = off");
-		const entries = listTables(db);
-		const tables: DataTable[] = entries.map((entry) => (entry.view ? { name: entry.name, view: true, rowCount: null, exact: true } : countRows(db as DatabaseSync, entry.name)));
-		const wanted = table === null ? (entries.find((entry) => !entry.view) ?? entries[0]) : entries.find((entry) => entry.name === table);
-		const selected: DataRows | null = wanted === undefined ? (table === null ? null : { name: table, columns: [], rows: [], more: false, columnsCut: false, failure: "table" }) : readRows(db, wanted);
-		return { kind: "database", tables, selected, walPending };
-	} catch (error) {
-		if (error instanceof Error) return { kind: "unreadable", reason: "corrupt" };
-		throw error;
-	} finally {
-		db?.close();
-	}
+	return withReadableFile(path, async (localPath) => {
+		const head = await readPrefix(localPath, SQLITE_MAGIC.length);
+		if (new TextDecoder("latin1").decode(head) !== SQLITE_MAGIC) return { kind: "unreadable", reason: "not-sqlite" };
+		// `immutable=1` makes SQLite skip locking and the `-wal`/`-shm` files entirely, so the
+		// preview can neither block a writer nor create or modify a sidecar file.
+		const uri = `${pathToFileURL(localPath).href}?mode=ro&immutable=1`;
+		let db: DatabaseSync | null = null;
+		try {
+			db = new DatabaseSync(uri, { readOnly: true, readBigInts: false, allowExtension: false });
+			// A stored view or trigger must not reach for functions an attacker-written schema could abuse.
+			db.exec("pragma trusted_schema = off");
+			const entries = listTables(db);
+			const tables: DataTable[] = entries.map((entry) => (entry.view ? { name: entry.name, view: true, rowCount: null, exact: true } : countRows(db as DatabaseSync, entry.name)));
+			const wanted = table === null ? (entries.find((entry) => !entry.view) ?? entries[0]) : entries.find((entry) => entry.name === table);
+			const selected: DataRows | null = wanted === undefined ? (table === null ? null : { name: table, columns: [], rows: [], more: false, columnsCut: false, failure: "table" }) : readRows(db, wanted);
+			return { kind: "database", tables, selected, walPending };
+		} catch (error) {
+			if (error instanceof Error) return { kind: "unreadable", reason: "corrupt" };
+			throw error;
+		} finally {
+			db?.close();
+		}
+	});
 }
 
 function parquetCell(value: unknown): DataCell {
@@ -131,28 +134,30 @@ function parquetType(node: SchemaTree): string {
 }
 
 async function previewParquet(path: string): Promise<DataPreview> {
-	const head = new TextDecoder("latin1").decode(await readPrefix(path, 4));
-	if (head === "PARE") return { kind: "unreadable", reason: "encrypted" };
-	if (head !== "PAR1") return { kind: "unreadable", reason: "not-parquet" };
-	try {
-		const file = await asyncBufferFromFile(path);
-		const metadata = await parquetMetadataAsync(file);
-		const top = parquetSchema(metadata).children;
-		const all = top.map((node) => ({ name: node.element.name, type: parquetType(node) }));
-		const columns = all.slice(0, DATA_COLUMN_LIMIT);
-		const rowCount = Number(metadata.num_rows);
-		const first = metadata.row_groups[0];
-		const base = { kind: "parquet", rowCount, rowGroups: metadata.row_groups.length, createdBy: metadata.created_by ?? null } as const;
-		const empty = { name: "", columns, rows: [], more: false, columnsCut: all.length > columns.length } as const;
-		if (first === undefined || rowCount === 0) return { ...base, selected: { ...empty, failure: null } };
-		if (Number(first.total_byte_size) > ROW_GROUP_BYTE_LIMIT) return { ...base, selected: { ...empty, failure: "too-large" } };
-		const objects = await parquetReadObjects({ file, compressors, columns: columns.map((column) => column.name), rowStart: 0, rowEnd: DATA_ROW_LIMIT + 1 });
-		const rows = objects.slice(0, DATA_ROW_LIMIT).map((row) => columns.map((column) => parquetCell(row[column.name])));
-		return { ...base, selected: { ...empty, rows, more: rowCount > DATA_ROW_LIMIT, failure: null } };
-	} catch (error) {
-		if (error instanceof Error) return { kind: "unreadable", reason: "corrupt" };
-		throw error;
-	}
+	return withReadableFile(path, async (localPath) => {
+		const head = new TextDecoder("latin1").decode(await readPrefix(localPath, 4));
+		if (head === "PARE") return { kind: "unreadable", reason: "encrypted" };
+		if (head !== "PAR1") return { kind: "unreadable", reason: "not-parquet" };
+		try {
+			const file = await asyncBufferFromFile(localPath);
+			const metadata = await parquetMetadataAsync(file);
+			const top = parquetSchema(metadata).children;
+			const all = top.map((node) => ({ name: node.element.name, type: parquetType(node) }));
+			const columns = all.slice(0, DATA_COLUMN_LIMIT);
+			const rowCount = Number(metadata.num_rows);
+			const first = metadata.row_groups[0];
+			const base = { kind: "parquet", rowCount, rowGroups: metadata.row_groups.length, createdBy: metadata.created_by ?? null } as const;
+			const empty = { name: "", columns, rows: [], more: false, columnsCut: all.length > columns.length } as const;
+			if (first === undefined || rowCount === 0) return { ...base, selected: { ...empty, failure: null } };
+			if (Number(first.total_byte_size) > ROW_GROUP_BYTE_LIMIT) return { ...base, selected: { ...empty, failure: "too-large" } };
+			const objects = await parquetReadObjects({ file, compressors, columns: columns.map((column) => column.name), rowStart: 0, rowEnd: DATA_ROW_LIMIT + 1 });
+			const rows = objects.slice(0, DATA_ROW_LIMIT).map((row) => columns.map((column) => parquetCell(row[column.name])));
+			return { ...base, selected: { ...empty, rows, more: rowCount > DATA_ROW_LIMIT, failure: null } };
+		} catch (error) {
+			if (error instanceof Error) return { kind: "unreadable", reason: "corrupt" };
+			throw error;
+		}
+	});
 }
 
 /**

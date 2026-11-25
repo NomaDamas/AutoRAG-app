@@ -13,8 +13,25 @@ function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 export function ImageView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const { t } = useTranslation();
 	const [failed, setFailed] = useState(false);
+	const [blobUrl, setBlobUrl] = useState<string | null>(null);
+	const bytes = file.bytes;
+	useEffect(() => {
+		if (bytes === null) {
+			setBlobUrl(null);
+			return;
+		}
+		const next = URL.createObjectURL(new Blob([copyBytes(bytes)], { type: file.mime }));
+		setFailed(false);
+		setBlobUrl(next);
+		return () => {
+			URL.revokeObjectURL(next);
+			setBlobUrl(null);
+		};
+	}, [bytes, file.mime]);
 	if (failed) return <FallbackView file={file} note={t("quickLook.media.imageOpenFailed")} />;
-	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={previewStreamUrl(file.path, file)} onError={() => setFailed(true)} />;
+	if (bytes !== null && blobUrl === null) return <Status>{t("quickLook.status.loading")}</Status>;
+	const src = blobUrl ?? previewStreamUrl(file.path, file);
+	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={src} onError={() => setFailed(true)} />;
 }
 
 export function FontView({ file }: { readonly file: PreviewDocument }): ReactElement {
@@ -125,8 +142,8 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 			current = URL.createObjectURL(blob);
 			setUrl(current);
 		};
-		// The main process already decoded it with the OS (macOS): a plain JPEG.
-		if (file.mime === "image/jpeg") {
+		// The main process already decoded it with the OS (macOS): a plain JPEG or PNG.
+		if (file.mime === "image/jpeg" || file.mime === "image/png") {
 			show(new Blob([copyBytes(bytes)], { type: file.mime }));
 		} else {
 			import("heic-to/csp")

@@ -21,6 +21,7 @@ import type { IconTarget } from "../main/file-icon";
 import { createFsWorkerService } from "./service";
 import { createClientWatchSets } from "./client-watch";
 
+process.env.UV_THREADPOOL_SIZE ??= "16";
 /** Recent requests kept for diagnostics (QA asserts which folder was listed when). */
 const RECENT_REQUESTS = 200;
 

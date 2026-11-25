@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { MouseEvent, ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
@@ -308,6 +308,11 @@ function ColumnRow({
 	// Icon and OS kind come from the sidecar: only this row re-renders when they land.
 	const { entry } = useEntrySidecar(useDirectoryData().sidecar, row.entry);
 	const { colors: tagColors } = useTagCatalog();
+	useEffect(() => {
+		if (entry.kind === "file" && entry.iconUrl === undefined) {
+			callbacks.onVisible(entry);
+		}
+	}, [callbacks.onVisible, entry]);
 	const isHead = row.stackCount > 0;
 	const canOpen = entry.kind === "folder" || isHead;
 	return (

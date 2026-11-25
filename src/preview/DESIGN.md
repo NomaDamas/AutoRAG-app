@@ -540,15 +540,38 @@ become a localized preview error instead of rejecting `preview:show` without
 loading the panel. `test/preview-file-read.test.ts` exercises the real native
 coordinator with a binary document after injecting the POSIX refusal.
 
-Audio tags keep their original reader, switching only a Darwin `EDEADLK` to a
-disk snapshot copied inside the coordinator's accessor and deleted after
-parsing. Byte-range streams recover only the remaining requested range through
-the coordinator's stdout, with bounded chunks and no whole-media copy per seek.
-Native `sips`/`qlmanage` errors trigger a one-byte probe, and a snapshot retry
-happens only if that probe confirms the same provider refusal.
-Successful local conversions incur no probe or snapshot. Native HEIC decoding
-remains first; the browser fallback uses `heic-to/csp`, not eval-based
-`heic2any`, with the production CSP unchanged.
+Audio tags, ZIP-backed package previews (iWork `.key`/`.numbers`/`.pages` and
+OpenDocument/Sketch/Figma thumbnails via `zip-read.ts`), embedded raster readers
+(RAW, PSD, ICNS, XMP), database/Parquet previews, native Apple previews, and file
+details keep their original direct readers, switching only a Darwin `EDEADLK` to
+a disk snapshot copied inside the coordinator's accessor and deleted after
+reading. Byte-range streams and SHA-256 hashing recover only the remaining
+requested range through the coordinator's stdout, with bounded chunks and no
+whole-file copy. Native `sips`, `qlmanage` (legacy Office and Keynote slide
+exports), `ffmpeg` probe, and archive-worker errors trigger a one-byte probe,
+and a snapshot retry happens only if that probe confirms the same provider
+refusal. Successful local reads and conversions incur no probe or snapshot.
+Unmaterialized macOS cloud placeholders (`SF_DATALESS`: `blocks === 0 && size > 0`
+verified by `/usr/bin/stat -f %Sf`, never checked by opening the file) never
+trigger background POSIX reads or `ffmpeg` probes during folder browsing
+(`readImageMetadata`, `readEmbeddedImage`, and `extractVideoFrame` skip them so
+neither iCloud's `bird` daemon nor libuv's threadpool is saturated by background
+downloads), plain-text placeholders skip Quick Look thumbnailing, folder listing
+and scrolling never materialize cloud placeholders (macOS `QLThumbnailGenerator`
+serves cloud thumbnails without downloading and State-3 placeholders without a
+cloud thumbnail fall back cleanly to their OS type icon, matching Finder), and
+large listings enrich thumbnails only for the first 24 rows up front (`enrichKinds`
+fetches OS kinds only for the rest while virtualized rows load thumbnails on demand
+as the user scrolls). On explicit user preview (Inspector `previewGate` or Quick
+Look `Space` via `datalessQuickLookPng` at 1440px), cloud thumbnails are tried
+first with zero download; only when a State-3 placeholder has no cloud thumbnail
+does `materializeDatalessFile` download that single file (up to 24 MiB, via
+foreground `NSFileCoordinator`) and render it reliably. Text and streamed
+media/PDF placeholders coordinate directly via `readCoordinatedHead` /
+`coordinatedRange` (killing the child immediately on
+close/navigation and never blocking libuv threads) and skip competing `ffmpeg -i`
+sidecar probes. Native HEIC decoding remains first; the browser fallback uses
+`heic-to/csp`, not eval-based `heic2any`, with the production CSP unchanged.
 
 The markup drawing module is lazy-loaded only on pressing the pen. Closing it
 releases text-entry focus and cancels an active edit. Changing files or closing
