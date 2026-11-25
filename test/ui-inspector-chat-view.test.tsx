@@ -411,12 +411,15 @@ describe("the inspector chat view", () => {
 		Reflect.deleteProperty(globalThis, "autorag");
 	});
 
-	it("puts the approval-mode chip, icon only, left of the input", () => {
+	it("puts the words on their own row and the approval-mode chip, icon only, under them beside the send button", () => {
 		render([]);
 		const chip = host.querySelector<HTMLButtonElement>('.inspector-chat-composer button[aria-haspopup="menu"]');
 		expect(chip).not.toBeNull();
 		expect(chip?.textContent).toBe("");
-		expect(chip?.nextElementSibling?.tagName).toBe("TEXTAREA");
+		const field = host.querySelector(".inspector-chat-composer textarea");
+		expect(field?.nextElementSibling?.contains(chip ?? null)).toBe(true);
+		// The send (or mic) button closes the same row.
+		expect(chip?.parentElement?.lastElementChild?.tagName).toBe("BUTTON");
 	});
 
 	it("asks about the waiting files, each as a card, and follows up otherwise", () => {

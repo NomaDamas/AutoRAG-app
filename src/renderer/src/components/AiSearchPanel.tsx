@@ -970,7 +970,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// the first question sends it back to the bottom.
 	const centered = showEmpty && !phone && pastTurns.length === 0 && interactionRequest === null && queued.length === 0;
 	// One row (Figma 672:3638, 672:3658): the mode, the field, the button; thumbnails and a dictation note need the taller box.
-	const rowComposer = !phone && !attachments.some(isThumbnailAttachment) && voiceNotice === null;
 	const hintsHidden = capability === null && query.trim().length > 0;
 	const pickedCapability = CAPABILITIES.find((item) => item.id === capability) ?? null;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
@@ -1367,9 +1366,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 															"compose-box border border-divider bg-window shadow-[0_2px_5px_rgba(20,20,41,0.07)] transition-[border-color,border-radius] duration-(--dur-color) ease-out",
 							voiceActive
 									? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
-									: rowComposer
-										? "flex flex-row items-end gap-10 rounded-[16px] py-10 pr-10 pl-12"
-										: "flex flex-col gap-8 rounded-[16px] px-16 py-12",
+									: "flex flex-col gap-8 rounded-[16px] px-16 py-12",
 						)}
 						onMouseDown={(event) => {
 							if (voiceActive) return;
@@ -1427,25 +1424,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								/>
 								<span>{t("aiSearch.voiceTranscribing")}</span>
 							</div>
-						) : rowComposer ? (
-							<>
-								{/* A longer question grows the field upward; the mode and the button stay on its last line. */}
-								<span className="flex h-32 flex-none items-center">
-									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-								</span>
-								<div className="flex min-h-32 min-w-0 flex-1 items-center">
-									<ComposerField
-										fieldRef={inputRef}
-										value={query}
-										onChange={setQuery}
-										onAltEnter={() => send(true)}
-										onPasteImages={pasteImages}
-										placeholder={pickedCapability === null ? t("inspector.chat.placeholderAny") : t(`aiSearch.capability.${pickedCapability.id}Placeholder`)}
-										ariaLabel={t("aiSearch.askDazzi")}
-									/>
-								</div>
-								{composerActions}
-							</>
 						) : (
 							<>
 								{attachments.some(isThumbnailAttachment) ? (
@@ -1470,7 +1448,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
 									onPasteImages={pasteImages}
-									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
+									placeholder={
+										searching
+											? t("aiSearch.steerPlaceholder")
+											: pickedCapability === null
+												? t("inspector.chat.placeholderAny")
+												: t(`aiSearch.capability.${pickedCapability.id}Placeholder`)
+									}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
 								{voiceNotice === null ? null : (
@@ -1478,9 +1462,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										{voiceNotice}
 									</p>
 								)}
+								{/* The words on their own row; the mode and the send button share the row under them. */}
 								<div className="composer-toolbar flex items-center justify-between gap-8">
 									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-										{composerActions}
+									{composerActions}
 								</div>
 							</>
 						)}

@@ -260,14 +260,14 @@ function Composer({
 						))}
 					</div>
 				)}
+				{/* The words on their own row; the mode and the send button share the row under them, as in the AI 에이전트 chat. */}
 				<form
-					className="flex items-end gap-8"
+					className="flex flex-col gap-6"
 					onSubmit={(event) => {
 						event.preventDefault();
 						send();
 					}}
 				>
-					<ApprovalModeMenu mode={approval.mode} onChange={approval.setMode} compact />
 					<ComposerField
 						className="py-4 text-meta leading-[16px] text-ink placeholder:text-ink-faint"
 						value={draft}
@@ -280,40 +280,44 @@ function Composer({
 						onAltEnter={() => send(true)}
 						onPasteImages={pasteImages}
 					/>
-					{running && onSteer !== undefined && draft.trim().length > 0 ? (
-						<button
-							type="submit"
-							className={composerButton}
-							aria-label={t("aiSearch.steerSend")}
-							title={t("aiSearch.steerSend")}
-						>
-							<ArrowUpIcon size={12} />
-						</button>
-					) : null}
-					{running ? (
-						<button
-							type="button"
-							className="flex size-24 flex-none items-center justify-center rounded-full border-0 bg-selected-nav p-0 text-ink cursor-pointer"
-							aria-label={t("inspector.chat.stop")}
-							title={t("inspector.chat.stop")}
-							onClick={onStop}
-						>
-							<span className="size-8 rounded-2 bg-current" aria-hidden="true" />
-						</button>
-					) : draft.trim().length === 0 && voice !== undefined ? (
-						<VoiceButton voice={voice} onTranscript={(text) => setDraft((current) => appendTranscript(current, text))} onError={setVoiceNotice} />
-					) : (
-						<button
-							type="button"
-							className={composerButton}
-							aria-label={t("inspector.chat.send")}
-							title={t("inspector.chat.send")}
-							disabled={draft.trim().length === 0}
-							onClick={() => send()}
-						>
-							<ArrowUpIcon size={12} />
-						</button>
-					)}
+					<div className="flex items-center gap-8">
+						<ApprovalModeMenu mode={approval.mode} onChange={approval.setMode} compact />
+						<span className="flex-1" />
+						{running && onSteer !== undefined && draft.trim().length > 0 ? (
+							<button
+								type="submit"
+								className={composerButton}
+								aria-label={t("aiSearch.steerSend")}
+								title={t("aiSearch.steerSend")}
+							>
+								<ArrowUpIcon size={12} />
+							</button>
+						) : null}
+						{running ? (
+							<button
+								type="button"
+								className="flex size-24 flex-none items-center justify-center rounded-full border-0 bg-selected-nav p-0 text-ink cursor-pointer"
+								aria-label={t("inspector.chat.stop")}
+								title={t("inspector.chat.stop")}
+								onClick={onStop}
+							>
+								<span className="size-8 rounded-2 bg-current" aria-hidden="true" />
+							</button>
+						) : draft.trim().length === 0 && voice !== undefined ? (
+							<VoiceButton voice={voice} onTranscript={(text) => setDraft((current) => appendTranscript(current, text))} onError={setVoiceNotice} />
+						) : (
+							<button
+								type="button"
+								className={composerButton}
+								aria-label={t("inspector.chat.send")}
+								title={t("inspector.chat.send")}
+								disabled={draft.trim().length === 0}
+								onClick={() => send()}
+							>
+								<ArrowUpIcon size={12} />
+							</button>
+						)}
+					</div>
 				</form>
 			</div>
 			{busyNotice ? (
