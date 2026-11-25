@@ -17,7 +17,7 @@ import type {
 	SettingsBridge,
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
-import { isApprovalMode } from "../shared/interaction-contract";
+import { isApprovalMode, normalizeApprovalMode } from "../shared/interaction-contract";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
 import { normalizeShortcutSettings } from "../shared/shortcuts-contract";
@@ -79,7 +79,7 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 				...defaults,
 				...persisted,
 				appearance: persisted.appearance === "dark" ? "dark" : "light",
-				approvalMode: isApprovalMode(persisted.approvalMode) ? persisted.approvalMode : defaults.approvalMode,
+				approvalMode: normalizeApprovalMode(persisted.approvalMode, defaults.approvalMode),
 				sidebar: persisted.sidebar === undefined ? defaults.sidebar : normalizeSidebarSettings(persisted.sidebar),
 				contextMenu: persisted.contextMenu === undefined ? defaults.contextMenu : normalizeContextMenuSettings(persisted.contextMenu),
 				shortcuts: persisted.shortcuts === undefined ? defaults.shortcuts : normalizeShortcutSettings(persisted.shortcuts),

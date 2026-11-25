@@ -2,33 +2,42 @@
  * What the AI Search agent asks the person, and how the person answers, shared by the
  * Electron main process and the renderer.
  *
- * Two things reach the person mid-run (librarian v2.12):
+ * Two things reach the person or constrain a run (librarian v2.15):
  *
- * - An **approval** from the librarian's file-change gate: the agent is about to
- *   delete, move, rename, overwrite or edit an existing file. Which calls ask is the
- *   {@link ApprovalMode}: `ask` puts every file-capable call to the person, `auto`
- *   lets Jev (the judgment model) approve what the request clearly covers and asks
- *   only about the rest, `full` never asks. The default is `full`.
+ * - The **permission mode** ({@link ApprovalMode}): `readonly` (default) enforces
+ *   OS-level read-only filesystem sandboxing on `bash`/`powershell` and blocks
+ *   write/edit/mutating tools; `full` allows unrestricted file reads and writes.
  * - A **question** from the `ask_user` tool: the agent needs a decision or a fact
  *   it cannot find out itself. It is multiple choice, free text, or 2-4 independent
  *   questions together.
  *
- * Both are requests tied to one running search (`searchId`). The panel of that search
+ * Requests are tied to one running search (`searchId`). The panel of that search
  * shows the open request in place of its message box and sends the answer back with
  * {@link InteractionBridge.answer}; the run waits for it. Stop, or the run ending,
  * closes the request. All payloads are plain serializable shapes, never pi or
  * librarian class instances.
  */
 
-export type ApprovalMode = "ask" | "auto" | "full";
+export type ApprovalMode = "readonly" | "full";
 
 /** Order the mode menu lists them, strictest first. */
-export const APPROVAL_MODES: readonly ApprovalMode[] = ["ask", "auto", "full"];
+export const APPROVAL_MODES: readonly ApprovalMode[] = ["readonly", "full"];
 
-export const DEFAULT_APPROVAL_MODE: ApprovalMode = "full";
+export const DEFAULT_APPROVAL_MODE: ApprovalMode = "readonly";
 
 export function isApprovalMode(value: unknown): value is ApprovalMode {
 	return typeof value === "string" && (APPROVAL_MODES as readonly string[]).includes(value);
+}
+
+/** Migrate persisted v2.12–v2.14 modes (`ask` / `auto`) to `readonly`, preserving valid modes and falling back otherwise. */
+export function normalizeApprovalMode(value: unknown, fallback: ApprovalMode = DEFAULT_APPROVAL_MODE): ApprovalMode {
+	if (isApprovalMode(value)) return value;
+	if (typeof value === "string") {
+		const normalized = value.trim().toLowerCase();
+		if (normalized === "read-only" || normalized === "ask" || normalized === "auto") return "readonly";
+		if (normalized === "full") return "full";
+	}
+	return fallback;
 }
 
 export const INTERACTION_CHANNELS = {

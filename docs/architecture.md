@@ -1038,13 +1038,15 @@ built for the librarian's terminal UI and ask through pi's `ctx.ui` (`select`, `
 has no terminal, so the app supplies the surface itself and the question appears in the AI Chat panel in place
 of the message box (`src/shared/interaction-contract.ts` is the contract).
 
-- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `full`; persisted by the settings
-  service, which refuses any other value) is chosen in the menu at the left of the message box. `ask` puts every
-  shell/write/edit call to the person; `auto` lets Jev (the judgment model) approve what the request clearly
-  covers and asks about the rest — with no Jev backend every call is unclassified and is asked about, as in
-  the TUI; `full` never asks. `main/index.ts` applies a change to every chat's agent
-  (`InteractiveSearchAgent.setApprovalMode` → the librarian's `permissionControl.set`, which also ends the
-  session's "allow all of this kind" grants) and to agents built later, and tells every window.
+- **Modes.** `AppSettings.approvalMode` (`readonly` | `full`, default `readonly`; persisted by the settings
+  service, which migrates retired `ask`/`auto` values to `readonly` and refuses any other value) is chosen in the
+  menu at the left of the message box. `readonly` runs shell commands (`bash`, Windows `powershell`) inside an
+  OS-level read-only filesystem sandbox (macOS Seatbelt, Linux `bwrap`, Windows Low Integrity + Restricted Token)
+  with a dedicated writable temp dir and blocks write/edit/mutating tools with no Jev calls or approval popups;
+  `full` allows unrestricted reads and writes. `main/index.ts` applies a change to every chat's agent
+  (`InteractiveSearchAgent.setApprovalMode` → the librarian's `permissionControl.set`) and to agents built later,
+  and tells every window. `migrateLegacyPermissionMode` rewrites retired `ask`/`auto` entries in the shared
+  `config.json` to `readonly` so librarian v2.15 never rejects an existing config.
   `AUTORAG_PERMISSION_MODE` and `permissionMode` in the shared config feed the librarian's own default only;
   the app's setting overrides them.
 - **Hub.** `interaction-hub.ts` owns the open requests (`QuestionRequest` | `ApprovalRequest`, each tied to a

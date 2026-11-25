@@ -103,78 +103,54 @@ function toolThenFinish(toolName: string, args: Parameters<typeof fauxToolCall>[
 const shellPath = (path: string): string => path.replaceAll("\\", "/");
 const removeFile = (path: string) => toolThenFinish("bash", { command: `rm ${shellPath(path)}` });
 
-describe("file-change gate through the app's interaction hub", () => {
-	it("ask mode: the person is asked before the shell runs, and Deny keeps the file", async () => {
+describe("readonly / full permission gate through InteractiveSearchAgent", () => {
+	it("readonly mode: blocks write tool and kernel-blocks shell deletions without asking Jev or opening dialogs", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
+		const created = join(root, "new.txt");
+		const t = await build(
+			"readonly",
+			[
+				fauxAssistantMessage("fast answer", { stopReason: "stop" }),
+				fauxAssistantMessage([fauxToolCall("write", { path: created, content: "nope" })], { stopReason: "toolUse" }),
+				fauxAssistantMessage([fauxToolCall("bash", { command: `rm ${shellPath(file)}` })], { stopReason: "toolUse" }),
+				fauxAssistantMessage("all done", { stopReason: "stop" }),
+			],
+			() => ({ kind: "cancel" }),
+		);
 
 		await t.agent.searchDocuments("delete the report");
 
-		expect(t.requests).toHaveLength(1);
-		expect(t.requests[0]).toMatchObject({ kind: "approval", searchId: "run-1", call: `rm ${shellPath(file)}`, sessionScope: "all", categories: [] });
+		expect(t.requests).toHaveLength(0);
+		expect(existsSync(created)).toBe(false);
 		expect(existsSync(file)).toBe(true);
-		expect(t.results.find((result) => result.toolName === "bash")?.text).toMatch(/denied/i);
+		expect(t.results.find((result) => result.toolName === "write")?.text).toMatch(/read-only/i);
+		expect(t.results.find((result) => result.toolName === "bash")?.isError).toBe(true);
 	});
 
-	it("ask mode: Allow once lets the call run", async () => {
-		const file = join(root, "report.pdf");
-		writeFileSync(file, "x");
-		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "allow-once" }));
+	it("readonly mode: still allows reading files via bash", async () => {
+		const file = join(root, "notes.txt");
+		writeFileSync(file, "hello-readonly");
+		const t = await build("readonly", toolThenFinish("bash", { command: `cat ${shellPath(file)}` }), () => ({ kind: "cancel" }));
 
-		await t.agent.searchDocuments("delete the report");
+		await t.agent.searchDocuments("read the notes");
 
-		expect(t.requests).toHaveLength(1);
-		expect(existsSync(file)).toBe(false);
+		expect(t.requests).toHaveLength(0);
+		const bashRes = t.results.find((result) => result.toolName === "bash");
+		expect(bashRes?.isError).toBe(false);
+		expect(bashRes?.text).toContain("hello-readonly");
 	});
 
-	it("passes the person's note to the model when they deny with one", async () => {
+	it("full mode allows file modifications, and switching readonly -> full mid-session takes effect immediately", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny-with-note", note: "work on a copy instead" }));
-
-		await t.agent.searchDocuments("delete the report");
-
-		expect(t.requests).toHaveLength(1);
-		expect(existsSync(file)).toBe(true);
-		expect(t.results.find((result) => result.toolName === "bash")?.text).toContain("work on a copy instead");
-	});
-
-	it("full mode never asks, and switching to it mid-session stops the questions", async () => {
-		const file = join(root, "report.pdf");
-		writeFileSync(file, "x");
-		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
+		const t = await build("readonly", removeFile(file), () => ({ kind: "cancel" }));
 		t.agent.setApprovalMode("full");
 
 		await t.agent.searchDocuments("delete the report");
 
 		expect(t.requests).toHaveLength(0);
 		expect(existsSync(file)).toBe(false);
-	});
-
-	it("auto mode asks about a call the judgment model does not approve instead of letting it through", async () => {
-		const file = join(root, "report.pdf");
-		writeFileSync(file, "x");
-		// The baseline decision backend flags every permission category and approves nothing on its own.
-		const t = await build("auto", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
-
-		await t.agent.searchDocuments("delete the report");
-
-		expect(t.requests).toHaveLength(1);
-		expect(t.requests[0]).toMatchObject({ kind: "approval" });
-		expect(existsSync(file)).toBe(true);
-	});
-
-	it("blocks the call when nobody is bound to answer (between runs), rather than waiting forever", async () => {
-		const file = join(root, "report.pdf");
-		writeFileSync(file, "x");
-		const t = await build("ask", removeFile(file), () => ({ kind: "approval", choice: "allow-once" }));
-		t.agent.bindRun(undefined);
-
-		await t.agent.searchDocuments("delete the report");
-
-		expect(t.requests).toHaveLength(0);
-		expect(existsSync(file)).toBe(true);
 	});
 });
 
@@ -186,7 +162,7 @@ describe("ask_user through the app's interaction hub", () => {
 	};
 
 	it("shows the model's question and hands the chosen option back as the tool result", async () => {
-		const t = await build("auto", toolThenFinish("ask_user", askReport), () => ({
+		const t = await build("readonly", toolThenFinish("ask_user", askReport), () => ({
 			kind: "question",
 			answers: [{ kind: "selection", selections: ["Q4"] }],
 		}));
@@ -210,7 +186,7 @@ describe("ask_user through the app's interaction hub", () => {
 	});
 
 	it("tells the model the person cancelled instead of inventing an answer", async () => {
-		const t = await build("auto", toolThenFinish("ask_user", askReport), () => ({ kind: "cancel" }));
+		const t = await build("readonly", toolThenFinish("ask_user", askReport), () => ({ kind: "cancel" }));
 
 		await t.agent.searchDocuments("summarize the report");
 
@@ -222,7 +198,7 @@ describe("onLocalTrack on the real librarian agent", () => {
 	const answer = (text: string): FauxResponseStep => fauxAssistantMessage(text, { stopReason: "stop" });
 
 	it("calls back once when a first question takes the local search track", async () => {
-		const t = await build("auto", [answer("fast answer"), answer("verified answer")], () => ({ kind: "cancel" }));
+		const t = await build("readonly", [answer("fast answer"), answer("verified answer")], () => ({ kind: "cancel" }));
 		const taken = vi.fn();
 		const stop = t.agent.onLocalTrack(taken);
 		disposers.push(stop);
@@ -233,7 +209,7 @@ describe("onLocalTrack on the real librarian agent", () => {
 	});
 
 	it("stays quiet for a follow-up the conversation answers by itself", async () => {
-		const t = await build("auto", [answer("fast answer"), answer("verified answer"), answer("follow-up answer")], () => ({ kind: "cancel" }));
+		const t = await build("readonly", [answer("fast answer"), answer("verified answer"), answer("follow-up answer")], () => ({ kind: "cancel" }));
 		await t.agent.searchDocuments("what do my notes say about the refund policy?");
 		const taken = vi.fn();
 		disposers.push(t.agent.onLocalTrack(taken));
@@ -244,7 +220,7 @@ describe("onLocalTrack on the real librarian agent", () => {
 	});
 
 	it("reads the route the librarian's own progress tracker reports, so a librarian release that renames it fails here", async () => {
-		const t = await build("auto", [], () => ({ kind: "cancel" }));
+		const t = await build("readonly", [], () => ({ kind: "cancel" }));
 		const tracker: unknown = Reflect.get(t.agent, "searchProgress");
 		const progress = tracker as { begin(query: string): void; end(): void; beginStep(id: string, label: string): void; endStep(id: string, status: "done" | "failed", detail?: string): void };
 		const taken = vi.fn();
@@ -280,7 +256,7 @@ describe("pictures attached to a question", () => {
 
 	it("puts them in front of the model on the first question and on a follow-up", async () => {
 		const counts: number[] = [];
-		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }));
+		const t = await build("readonly", recordImages(counts), () => ({ kind: "cancel" }));
 
 		t.agent.setAttachmentImages([png]);
 		await t.agent.searchDocuments("what is in this screenshot?");
@@ -296,7 +272,7 @@ describe("pictures attached to a question", () => {
 
 	it("sends a question without pictures when none were set", async () => {
 		const counts: number[] = [];
-		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }));
+		const t = await build("readonly", recordImages(counts), () => ({ kind: "cancel" }));
 
 		await t.agent.searchDocuments("hello");
 
@@ -305,7 +281,7 @@ describe("pictures attached to a question", () => {
 
 	it("leaves them out for a model that takes no images, and still answers", async () => {
 		const counts: number[] = [];
-		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }), ["text"]);
+		const t = await build("readonly", recordImages(counts), () => ({ kind: "cancel" }), ["text"]);
 
 		t.agent.setAttachmentImages([png]);
 		await t.agent.searchDocuments("what is in this screenshot?");
@@ -316,7 +292,7 @@ describe("pictures attached to a question", () => {
 
 	it("does not repeat them on the next question", async () => {
 		const counts: number[] = [];
-		const t = await build("auto", recordImages(counts), () => ({ kind: "cancel" }));
+		const t = await build("readonly", recordImages(counts), () => ({ kind: "cancel" }));
 		t.agent.setAttachmentImages([png]);
 		await t.agent.searchDocuments("first");
 		counts.length = 0;

@@ -86,6 +86,27 @@ const server = createServer((req, res) => {
 			return;
 		}
 		const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+		const decisionTool = (body.tools ?? []).find((tool) => tool.function?.name === "submit_decisions");
+		if (decisionTool !== undefined) {
+			const asked = decisionTool.function.parameters?.properties?.answers?.properties ?? {};
+			const answers = {};
+			for (const [key, schema] of Object.entries(asked)) {
+				const shares = schema.properties?.probabilities?.properties;
+				if (shares === undefined) {
+					answers[key] = { yes: key === "follow_up" || key.startsWith("citation:") || key.startsWith("citation_") ? 1 : 0, confidence: 1 };
+					continue;
+				}
+				const labels = Object.keys(shares);
+				const winner = key === "route" && labels.includes("local") ? "local" : labels[0];
+				answers[key] = { probabilities: Object.fromEntries(labels.map((label) => [label, label === winner ? 1 : 0])), confidence: 1 };
+			}
+			const call = { index: 0, id: "call_decision", type: "function", function: { name: "submit_decisions", arguments: JSON.stringify({ answers }) } };
+			res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+			res.write(frame({ role: "assistant", tool_calls: [call] }, null));
+			res.write(frame({}, "tool_calls"));
+			res.end("data: [DONE]\n\n");
+			return;
+		}
 		const step = queue.shift() ?? { text: "(nothing scripted)" };
 		seen.push({
 			tools: (body.tools ?? []).map((tool) => tool.function?.name),
@@ -120,6 +141,7 @@ const script = (steps) => {
 /** Text of every tool message the model was sent, newest request last. */
 const toolResults = () => seen.flatMap((request) => request.messages.filter((message) => message.role === "tool").map((message) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content))));
 
+const QA_MODEL = { provider: "qa", id: "qa-model", name: "QA", baseUrl: `${MODEL_URL}/v1`, api: "openai-completions", apiKeyEnv: "QA_API_KEY", reasoning: false, input: ["text"], contextWindow: 128000, maxTokens: 4096 };
 writeFileSync(
 	CONFIG,
 	`${JSON.stringify(
@@ -129,10 +151,10 @@ writeFileSync(
 			memoryPath: join(WORK, "memory.json"),
 			minSync: { enabled: true, autoInstall: false, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
 			jikji: false,
-			jev: false,
+			jev: { backend: "sllm", sllm: { model: QA_MODEL } },
 			webSearch: false,
 			queryDecomposition: false,
-			model: { provider: "qa", id: "qa-model", name: "QA", baseUrl: `${MODEL_URL}/v1`, api: "openai-completions", apiKeyEnv: "QA_API_KEY", reasoning: false, input: ["text"], contextWindow: 128000, maxTokens: 4096 },
+			model: QA_MODEL,
 		},
 		null,
 		2,
@@ -180,8 +202,8 @@ app.process().stderr?.on("data", (chunk) => {
 await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await openAiSearch(page);
 const panel = page.locator(AI_PANEL);
-const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
-const modeButton = panel.locator('button[aria-label="File change approval mode"]');
+const composer = panel.locator("form.composer textarea").first();
+const modeButton = panel.locator('button[aria-label="File permission mode"]');
 const approval = panel.locator('[role="alertdialog"]');
 const question = panel.locator('[role="dialog"]');
 // Colors ease over a few hundred ms; capture the settled state.
@@ -193,7 +215,7 @@ const mode = () => page.evaluate(() => window.autorag.interaction.getMode());
 const pending = () => page.evaluate(() => window.autorag.interaction.pending());
 // The run is over when the message box is back and not in its "running" state (the Stop button): while a card is open the box is not on screen at all.
 const finished = () =>
-	page.waitForFunction(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
+	page.waitForFunction(() => document.querySelector("form.composer textarea") !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
 // Every scenario below scripts a chat's FIRST question (the librarian answers it in two phases, Quick then Deep). A later question of the same
 // chat is a plain turn of the conversation, so each one starts a new chat; the conversation lane covers follow-ups and the gate on them.
 const ask = async (text) => {
@@ -205,101 +227,43 @@ const ask = async (text) => {
 const chooseMode = async (label) => {
 	await modeButton.click();
 	await page.locator('[role="menuitemradio"]', { hasText: new RegExp(`^\\s*${label}`) }).click();
-	await page.waitForFunction((wanted) => document.querySelector('button[aria-label="File change approval mode"]')?.textContent?.includes(wanted), label);
+	await page.waitForFunction((wanted) => document.querySelector('button[aria-label="File permission mode"]')?.textContent?.includes(wanted), label);
 };
 log("app ready");
 
 // ── 1. The mode menu. ─────────────────────────────────────────────────────
-check("the mode defaults to full", (await mode()) === "full", await mode());
-check("the menu button shows Full", (await modeButton.innerText()).includes("Full"), await modeButton.innerText());
+check("the mode defaults to readonly", (await mode()) === "readonly", await mode());
+check("the menu button shows Read-only", (await modeButton.innerText()).includes("Read-only"), await modeButton.innerText());
 const geometry = await panel.evaluate((root) => {
-	const button = root.querySelector('button[aria-label="File change approval mode"]');
-	const input = root.querySelector('textarea[aria-label="Ask Dazzi"]');
-	if (!button || !input) return null;
+	const button = root.querySelector('button[aria-label="File permission mode"]');
+	const form = root.querySelector("form.composer");
+	if (!button || !form) return null;
 	const a = button.getBoundingClientRect();
-	const b = input.getBoundingClientRect();
-	return { buttonRight: a.right, inputLeft: b.left, sameRow: Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 20 };
+	const b = form.getBoundingClientRect();
+	return { insideForm: a.left >= b.left && a.right <= b.right && a.top >= b.top && a.bottom <= b.bottom };
 });
-check("the mode menu sits to the left of the message box, on its row", geometry !== null && geometry.buttonRight <= geometry.inputLeft + 1 && geometry.sameRow, JSON.stringify(geometry));
+check("the mode menu sits inside the composer", geometry !== null && geometry.insideForm, JSON.stringify(geometry));
 await modeButton.click();
 const items = await page.locator('[role="menuitemradio"]').allInnerTexts();
-check("the menu lists Ask, Auto and Full", items.length === 3 && /Ask/.test(items[0]) && /Auto/.test(items[1]) && /Full/.test(items[2]), JSON.stringify(items));
-check("Full is the checked item", (await page.locator('[role="menuitemradio"][aria-checked="true"]').innerText()).includes("Full"));
+check("the menu lists Read-only and Full", items.length === 2 && /Read-only/.test(items[0]) && /Full/.test(items[1]), JSON.stringify(items));
+check("Read-only is the checked item", (await page.locator('[role="menuitemradio"][aria-checked="true"]').innerText()).includes("Read-only"));
 await page.waitForTimeout(400);
 await shot("01-mode-menu");
 await page.keyboard.press("Escape");
-await chooseMode("Ask");
-check("choosing Ask changes the mode in the main process", (await mode()) === "ask", await mode());
-const settingsFile = join(USER_DATA, "settings", "settings-state.json");
-check("the choice is stored in the app settings", existsSync(settingsFile) && JSON.parse(readFileSync(settingsFile, "utf8")).settings.approvalMode === "ask");
 
-// ── 2. Ask: the approval card. ────────────────────────────────────────────
-// The model's shell is bash (Git Bash on Windows), where an unquoted backslash path loses its separators.
+// ── 2. Read-only: OS sandbox blocks shell deletion & write tool without dialogs. ──
 const shellPath = (path) => path.replaceAll("\\", "/");
 const deleteOld = [{ text: "Looking at it." }, { tool: "bash", args: { command: `rm ${shellPath(file("old-draft.txt"))}` } }, { text: "Handled." }];
 script(deleteOld);
 await ask("remove the stale draft");
-await approval.waitFor();
-check("the approval card replaces the message box", (await composer.count()) === 0);
-const cardText = await approval.innerText();
-check("the card names the call", cardText.includes(`rm ${shellPath(file("old-draft.txt"))}`), cardText.slice(0, 200));
-check("the card offers the four answers", ["Allow once", "Deny"].every((label) => cardText.includes(label)) && /session/i.test(cardText) && /tell the model/i.test(cardText));
-await shot("02-approval-card-ask");
-await approval.getByRole("button", { name: "Deny", exact: true }).click();
 await finished();
-check("Deny keeps the file", existsSync(file("old-draft.txt")));
-check("the model was told it was denied", toolResults().some((text) => /denied/i.test(text)), JSON.stringify(toolResults()));
-check("the message box is back after the answer", (await composer.count()) === 1);
+check("Read-only opens no approval dialog and keeps the file intact via OS sandbox", (await approval.count()) === 0 && existsSync(file("old-draft.txt")));
 
-script(deleteOld);
-await ask("remove the stale draft, please");
-await approval.waitFor();
-await approval.getByRole("button", { name: /tell the model/i }).click();
-const note = approval.locator("input, textarea").first();
-await note.fill("copy it to the archive folder instead");
-await shot("03-approval-deny-with-note");
-await page.keyboard.press("Enter");
-await finished();
-check("Deny with a note keeps the file", existsSync(file("old-draft.txt")));
-check("the note reached the model", toolResults().some((text) => text.includes("copy it to the archive folder instead")), JSON.stringify(toolResults()));
-
-script(deleteOld);
-await ask("really remove the stale draft");
-await approval.waitFor();
-await approval.getByRole("button", { name: "Allow once" }).click();
-await finished();
-check("Allow once runs the call", !existsSync(file("old-draft.txt")));
-check("the person was asked exactly once, and nothing is left open", (await pending()).length === 0);
-seed();
-
-// Enter on the card must not approve anything: focus starts on Deny, so a stray Enter denies.
-script(deleteOld);
-await ask("remove it once more");
-await approval.waitFor();
-await page.keyboard.press("Enter");
-await finished();
-check("a stray Enter does not approve (focus starts on Deny)", existsSync(file("old-draft.txt")) && toolResults().some((text) => /denied/i.test(text)));
-script(deleteOld);
-await ask("remove it yet again");
-await approval.waitFor();
-await page.keyboard.press("Escape");
-await finished();
-check("Escape denies", existsSync(file("old-draft.txt")) && toolResults().some((text) => /denied/i.test(text)));
-
-// ── 3. Auto (no judgment model): asks, and says it could not classify. ────
-await chooseMode("Auto");
-script(deleteOld);
-await ask("clean up the stale draft");
-await approval.waitFor();
-const autoText = await approval.innerText();
-check("Auto asks when it cannot judge the call", /unclassified/i.test(autoText), autoText.slice(0, 240));
-await shot("04-approval-card-auto");
-await approval.getByRole("button", { name: "Deny", exact: true }).click();
-await finished();
-check("the file survives Auto's denial", existsSync(file("old-draft.txt")));
-
-// ── 4. Full never asks. ───────────────────────────────────────────────────
+// ── 3. Full: persists setting and allows deletion. ────────────────────────
 await chooseMode("Full");
+check("choosing Full changes the mode in the main process", (await mode()) === "full", await mode());
+const settingsFile = join(USER_DATA, "settings", "settings-state.json");
+check("the choice is stored in the app settings", existsSync(settingsFile) && JSON.parse(readFileSync(settingsFile, "utf8")).settings.approvalMode === "full");
 check("Full is shown as a warning", (await modeButton.innerText()).includes("Full"));
 await shot("05-mode-full");
 script(deleteOld);
@@ -321,7 +285,7 @@ check("the agent's progress note is on screen while it works", true);
 check("the shimmering note is the only loading indicator: no grey placeholder bars", (await panel.locator(".skeleton").count()) === 0 && (await panel.locator(".water-wave-thinking .shimmer").count()) === 1 && (await panel.locator(".water-wave-thinking").first().innerText()).includes("Downloads"));
 await shot("06b-progress-note");
 await finished();
-await chooseMode("Auto");
+await chooseMode("Read-only");
 
 // ── 5. ask_user. ──────────────────────────────────────────────────────────
 const askStep = (args) => [{ text: "Checking." }, { tool: "ask_user", args }, { text: "Thanks, noted." }];
@@ -342,6 +306,7 @@ check("the question shows its text, context and option descriptions", questionTe
 await shot("06-question-single");
 check("the system prompt tells the model it can ask", seen.some((request) => request.system.includes("ask_user")));
 await question.getByRole("radio", { name: /Q4 report/ }).click();
+await question.getByRole("button", { name: /^Send$/ }).click();
 await finished();
 check("the pick reaches the model as the tool result", toolResults().some((text) => text === "User answered: Q4 report"), JSON.stringify(toolResults()));
 check("the message box returns", (await composer.count()) === 1);
@@ -353,6 +318,7 @@ await composer.click();
 await page.keyboard.type("also mention revenue");
 await question.waitFor();
 await question.getByRole("radio", { name: /Q3 report/ }).click();
+await question.getByRole("button", { name: /^Send$/ }).click();
 await finished();
 check("a draft typed during the run is still in the message box", (await composer.inputValue()) === "also mention revenue", await composer.inputValue());
 await composer.fill("");
@@ -475,7 +441,7 @@ await koPage.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await koPage.locator(".sidebar__item").first().click();
 // The panel's own label is translated too, so this part finds it by structure, not by its English name.
 await koPage.waitForSelector("form.composer textarea", { timeout: 30_000 });
-await koPage.evaluate(() => window.autorag.interaction.setMode("ask"));
+await koPage.evaluate(() => window.autorag.interaction.setMode("readonly"));
 const koPanel = koPage.locator("body");
 const koIdle = () => koPage.waitForFunction(() => document.querySelector("form.composer textarea") !== null && document.querySelector('button[aria-label="중지"]') === null, null, { timeout: 60_000 });
 // The first words of every run are the librarian's own English sentence; the app shows them in the interface language.
@@ -490,23 +456,11 @@ check("the opening note is in Korean, not the librarian's English", /[가-힣]/.
 check("it is the one shimmering line, with no grey bars", (await koRow.count()) === 1 && (await koPanel.locator(".skeleton").count()) === 0);
 await koPage.screenshot({ path: join(EVIDENCE, "10c-opening-note-ko.png") });
 await koIdle();
-script(deleteOld);
-// The scripted steps are a first question's (Quick, then Deep); a later question of the same chat is a plain conversation turn.
-await koPanel.locator('button[aria-label="새 대화"]').click();
-await koPanel.locator("form.composer textarea").first().click();
-await koPage.keyboard.type("오래된 초안 지워줘");
-await koPage.keyboard.press("Enter");
-await koPanel.locator('[role="alertdialog"]').waitFor();
-const koText = await koPanel.locator('[role="alertdialog"]').innerText();
-check("the approval card is in Korean", /[가-힣]/.test(koText) && !/Allow once|Deny/.test(koText), koText.slice(0, 200));
-await koPage.screenshot({ path: join(EVIDENCE, "11-approval-card-ko.png") });
-await koPage.keyboard.press("Escape");
-await koPage.waitForFunction(() => document.querySelector("form.composer textarea") !== null && document.querySelector("button[aria-label=\"중지\"]") === null, null, { timeout: 60_000 });
-await koPage.locator('button[aria-label^="파일 변경"]').click();
+await koPage.locator('button[aria-label^="파일 권한"]').click();
 await koPage.waitForTimeout(400);
 await koPage.screenshot({ path: join(EVIDENCE, "12-mode-menu-ko.png") });
 const koMenu = await koPage.locator('[role="menu"]').innerText();
-check("the mode menu is in Korean", /[가-힣]/.test(koMenu) && !/Asks before every/.test(koMenu), koMenu.slice(0, 160));
+check("the mode menu is in Korean", /[가-힣]/.test(koMenu) && koMenu.includes("읽기 전용") && koMenu.includes("전체 허용"), koMenu.slice(0, 160));
 await koPage.keyboard.press("Escape");
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);

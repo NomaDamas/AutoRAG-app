@@ -230,7 +230,7 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 		this.#interaction.bind(run);
 	}
 
-	/** Takes effect on the next gated call; the session's "allow for this session" grants end with the old mode. */
+	/** Takes effect immediately on the next tool call or shell command (`readonly` ↔ `full`). */
 	setApprovalMode(mode: ApprovalMode): void {
 		this.permissionControl.set(mode);
 	}

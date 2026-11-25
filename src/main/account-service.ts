@@ -25,6 +25,7 @@ import { isJsonObject } from "../shared/settings-contract";
 import { managedRoleUpdates, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles } from "../shared/ai-roles";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { migrateLegacyJev } from "./jev-migration";
+import { migrateLegacyPermissionMode } from "./permission-migration";
 import {
 	clearDazziGuestCredential,
 	clearDazziPlanCredential,
@@ -600,7 +601,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			contextWindow: model.contextWindow,
 			maxTokens: model.maxTokens,
 		});
-		const raw = migrateLegacyJev(existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {}).raw;
+		const raw = migrateLegacyPermissionMode(migrateLegacyJev(existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {}).raw).raw;
 		const next: Record<string, unknown> = { ...raw, model: reference(main) };
 		// The librarian's default decomposition model is on OpenRouter, which an
 		// account holder has no key for.

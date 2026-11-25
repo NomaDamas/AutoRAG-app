@@ -55,7 +55,7 @@ interface Options {
 	readonly sessionDir?: string;
 	readonly jev?: JevBackend;
 	readonly respond?: (request: InteractionRequest) => InteractionAnswer;
-	readonly permissionMode?: "ask" | "auto" | "full";
+	readonly permissionMode?: "readonly" | "full";
 }
 
 function harness(options: Options = {}): Harness {
@@ -248,47 +248,39 @@ describe("a chat is one model conversation", () => {
 	});
 });
 
-describe("what the person said reaches Jev's approval judgment", () => {
-	/** Jev that routes every question `extra` (no retrieval, every tool available), classifies nothing as risky, and keeps the state of every permission request. */
-	function jevThatRecords(): { backend: JevBackend; states: string[] } {
-		const states: string[] = [];
-		const backend: JevBackend = {
-			name: "recording",
+describe("readonly / full permission mode across conversation follow-ups", () => {
+	function extraRouteJev(): JevBackend {
+		return {
+			name: "extra-route",
 			judge: async (request: BackendRequest) => {
-				if (request.questions.some((question) => question.id === "permission_delete")) {
-					states.push(typeof request.state === "string" ? request.state : JSON.stringify(request.state));
-				}
 				const answer = (question: BackendRequest["questions"][number]): RawAnswer => {
 					if (question.id === "route") return { answer: "extra", distribution: { local: 0.05, organize: 0.05, extra: 0.9 }, confidence: 0.9 };
-					if (question.id === "permission_gate") return { answer: "allow", distribution: { allow: 0.97, deny: 0.03 }, confidence: 0.97 };
-					if (question.id.startsWith("permission_")) return { answer: question.id === "permission_delete" ? 0.95 : 0.02 };
 					return { answer: 0.05 };
 				};
 				return { answers: request.questions.map(answer) };
 			},
 		};
-		return { backend, states };
 	}
 
-	it("tells Jev what was asked in this chat, follow-ups included, so `auto` can approve what the person clearly asked for", async () => {
+	it("blocks shell deletions on follow-ups in readonly mode without asking Jev, and allows them after switching to full", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
-		const jev = jevThatRecords();
-		const h = harness({ jev: jev.backend, permissionMode: "auto" });
+		const h = harness({ jev: extraRouteJev(), permissionMode: "readonly" });
 		await h.agent.openSession();
 		h.script("Hello.");
 		await h.agent.searchDocuments("hello there");
 
-		// The follow-up asks for the deletion; the model answers with a shell call, then a closing sentence.
-		h.script({ tool: "bash", args: { command: `rm ${file.replaceAll("\\", "/")}` } }, "Deleted it.");
+		// In readonly mode, bash deletion fails at the OS sandbox boundary with no dialog.
+		h.script({ tool: "bash", args: { command: `rm ${file.replaceAll("\\", "/")}` } }, "Blocked.");
 		await h.agent.searchDocuments("please delete report.pdf");
+		expect(h.requests).toHaveLength(0);
+		expect(existsSync(file)).toBe(true);
 
-		// Jev approved on what was said, so nobody was asked, and the call ran.
+		// Switching the same conversation to full mode lets the follow-up delete it.
+		h.agent.setApprovalMode("full");
+		h.script({ tool: "bash", args: { command: `rm ${file.replaceAll("\\", "/")}` } }, "Deleted it.");
+		await h.agent.searchDocuments("delete report.pdf now");
 		expect(h.requests).toHaveLength(0);
 		expect(existsSync(file)).toBe(false);
-		expect(jev.states.length).toBeGreaterThan(0);
-		const judged = jev.states.at(-1) ?? "";
-		expect(judged).toContain("please delete report.pdf");
-		expect(judged).toContain("hello there");
 	});
 });

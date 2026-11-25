@@ -1336,11 +1336,11 @@ describe("createSearchService interaction", () => {
 			chatStore: await createStore(),
 			send,
 			now,
-			approvalMode: async () => "ask",
+			approvalMode: async () => "readonly",
 		});
 
 		await service.start("search-a", "chat-a", "one", []);
-		expect(first.setApprovalMode).toHaveBeenLastCalledWith("ask");
+		expect(first.setApprovalMode).toHaveBeenLastCalledWith("readonly");
 
 		service.setApprovalMode("full");
 		expect(first.setApprovalMode).toHaveBeenLastCalledWith("full");
@@ -1350,14 +1350,14 @@ describe("createSearchService interaction", () => {
 		expect(second.setApprovalMode).toHaveBeenLastCalledWith("full");
 	});
 
-	it("falls back to full when nothing says otherwise", async () => {
+	it("falls back to readonly when nothing says otherwise", async () => {
 		const agent = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
 		const { send } = collectEvents();
 		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
 
 		await service.start("search-c", "chat-c", "one", []);
 
-		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("full");
+		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("readonly");
 	});
 });
 
