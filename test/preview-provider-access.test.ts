@@ -22,7 +22,7 @@ import { readIworkPreview } from "../src/preview/node/iwork";
 import { exportWithQuickLook } from "../src/preview/node/keynote-render";
 import { readEmbeddedThumbnail } from "../src/preview/node/odf";
 import { previewResponseForPath } from "../src/preview/node/protocol";
-import { isDatalessFile, prepareDatalessThumbnail, withReadableFile } from "../src/preview/node/provider-access";
+import { datalessQuickLookPng, isDatalessFile, materializeDatalessFile, withReadableFile } from "../src/preview/node/provider-access";
 import { readRasterPreview } from "../src/preview/node/raster";
 import { readHead } from "../src/preview/node/read-file";
 import { pixelSize } from "../src/preview/node/sips";
@@ -518,17 +518,24 @@ describe("preview provider access", () => {
 		expect(fs.open).not.toHaveBeenCalled();
 		expect(nodeFs.createReadStream).not.toHaveBeenCalled();
 	});
-	it.skipIf(process.platform !== "darwin")("prepares State-3 dataless files (empty NSURLThumbnailDictionaryKey) via NSFileCoordinator for small images and skips huge ones so ThumbnailsAgent never hangs", async () => {
-		const smallJpg = join(dir, "2024-12-17_05-57-20_UTC_8.jpg");
+	it.skipIf(process.platform !== "darwin")("never materializes dataless files during list scrolling, tries cloud thumbnail first for explicit Inspector/Quick Look previews, and materializes only State-3 failures within the byte cap", async () => {
+		const state2Jpg = join(dir, "state2-cloud-thumb.jpg");
+		const state3Jpg = join(dir, "state3-no-thumb.jpg");
 		const hugeWebm = join(dir, "huge-500mb.webm");
-		await fs.writeFile(smallJpg, JPEG);
+		await fs.writeFile(state2Jpg, JPEG);
+		await fs.writeFile(state3Jpg, JPEG);
 		await fs.writeFile(hugeWebm, JPEG);
 		vi.mocked(fs.stat).mockImplementation(async (...args) => {
 			const st = await realFs.stat(...args);
-			if (args[0] === smallJpg) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: 140_000 });
-			if (args[0] === hugeWebm) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: 500 * 1024 * 1024 });
+			if (args[0] === state2Jpg || args[0] === state3Jpg) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: 140_000 });
+			}
+			if (args[0] === hugeWebm) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: 500 * 1024 * 1024 });
+			}
 			return st;
 		});
+		const osascriptCalls: string[] = [];
 		const realExecFile = await vi.importActual<typeof childProcess>("node:child_process");
 		vi.mocked(childProcess.execFile).mockImplementation(((command: string, ...rest: unknown[]) => {
 			if (command === "/usr/bin/stat") {
@@ -536,25 +543,97 @@ describe("preview provider access", () => {
 				cb(null, "compressed,dataless\n", "");
 				return {} as childProcess.ChildProcess;
 			}
+			if (command === "/usr/bin/osascript") {
+				osascriptCalls.push(String((rest[0] as string[] | undefined)?.[4] ?? ""));
+			}
 			return (realExecFile.execFile as (...a: unknown[]) => childProcess.ChildProcess)(command, ...rest);
 		}) as typeof childProcess.execFile);
 
-		// Real osascript runs against local temp files: smallJpg has no ubiquitous thumbnailDict -> coordinates in place ("materialized")
-		expect(await prepareDatalessThumbnail(smallJpg, 24 * 1024 * 1024)).toBe("materialized");
-		// File larger than maxBytes with no thumbnailDict -> "skip" (never hangs createThumbnailFromPath or downloads 500MB)
-		expect(await prepareDatalessThumbnail(hugeWebm, 1)).toBe("skip");
+		// 1. materializeDatalessFile: materializes small files and skips huge files (> maxBytes)
+		expect(await materializeDatalessFile(state3Jpg, 24 * 1024 * 1024)).toBe("materialized");
+		expect(await materializeDatalessFile(hugeWebm, 1)).toBe("skip");
+		osascriptCalls.length = 0;
 
-		const thumbSpy = vi.fn(async () => PNG);
+		// 2. List scroll (`provider.icons`) NEVER calls osascript/materialize, even when State-3 fails
+		const listThumbSpy = vi.fn(async (path: string) => {
+			if (path === state2Jpg) return PNG;
+			throw new Error("QLThumbnailErrorDomain Code=3");
+		});
 		const sysSpy = vi.fn(async () => JPEG);
-		const provider = createIconProvider({
+		const listProvider = createIconProvider({
 			platform: "darwin",
-			thumbnail: thumbSpy,
+			thumbnail: listThumbSpy,
 			systemIcon: sysSpy,
+			warn: () => undefined,
+		});
+		await listProvider.icons([
+			{ path: state2Jpg, ext: "jpg", mtimeMs: 1 },
+			{ path: state3Jpg, ext: "jpg", mtimeMs: 1 },
+		]);
+		expect(listProvider.read(state2Jpg, 1)).toEqual(PNG);
+		expect(listProvider.read(state3Jpg, 1)).toEqual(JPEG);
+		expect(osascriptCalls).toEqual([]);
+
+		// 3. Explicit Inspector preview (`provider.preview`): State-2 succeeds with zero osascript;
+		// State-3 fails cloud thumbnail first, then materializes ONLY that 1 file and retries!
+		let state3Attempts = 0;
+		const previewThumbSpy = vi.fn(async (path: string) => {
+			if (path === state2Jpg) return PNG;
+			if (path === state3Jpg) {
+				state3Attempts += 1;
+				if (state3Attempts === 1) throw new Error("QLThumbnailErrorDomain Code=3");
+				return PNG;
+			}
+			throw new Error("QLThumbnailErrorDomain Code=3");
+		});
+		const previewProvider = createIconProvider({
+			platform: "darwin",
+			thumbnail: previewThumbSpy,
+			systemIcon: sysSpy,
+			datalessMaxMaterializeBytes: 24 * 1024 * 1024,
+			warn: () => undefined,
+		});
+		// State-2: cloud thumbnail directly, ZERO osascript/download
+		expect(await previewProvider.preview({ path: state2Jpg, ext: "jpg", mtimeMs: 1 })).not.toBeNull();
+		expect(osascriptCalls).toEqual([]);
+		// State-3 small: first attempt fails -> materializes that 1 file -> retry succeeds
+		expect(await previewProvider.preview({ path: state3Jpg, ext: "jpg", mtimeMs: 1 })).not.toBeNull();
+		expect(state3Attempts).toBe(2);
+		expect(osascriptCalls).toEqual([state3Jpg]);
+		// State-3 huge (> maxBytes): skips materialization without retrying thumbnail
+		osascriptCalls.length = 0;
+		const hugeThumbSpy = vi.fn(async () => {
+			throw new Error("QLThumbnailErrorDomain Code=3");
+		});
+		const hugeProvider = createIconProvider({
+			platform: "darwin",
+			thumbnail: hugeThumbSpy,
+			systemIcon: async () => null,
 			datalessMaxMaterializeBytes: 1,
 			warn: () => undefined,
 		});
-		await provider.icons([{ path: hugeWebm, ext: "mp4", mtimeMs: 1 }]);
-		expect(thumbSpy).not.toHaveBeenCalled();
-		expect(sysSpy).toHaveBeenCalledTimes(1);
+		expect(await hugeProvider.preview({ path: hugeWebm, ext: "mp4", mtimeMs: 1 })).toBeNull();
+		expect(hugeThumbSpy).toHaveBeenCalledTimes(1);
+
+		// 4. Quick Look (`datalessQuickLookPng`): State-2 never calls materialize; State-3 calls materialize once and retries
+		const qlMat = vi.fn(async () => "materialized" as const);
+		const qlState2 = await datalessQuickLookPng(state2Jpg, 1440, {
+			thumbnail: async () => PNG,
+			materialize: qlMat,
+		});
+		expect(qlState2).toEqual(PNG);
+		expect(qlMat).not.toHaveBeenCalled();
+
+		let qlAttempts = 0;
+		const qlState3 = await datalessQuickLookPng(state3Jpg, 1440, {
+			thumbnail: async () => {
+				qlAttempts += 1;
+				return qlAttempts === 1 ? null : PNG;
+			},
+			materialize: qlMat,
+		});
+		expect(qlState3).toEqual(PNG);
+		expect(qlAttempts).toBe(2);
+		expect(qlMat).toHaveBeenCalledTimes(1);
 	});
 });

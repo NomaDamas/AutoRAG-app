@@ -556,20 +556,22 @@ verified by `/usr/bin/stat -f %Sf`, never checked by opening the file) never
 trigger background POSIX reads or `ffmpeg` probes during folder browsing
 (`readImageMetadata`, `readEmbeddedImage`, and `extractVideoFrame` skip them so
 neither iCloud's `bird` daemon nor libuv's threadpool is saturated by background
-downloads), plain-text placeholders skip Quick Look thumbnailing, `prepareDatalessThumbnail`
-checks `NSURLThumbnailDictionaryKey` before `QLThumbnailGenerator` (serving cached
-cloud thumbnails without downloading, materializing uncached visual files up to
-24 MiB via `NSFileCoordinator` instead of hanging `ThumbnailsAgent` for 15s, and
-skipping uncached huge files), and large listings enrich thumbnails only for the
-first 24 rows up front (`enrichKinds` fetches OS kinds only for the rest while
-virtualized rows load thumbnails on demand as the user scrolls). In Quick Look,
-dataless visual formats (iWork, images, HEIC, TIFF, RAW/PSD/ICNS/Sketch/Figma
-raster, ODG) render directly from `datalessQuickLookPng` at 1440px, while text and
-streamed media/PDF placeholders coordinate directly via `readCoordinatedHead` /
-`coordinatedRange` (killing the child immediately on close/navigation and never
-blocking libuv threads) and skip competing `ffmpeg -i` sidecar probes. Native HEIC
-decoding remains first; the browser fallback uses `heic-to/csp`, not eval-based
-`heic2any`, with the production CSP unchanged.
+downloads), plain-text placeholders skip Quick Look thumbnailing, folder listing
+and scrolling never materialize cloud placeholders (macOS `QLThumbnailGenerator`
+serves cloud thumbnails without downloading and State-3 placeholders without a
+cloud thumbnail fall back cleanly to their OS type icon, matching Finder), and
+large listings enrich thumbnails only for the first 24 rows up front (`enrichKinds`
+fetches OS kinds only for the rest while virtualized rows load thumbnails on demand
+as the user scrolls). On explicit user preview (Inspector `previewGate` or Quick
+Look `Space` via `datalessQuickLookPng` at 1440px), cloud thumbnails are tried
+first with zero download; only when a State-3 placeholder has no cloud thumbnail
+does `materializeDatalessFile` download that single file (up to 24 MiB, via
+foreground `NSFileCoordinator`) and render it reliably. Text and streamed
+media/PDF placeholders coordinate directly via `readCoordinatedHead` /
+`coordinatedRange` (killing the child immediately on
+close/navigation and never blocking libuv threads) and skip competing `ffmpeg -i`
+sidecar probes. Native HEIC decoding remains first; the browser fallback uses
+`heic-to/csp`, not eval-based `heic2any`, with the production CSP unchanged.
 
 The markup drawing module is lazy-loaded only on pressing the pen. Closing it
 releases text-entry focus and cancels an active edit. Changing files or closing

@@ -35,7 +35,13 @@ import { extname } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { EMBEDDED_IMAGE_EXTENSIONS, readEmbeddedImage } from "../preview/node/embedded-image";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS } from "../preview/node/odf";
-import { DATALESS_MAX_MATERIALIZE_BYTES, isDatalessFile, prepareDatalessThumbnail } from "../preview/node/provider-access";
+import {
+	DATALESS_MAX_MATERIALIZE_BYTES,
+	DATALESS_PREVIEW_CLOUD_TIMEOUT_MS,
+	directRasterThumbnailPng,
+	isDatalessFile,
+	materializeDatalessFile,
+} from "../preview/node/provider-access";
 import { GOOGLE_DRIVE_EXTENSIONS } from "../preview/shared/google-drive";
 import { RAW_PHOTO_EXTENSIONS } from "../preview/shared/raster-formats";
 import { errorMessage } from "./fs-entry";
@@ -72,9 +78,9 @@ export const ICON_CACHE_MAX_ENTRIES = 4096;
 export const ICON_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
 const THUMBNAIL_TIMEOUT_MS = 4000;
-/** Cold iCloud CloudKit thumbnail round-trips take 3–7s without downloading the file; keep a dedicated budget and concurrency cap. */
-const DATALESS_THUMBNAIL_TIMEOUT_MS = 15_000;
-const DATALESS_THUMBNAIL_CONCURRENCY = 8;
+/** CloudKit list thumbnails return in 0.5–3.5s without downloading; State-3 placeholders hang 16s+ so bound list requests and never download on scroll. */
+const DATALESS_LIST_THUMBNAIL_TIMEOUT_MS = 5000;
+const DATALESS_THUMBNAIL_CONCURRENCY = 4;
 const SYSTEM_ICON_TIMEOUT_MS = 4000;
 /** Plain-text extensions have no cloud-cached visual thumbnail in iCloud; skip Quick Look on dataless placeholders so `getFileIcon` answers in ~1ms. */
 const DATALESS_TEXT_ONLY_EXTENSIONS: Readonly<Record<string, true>> = {
@@ -484,29 +490,50 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	async function generateNative(target: IconTarget, gate: PriorityGate, priority: number): Promise<Uint8Array | null> {
 		const size = target.size ?? ICON_SIZE;
 		const ext = target.ext.toLowerCase();
+		const isListGate = gate === thumbnailGate;
+		const isPreviewGate = gate === previewGate;
 		const dataless = platform === "darwin" && (await isDatalessFile(target.path));
 		if (dataless && Object.hasOwn(DATALESS_TEXT_ONLY_EXTENSIONS, ext)) return null;
-		const activeGate = dataless && gate === thumbnailGate ? datalessGate : gate;
-		const timeoutMs = dataless && deps.thumbnailTimeoutMs === undefined ? DATALESS_THUMBNAIL_TIMEOUT_MS : thumbnailTimeoutMs;
+		const activeGate = dataless && isListGate ? datalessGate : gate;
+		const timeoutMs = dataless && deps.thumbnailTimeoutMs === undefined
+			? (isPreviewGate ? DATALESS_PREVIEW_CLOUD_TIMEOUT_MS : DATALESS_LIST_THUMBNAIL_TIMEOUT_MS)
+			: thumbnailTimeoutMs;
 		await activeGate.acquire(priority);
 		let timedOut = false;
 		let rawPromise: Promise<Uint8Array | null> | null = null;
 		try {
-			if (dataless) {
-				const prepared = await prepareDatalessThumbnail(target.path, datalessMaxMaterializeBytes);
-				if (prepared === "skip") return null;
-			}
 			let bytes: Uint8Array | null = null;
+			let firstError: unknown = null;
 			try {
 				rawPromise = thumbnail(target.path, size);
 				bytes = await withTimeout(rawPromise, timeoutMs, "thumbnail");
 			} catch (error) {
 				timedOut = true;
-				if (platform !== "win32" || size <= WINDOWS_CACHED_THUMBNAIL_SIZE) throw error;
-				warn(`file-icon: ${size}px thumbnail for ${target.path} failed, retrying at ${WINDOWS_CACHED_THUMBNAIL_SIZE}px: ${errorMessage(error)}`);
+				firstError = error;
+				if (platform === "win32" && size > WINDOWS_CACHED_THUMBNAIL_SIZE) {
+					warn(`file-icon: ${size}px thumbnail for ${target.path} failed, retrying at ${WINDOWS_CACHED_THUMBNAIL_SIZE}px: ${errorMessage(error)}`);
+				} else if (!(dataless && isPreviewGate)) {
+					throw error;
+				}
 			}
 			if (bytes === null && platform === "win32" && size > WINDOWS_CACHED_THUMBNAIL_SIZE) {
 				bytes = await withTimeout(thumbnail(target.path, WINDOWS_CACHED_THUMBNAIL_SIZE), timeoutMs, "thumbnail");
+			}
+			// Explicit Inspector preview on a State-3 dataless file (no cloud thumbnail):
+			// materialize ONLY this 1 user-selected file within the byte cap and render locally.
+			// List scrolling (`thumbnailGate`) never materializes files.
+			if (bytes === null && dataless && isPreviewGate) {
+				const prepared = await materializeDatalessFile(target.path, datalessMaxMaterializeBytes);
+				if (prepared === "materialized") {
+					if (deps.thumbnail === undefined) {
+						bytes = await directRasterThumbnailPng(target.path, size);
+					}
+					if (bytes === null) {
+						bytes = await withTimeout(thumbnail(target.path, size), thumbnailTimeoutMs, "thumbnail");
+					}
+				} else if (firstError !== null) {
+					throw firstError;
+				}
 			}
 			return bytes;
 		} catch (error) {

@@ -2,7 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, extname, join } from "node:path";
 
 /**
  * True on macOS when `path` is an unmaterialized cloud placeholder (`SF_DATALESS`).
@@ -30,22 +30,19 @@ export async function isDatalessFile(path: string): Promise<boolean> {
 }
 
 export const DATALESS_QUICK_LOOK_EDGE = 1440;
-/** Uncached cloud placeholders up to this size are materialized via NSFileCoordinator so thumbnails/previews render instead of hanging QLThumbnailGenerator. */
+/** Time budget to try iCloud's cloud-only thumbnail before materializing a single user-selected State-3 file. */
+export const DATALESS_PREVIEW_CLOUD_TIMEOUT_MS = 4000;
+/** Uncached State-3 placeholders up to this size may be materialized on explicit user preview (Inspector / Quick Look). */
 export const DATALESS_MAX_MATERIALIZE_BYTES = 24 * 1024 * 1024;
+const DIRECT_RASTER_EXTENSIONS = new Set(["png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "webp", "gif", "bmp", "ico"]);
 
-const PREPARE_DATALESS_THUMBNAIL = `
+const MATERIALIZE_DATALESS = `
 ObjC.import("Foundation");
 function run(argv) {
 	const url = $.NSURL.fileURLWithPath(argv[0]);
 	const maxBytes = Number(argv[1]);
-	const vals = url.resourceValuesForKeysError($([
-		$.NSURLFileSizeKey,
-		$.NSURLThumbnailDictionaryKey,
-	]), Ref());
-	if (!vals || vals.isNil()) return "skip";
-	const dict = vals.objectForKey($.NSURLThumbnailDictionaryKey);
-	if (dict && !dict.isNil() && dict.count > 0) return "cached";
-	const fileSize = ObjC.unwrap(vals.objectForKey($.NSURLFileSizeKey)) || 0;
+	const vals = url.resourceValuesForKeysError($([$.NSURLFileSizeKey]), Ref());
+	const fileSize = vals && !vals.isNil() ? (ObjC.unwrap(vals.objectForKey($.NSURLFileSizeKey)) || 0) : 0;
 	if (fileSize <= 0 || fileSize > maxBytes) return "skip";
 	const coordinator = $.NSFileCoordinator.alloc.initWithFilePresenter($());
 	const err = Ref();
@@ -57,54 +54,101 @@ function run(argv) {
 }`;
 
 /**
- * Prepares a macOS `SF_DATALESS` placeholder before asking `QLThumbnailGenerator`
- * (`nativeImage.createThumbnailFromPath`). When iCloud already carries a cloud thumbnail
- * (`NSURLThumbnailDictionaryKey`), `QLThumbnailGenerator` answers in ~10–50ms without
- * downloading the file (`"cached"`). When `NSURLThumbnailDictionaryKey` is empty (e.g.
- * CLI-created images evicted to iCloud), `QLThumbnailGenerator` hangs `ThumbnailsAgent`
- * for >15s and fails; coordinating via `NSFileCoordinator` materializes files within
- * `maxBytes` cleanly in place (`"materialized"`), while larger uncached files return
- * `"skip"` immediately so they never stall `ThumbnailsAgent` or download hundreds of MB.
+ * Materializes a single user-selected `SF_DATALESS` placeholder within `maxBytes`
+ * when iCloud has no cloud thumbnail (State 3, `QLThumbnailErrorDomain Code=3`).
+ * Uses `NSFileCoordinator` (foreground high-priority read across iCloud and all
+ * macOS File Providers — unlike `startDownloadingUbiquitousItemAtURL`, which
+ * queues at low background priority and can stall for >12s).
+ * Never call this during folder listing/scrolling — only on explicit user preview.
  */
-export function prepareDatalessThumbnail(
+export function materializeDatalessFile(
 	path: string,
 	maxBytes = DATALESS_MAX_MATERIALIZE_BYTES,
-): Promise<"cached" | "materialized" | "skip"> {
+): Promise<"materialized" | "skip"> {
 	if (process.platform !== "darwin") return Promise.resolve("skip");
-	const { promise, resolve } = Promise.withResolvers<"cached" | "materialized" | "skip">();
+	const { promise, resolve } = Promise.withResolvers<"materialized" | "skip">();
 	execFile(
 		"/usr/bin/osascript",
-		["-l", "JavaScript", "-e", PREPARE_DATALESS_THUMBNAIL, path, String(maxBytes)],
-		{ timeout: 20_000 },
+		["-l", "JavaScript", "-e", MATERIALIZE_DATALESS, path, String(maxBytes)],
+		{ timeout: 30_000 },
 		(error, stdout) => {
 			if (error !== null) {
 				resolve("skip");
 				return;
 			}
-			const tag = stdout.trim();
-			resolve(tag === "cached" || tag === "materialized" ? tag : "skip");
+			resolve(stdout.trim() === "materialized" ? "materialized" : "skip");
 		},
 	);
 	return promise;
 }
 
-/**
- * High-resolution PNG from macOS's `QLThumbnailGenerator` (`nativeImage.createThumbnailFromPath`)
- * for an unmaterialized cloud placeholder, answering in tens of milliseconds when cached by iCloud
- * (or after coordinating an uncached visual file within `DATALESS_MAX_MATERIALIZE_BYTES`).
- * Null off macOS, outside Electron, or when skipped/empty.
- */
-export async function datalessQuickLookPng(path: string, maxEdge = DATALESS_QUICK_LOOK_EDGE): Promise<Uint8Array | null> {
-	if (process.platform !== "darwin") return null;
-	if ((await prepareDatalessThumbnail(path)) === "skip") return null;
+/** Decodes a locally materialized raster image directly without touching ThumbnailsAgent. */
+export async function directRasterThumbnailPng(path: string, maxEdge: number): Promise<Uint8Array | null> {
+	if (!DIRECT_RASTER_EXTENSIONS.has(extname(path).slice(1).toLowerCase())) return null;
 	try {
-		// Dynamic: `electron` is only available in Electron main, not in Node unit tests.
 		const { nativeImage } = await import("electron");
-		const image = await nativeImage.createThumbnailFromPath(path, { width: maxEdge, height: maxEdge });
-		return image.isEmpty() ? null : image.toPNG();
+		const image = nativeImage.createFromPath(path);
+		if (image.isEmpty()) return null;
+		const { width, height } = image.getSize();
+		const fitted = width > maxEdge || height > maxEdge
+			? (width >= height ? image.resize({ width: maxEdge }) : image.resize({ height: maxEdge }))
+			: image;
+		return fitted.toPNG();
 	} catch {
 		return null;
 	}
+}
+
+async function defaultQuickLookThumbnail(path: string, maxEdge: number): Promise<Uint8Array | null> {
+	// Dynamic: `electron` is only available in Electron main, not in Node unit tests.
+	const { nativeImage } = await import("electron");
+	const image = await nativeImage.createThumbnailFromPath(path, { width: maxEdge, height: maxEdge });
+	return image.isEmpty() ? null : image.toPNG();
+}
+
+function raceTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+	let timer: NodeJS.Timeout | undefined;
+	const timeout = new Promise<null>((resolve) => {
+		timer = setTimeout(() => resolve(null), timeoutMs);
+	});
+	return Promise.race([promise.catch(() => null), timeout]).finally(() => {
+		clearTimeout(timer);
+	});
+}
+
+export interface DatalessQuickLookDeps {
+	readonly thumbnail?: (path: string, maxEdge: number) => Promise<Uint8Array | null>;
+	readonly materialize?: (path: string, maxBytes: number) => Promise<"materialized" | "skip">;
+	readonly cloudTimeoutMs?: number;
+	readonly maxBytes?: number;
+}
+
+/**
+ * High-resolution PNG for an unmaterialized cloud placeholder during explicit
+ * Quick Look (`Space`). Tries macOS `QLThumbnailGenerator` first (zero download
+ * when iCloud has a cloud thumbnail — State 2); only when that returns empty or
+ * times out (State 3, `QLThumbnailErrorDomain Code=3`) materializes this single
+ * file within `maxBytes` and renders from disk.
+ */
+export async function datalessQuickLookPng(
+	path: string,
+	maxEdge = DATALESS_QUICK_LOOK_EDGE,
+	deps: DatalessQuickLookDeps = {},
+): Promise<Uint8Array | null> {
+	if (process.platform !== "darwin") return null;
+	const thumb = deps.thumbnail ?? defaultQuickLookThumbnail;
+	const cloudTimeoutMs = deps.cloudTimeoutMs ?? DATALESS_PREVIEW_CLOUD_TIMEOUT_MS;
+	const cloud = await raceTimeout(thumb(path, maxEdge), cloudTimeoutMs);
+	if (cloud !== null && cloud.byteLength > 0) return cloud;
+	const materialize = deps.materialize ?? materializeDatalessFile;
+	const maxBytes = deps.maxBytes ?? DATALESS_MAX_MATERIALIZE_BYTES;
+	if ((await materialize(path, maxBytes)) !== "materialized") return null;
+	if (deps.thumbnail === undefined) {
+		const direct = await directRasterThumbnailPng(path, maxEdge);
+		if (direct !== null && direct.byteLength > 0) return direct;
+	}
+	const local = await raceTimeout(thumb(path, maxEdge), cloudTimeoutMs);
+	return local !== null && local.byteLength > 0 ? local : null;
 }
 /** Darwin EDEADLK is 11; libuv may expose it only as an unmapped negative errno. */
 export function needsFileCoordination(error: unknown): boolean {
