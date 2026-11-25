@@ -22,6 +22,7 @@ import {
 	ZoomOut,
 } from "lucide-react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
+import { pdfDocumentSource } from "../../../preview/ui/pdf-config";
 import type { DocumentEditorPdfPayload, PdfEditOperation } from "../../../shared/document-editor-contract";
 import { cn } from "../lib/cn";
 
@@ -481,7 +482,7 @@ export function PdfDocumentEditor({
 		}
 		ensurePdfWorker();
 		let cancelled = false;
-		const task = getDocument({ url: streamUrl, disableAutoFetch: true });
+		const task = getDocument(pdfDocumentSource(streamUrl));
 		task.promise
 			.then((doc) => {
 				if (cancelled) {

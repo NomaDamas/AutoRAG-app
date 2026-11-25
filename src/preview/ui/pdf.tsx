@@ -9,6 +9,7 @@ import { FallbackView, Status } from "./fallback";
 import { PagedView, type DrawPage, type EvidenceMarks } from "./paged";
 import { ChromeProvider, useChrome } from "./chrome";
 import { PasswordView } from "./password";
+import { pdfDocumentSource } from "./pdf-config";
 
 let workerReady = false;
 
@@ -61,7 +62,7 @@ export function PdfView({ file, anchor = null }: { readonly file: PreviewDocumen
 		ensurePdfWorker();
 		let cancelled = false;
 		let attempts = 0;
-		const task = getDocument({ url, disableAutoFetch: true });
+		const task = getDocument(pdfDocumentSource(url));
 		task.onPassword = (unlock: (password: string) => void, reason: number) => {
 			attempts += 1;
 			if (!cancelled) {
