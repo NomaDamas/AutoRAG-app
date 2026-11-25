@@ -22,7 +22,7 @@ import { readIworkPreview } from "../src/preview/node/iwork";
 import { exportWithQuickLook } from "../src/preview/node/keynote-render";
 import { readEmbeddedThumbnail } from "../src/preview/node/odf";
 import { previewResponseForPath } from "../src/preview/node/protocol";
-import { isDatalessFile, withReadableFile } from "../src/preview/node/provider-access";
+import { isDatalessFile, prepareDatalessThumbnail, withReadableFile } from "../src/preview/node/provider-access";
 import { readRasterPreview } from "../src/preview/node/raster";
 import { readHead } from "../src/preview/node/read-file";
 import { pixelSize } from "../src/preview/node/sips";
@@ -517,5 +517,44 @@ describe("preview provider access", () => {
 		expect(Buffer.from(await response.arrayBuffer())).toEqual(body.subarray(4, 16));
 		expect(fs.open).not.toHaveBeenCalled();
 		expect(nodeFs.createReadStream).not.toHaveBeenCalled();
+	});
+	it.skipIf(process.platform !== "darwin")("prepares State-3 dataless files (empty NSURLThumbnailDictionaryKey) via NSFileCoordinator for small images and skips huge ones so ThumbnailsAgent never hangs", async () => {
+		const smallJpg = join(dir, "2024-12-17_05-57-20_UTC_8.jpg");
+		const hugeWebm = join(dir, "huge-500mb.webm");
+		await fs.writeFile(smallJpg, JPEG);
+		await fs.writeFile(hugeWebm, JPEG);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === smallJpg) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: 140_000 });
+			if (args[0] === hugeWebm) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: 500 * 1024 * 1024 });
+			return st;
+		});
+		const realExecFile = await vi.importActual<typeof childProcess>("node:child_process");
+		vi.mocked(childProcess.execFile).mockImplementation(((command: string, ...rest: unknown[]) => {
+			if (command === "/usr/bin/stat") {
+				const cb = rest.at(-1) as (err: null, stdout: string, stderr: string) => void;
+				cb(null, "compressed,dataless\n", "");
+				return {} as childProcess.ChildProcess;
+			}
+			return (realExecFile.execFile as (...a: unknown[]) => childProcess.ChildProcess)(command, ...rest);
+		}) as typeof childProcess.execFile);
+
+		// Real osascript runs against local temp files: smallJpg has no ubiquitous thumbnailDict -> coordinates in place ("materialized")
+		expect(await prepareDatalessThumbnail(smallJpg, 24 * 1024 * 1024)).toBe("materialized");
+		// File larger than maxBytes with no thumbnailDict -> "skip" (never hangs createThumbnailFromPath or downloads 500MB)
+		expect(await prepareDatalessThumbnail(hugeWebm, 1)).toBe("skip");
+
+		const thumbSpy = vi.fn(async () => PNG);
+		const sysSpy = vi.fn(async () => JPEG);
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: thumbSpy,
+			systemIcon: sysSpy,
+			datalessMaxMaterializeBytes: 1,
+			warn: () => undefined,
+		});
+		await provider.icons([{ path: hugeWebm, ext: "mp4", mtimeMs: 1 }]);
+		expect(thumbSpy).not.toHaveBeenCalled();
+		expect(sysSpy).toHaveBeenCalledTimes(1);
 	});
 });

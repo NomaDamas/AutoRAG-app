@@ -556,13 +556,15 @@ verified by `/usr/bin/stat -f %Sf`, never checked by opening the file) never
 trigger background POSIX reads or `ffmpeg` probes during folder browsing
 (`readImageMetadata`, `readEmbeddedImage`, and `extractVideoFrame` skip them so
 neither iCloud's `bird` daemon nor libuv's threadpool is saturated by background
-downloads), plain-text placeholders skip Quick Look thumbnailing, cold CloudKit
-thumbnail round-trips get a dedicated concurrency cap and deadline (with late
-completions upgrading the icon cache), and large listings enrich in 24-row waves
-so the visible screenful paints immediately. In Quick Look, dataless visual
-formats (iWork, images, HEIC, TIFF, RAW/PSD/ICNS/Sketch/Figma raster, ODG) render
-directly from macOS's `QLThumbnailGenerator` cache (`datalessQuickLookPng` at
-1440px) in tens of milliseconds without materializing the file, while text and
+downloads), plain-text placeholders skip Quick Look thumbnailing, `prepareDatalessThumbnail`
+checks `NSURLThumbnailDictionaryKey` before `QLThumbnailGenerator` (serving cached
+cloud thumbnails without downloading, materializing uncached visual files up to
+24 MiB via `NSFileCoordinator` instead of hanging `ThumbnailsAgent` for 15s, and
+skipping uncached huge files), and large listings enrich thumbnails only for the
+first 24 rows up front (`enrichKinds` fetches OS kinds only for the rest while
+virtualized rows load thumbnails on demand as the user scrolls). In Quick Look,
+dataless visual formats (iWork, images, HEIC, TIFF, RAW/PSD/ICNS/Sketch/Figma
+raster, ODG) render directly from `datalessQuickLookPng` at 1440px, while text and
 streamed media/PDF placeholders coordinate directly via `readCoordinatedHead` /
 `coordinatedRange` (killing the child immediately on close/navigation and never
 blocking libuv threads) and skip competing `ffmpeg -i` sidecar probes. Native HEIC

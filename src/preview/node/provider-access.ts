@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -10,7 +11,7 @@ import { basename, join } from "node:path";
  * so sparse local files are never misclassified. Never opens or reads file data.
  */
 export async function isDatalessFile(path: string): Promise<boolean> {
-	if (process.platform !== "darwin") return false;
+	if (process.platform !== "darwin" || !existsSync(path)) return false;
 	try {
 		const info = await stat(path);
 		if (!info.isFile() || info.size === 0 || info.blocks > 0) return false;
@@ -29,14 +30,73 @@ export async function isDatalessFile(path: string): Promise<boolean> {
 }
 
 export const DATALESS_QUICK_LOOK_EDGE = 1440;
+/** Uncached cloud placeholders up to this size are materialized via NSFileCoordinator so thumbnails/previews render instead of hanging QLThumbnailGenerator. */
+export const DATALESS_MAX_MATERIALIZE_BYTES = 24 * 1024 * 1024;
+
+const PREPARE_DATALESS_THUMBNAIL = `
+ObjC.import("Foundation");
+function run(argv) {
+	const url = $.NSURL.fileURLWithPath(argv[0]);
+	const maxBytes = Number(argv[1]);
+	const vals = url.resourceValuesForKeysError($([
+		$.NSURLFileSizeKey,
+		$.NSURLThumbnailDictionaryKey,
+	]), Ref());
+	if (!vals || vals.isNil()) return "skip";
+	const dict = vals.objectForKey($.NSURLThumbnailDictionaryKey);
+	if (dict && !dict.isNil() && dict.count > 0) return "cached";
+	const fileSize = ObjC.unwrap(vals.objectForKey($.NSURLFileSizeKey)) || 0;
+	if (fileSize <= 0 || fileSize > maxBytes) return "skip";
+	const coordinator = $.NSFileCoordinator.alloc.initWithFilePresenter($());
+	const err = Ref();
+	let ok = false;
+	coordinator.coordinateReadingItemAtURLOptionsErrorByAccessor(url, 0, err, function() {
+		ok = true;
+	});
+	return ok ? "materialized" : "skip";
+}`;
+
+/**
+ * Prepares a macOS `SF_DATALESS` placeholder before asking `QLThumbnailGenerator`
+ * (`nativeImage.createThumbnailFromPath`). When iCloud already carries a cloud thumbnail
+ * (`NSURLThumbnailDictionaryKey`), `QLThumbnailGenerator` answers in ~10–50ms without
+ * downloading the file (`"cached"`). When `NSURLThumbnailDictionaryKey` is empty (e.g.
+ * CLI-created images evicted to iCloud), `QLThumbnailGenerator` hangs `ThumbnailsAgent`
+ * for >15s and fails; coordinating via `NSFileCoordinator` materializes files within
+ * `maxBytes` cleanly in place (`"materialized"`), while larger uncached files return
+ * `"skip"` immediately so they never stall `ThumbnailsAgent` or download hundreds of MB.
+ */
+export function prepareDatalessThumbnail(
+	path: string,
+	maxBytes = DATALESS_MAX_MATERIALIZE_BYTES,
+): Promise<"cached" | "materialized" | "skip"> {
+	if (process.platform !== "darwin") return Promise.resolve("skip");
+	const { promise, resolve } = Promise.withResolvers<"cached" | "materialized" | "skip">();
+	execFile(
+		"/usr/bin/osascript",
+		["-l", "JavaScript", "-e", PREPARE_DATALESS_THUMBNAIL, path, String(maxBytes)],
+		{ timeout: 20_000 },
+		(error, stdout) => {
+			if (error !== null) {
+				resolve("skip");
+				return;
+			}
+			const tag = stdout.trim();
+			resolve(tag === "cached" || tag === "materialized" ? tag : "skip");
+		},
+	);
+	return promise;
+}
 
 /**
  * High-resolution PNG from macOS's `QLThumbnailGenerator` (`nativeImage.createThumbnailFromPath`)
  * for an unmaterialized cloud placeholder, answering in tens of milliseconds when cached by iCloud
- * without downloading the file itself. Null off macOS, outside Electron, or when empty.
+ * (or after coordinating an uncached visual file within `DATALESS_MAX_MATERIALIZE_BYTES`).
+ * Null off macOS, outside Electron, or when skipped/empty.
  */
 export async function datalessQuickLookPng(path: string, maxEdge = DATALESS_QUICK_LOOK_EDGE): Promise<Uint8Array | null> {
 	if (process.platform !== "darwin") return null;
+	if ((await prepareDatalessThumbnail(path)) === "skip") return null;
 	try {
 		// Dynamic: `electron` is only available in Electron main, not in Node unit tests.
 		const { nativeImage } = await import("electron");
@@ -107,6 +167,14 @@ async function providerRefusesRead(path: string): Promise<boolean> {
 
 /** Original operation first. Retry only a verified provider deadlock, with no persistent copies or altered local reads. */
 export async function withReadableFile<T>(path: string, consume: (localPath: string) => Promise<T>, nativeError = false): Promise<T> {
+	if (await isDatalessFile(path)) {
+		const snapshot = await coordinatedSnapshot(path);
+		try {
+			return await consume(snapshot.path);
+		} finally {
+			await snapshot.dispose();
+		}
+	}
 	try {
 		return await consume(path);
 	} catch (error) {

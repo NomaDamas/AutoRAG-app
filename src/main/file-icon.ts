@@ -35,7 +35,7 @@ import { extname } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { EMBEDDED_IMAGE_EXTENSIONS, readEmbeddedImage } from "../preview/node/embedded-image";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS } from "../preview/node/odf";
-import { isDatalessFile } from "../preview/node/provider-access";
+import { DATALESS_MAX_MATERIALIZE_BYTES, isDatalessFile, prepareDatalessThumbnail } from "../preview/node/provider-access";
 import { GOOGLE_DRIVE_EXTENSIONS } from "../preview/shared/google-drive";
 import { RAW_PHOTO_EXTENSIONS } from "../preview/shared/raster-formats";
 import { errorMessage } from "./fs-entry";
@@ -74,7 +74,7 @@ export const ICON_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const THUMBNAIL_TIMEOUT_MS = 4000;
 /** Cold iCloud CloudKit thumbnail round-trips take 3–7s without downloading the file; keep a dedicated budget and concurrency cap. */
 const DATALESS_THUMBNAIL_TIMEOUT_MS = 15_000;
-const DATALESS_THUMBNAIL_CONCURRENCY = 4;
+const DATALESS_THUMBNAIL_CONCURRENCY = 8;
 const SYSTEM_ICON_TIMEOUT_MS = 4000;
 /** Plain-text extensions have no cloud-cached visual thumbnail in iCloud; skip Quick Look on dataless placeholders so `getFileIcon` answers in ~1ms. */
 const DATALESS_TEXT_ONLY_EXTENSIONS: Readonly<Record<string, true>> = {
@@ -225,6 +225,8 @@ export interface IconProviderDeps {
 	readonly cacheMaxEntries?: number;
 	/** Icon cache byte cap; defaults to ICON_CACHE_MAX_BYTES. */
 	readonly cacheMaxBytes?: number;
+	/** Max bytes to materialize via NSFileCoordinator for dataless files with no cloud thumbnail; defaults to DATALESS_MAX_MATERIALIZE_BYTES. */
+	readonly datalessMaxMaterializeBytes?: number;
 	/** Defaults to console.warn. */
 	readonly warn?: (message: string) => void;
 }
@@ -394,6 +396,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	// Preview thumbnails come from the in-process Quick Look Thumbnailing API on
 	// macOS/Windows; other platforms keep the OS's per-type icon.
 	const usesNativeThumbnails = platform === "darwin" || platform === "win32";
+	const datalessMaxMaterializeBytes = deps.datalessMaxMaterializeBytes ?? DATALESS_MAX_MATERIALIZE_BYTES;
 	const thumbnail = deps.thumbnail ?? defaultThumbnail;
 	const embeddedImage = deps.embeddedImage ?? defaultEmbeddedImage;
 	const systemIcon = deps.systemIcon ?? defaultSystemIcon;
@@ -489,6 +492,10 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 		let timedOut = false;
 		let rawPromise: Promise<Uint8Array | null> | null = null;
 		try {
+			if (dataless) {
+				const prepared = await prepareDatalessThumbnail(target.path, datalessMaxMaterializeBytes);
+				if (prepared === "skip") return null;
+			}
 			let bytes: Uint8Array | null = null;
 			try {
 				rawPromise = thumbnail(target.path, size);

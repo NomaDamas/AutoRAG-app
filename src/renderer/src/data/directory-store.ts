@@ -44,11 +44,15 @@ const DEFAULT_ICON_FLUSH_MS = 60;
 const ICON_REQUEST_MEMORY = 20_000;
 /** Rows enriched per wave so the visible screenful paints thumbnails without waiting for hundreds of off-screen rows. */
 const ENRICH_WAVE_SIZE = 24;
+/** Max rows per viewport thumbnail IPC call so scrolled rows paint progressively every few icons instead of waiting for the whole overscan window. */
+const ICON_FLUSH_CHUNK_SIZE = 8;
 
 export interface DirectorySource {
 	list(dir: string): Promise<readonly FinderEntry[]>;
 	readEntries(dir: string, paths: readonly string[]): Promise<EntryPatch>;
 	enrich(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
+	/** OS kind only (`thumbnails: false`), so off-screen rows get Sort/Group kinds without queuing hundreds of thumbnails ahead of scroll. */
+	enrichKinds?(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
 	finderMetadata(entries: readonly FinderEntry[]): Promise<readonly FsFinderEnrichment[]>;
 	onLive(listener: (message: LiveMessage) => void): () => void;
 	onReconnect(listener: () => void): () => void;
@@ -192,13 +196,34 @@ export function createDirectoryStore(options: {
 		const needKind = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasKind(entry));
 		const needMetadata = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasMetadata(entry));
 		if (needKind.length > 0) {
-			void runWaves(
-				needKind,
-				isActive,
-				(wave) => source.enrich(wave),
-				(enriched) => sidecar.applyEnrichment(enriched),
-				"background enrichment failed",
-			);
+			if (source.enrichKinds !== undefined && needKind.length > ENRICH_WAVE_SIZE) {
+				const firstWave = needKind.slice(0, ENRICH_WAVE_SIZE);
+				const rest = needKind.slice(ENRICH_WAVE_SIZE);
+				const enrichKinds = source.enrichKinds;
+				void (async () => {
+					try {
+						if (!isActive()) return;
+						sidecar.applyEnrichment(await source.enrich(firstWave));
+						await runWaves(
+							rest,
+							isActive,
+							(wave) => enrichKinds(wave),
+							(enriched) => sidecar.applyEnrichment(enriched),
+							"background kind enrichment failed",
+						);
+					} catch (error) {
+						console.error("background enrichment failed", error);
+					}
+				})();
+			} else {
+				void runWaves(
+					needKind,
+					isActive,
+					(wave) => source.enrich(wave),
+					(enriched) => sidecar.applyEnrichment(enriched),
+					"background enrichment failed",
+				);
+			}
 		}
 		if (needMetadata.length > 0) {
 			void runWaves(
@@ -287,11 +312,15 @@ export function createDirectoryStore(options: {
 				if (oldest.done !== true) iconRequested.delete(oldest.value);
 			}
 		}
-		// Icons only: the background pass already asked for these rows' Finder metadata.
-		source
-			.enrich(batch)
-			.then((enriched) => sidecar.applyEnrichment(enriched))
-			.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
+		// Icons only, sliced so the first visible rows paint as soon as their chunk finishes
+		// instead of waiting for the entire virtualized overscan window (~40 rows).
+		for (let offset = 0; offset < batch.length; offset += ICON_FLUSH_CHUNK_SIZE) {
+			const chunk = batch.slice(offset, offset + ICON_FLUSH_CHUNK_SIZE);
+			source
+				.enrich(chunk)
+				.then((enriched) => sidecar.applyEnrichment(enriched))
+				.catch((error: unknown) => console.error("viewport thumbnail enrichment failed", error));
+		}
 	};
 
 	const onLive = (message: LiveMessage): void => {
