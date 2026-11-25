@@ -1094,6 +1094,94 @@ export function AutomationSuggestionCard({
 	);
 }
 
+/**
+ * The rule the agent is about to save, filled in (Figma 672:3740): the 언제 sentence of chips over the 할 일 line, or
+ * the command a program rule runs, read as it is. A folder, kind or change the chips do not offer stays as written
+ * until its chip is changed.
+ */
+export function AutomationDraftCard({
+	initial,
+	onCreate,
+	onCancel,
+}: {
+	readonly initial: AutomationDraft;
+	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	readonly onCancel: () => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const locations = useLocations();
+	const first = initial.paths[0] ?? null;
+	const [folder, setFolder] = useState<string | null>(first);
+	const [kind, setKind] = useState<KindId | null>(kindOf(initial.include));
+	const [event, setEvent] = useState<EventId | null>(eventOf(initial.events));
+	const [task, setTask] = useState(initial.agent?.task ?? "");
+	const [busy, setBusy] = useState(false);
+	const standard = standardFolders(locations);
+	const folders = folder === null || standard.some((option) => option.value === folder) ? standard : [...standard, { value: folder, label: folderLabel(folder), icon: <FolderGlyph size={13} /> }];
+	const draft: AutomationDraft | null =
+		folder === null
+			? null
+			: {
+					paths: folder === first ? initial.paths : [folder],
+					events: event === null ? initial.events : EVENTS[event],
+					include: kind === null ? initial.include : KIND_GLOBS[kind],
+					...(initial.agent === undefined ? { run: initial.run ?? [] } : { agent: { profile: initial.agent.profile, task: task.trim() } }),
+				};
+	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
+	const events: readonly ChipOption<EventId>[] = (["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) }));
+	const chips: Readonly<Record<string, ReactNode>> = {
+		folder: <ChipSelect value={folder} options={folders} label={folder === null ? t("automations.create.pickFolder") : folderLabel(folder)} icon={<FolderGlyph size={13} />} testId="automation-request-folder" onChange={setFolder} />,
+		kind: <ChipSelect value={kind} options={kinds} label={kind === null ? t("automations.kinds.noun", { kinds: kindsText(initial.include) }) : t("automations.create.kindLabel")} testId="automation-request-kind" onChange={setKind} />,
+		event: <ChipSelect value={event} options={events} label={event === null ? t("automations.create.event.other") : t("automations.create.eventLabel")} testId="automation-request-event" onChange={setEvent} />,
+	};
+	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
+	const canSubmit = draft !== null && (initial.agent === undefined ? (initial.run?.length ?? 0) > 0 : task.trim().length > 0) && !busy;
+	return (
+		<div className="flex flex-col gap-8 rounded-12 border border-border bg-window p-12" data-automation-request>
+			<span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span>
+			<div className="flex flex-wrap items-center gap-6">
+				{sentence.map((part, index) =>
+					part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
+				)}
+			</div>
+			<span className="text-badge leading-[15px] text-ink-muted">{initial.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
+			{initial.agent === undefined ? (
+				<code className="block rounded-6 bg-subtle-alt px-8 py-6 font-mono text-badge leading-[16px] text-ink [overflow-wrap:anywhere]" data-testid="automation-request-command">
+					{(initial.run ?? []).join(" ")}
+				</code>
+			) : (
+				<textarea
+					value={task}
+					rows={2}
+					aria-label={t("automations.create.task")}
+					placeholder={t("automations.create.taskPlaceholder")}
+					data-testid="automation-request-task"
+					className="w-full resize-none rounded-6 border-[0.5px] border-divider bg-subtle-alt px-8 py-6 text-meta leading-[18px] text-ink outline-none focus:border-accent"
+					onChange={(change) => setTask(change.target.value)}
+				/>
+			)}
+			<div className="flex items-center justify-end gap-12">
+				<button type="button" data-action="automation-request-cancel" className="border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink" onClick={onCancel}>
+					{t("common.cancel")}
+				</button>
+				<button
+					type="button"
+					data-action="automation-request-add"
+					disabled={!canSubmit}
+					className="inline-flex h-28 items-center rounded-6 border-0 bg-accent px-10 text-meta font-medium text-on-accent cursor-pointer hover:bg-accent-hover disabled:cursor-default disabled:opacity-50"
+					onClick={() => {
+						if (draft === null) return;
+						setBusy(true);
+						void onCreate(draft).finally(() => setBusy(false));
+					}}
+				>
+					{t("automations.recs.add")}
+				</button>
+			</div>
+		</div>
+	);
+}
+
 export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [page, setPage] = useState<"list" | "all">("list");

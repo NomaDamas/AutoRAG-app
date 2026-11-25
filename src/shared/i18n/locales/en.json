@@ -814,6 +814,9 @@
       "lead": "Here's the automation. Change any part, then select Add.",
       "created": "Automation created. Turn it on or off on the Automations side.",
       "view": "View"
+    },
+    "request": {
+      "command": "Command"
     }
   },
   "osMenu": {

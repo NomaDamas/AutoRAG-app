@@ -16,6 +16,7 @@ import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-image
 import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
+import { confirmAutomationSaves } from "./automation-confirm";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
@@ -1014,10 +1015,13 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
 		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
+		const interaction = createAgentInteraction();
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), interaction);
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
+		// A rule the agent saves is shown to the person filled in first, and written only once they add it.
+		confirmAutomationSaves(agent, () => interaction.current());
 		return agent as SearchAgent;
 	};
 }
