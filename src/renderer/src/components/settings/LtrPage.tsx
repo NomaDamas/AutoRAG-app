@@ -213,7 +213,7 @@ export function LtrPage({
 	const error = writeError ?? actionError;
 
 	const logged = ltr?.loggedRuns ?? 0;
-	const needed = ltr?.minTrainingRuns ?? 100;
+	const needed = ltr?.minTrainingRuns ?? 300;
 	const missing = Math.max(0, needed - logged);
 	const canTrain = ltr !== null && missing === 0 && !training;
 	const serving = ltr?.serving;

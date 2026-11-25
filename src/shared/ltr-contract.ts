@@ -31,6 +31,8 @@ export interface LtrHoldout {
 	readonly model: { readonly ndcg10: number; readonly mrr: number };
 	/** 95% bootstrap interval of the per-search MRR difference (model minus baseline). */
 	readonly deltaMrrCi95: readonly [number, number];
+	/** 95% bootstrap interval of the per-search nDCG@10 difference (model minus baseline); added in librarian v2.15. */
+	readonly deltaNdcg10Ci95?: readonly [number, number];
 }
 
 export interface LtrModel {
@@ -102,6 +104,6 @@ export const EMPTY_LTR_SNAPSHOT: LtrSnapshot = {
 	models: [],
 	lastAttempt: null,
 	autoTrain: { enabled: false, minNewRuns: 200, due: false },
-	minTrainingRuns: 100,
+	minTrainingRuns: 300,
 	training: false,
 };
