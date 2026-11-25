@@ -742,7 +742,7 @@ function AutomationDetail({
 	return (
 		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
 			<div className="flex flex-col gap-6">
-				<Breadcrumb crumbs={crumbs} />
+				<Breadcrumb crumbs={crumbs} current={ruleTitle(rule)} />
 				<div className="flex min-w-0 items-center gap-8">
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
@@ -783,10 +783,13 @@ interface Crumb {
 	readonly onClick: () => void;
 }
 
-/** Where a page under the list sits (자동화 › 전체 기록): each step takes the person straight to that page, quiet until hovered. */
-function Breadcrumb({ crumbs }: { readonly crumbs: readonly Crumb[] }): ReactElement {
+/**
+ * Where a page under the list sits (자동화 › 전체 기록 › the rule): each earlier step takes the person straight to that
+ * page, quiet until hovered; the last step names the page they are on and is not a link.
+ */
+function Breadcrumb({ crumbs, current }: { readonly crumbs: readonly Crumb[]; readonly current: string }): ReactElement {
 	return (
-		<nav aria-label="breadcrumb" className="flex flex-none items-center gap-4 self-start text-meta leading-[16px] text-ink-muted">
+		<nav aria-label="breadcrumb" className="flex min-w-0 max-w-full flex-none items-center gap-4 self-start text-meta leading-[16px] text-ink-muted">
 			{crumbs.map((crumb, index) => (
 				<Fragment key={crumb.action}>
 					{index === 0 ? null : <ChevronRightIcon size={11} className="flex-none text-ink-faint" />}
@@ -795,6 +798,10 @@ function Breadcrumb({ crumbs }: { readonly crumbs: readonly Crumb[] }): ReactEle
 					</button>
 				</Fragment>
 			))}
+			<ChevronRightIcon size={11} className="flex-none text-ink-faint" />
+			<span aria-current="page" className="min-w-0 truncate text-ink-body" data-crumb-current>
+				{current}
+			</span>
 		</nav>
 	);
 }
@@ -823,7 +830,7 @@ function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: reado
 	}
 	return (
 		<section className="flex flex-col gap-6" data-automation-all-runs>
-			<Breadcrumb crumbs={crumbs} />
+			<Breadcrumb crumbs={crumbs} current={t("automations.all.title")} />
 			<h1 className="m-0 text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
 			{all.length === 0 ? (
 				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
