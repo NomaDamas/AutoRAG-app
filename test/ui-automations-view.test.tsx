@@ -146,13 +146,13 @@ describe("AutomationsView list", () => {
 		const onShowChat = vi.fn();
 		render(props({ onShowChat }));
 		expect(host.querySelector("[data-automations-head] strong")).toBeNull();
-		expect(text(host.querySelector("[data-automations-head]"))).toBe("ChatMy automations");
+		expect(text(host.querySelector("[data-automations-head]"))).toBe("ChatAutomations");
 		const segment = host.querySelector('[data-agent-segment][role="tablist"]');
 		expect(segment?.getAttribute("data-agent-segment")).toBe("automations");
 		const sides = [...(segment?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])];
 		expect(sides.map((side) => [side.dataset.side, side.textContent, side.getAttribute("aria-selected")])).toEqual([
 			["chat", "Chat", "false"],
-			["automations", "My automations", "true"],
+			["automations", "Automations", "true"],
 		]);
 		click(sides[1]);
 		expect(onShowChat).not.toHaveBeenCalled();

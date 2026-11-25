@@ -419,7 +419,7 @@
     "segment": {
       "label": "AI 助手视图",
       "chat": "聊天",
-      "automations": "我的自动化"
+      "automations": "自动化"
     }
   },
   "appError": {

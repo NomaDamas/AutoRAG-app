@@ -14,7 +14,7 @@
  *                      to the Info view (Figma 328:3991, 328:5742).
  */
 
-import { useCallback, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
+import { Fragment, useCallback, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contract";
 import { useTranslation } from "react-i18next";
@@ -844,6 +844,39 @@ export function InspectorChatView({
 	}, [lastAnswered, lastKey]);
 	// The rule 새 자동화 started here: added (the card gives way to the line that says so) or still being filled in.
 	const [starterAdded, setStarterAdded] = useState<number | null>(null);
+	// 새 자동화 started here: the person's 새 자동화 만들기, the reply, and the card, rising one after another. It keeps
+	// its place in the conversation, so a question asked after it comes below it, as in any chat.
+	const starter =
+		newAutomation === null || automationsShell === null ? null : (
+						// Figma 672:3740: the person's 새 자동화 만들기, the reply, and the card, rising one after another.
+						<div key={newAutomation} className="flex flex-col gap-10" data-automation-starter>
+							<div className="flex max-w-[90%] self-end animate-rise [animation-fill-mode:both]">
+								<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window">{t("automations.starter.ask")}</div>
+							</div>
+							<p className="m-0 text-sm leading-[1.5] text-ink-body animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
+							<div className="animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+								{starterAdded === newAutomation ? (
+									<AutomationNudge narrow template="pdf" phase="created" onPhase={() => undefined} onLater={() => undefined} onCreate={async () => false} />
+								) : (
+									<AutomationDraftCard
+										initial={null}
+										onCancel={() => onNewAutomationDone?.()}
+										onCreate={async (draft) => {
+											const ok = await automationsShell.props.onCreate(draft);
+											if (ok) setStarterAdded(newAutomation);
+											return ok;
+										}}
+									/>
+								)}
+							</div>
+						</div>
+				
+		);
+	const [starterAt, setStarterAt] = useState<{ readonly key: number; readonly at: number } | null>(null);
+	useEffect(() => {
+		if (newAutomation !== null) setStarterAt({ key: newAutomation, at: turns.length });
+	}, [newAutomation]);
+	const starterIndex = starterAt !== null && starterAt.key === newAutomation ? Math.min(starterAt.at, turns.length) : turns.length;
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -908,16 +941,19 @@ export function InspectorChatView({
 				}}
 			>
 				{turns.map((turn, index) => (
-					<TurnView
-						key={`${tab.chat?.chatId ?? ""}:${index}`}
-						turn={turn}
-						live={running && index === turns.length - 1}
-						steerLabels={steerLabels}
-						imageActions={imageActions}
-						onReveal={onReveal}
-						onPreview={onPreview}
-					/>
+					<Fragment key={`${tab.chat?.chatId ?? ""}:${index}`}>
+						{index === starterIndex ? starter : null}
+						<TurnView
+							turn={turn}
+							live={running && index === turns.length - 1}
+							steerLabels={steerLabels}
+							imageActions={imageActions}
+							onReveal={onReveal}
+							onPreview={onPreview}
+						/>
+					</Fragment>
 				))}
+				{starterIndex >= turns.length ? starter : null}
 				{suggestion !== null && suggestion.key === lastKey && suggestion.phase !== "gone" && lastAnswered && automationsShell !== null ? (
 					<AutomationNudge
 						narrow
@@ -931,30 +967,6 @@ export function InspectorChatView({
 						onCreate={automationsShell.props.onCreate}
 					/>
 				) : null}
-				{newAutomation === null || automationsShell === null ? null : (
-					// Figma 672:3740: the person's 새 자동화 만들기, the reply, and the card, rising one after another.
-					<div key={newAutomation} className="flex flex-col gap-10" data-automation-starter>
-						<div className="flex max-w-[90%] self-end animate-rise [animation-fill-mode:both]">
-							<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window">{t("automations.starter.ask")}</div>
-						</div>
-						<p className="m-0 text-sm leading-[1.5] text-ink-body animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
-						<div className="animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
-							{starterAdded === newAutomation ? (
-								<AutomationNudge narrow template="pdf" phase="created" onPhase={() => undefined} onLater={() => undefined} onCreate={async () => false} />
-							) : (
-								<AutomationDraftCard
-									initial={null}
-									onCancel={() => onNewAutomationDone?.()}
-									onCreate={async (draft) => {
-										const ok = await automationsShell.props.onCreate(draft);
-										if (ok) setStarterAdded(newAutomation);
-										return ok;
-									}}
-								/>
-							)}
-						</div>
-					</div>
-				)}
 				{tab.queued.length === 0 ? null : (
 					<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
 						{tab.queued.map((text, index) => (
