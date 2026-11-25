@@ -95,7 +95,7 @@ const probe = (page) =>
 			text: nav.innerText,
 			more: trail.querySelectorAll("[data-path-more]").length,
 			segments,
-			all: [...measure.querySelectorAll("[data-measure-segment]")].map((button) => ({ label: button.textContent, width: button.getBoundingClientRect().width })),
+			all: [...measure.querySelectorAll("[data-measure-segment]")].map((button) => ({ label: button.querySelector(".path-label")?.textContent ?? button.textContent, width: button.getBoundingClientRect().width })),
 			layout: {
 				separator: measure.querySelector("[data-measure-separator]").getBoundingClientRect().width + gap,
 				gap,
@@ -274,6 +274,108 @@ check(
 			shots.push({ name, key: stateClass(state), width, height, fits: signature(state), labels: state.segments.map((segment) => segment.label) });
 		}
 		check(`file selected at ${width}px wide: fit matches at every height`, fits.size === 1, [...fits].join(" | "));
+	}
+
+	// Right-click "Copy Path" on segments, volume/empty bar, folded "..." dropdown, and Escape/outside-click dismissal.
+	{
+		const readClipboard = () => app.evaluate(({ clipboard }) => clipboard.readText());
+		const clearClipboard = () => app.evaluate(({ clipboard }) => clipboard.writeText(""));
+		const leafDir = join(fixture, leafName);
+		const filePath = join(leafDir, fileName);
+
+		await resize(WIDEST, 900);
+		const copyMenu = page.locator('[data-path-menu] [role="menu"]');
+		const copyItem = page.locator('[data-path-menu] [role="menuitem"]');
+		const toast = page.locator('[role="status"]');
+
+		// 1. Folder segment right-click: menu fits inside viewport, copies folder path, shows toast, never opens editor.
+		await clearClipboard();
+		const folderSeg = page.locator("nav.pathbar .path-trail .path-seg").filter({ hasText: fixtureName }).first();
+		await folderSeg.click({ button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		await page.waitForTimeout(200);
+		const menuBox = await copyMenu.boundingBox();
+		const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+		check(
+			"copy menu sits completely inside the viewport above the bottom edge",
+			menuBox !== null && menuBox.x >= 0 && menuBox.y >= 0 && menuBox.x + menuBox.width <= viewport.width && menuBox.y + menuBox.height <= viewport.height,
+			JSON.stringify({ menuBox, viewport }),
+		);
+		await page.screenshot({ path: join(EVIDENCE, "copy-menu-folder.png") });
+		await copyItem.click();
+		await page.waitForFunction(() => document.querySelector('[data-path-menu] [role="menu"]') === null, { timeout: 5000 });
+		await toast.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+		const folderClip = await readClipboard();
+		check("right-click folder segment copies that folder's path", folderClip === fixture, JSON.stringify({ got: folderClip, want: fixture }));
+		check("folder Copy Path never opens the path editor", (await page.locator("nav.pathbar input").count()) === 0);
+
+		// 2. Selected file segment right-click copies the file's full path.
+		await clearClipboard();
+		const fileSeg = page.locator("nav.pathbar .path-trail .path-seg").filter({ hasText: fileName }).first();
+		await fileSeg.click({ button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		await page.waitForTimeout(200);
+		await page.screenshot({ path: join(EVIDENCE, "copy-menu-file.png") });
+		await copyItem.click();
+		await page.waitForFunction(() => document.querySelector('[data-path-menu] [role="menu"]') === null, { timeout: 5000 });
+		const fileClip = await readClipboard();
+		check("right-click file segment copies the selected file's full path", fileClip === filePath, JSON.stringify({ got: fileClip, want: filePath }));
+
+		// 3. Volume label and trailing empty bar copy the folder in view (Windows drive root copies drive root).
+		await clearClipboard();
+		const volumeSeg = page.locator("nav.pathbar .path-trail .path-seg").first();
+		await volumeSeg.click({ button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		await copyItem.click();
+		await page.waitForFunction(() => document.querySelector('[data-path-menu] [role="menu"]') === null, { timeout: 5000 });
+		const volumeClip = await readClipboard();
+		const expectedVolume = isWindows ? `${homeSegments[0]}\\` : leafDir;
+		check("right-click volume segment copies expected path", volumeClip === expectedVolume, JSON.stringify({ got: volumeClip, want: expectedVolume }));
+
+		await clearClipboard();
+		const navBox = await page.locator("nav.pathbar").boundingBox();
+		await page.mouse.click(navBox.x + navBox.width - 6, navBox.y + navBox.height / 2, { button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		await copyItem.click();
+		await page.waitForFunction(() => document.querySelector('[data-path-menu] [role="menu"]') === null, { timeout: 5000 });
+		const emptyClip = await readClipboard();
+		check("right-click trailing empty bar copies current folder path", emptyClip === leafDir, JSON.stringify({ got: emptyClip, want: leafDir }));
+		check("empty bar right-click never opens the path editor", (await page.locator("nav.pathbar input").count()) === 0);
+
+		// 4. Folded "..." dropdown item right-click offers Copy Path.
+		await resize(NARROWEST, 820);
+		await clearClipboard();
+		await page.locator("nav.pathbar .path-trail [data-path-more]").click();
+		const foldedFolder = page.locator('.path-more-menu [role="menuitem"][data-crumb-path]').first();
+		await foldedFolder.waitFor({ state: "visible", timeout: 5000 });
+		const foldedWant = await foldedFolder.getAttribute("data-copy-path");
+		await foldedFolder.click({ button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		await page.waitForTimeout(200);
+		await page.screenshot({ path: join(EVIDENCE, "copy-menu-folded.png") });
+		await copyItem.click();
+		await page.waitForFunction(() => document.querySelector('[data-path-menu] [role="menu"]') === null, { timeout: 5000 });
+		const foldedClip = await readClipboard();
+		check("right-click folded dropdown item copies its path", foldedClip === foldedWant, JSON.stringify({ got: foldedClip, want: foldedWant }));
+
+		// 5. Escape closes the copy menu without copying; clicking the empty bar to dismiss does not open the editor.
+		await resize(WIDEST, 900);
+		await clearClipboard();
+		await folderSeg.click({ button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		await page.keyboard.press("Escape");
+		check("Escape closes the copy menu", (await copyMenu.count()) === 0);
+		check("Escape does not copy", (await readClipboard()) === "");
+
+		await folderSeg.click({ button: "right" });
+		await copyMenu.waitFor({ state: "visible", timeout: 5000 });
+		const barBox2 = await page.locator("nav.pathbar").boundingBox();
+		await page.mouse.click(barBox2.x + barBox2.width - 6, barBox2.y + barBox2.height / 2);
+		check("clicking empty bar dismisses copy menu without opening path editor", (await copyMenu.count()) === 0 && (await page.locator("nav.pathbar input").count()) === 0);
+		// A second click on the empty bar still opens the path editor normally.
+		await page.mouse.click(barBox2.x + barBox2.width - 6, barBox2.y + barBox2.height / 2);
+		check("a subsequent click on the empty bar still opens the path editor", (await page.locator("nav.pathbar input").count()) === 1);
+		await page.keyboard.press("Escape");
 	}
 
 	await Bun.write(join(EVIDENCE, "result.json"), JSON.stringify({ platform: process.platform, shots, sweeps, checks: results }, null, 2));

@@ -252,7 +252,7 @@ export function PathBar({
 		setMoreOpen((open) => !open);
 	};
 	useLayoutEffect(() => {
-		if (moreOpen) menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+		if (moreOpen) menuRef.current?.querySelector<HTMLButtonElement>("button[data-crumb-path]")?.focus();
 	}, [moreOpen]);
 	useEffect(() => {
 		if (!moreOpen) return;
@@ -281,7 +281,7 @@ export function PathBar({
 		if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
 		event.preventDefault();
 		event.stopPropagation();
-		const options = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+		const options = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[data-crumb-path]") ?? [])];
 		if (options.length === 0) return;
 		const at = options.indexOf(document.activeElement as HTMLButtonElement);
 		const next =
@@ -291,13 +291,32 @@ export function PathBar({
 
 	// Right-click: "Copy Path" for the segment under the pointer, else for the folder in view.
 	const [copyMenu, setCopyMenu] = useState<{ readonly cursor: { readonly x: number; readonly y: number }; readonly path: string } | null>(null);
-	const closeCopyMenu = useCallback(() => setCopyMenu(null), []);
+	// Dismissing the copy menu on mousedown must swallow only the matching click on the bar, never a later click.
+	const dismissClickRef = useRef(false);
+	const closeCopyMenu = useCallback(() => {
+		dismissClickRef.current = true;
+		setCopyMenu(null);
+		// Clear after the click turn settles: mouseup fires before click in real Chromium, so wait a macrotask past mouseup.
+		const reset = (): void => {
+			dismissClickRef.current = false;
+		};
+		window.addEventListener("click", reset, { once: true });
+		window.addEventListener(
+			"mouseup",
+			() => {
+				window.setTimeout(reset, 0);
+			},
+			{ once: true },
+		);
+	}, []);
 	const openCopyMenu = (event: MouseEvent<HTMLElement>): void => {
+		if (editing) return;
 		event.preventDefault();
 		event.stopPropagation();
-		if (editing || (event.target as Element).closest("[data-path-menu]") !== null) return;
+		if ((event.target as Element).closest("[data-path-menu]") !== null) return;
 		const owner = (event.target as Element).closest<HTMLElement>("[data-copy-path]");
 		setMoreOpen(false);
+		dismissClickRef.current = false;
 		setCopyMenu({ cursor: { x: event.clientX, y: event.clientY }, path: owner?.dataset.copyPath ?? path });
 	};
 	useEffect(() => {
@@ -317,6 +336,10 @@ export function PathBar({
 	}, [path, editing]);
 
 	const startEditing = (event: MouseEvent<HTMLElement>): void => {
+		if (dismissClickRef.current) {
+			dismissClickRef.current = false;
+			return;
+		}
 		if (editing || (event.target as Element).closest("[data-crumb-path], [data-path-more], [data-path-menu]") !== null) return;
 		setDraft(path);
 		setCompletionEnabled(false);
@@ -432,11 +455,17 @@ export function PathBar({
 							key={segment.key}
 							type="button"
 							role="menuitem"
-							disabled={segment.path === null}
+							aria-disabled={segment.path === null ? true : undefined}
+							tabIndex={segment.path === null ? -1 : undefined}
 							title={segment.path ?? segment.label}
 							data-crumb-path={segment.path ?? undefined}
 							data-copy-path={segment.copyPath}
-							className="flex h-28 w-full items-center gap-6 rounded-4 border-0 bg-transparent px-6 text-left text-badge text-ink-body enabled:cursor-pointer enabled:hover:bg-hover enabled:focus-visible:bg-hover disabled:text-ink-faint focus-visible:outline-none"
+							className={cn(
+								"flex h-28 w-full items-center gap-6 rounded-4 border-0 bg-transparent px-6 text-left text-badge focus-visible:outline-none",
+								segment.path !== null
+									? "cursor-pointer text-ink-body hover:bg-hover focus-visible:bg-hover"
+									: "cursor-default text-ink-faint",
+							)}
 							onClick={() => {
 								if (segment.path === null) return;
 								setMoreOpen(false);
