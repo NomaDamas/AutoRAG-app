@@ -908,10 +908,21 @@ async function countFiles(path: string, keep: (entry: { readonly name: string; r
  * reached search (or, when this app has not seen an index run, how many of its files changed this week). A template
  * with nothing to point at gets no reason, and its card falls back to when it would run.
  */
-function useRecommendationReasons(locations: readonly FsLocation[]): Readonly<Partial<Record<TemplateId, string>>> {
+type Reasons = Readonly<Partial<Record<TemplateId, string>>>;
+
+/** The reasons last counted, so coming back to the page shows them at once instead of counting from nothing. */
+let lastReasons: Reasons | null = null;
+
+/**
+ * Why each recommendation is worth having, counted from the person's folders; null until the first count is in, so a
+ * card does not show its fallback (when it would run) for a moment and then swap it for the reason.
+ */
+function useRecommendationReasons(locations: readonly FsLocation[]): Reasons | null {
 	const { t } = useTranslation();
-	const [reasons, setReasons] = useState<Readonly<Partial<Record<TemplateId, string>>>>({});
+	const [reasons, setReasons] = useState<Reasons | null>(lastReasons);
 	useEffect(() => {
+		// The places are not known yet: counting now would find nothing and flash the fallback.
+		if (locations.length === 0) return;
 		let live = true;
 		const folder = (icon: Template["folder"]): string | null => locations.find((location) => location.icon === icon && location.available)?.path ?? null;
 		const downloads = folder("downloads");
@@ -934,6 +945,7 @@ function useRecommendationReasons(locations: readonly FsLocation[]): Readonly<Pa
 				const changed = await countFiles(documents, (entry) => entry.mtimeMs >= weekAgo);
 				if (changed !== null && changed > 0) next.refresh = t("automations.recs.reason.refreshChanged", { count: changed });
 			}
+			lastReasons = next;
 			if (live) setReasons(next);
 		})();
 		return () => {
@@ -961,8 +973,8 @@ function RecommendationCard({
 	readonly locations: readonly FsLocation[];
 	/** While there are no rules the recommendations are the page's invitation: a soft aurora sits behind each card. */
 	readonly glow?: boolean;
-	/** Why it is worth having, from the person's files; without one the card says when it would run. */
-	readonly reason: string | undefined;
+	/** Why it is worth having, from the person's files; without one the card says when it would run; null while counting. */
+	readonly reason: string | undefined | null;
 	readonly onAdd: (draft: AutomationDraft) => Promise<boolean>;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -991,8 +1003,9 @@ function RecommendationCard({
 					)}
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
 						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined ? undefined : "true"}>
-							{reason ?? when}
+						{/* While the reasons are being counted the line keeps its height and shows nothing yet. */}
+						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined || reason === null ? undefined : "true"}>
+							{reason === null ? "\u00a0" : (reason ?? when)}
 						</span>
 					</span>
 				</button>
@@ -1231,7 +1244,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	}, [detail?.id, page]);
 	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
 	const reasons = useRecommendationReasons(locations);
-	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons[template.id]} glow={state.rules.length === 0} onAdd={onCreate} />);
+	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} glow={state.rules.length === 0} onAdd={onCreate} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			{/* The AI 에이전트 tab's head: only 채팅 | 자동화 at the very middle, the same height as the chat side's and with no line under it. */}
@@ -1335,7 +1348,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 									<h2 className="m-0 text-meta leading-[16px] text-ink-muted">{t("automations.recs.section")}</h2>
 									<div className="flex flex-col overflow-hidden rounded-12 bg-hover [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider" data-quiet-recommendations>
 										{recommendations.map((template) => (
-											<RecommendationCard key={template.id} quiet template={template} locations={locations} reason={reasons[template.id]} onAdd={onCreate} />
+											<RecommendationCard key={template.id} quiet template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} onAdd={onCreate} />
 										))}
 									</div>
 								</section>
