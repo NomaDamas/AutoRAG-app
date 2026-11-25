@@ -45,6 +45,7 @@ import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import { SeedLoader } from "./SeedLoader";
 import { PipeTable } from "./PipeTable";
 import dazziLogo from "../assets/dazzi-logo.png";
@@ -61,7 +62,7 @@ import {
 import { HISTORY_SEARCH_DEBOUNCE_MS, groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowDownIcon, ArrowUpIcon, CheckIcon, CloseIcon, FileTextIcon, FolderOutlineIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SearchIcon, SparklesIcon, TabCloseIcon, ZapIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, FileTextIcon, FolderOutlineIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SearchIcon, SparklesIcon, TabCloseIcon, ZapIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { FileMention } from "./FileMention";
@@ -1361,30 +1362,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					) : null}
 				</div>
 			</div>
-			{awayFromBottom ? (
-				// Scrolled up: a round button floats above the composer. While Dazzi is answering it shows the loader, and the arrow on hover.
-				<button
-					type="button"
-					data-action="scroll-to-bottom"
-					aria-label={t("aiSearch.scrollToBottom")}
-					title={t("aiSearch.scrollToBottom")}
-					className="group absolute bottom-12 left-1/2 z-10 grid size-32 -translate-x-1/2 cursor-pointer place-items-center rounded-full border border-border bg-window p-0 text-ink shadow-[0_2px_8px_rgba(0,0,0,0.14)] transition-colors duration-(--dur-color) ease-out hover:bg-hover"
-					onClick={scrollToBottom}
-				>
-					{searching ? (
-						<>
-							<span className="flex group-hover:hidden" aria-hidden="true">
-								<SeedLoader />
-							</span>
-							<span className="hidden group-hover:flex" aria-hidden="true">
-								<ArrowDownIcon size={16} />
-							</span>
-						</>
-					) : (
-						<ArrowDownIcon size={16} />
-					)}
-				</button>
-			) : null}
+			{awayFromBottom ? <ScrollToBottomButton answering={searching} onClick={scrollToBottom} /> : null}
 			</div>
 
 			<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>

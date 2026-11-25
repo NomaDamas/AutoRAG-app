@@ -30,6 +30,7 @@ import { drawQuickAnswer } from "../state/answer-revisions";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
+import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
 import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
@@ -833,6 +834,28 @@ export function InspectorChatView({
 	const { t } = useTranslation();
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const turns = tab.chat?.turns ?? [];
+	// The chat follows its newest line only while the person is at the bottom; scrolling up lets go and shows the floating button.
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	const followRef = useRef(true);
+	const [awayFromBottom, setAwayFromBottom] = useState(false);
+	useEffect(() => {
+		const body = bodyRef.current;
+		if (body !== null && followRef.current) body.scrollTop = body.scrollHeight;
+	});
+	const onBodyScroll = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		const away = body.scrollHeight - body.scrollTop - body.clientHeight > 120;
+		followRef.current = !away;
+		setAwayFromBottom(away);
+	};
+	const scrollToBottom = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		followRef.current = true;
+		setAwayFromBottom(false);
+		body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+	};
 	// The automation the last answer suggests under it, as in the AI 에이전트 chat (Figma 672:3658, 672:3740).
 	const automationsShell = useContext(AutomationsContext);
 	const last = turns[turns.length - 1];
@@ -938,12 +961,8 @@ export function InspectorChatView({
 					/>
 				) : null}
 			</div>
-			<div
-				className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10"
-				ref={(node) => {
-					if (node !== null) node.scrollTop = node.scrollHeight;
-				}}
-			>
+			<div className="relative flex min-h-0 flex-1 flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10" ref={bodyRef} onScroll={onBodyScroll}>
 				{turns.map((turn, index) => (
 					<Fragment key={`${tab.chat?.chatId ?? ""}:${index}`}>
 						{index === starterIndex ? starter : null}
@@ -990,6 +1009,8 @@ export function InspectorChatView({
 						))}
 					</div>
 				)}
+			</div>
+			{awayFromBottom ? <ScrollToBottomButton answering={running} onClick={scrollToBottom} /> : null}
 			</div>
 			<div className="flex-none px-12 pt-12 pb-12">
 				{request === null ? (

@@ -17,9 +17,8 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, ZapIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
-import { SeedLoader } from "./SeedLoader";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -1268,14 +1267,13 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				{/* Like the chat tab's start: the page sits in the middle of the pane, a little above the true middle (1 : 1.2), and runs
-				    from the top once it is taller than the pane. */}
-				<div className="flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40 pt-32">
-				<div className="flex-1" aria-hidden="true" />
+				{/* The page's top edge is fixed a little way down the pane (about where the first screen looks balanced), so opening a menu or a card
+				    only grows it downward and nothing jumps. */}
+				<div className="flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40 pt-[clamp(32px,14vh,140px)]">
 				<div className="mx-auto flex w-full max-w-[640px] flex-none flex-col gap-24">
 					{state.error === null ? null : fixing !== undefined ? (
 						<div role="status" data-automation-fixing className="flex h-40 items-center gap-8 rounded-12 border border-border px-14 text-meta text-ink-muted">
-							<SeedLoader />
+							<SparklesIcon size={14} className="flex-none text-accent" />
 							<span className="shimmer min-w-0 flex-1 truncate">{t("automations.errors.fixing")}</span>
 							<button type="button" className="flex-none border-0 bg-transparent p-0 text-meta text-accent-text cursor-pointer hover:underline" onClick={() => openErrorFixDialog(fixing.id)}>
 								{t("automations.errors.fixingView")}
@@ -1319,7 +1317,6 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 						// suggest (glowing: the AI offers them), and a way to ask in words.
 						<section className="flex flex-col gap-10" data-automation-recommendations>
 							<div className="mb-8 flex flex-col gap-4" data-automation-hero>
-								<ZapIcon size={22} className="text-accent" />
 								<h2 className="m-0 mt-2 text-[17px] font-bold leading-[24px] text-ink">{t("automations.recs.hero")}</h2>
 								<p className="m-0 text-[13px] leading-[19px] text-ink-muted">{t("automations.recs.heroCaption")}</p>
 							</div>
@@ -1370,7 +1367,6 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 						</>
 					)}
 				</div>
-				<div className="flex-[1.2]" aria-hidden="true" />
 				</div>
 			</div>
 		</section>
