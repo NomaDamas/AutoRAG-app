@@ -1354,7 +1354,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							voiceActive
 									? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
 									: rowComposer
-										? "flex flex-row items-center gap-10 rounded-[16px] py-10 pr-10 pl-12"
+										? "flex flex-row items-end gap-10 rounded-[16px] py-10 pr-10 pl-12"
 										: "flex flex-col gap-8 rounded-[16px] px-16 py-12",
 						)}
 						onMouseDown={(event) => {
@@ -1415,8 +1415,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</div>
 						) : rowComposer ? (
 							<>
-								<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-								<div className="min-w-0 flex-1">
+								{/* A longer question grows the field upward; the mode and the button stay on its last line. */}
+								<span className="flex h-32 flex-none items-center">
+									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+								</span>
+								<div className="flex min-h-32 min-w-0 flex-1 items-center">
 									<ComposerField
 										fieldRef={inputRef}
 										value={query}
