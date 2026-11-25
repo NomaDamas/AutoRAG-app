@@ -238,4 +238,83 @@ describe("RolePicker", () => {
 		await typeQuery(input, "nonexistent-model-xyz");
 		expect(host.querySelector(".settings-menu-empty")?.textContent).toContain("No matching models");
 	});
+
+	it("shows each model's full name and full id in a two-line row with a full tooltip so long OpenRouter/Fireworks models stay distinguishable", async () => {
+		const openrouter = provider("openrouter", "OpenRouter", [
+			model("openrouter", "anthropic/claude-haiku-4.5", "Anthropic: Claude Haiku 4.5"),
+			model("openrouter", "anthropic/claude-haiku-5.5", "Anthropic: Claude Haiku 5.5"),
+			model("openrouter", "~anthropic/claude-sonnet-latest", "Anthropic: Claude Sonnet Latest"),
+		]);
+		const fireworks = provider("fireworks", "Fireworks", [
+			model("fireworks", "accounts/fireworks/models/deepseek-v4p1-flash-1017", "DeepSeek V4.1 Flash 1017"),
+		]);
+
+		await act(async () => {
+			root.render(
+				<RolePicker
+					role="answer"
+					models={catalog([openrouter, fireworks])}
+					specials={[]}
+					selected={{ kind: "model", provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" }}
+					onPick={vi.fn()}
+					onSpecial={vi.fn()}
+				/>,
+			);
+		});
+
+		// Browse mode submenu: two-line model rows with full title tooltip.
+		await hover(host.querySelector('[data-provider-trigger="openrouter"]'));
+		const submenuItems = [...document.querySelectorAll<HTMLButtonElement>(".settings-submenu .settings-menu-item")];
+		expect(submenuItems).toHaveLength(3);
+		for (const item of submenuItems) {
+			expect(item.classList.contains("is-model")).toBe(true);
+			const textWrap = item.querySelector(".settings-model-item-text");
+			expect(textWrap).not.toBeNull();
+			expect(textWrap?.querySelector("span")).not.toBeNull();
+			expect(textWrap?.querySelector("small")).not.toBeNull();
+		}
+		expect(submenuItems[0]?.getAttribute("title")).toBe("Anthropic: Claude Haiku 4.5\nanthropic/claude-haiku-4.5");
+		expect(submenuItems[1]?.getAttribute("title")).toBe("Anthropic: Claude Haiku 5.5\nanthropic/claude-haiku-5.5");
+		expect(submenuItems[1]?.querySelector(".settings-model-item-text span")?.textContent).toBe("Anthropic: Claude Haiku 5.5");
+		expect(submenuItems[1]?.querySelector(".settings-model-item-text small")?.textContent).toBe("anthropic/claude-haiku-5.5");
+		expect(submenuItems[1]?.getAttribute("aria-checked")).toBe("true");
+
+		// Search mode: marks the picker container as searching (so it can widen) and uses the same two-line model row.
+		const picker = host.querySelector(".settings-model-picker");
+		expect(picker?.classList.contains("is-searching")).toBe(false);
+		await typeQuery(host.querySelector<HTMLInputElement>(".settings-menu-search input"), "claude");
+		expect(picker?.classList.contains("is-searching")).toBe(true);
+
+		const searchItems = [...host.querySelectorAll<HTMLButtonElement>(".settings-model-search-section .settings-menu-item")];
+		expect(searchItems).toHaveLength(3);
+		expect(searchItems[2]?.classList.contains("is-model")).toBe(true);
+		expect(searchItems[2]?.getAttribute("title")).toBe("Anthropic: Claude Sonnet Latest\n~anthropic/claude-sonnet-latest");
+		expect(searchItems[2]?.querySelector(".settings-model-item-text span")?.textContent).toBe("Anthropic: Claude Sonnet Latest");
+		expect(searchItems[2]?.querySelector(".settings-model-item-text small")?.textContent).toBe("~anthropic/claude-sonnet-latest");
+	});
+
+	it("avoids duplicate tooltip text when model name equals id while preserving the id element", async () => {
+		const openrouter = provider("openrouter", "OpenRouter", [
+			model("openrouter", "cohere/rerank-v3.5", "cohere/rerank-v3.5"),
+		]);
+
+		await act(async () => {
+			root.render(
+				<RolePicker
+					role="rerank"
+					models={catalog([openrouter])}
+					specials={[]}
+					selected={null}
+					onPick={vi.fn()}
+					onSpecial={vi.fn()}
+				/>,
+			);
+		});
+
+		await hover(host.querySelector('[data-provider-trigger="openrouter"]'));
+		const item = document.querySelector<HTMLButtonElement>(".settings-submenu .settings-menu-item");
+		expect(item?.getAttribute("title")).toBe("cohere/rerank-v3.5");
+		// Still exposes <small> for consumers/QA that inspect the model id, or displays both cleanly.
+		expect(item?.querySelector("small")?.textContent).toBe("cohere/rerank-v3.5");
+	});
 });

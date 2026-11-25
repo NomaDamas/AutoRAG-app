@@ -240,10 +240,10 @@ export function AiPage({
 					<p className="ai-section-desc">{t("settingsCore.ai.rolesDesc")}</p>
 				</div>
 				<div className="ai-roles">
-					<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} unset={answerUnset(snapshot)} broken={roleBroken("answer", snapshot.config, connected)} provider={selectedProvider("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
-					<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} broken={roleBroken("decomposition", snapshot.config, connected)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-					<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} broken={roleBroken("jev", snapshot.config, connected)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
-					<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} broken={roleBroken("rerank", snapshot.config, connected)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+					<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} currentTitle={roleTitle("answer", snapshot, t)} unset={answerUnset(snapshot)} broken={roleBroken("answer", snapshot.config, connected)} provider={selectedProvider("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
+					<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} currentTitle={roleTitle("decomposition", snapshot, t)} broken={roleBroken("decomposition", snapshot.config, connected)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
+					<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} currentTitle={roleTitle("jev", snapshot, t)} broken={roleBroken("jev", snapshot.config, connected)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+					<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} currentTitle={roleTitle("rerank", snapshot, t)} broken={roleBroken("rerank", snapshot.config, connected)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
 					<EmbeddingPicker name={t("settingsCore.ai.embeddingModel")} hint={t("settingsCore.ai.embeddingHint")} />
 				</div>
 			</section>
@@ -331,6 +331,31 @@ function decompositionLabel(snapshot: AutoRagConfigSnapshot, t: TFunction): stri
 	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.defaultModel");
 }
 
+function formatModelTooltip(name: string, id: string): string | undefined {
+	const trimmedName = name.trim();
+	const trimmedId = id.trim();
+	if (trimmedName.length > 0 && trimmedId.length > 0 && trimmedName !== trimmedId) {
+		return `${trimmedName} (${trimmedId})`;
+	}
+	return trimmedName || trimmedId || undefined;
+}
+
+function roleTitle(role: "answer" | "decomposition" | "jev" | "rerank", snapshot: AutoRagConfigSnapshot, t: TFunction): string | undefined {
+	if (role === "answer") {
+		const model = asRecord(getAt(snapshot.config, ["model"]));
+		return formatModelTooltip(stringOf(model?.name), stringOf(model?.id));
+	}
+	if (role === "decomposition") {
+		const raw = getAt(snapshot.config, ["queryDecomposition"]);
+		if (raw === false) return t("settingsCore.ai.sameAsAnswer");
+		if (raw === undefined) return t("settingsCore.ai.defaultModel");
+		const model = asRecord(asRecord(raw)?.model);
+		return formatModelTooltip(stringOf(model?.name), stringOf(model?.id)) ?? t("settingsCore.ai.defaultModel");
+	}
+	if (role === "jev") return jevLabel(snapshot.config, t);
+	return rerankLabel(snapshot.config, t);
+}
+
 function thinkingValue(snapshot: AutoRagConfigSnapshot): string {
 	return stringOf(getAt(snapshot.config, ["thinking", "final"]));
 }
@@ -362,6 +387,7 @@ function RoleRow({
 	label,
 	hint,
 	current,
+	currentTitle,
 	unset = false,
 	broken = false,
 	provider,
@@ -372,6 +398,7 @@ function RoleRow({
 	readonly label: string;
 	readonly hint: string;
 	readonly current: string;
+	readonly currentTitle?: string | undefined;
 	readonly unset?: boolean;
 	readonly broken?: boolean;
 	readonly provider?: ProviderSummary | null;
@@ -393,7 +420,7 @@ function RoleRow({
 						<Ellipsis size={16} aria-hidden="true" focusable="false" />
 					</button>
 				) : null}
-				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
+				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} title={unset ? undefined : currentTitle} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
 					{provider ? <ProviderIcon small provider={provider} /> : null}
 					<span className={`settings-trigger-label${unset ? " is-muted" : ""}`}>{unset ? t("settingsCore.ai.pickModel") : current}</span>
 					<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />

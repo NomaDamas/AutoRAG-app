@@ -101,4 +101,15 @@ describe("AiPage provider icons", () => {
 		await render([provider("anthropic", "Anthropic"), provider("radius", "Radius")], { model: { provider: "radius", id: "m1" } });
 		expect(host.querySelector('[data-role="answer"] .settings-app-icon.is-sm')?.textContent).toBe("R");
 	});
+
+	it("exposes the full model name and id as a tooltip on the role trigger button", async () => {
+		await render([provider("openrouter", "OpenRouter")], {
+			model: { provider: "openrouter", id: "anthropic/claude-sonnet-5.5", name: "Anthropic: Claude Sonnet 5.5" },
+			rerank: { provider: "openrouter", model: "cohere/rerank-v3.5" },
+		});
+		const answerTrigger = host.querySelector<HTMLButtonElement>('[data-role="answer"]');
+		const rerankTrigger = host.querySelector<HTMLButtonElement>('[data-role="rerank"]');
+		expect(answerTrigger?.getAttribute("title")).toBe("Anthropic: Claude Sonnet 5.5 (anthropic/claude-sonnet-5.5)");
+		expect(rerankTrigger?.getAttribute("title")).toBe("cohere/rerank-v3.5");
+	});
 });
