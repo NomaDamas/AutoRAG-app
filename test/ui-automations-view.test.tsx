@@ -340,8 +340,9 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		const name = host.querySelector('[data-action="automation-rename"]');
 		expect(name?.getAttribute("title")).toBe("이름 바꾸기");
 		expect(name?.querySelector("svg")).not.toBeNull();
-		// The way back is ‹ 뒤로가기.
-		expect(text(host.querySelector('[data-action="automation-back"]'))).toBe("뒤로가기");
+		// The way back is the path above the name: 자동화.
+		expect(text(host.querySelector('[data-action="automation-back"]'))).toBe("자동화");
+		expect(host.querySelector('[data-action="automation-crumb-all"]')).toBeNull();
 		click(host.querySelector('[data-action="automation-back"]'));
 		expect(onCancelEdit).toHaveBeenCalledTimes(1);
 	});
@@ -458,7 +459,7 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		const page = (): HTMLElement | null => host.querySelector("[data-automation-all-runs]");
 		expect(rows()).toEqual([]);
 		expect(text(page()?.querySelector("h1"))).toBe("전체 기록");
-		expect(text(page()?.querySelector('[data-action="automation-back"]'))).toBe("뒤로가기");
+		expect(text(page()?.querySelector('[data-action="automation-back"]'))).toBe("자동화");
 		expect([...(page()?.querySelectorAll("h2") ?? [])].map((day) => day.textContent)).toEqual(["오늘", "어제"]);
 		const runs = (): Element[] => [...host.querySelectorAll("[data-automation-all-runs] [data-run]")];
 		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("새 PDF → Dazzi에게 맡기기"), expect.stringContaining("hwp5")]);
@@ -466,11 +467,22 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		expect(page()?.querySelector('[role="switch"]')).toBeNull();
 		click(runs()[1]);
 		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
+		// The rule's page opened from here says so in its path, and 전체 기록 in it goes straight back, not to the main page.
+		const opened = p.state.rules.find((item) => item.id === "hwp-to-pdf") ?? null;
+		const onCancelEdit = vi.fn();
+		render({ ...p, editing: opened, onCancelEdit });
+		await settle();
+		expect([...host.querySelectorAll("[data-automation-detail] nav button")].map((crumb) => crumb.textContent)).toEqual(["자동화", "전체 기록"]);
+		click(host.querySelector('[data-action="automation-crumb-all"]'));
+		expect(onCancelEdit).toHaveBeenCalledTimes(1);
+		render({ ...p, editing: null, onCancelEdit });
+		await settle();
+		expect(host.querySelector("[data-automation-all-runs]")).not.toBeNull();
 		Reflect.deleteProperty(runLogs, "downloads-pdf-summary");
 		Reflect.deleteProperty(runLogs, "hwp-to-pdf");
 	});
 
-	it("says there are no runs yet, and ‹ 뒤로가기 returns to the list", async () => {
+	it("says there are no runs yet, and the 자동화 crumb returns to the list", async () => {
 		render(props({ state: state([never]) }));
 		await settle();
 		click(host.querySelector('[data-action="automation-all-runs"]'));

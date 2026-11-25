@@ -808,6 +808,79 @@ export interface InspectorChatViewProps {
 	readonly onNewAutomationDone?: () => void;
 }
 
+/**
+ * The chat column's head: the title (a button that opens the chat history, in the 자동화 tab's column too), 새 채팅, and, beside a file,
+ * 크게 보기 and 닫기. It is also what the 자동화 column shows over its empty state, so a past chat can be picked before one is started.
+ */
+export function InspectorChatHead({
+	title,
+	standalone = false,
+	running = false,
+	currentChatId,
+	newChatDisabled = false,
+	onNewChat,
+	onExpand,
+	onBack,
+	onOpenChat,
+}: {
+	readonly title: string;
+	readonly standalone?: boolean;
+	readonly running?: boolean;
+	readonly currentChatId: string | null;
+	readonly newChatDisabled?: boolean;
+	readonly onNewChat: () => void;
+	readonly onExpand?: () => void;
+	readonly onBack?: () => void;
+	readonly onOpenChat: (chatId: string) => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const [historyOpen, setHistoryOpen] = useState(false);
+	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
+	return (
+		<div className="relative flex h-35 flex-none items-center gap-4 bg-subtle-alt py-6 pl-12 pr-8">
+			{/* At least 30px before the buttons (Figma 328:3802): a wider sidebar shows more of the title, and once it is whole the gap grows. */}
+			<div className="flex min-w-0 flex-1 pr-26">
+				<button
+					type="button"
+					className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
+					aria-haspopup="menu"
+					aria-expanded={historyOpen}
+					title={title}
+					onClick={() => setHistoryOpen((open) => !open)}
+				>
+					<span className="truncate">{title}</span>
+					<span className="flex flex-none text-ink-muted" aria-hidden="true">
+						<TitleChevronIcon size={16} />
+					</span>
+				</button>
+			</div>
+			<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running || newChatDisabled} onClick={onNewChat}>
+				<ChatNewIcon size={16} />
+			</button>
+			{standalone ? null : (
+				<>
+					<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
+						<MaximizeIcon size={16} />
+					</button>
+					<button type="button" className={headButton} aria-label={t("inspector.chat.close")} title={t("inspector.chat.close")} onClick={onBack}>
+						<PanelCloseIcon size={16} />
+					</button>
+				</>
+			)}
+			{historyOpen ? (
+				<ChatHistoryMenu
+					currentChatId={currentChatId}
+					onClose={() => setHistoryOpen(false)}
+					onPick={(chatId) => {
+						setHistoryOpen(false);
+						if (chatId !== currentChatId) onOpenChat(chatId);
+					}}
+				/>
+			) : null}
+		</div>
+	);
+}
+
 export function InspectorChatView({
 	tab,
 	targetName,
@@ -832,7 +905,6 @@ export function InspectorChatView({
 	onNewAutomationDone,
 }: InspectorChatViewProps): ReactElement {
 	const { t } = useTranslation();
-	const [historyOpen, setHistoryOpen] = useState(false);
 	const turns = tab.chat?.turns ?? [];
 	// The chat follows its newest line only while the person is at the bottom; scrolling up lets go and shows the floating button.
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -911,56 +983,18 @@ export function InspectorChatView({
 	};
 	/** A chat picked from history carries its own title; a chat started here is titled by the selection it is about. */
 	const title = tab.chat?.title ?? targetName;
-	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
-			<div className="relative flex h-35 flex-none items-center gap-4 bg-subtle-alt py-6 pl-12 pr-8">
-				{/* At least 30px before the buttons (Figma 328:3802): a wider sidebar shows more of the title, and once it is whole the gap grows. */}
-				<div className="flex min-w-0 flex-1 pr-26">
-					{standalone ? (
-						<span className="inspector-chat-title truncate text-sm font-normal leading-[1.5] text-ink-body" title={title}>
-							{title}
-						</span>
-					) : (
-						<button
-							type="button"
-							className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
-							aria-haspopup="menu"
-							aria-expanded={historyOpen}
-							title={title}
-							onClick={() => setHistoryOpen((open) => !open)}
-						>
-							<span className="truncate">{title}</span>
-							<span className="flex flex-none text-ink-muted" aria-hidden="true">
-								<TitleChevronIcon size={16} />
-							</span>
-						</button>
-					)}
-				</div>
-				<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running} onClick={onNewChat}>
-					<ChatNewIcon size={16} />
-				</button>
-				{standalone ? null : (
-					<>
-						<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
-							<MaximizeIcon size={16} />
-						</button>
-						<button type="button" className={headButton} aria-label={t("inspector.chat.close")} title={t("inspector.chat.close")} onClick={onBack}>
-							<PanelCloseIcon size={16} />
-						</button>
-					</>
-				)}
-				{historyOpen && !standalone ? (
-					<ChatHistoryMenu
-						currentChatId={tab.chat?.chatId ?? null}
-						onClose={() => setHistoryOpen(false)}
-						onPick={(chatId) => {
-							setHistoryOpen(false);
-							if (chatId !== tab.chat?.chatId) onOpenChat(chatId);
-						}}
-					/>
-				) : null}
-			</div>
+			<InspectorChatHead
+				title={title}
+				standalone={standalone}
+				running={running}
+				currentChatId={tab.chat?.chatId ?? null}
+				onNewChat={onNewChat}
+				onExpand={onExpand}
+				onBack={onBack}
+				onOpenChat={onOpenChat}
+			/>
 			<div className="relative flex min-h-0 flex-1 flex-col">
 			<div className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10" ref={bodyRef} onScroll={onBodyScroll}>
 				{turns.map((turn, index) => (

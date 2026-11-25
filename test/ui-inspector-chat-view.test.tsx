@@ -323,7 +323,7 @@ describe("the inspector chat view", () => {
 		const title = host.querySelector<HTMLButtonElement>(".inspector-chat-title");
 		expect(title?.textContent).toBe("deck.pdf");
 		expect(title?.getAttribute("aria-haspopup")).toBe("menu");
-		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]:not(.inspector-chat-title)")].map((button) => button.getAttribute("aria-label"));
 		expect(labels).toEqual(["새 대화", "AI 에이전트 탭에서 열기", "대화 닫기"]);
 		act(() => host.querySelector<HTMLButtonElement>('button[aria-label="대화 닫기"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(backs).toEqual(["back"]);
@@ -358,7 +358,7 @@ describe("the inspector chat view", () => {
 		expect(host.querySelector(".inspector-chat-title")?.textContent).toBe("3분기 기획안 요약");
 	});
 
-	it("is the 자동화 tab's own chat when standalone: a plain title, only 새 대화, no history, no open-in-tab, no close", () => {
+	it("is the 자동화 tab's own chat when standalone: the title opens the history, beside it only 새 대화, no open-in-tab, no close", () => {
 		act(() =>
 			root.render(
 				<InspectorChatView
@@ -384,7 +384,7 @@ describe("the inspector chat view", () => {
 				/>,
 			),
 		);
-		expect(host.querySelector(".inspector-chat-title")?.tagName).toBe("SPAN");
+		expect(host.querySelector(".inspector-chat-title")?.tagName).toBe("BUTTON");
 		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
 		expect(labels).toEqual(["새 대화"]);
 	});

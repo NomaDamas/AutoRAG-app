@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
@@ -642,7 +642,7 @@ function RunLine({ run, rule, onOpen, flat = false }: { readonly run: Automation
 				<RunDot tone={runDotTone(run)} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
 					<span className="truncate text-[13px] leading-[20px] text-ink">{first}</span>
-					{second === null ? null : <span className="truncate text-badge leading-[17px] text-ink-muted">{second}</span>}
+					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted">{second}</span>}
 				</div>
 				<span className="flex-none text-meta leading-[18px] text-ink-muted">{relativeTime(run.startedAt)}</span>
 				{onOpen === undefined ? null : <ChevronRightIcon size={14} className="flex-none text-ink-faint" />}
@@ -718,11 +718,11 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 	);
 }
 
-/** A rule's own page (Figma 621:4882): back to the list, the name, the card to change it, and its 실행 기록. */
+/** A rule's own page (Figma 621:4882): the path back (자동화 › 전체 기록), the name, the card to change it, and its 실행 기록. */
 function AutomationDetail({
 	rule,
 	runs,
-	onBack,
+	crumbs,
 	onRename,
 	onUpdate,
 	onDelete,
@@ -730,7 +730,7 @@ function AutomationDetail({
 }: {
 	readonly rule: AutomationRule;
 	readonly runs: readonly AutomationRun[] | undefined;
-	readonly onBack: () => void;
+	readonly crumbs: readonly Crumb[];
 	readonly onRename: AutomationsViewProps["onRename"];
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onDelete: () => void;
@@ -742,7 +742,7 @@ function AutomationDetail({
 	return (
 		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
 			<div className="flex flex-col gap-6">
-				<BackLink onBack={onBack} />
+				<Breadcrumb crumbs={crumbs} />
 				<div className="flex min-w-0 items-center gap-8">
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
@@ -776,19 +776,26 @@ function AutomationDetail({
 	);
 }
 
-/** The way back to the list from a page under it (a rule's own page, 전체 기록): ‹ 뒤로가기, quiet until hovered. */
-function BackLink({ onBack }: { readonly onBack: () => void }): ReactElement {
-	const { t } = useTranslation();
+/** One step of the path above a page under the list. */
+interface Crumb {
+	readonly label: string;
+	readonly action: string;
+	readonly onClick: () => void;
+}
+
+/** Where a page under the list sits (자동화 › 전체 기록): each step takes the person straight to that page, quiet until hovered. */
+function Breadcrumb({ crumbs }: { readonly crumbs: readonly Crumb[] }): ReactElement {
 	return (
-		<button
-			type="button"
-			data-action="automation-back"
-			className="inline-flex flex-none items-center gap-4 self-start border-0 bg-transparent p-0 text-meta leading-[16px] text-ink-muted cursor-pointer hover:text-ink"
-			onClick={onBack}
-		>
-			<ChevronLeftIcon size={12} />
-			{t("automations.back")}
-		</button>
+		<nav aria-label="breadcrumb" className="flex flex-none items-center gap-4 self-start text-meta leading-[16px] text-ink-muted">
+			{crumbs.map((crumb, index) => (
+				<Fragment key={crumb.action}>
+					{index === 0 ? null : <ChevronRightIcon size={11} className="flex-none text-ink-faint" />}
+					<button type="button" data-action={crumb.action} className="border-0 bg-transparent p-0 text-meta leading-[16px] text-ink-muted cursor-pointer hover:text-ink" onClick={crumb.onClick}>
+						{crumb.label}
+					</button>
+				</Fragment>
+			))}
+		</nav>
 	);
 }
 
@@ -802,7 +809,7 @@ function dayLabel(at: number, t: TFunction, language: string, now: number = Date
 }
 
 /** 전체 기록 (Figma 676:646): every rule's runs, newest first, under the day they ran; a row opens its rule. */
-function AllRunsPage({ rules, history, onOpen, onBack }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void; readonly onBack: () => void }): ReactElement {
+function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void; readonly crumbs: readonly Crumb[] }): ReactElement {
 	const { t, i18n } = useTranslation();
 	const all = rules
 		.flatMap((rule) => (history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ rule, run })))
@@ -816,7 +823,7 @@ function AllRunsPage({ rules, history, onOpen, onBack }: { readonly rules: reado
 	}
 	return (
 		<section className="flex flex-col gap-6" data-automation-all-runs>
-			<BackLink onBack={onBack} />
+			<Breadcrumb crumbs={crumbs} />
 			<h1 className="m-0 text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
 			{all.length === 0 ? (
 				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
@@ -825,7 +832,7 @@ function AllRunsPage({ rules, history, onOpen, onBack }: { readonly rules: reado
 					{days.map((day) => (
 						<div key={day.label} className="flex flex-col">
 							<h2 className="m-0 border-b-[0.5px] border-divider pb-6 text-meta font-medium leading-[16px] text-ink-muted">{day.label}</h2>
-							<div role="list" aria-label={day.label} className="flex flex-col">
+							<div role="list" aria-label={day.label} className="flex flex-col border-b-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 								{day.runs.map(({ rule, run }) => (
 									<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} flat />
 								))}
@@ -1226,6 +1233,8 @@ export function AutomationDraftCard({
 export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [page, setPage] = useState<"list" | "all">("list");
+	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
+	const [fromAll, setFromAll] = useState(false);
 	const locations = useLocations();
 	const broken = state.configError !== null;
 	// A repair of this very error is running: the card gives way to one line saying so, and comes back if the repair did not clear the error.
@@ -1238,8 +1247,19 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	const detail = editing;
 	const open = (id: string): void => {
 		setPage("list");
+		setFromAll(false);
 		onEdit(id);
 	};
+	const toMain = (): void => {
+		setPage("list");
+		setFromAll(false);
+		onCancelEdit?.();
+	};
+	const mainCrumb: Crumb = { label: t("places.automations"), action: "automation-back", onClick: toMain };
+	const allCrumb: Crumb = { label: t("automations.all.title"), action: "automation-crumb-all", onClick: () => {
+		setFromAll(false);
+		onCancelEdit?.();
+	} };
 	const scrollRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		scrollRef.current?.scrollTo?.({ top: 0 });
@@ -1304,14 +1324,28 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 						<AutomationDetail
 							rule={detail}
 							runs={history[detail.id]}
-							onBack={() => onCancelEdit?.()}
+							crumbs={fromAll ? [mainCrumb, allCrumb] : [mainCrumb]}
 							onRename={onRename}
 							onUpdate={onUpdate}
-							onDelete={() => onAskDelete(detail.id)}
+							onDelete={() => {
+								// A deleted rule leaves for the main page, not for the 전체 기록 it was opened from.
+								setPage("list");
+								setFromAll(false);
+								onAskDelete(detail.id);
+							}}
 							onDraftChange={onDraftChange}
 						/>
 					) : page === "all" ? (
-						<AllRunsPage rules={state.rules} history={history} onOpen={open} onBack={() => setPage("list")} />
+						<AllRunsPage
+							rules={state.rules}
+							history={history}
+							onOpen={(id) => {
+								// The rule's page opens over 전체 기록, which stays where it is behind it.
+								setFromAll(true);
+								onEdit(id);
+							}}
+							crumbs={[mainCrumb]}
+						/>
 					) : state.rules.length === 0 ? (
 						// With no rules the recommendations are the page: a line on what automations do, what the person's files
 						// suggest (glowing: the AI offers them), and a way to ask in words.
@@ -1357,7 +1391,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 								// Under the person's own rules the recommendations are one quiet grouped list: no glow, no stroke.
 								<section className="flex flex-col gap-8" data-automation-recommendations>
 									<h2 className="m-0 text-meta leading-[16px] text-ink-muted">{t("automations.recs.section")}</h2>
-									<div className="flex flex-col overflow-hidden rounded-12 bg-hover [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider" data-quiet-recommendations>
+									<div className="flex flex-col overflow-hidden rounded-12 bg-subtle-alt [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider" data-quiet-recommendations>
 										{recommendations.map((template) => (
 											<RecommendationCard key={template.id} quiet template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} onAdd={onCreate} />
 										))}

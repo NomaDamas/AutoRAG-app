@@ -16,6 +16,8 @@ export interface AutomationInspectorProps {
 	readonly chatDock?: ReactNode;
 	/** The conversation that box started; it fills the column while it is open. */
 	readonly chatView?: ReactNode;
+	/** Over the empty state: the chat head, so a past chat can be picked before a new one starts. */
+	readonly chatHead?: ReactNode;
 }
 
 /** A rule's action as its glyph: the search index refresh, an AI Search run, or any other program. */
@@ -26,7 +28,7 @@ export function AutomationActionGlyph({ rule, size = 20 }: { readonly rule: Auto
 	return <ZapIcon size={size} />;
 }
 
-export function AutomationInspector({ chatDock, chatView }: AutomationInspectorProps): ReactElement {
+export function AutomationInspector({ chatDock, chatView, chatHead }: AutomationInspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
 		<aside className="inspector w-full min-w-0 flex-1 min-h-0 flex flex-col bg-subtle overflow-hidden" aria-label={t("finderComponents.inspectorAside")} data-automation-assistant>
@@ -34,6 +36,7 @@ export function AutomationInspector({ chatDock, chatView }: AutomationInspectorP
 				chatView
 			) : (
 				<>
+					{chatHead === undefined || chatHead === null ? null : chatHead}
 					<FadedDazziMark caption={t("automations.assistant.caption")} />
 					{chatDock === undefined || chatDock === null ? null : <div className="inspector-dock-slot flex-none bg-subtle">{chatDock}</div>}
 				</>

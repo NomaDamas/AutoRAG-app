@@ -19,7 +19,7 @@ import { DocumentEditorSidebarProvider } from "./components/DocumentEditorSideba
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
-import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
+import { InspectorChatDock, InspectorChatHead, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast, type ToastTone } from "./components/primitives/Toast";
 import { pushNotice, setNotificationCenterOpen } from "./state/notifications";
@@ -1152,6 +1152,12 @@ export function App(): ReactElement {
 						) : automationsTabActive ? (
 							<AutomationInspector
 								// The 자동화 tab's sidebar is the AI chat: it asks about no file, and the agent manages automations with its own tools.
+								// Empty, it still carries the chat head: the history list is there to pick a past chat from.
+								chatHead={
+									chatTabId === null ? undefined : (
+										<InspectorChatHead standalone title={t("places.automations")} currentChatId={null} newChatDisabled onNewChat={() => undefined} onOpenChat={(chatId) => inspectorChats.open(chatTabId, chatId)} />
+									)
+								}
 								chatDock={
 									chatTabId === null ? undefined : (
 										<InspectorChatDock
