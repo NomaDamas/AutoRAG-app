@@ -348,7 +348,6 @@
     "emptyPromptTitle": "무엇을 찾아드릴까요?",
     "capability": {
       "hints": "할 수 있는 일",
-      "remove": "{{name}} 빼기",
       "find": "찾기",
       "findPlaceholder": "찾고 싶은 파일을 말해 보세요",
       "summarize": "요약하기",

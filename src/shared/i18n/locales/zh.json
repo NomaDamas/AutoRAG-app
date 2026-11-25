@@ -348,7 +348,6 @@
     "emptyPromptTitle": "想查找什么内容？",
     "capability": {
       "hints": "可以做的事",
-      "remove": "移除{{name}}",
       "find": "查找",
       "findPlaceholder": "说说你要找的文件",
       "summarize": "总结",

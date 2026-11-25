@@ -80,8 +80,8 @@ import { RunErrorNotice } from "./RunErrorNotice";
 
 /**
  * The kinds of work the empty AI tab hints at under the composer (Figma 672:3638).
- * A hint only names a direction: picking one puts a tag in the composer and changes
- * its placeholder; the question is still whatever the person types.
+ * A hint only names a direction: picking one reads pressed and changes the composer's
+ * placeholder; the question is still whatever the person types.
  */
 const CAPABILITIES = [
 	{ id: "find", Icon: SearchIcon },
@@ -1416,24 +1416,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						) : rowComposer ? (
 							<>
 								<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-								{pickedCapability === null ? null : (
-									<span className="capability-tag inline-flex h-24 flex-none items-center gap-4 rounded-[6px] bg-accent-soft pr-2 pl-8 text-badge font-medium text-accent">
-										<pickedCapability.Icon size={12} />
-										{t(`aiSearch.capability.${pickedCapability.id}`)}
-										<button
-											type="button"
-											className="flex size-18 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-accent hover:bg-accent-drop-hover"
-											aria-label={t("aiSearch.capability.remove", { name: t(`aiSearch.capability.${pickedCapability.id}`) })}
-											title={t("aiSearch.capability.remove", { name: t(`aiSearch.capability.${pickedCapability.id}`) })}
-											onClick={() => {
-												setCapability(null);
-												inputRef.current?.focus();
-											}}
-										>
-											<CloseIcon size={9} />
-										</button>
-									</span>
-								)}
 								<div className="min-w-0 flex-1">
 									<ComposerField
 										fieldRef={inputRef}
@@ -1500,7 +1482,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									tabIndex={hintsHidden ? -1 : undefined}
 									aria-pressed={item.id === capability}
 									className={cn(
-										"inline-flex h-26 cursor-pointer items-center gap-4 rounded-full border-0 px-8 text-meta transition-colors duration-(--dur-color) ease-out",
+										"inline-flex h-26 cursor-pointer items-center gap-4 rounded-6 border-0 px-8 text-meta transition-colors duration-(--dur-color) ease-out",
 										item.id === capability ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink-body",
 									)}
 									onClick={() => {

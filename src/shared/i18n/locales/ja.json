@@ -348,7 +348,6 @@
     "emptyPromptTitle": "何をお探しですか？",
     "capability": {
       "hints": "できること",
-      "remove": "{{name}}を外す",
       "find": "探す",
       "findPlaceholder": "探したいファイルを教えてください",
       "summarize": "要約する",

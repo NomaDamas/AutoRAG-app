@@ -348,7 +348,6 @@
     "emptyPromptTitle": "What can I find for you?",
     "capability": {
       "hints": "Things you can do",
-      "remove": "Remove {{name}}",
       "find": "Find",
       "findPlaceholder": "Describe the file you’re looking for",
       "summarize": "Summarize",
