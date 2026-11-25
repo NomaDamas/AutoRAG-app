@@ -1302,14 +1302,11 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 										{t("automations.create.headButton")}
 									</button>
 								</div>
-								{/* The whole list glows softly, as the recommendations do while there are no rules, and draws no stroke. */}
-								<div className="ai-glow-host [--ai-glow-opacity:0.16] [--ai-glow-opacity-focus:0.24] [--ai-glow-blur:18px]" data-ai-glow>
-									<div className="ai-glow" aria-hidden="true" />
-									<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-transparent [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
-										{state.rules.map((rule) => (
-											<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
-										))}
-									</div>
+								{/* One soft shadow on the whole list, not on each row, so it lifts the group the same however many rules there are. */}
+								<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
+									{state.rules.map((rule) => (
+										<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
+									))}
 								</div>
 								<button type="button" data-action="automation-all-runs" className="self-end border-0 bg-transparent p-0 pr-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
 									{t("automations.all.open")}
