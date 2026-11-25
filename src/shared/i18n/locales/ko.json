@@ -346,6 +346,18 @@
     "emptyHistory": "저장된 대화가 없습니다.",
     "emptyHistorySearch": "\"{{query}}\"에 해당하는 대화가 없습니다",
     "emptyPromptTitle": "무엇을 찾아드릴까요?",
+    "capability": {
+      "hints": "할 수 있는 일",
+      "remove": "{{name}} 빼기",
+      "find": "찾기",
+      "findPlaceholder": "찾고 싶은 파일을 말해 보세요",
+      "summarize": "요약하기",
+      "summarizePlaceholder": "요약할 문서를 말해 보세요",
+      "organize": "정리하기",
+      "organizePlaceholder": "어떻게 정리하고 싶은지 말해 보세요",
+      "automate": "자동화하기",
+      "automatePlaceholder": "어떤 일이 생기면 무엇을 할지 말해 보세요"
+    },
     "emptyPromptDesc": "파일, 메일, 메신저 전체에서 찾아 빠른 답변과 정밀한 답변을 함께 드립니다.",
     "generatingDeep": "정밀 답변 작성 중…",
     "askDazzi": "AI에게 묻기",

@@ -60,16 +60,30 @@ import {
 import { HISTORY_SEARCH_DEBOUNCE_MS, groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, FileTextIcon, FolderOutlineIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SearchIcon, SparklesIcon, TabCloseIcon, ZapIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { FileMention } from "./FileMention";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
+
 import { IndexNoticeBanner } from "./IndexNotice";
 import { CompactingStatus, ContextNoticeView } from "./ContextNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
+
+/**
+ * The kinds of work the empty AI tab hints at under the composer (Figma 672:3638).
+ * A hint only names a direction: picking one puts a tag in the composer and changes
+ * its placeholder; the question is still whatever the person types.
+ */
+const CAPABILITIES = [
+	{ id: "find", Icon: SearchIcon },
+	{ id: "summarize", Icon: FileTextIcon },
+	{ id: "organize", Icon: FolderOutlineIcon },
+	{ id: "automate", Icon: ZapIcon },
+] as const;
+type Capability = (typeof CAPABILITIES)[number]["id"];
 
 const autorag = window.autorag;
 
@@ -216,6 +230,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [steers, setSteers] = useState<readonly SteerItem[]>([]);
 	/** Questions queued with ⌥Enter during a run, asked one by one once it ends. */
 	const [queued, setQueued] = useState<readonly string[]>([]);
+	/** The hint picked in the empty tab; cleared once the conversation starts. */
+	const [capability, setCapability] = useState<Capability | null>(null);
 	const queuedRef = useRef(queued);
 	queuedRef.current = queued;
 	/** The current run already showed its Quick answer (read by steer timing). */
@@ -926,15 +942,73 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
+	// A fresh conversation puts the composer in the middle with the hints under it;
+	// the first question sends it back to the bottom.
+	const centered = showEmpty && !phone && pastTurns.length === 0 && interactionRequest === null && queued.length === 0;
+	const rowComposer = centered && !attachments.some(isThumbnailAttachment) && voiceNotice === null;
+	const hintsHidden = capability === null && query.trim().length > 0;
+	const pickedCapability = CAPABILITIES.find((item) => item.id === capability) ?? null;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
 	const contextBeforeQuick = contextNotices.filter((notice) => notice.timing === "before-quick");
 	const contextAfterQuick = contextNotices.filter((notice) => notice.timing === "after-quick");
+	useEffect(() => {
+		if (!centered) setCapability(null);
+	}, [centered]);
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
 		dropped: t("aiSearch.steerDropped"),
 	};
+
+	const composerActions = (
+		<div className="composer-actions flex items-center gap-7">
+			{searching && query.trim().length > 0 ? (
+				<button
+					type="submit"
+					className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+					title={t("aiSearch.steerSend")}
+					aria-label={t("aiSearch.steerSend")}
+				>
+					<ArrowUpIcon />
+				</button>
+			) : null}
+			{searching ? (
+				<button
+					type="button"
+					className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+					title={t("aiSearch.stop")}
+					aria-label={t("aiSearch.stop")}
+					onClick={() => void stop()}
+				>
+					<Square size={10} strokeWidth={3} fill="currentColor" />
+				</button>
+														) : query.trim().length === 0 && attachments.length === 0 ? (
+				<button
+					type="button"
+					className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+					title={t("aiSearch.voiceStart")}
+					aria-label={t("aiSearch.voiceStart")}
+					aria-pressed="false"
+					onClick={() => {
+						setVoiceNotice(null);
+						voice.toggle();
+					}}
+				>
+					<MicIcon size={17} />
+				</button>
+			) : (
+				<button
+					type="submit"
+					className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+					title={t("aiSearch.askDazzi")}
+					aria-label={t("aiSearch.askDazzi")}
+				>
+					<ArrowUpIcon />
+				</button>
+			)}
+	</div>
+	);
 
 	return (
 		<section
@@ -1054,7 +1128,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									))}
 								</div>
 							</div>
-						) : (
+						) : centered ? null : (
 							<div className="ai-empty my-28 text-center">
 								<strong className="block text-title font-medium leading-[27px] text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
 								<p className="mt-8 text-body leading-[21px] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
@@ -1230,7 +1304,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						ref={composeBoxRef}
 						className={cn(
 															"compose-box border border-divider bg-window shadow-[0_2px_5px_rgba(20,20,41,0.07)] transition-[border-color,border-radius] duration-(--dur-color) ease-out",
-							voiceActive ? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8" : "flex flex-col gap-8 rounded-[16px] px-16 py-12",
+							voiceActive
+									? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
+									: rowComposer
+										? "flex flex-row items-center gap-10 rounded-[16px] py-10 pr-10 pl-12"
+										: "flex flex-col gap-8 rounded-[16px] px-16 py-12",
 						)}
 						onMouseDown={(event) => {
 							if (voiceActive) return;
@@ -1288,6 +1366,40 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								/>
 								<span>{t("aiSearch.voiceTranscribing")}</span>
 							</div>
+						) : rowComposer ? (
+							<>
+								<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+								{pickedCapability === null ? null : (
+									<span className="capability-tag inline-flex h-24 flex-none items-center gap-4 rounded-[6px] bg-accent-soft pr-2 pl-8 text-badge font-medium text-accent">
+										<pickedCapability.Icon size={12} />
+										{t(`aiSearch.capability.${pickedCapability.id}`)}
+										<button
+											type="button"
+											className="flex size-18 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-accent hover:bg-accent-drop-hover"
+											aria-label={t("aiSearch.capability.remove", { name: t(`aiSearch.capability.${pickedCapability.id}`) })}
+											title={t("aiSearch.capability.remove", { name: t(`aiSearch.capability.${pickedCapability.id}`) })}
+											onClick={() => {
+												setCapability(null);
+												inputRef.current?.focus();
+											}}
+										>
+											<CloseIcon size={9} />
+										</button>
+									</span>
+								)}
+								<div className="min-w-0 flex-1">
+									<ComposerField
+										fieldRef={inputRef}
+										value={query}
+										onChange={setQuery}
+										onAltEnter={() => send(true)}
+										onPasteImages={pasteImages}
+										placeholder={pickedCapability === null ? t("inspector.chat.placeholderAny") : t(`aiSearch.capability.${pickedCapability.id}Placeholder`)}
+										ariaLabel={t("aiSearch.askDazzi")}
+									/>
+								</div>
+								{composerActions}
+							</>
 						) : (
 							<>
 								{attachments.some(isThumbnailAttachment) ? (
@@ -1322,60 +1434,41 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								)}
 								<div className="composer-toolbar flex items-center justify-between gap-8">
 									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-																			<div className="composer-actions flex items-center gap-7">
-										{searching && query.trim().length > 0 ? (
-											<button
-												type="submit"
-												className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-												title={t("aiSearch.steerSend")}
-												aria-label={t("aiSearch.steerSend")}
-											>
-												<ArrowUpIcon />
-											</button>
-										) : null}
-										{searching ? (
-											<button
-												type="button"
-												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-												title={t("aiSearch.stop")}
-												aria-label={t("aiSearch.stop")}
-												onClick={() => void stop()}
-											>
-												<Square size={10} strokeWidth={3} fill="currentColor" />
-											</button>
-																					) : query.trim().length === 0 && attachments.length === 0 ? (
-											<button
-												type="button"
-												className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-												title={t("aiSearch.voiceStart")}
-												aria-label={t("aiSearch.voiceStart")}
-												aria-pressed="false"
-												onClick={() => {
-													setVoiceNotice(null);
-													voice.toggle();
-												}}
-											>
-												<MicIcon size={17} />
-											</button>
-										) : (
-											<button
-												type="submit"
-												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-												title={t("aiSearch.askDazzi")}
-												aria-label={t("aiSearch.askDazzi")}
-											>
-												<ArrowUpIcon />
-											</button>
-										)}
-									</div>
+										{composerActions}
 								</div>
 							</>
 						)}
 					</div>
-					<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					{centered ? (
+						<div
+							className={cn("capability-hints mt-10 flex flex-wrap justify-center gap-2 transition-opacity duration-(--dur-color) ease-out", hintsHidden && "pointer-events-none opacity-0")}
+							role="group"
+							aria-label={t("aiSearch.capability.hints")}
+							aria-hidden={hintsHidden ? true : undefined}
+						>
+							{CAPABILITIES.filter((item) => item.id !== capability).map((item) => (
+								<button
+									key={item.id}
+									type="button"
+									tabIndex={hintsHidden ? -1 : undefined}
+									className="inline-flex h-26 cursor-pointer items-center gap-4 rounded-full border-0 bg-transparent px-8 text-meta text-ink-muted transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink-body"
+									onClick={() => {
+										setCapability(item.id);
+										inputRef.current?.focus();
+									}}
+								>
+									<item.Icon size={13} />
+									{t(`aiSearch.capability.${item.id}`)}
+								</button>
+							))}
+						</div>
+					) : (
+						<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					)}
 				</div>
 				)}
 			</form>
+			{centered ? <div className="flex-[1.2]" aria-hidden="true" /> : null}
 
 			{/* One drop screen, over the panel or over the field alike (Figma 603:6785): the words and the file's name. */}
 			{dragActive ? (

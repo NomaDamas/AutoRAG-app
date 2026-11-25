@@ -346,6 +346,18 @@
     "emptyHistory": "保存されたチャットはありません。",
     "emptyHistorySearch": "\"{{query}}\"に一致するチャットはありません",
     "emptyPromptTitle": "何をお探しですか？",
+    "capability": {
+      "hints": "できること",
+      "remove": "{{name}}を外す",
+      "find": "探す",
+      "findPlaceholder": "探したいファイルを教えてください",
+      "summarize": "要約する",
+      "summarizePlaceholder": "要約する文書を教えてください",
+      "organize": "整理する",
+      "organizePlaceholder": "どう整理したいか教えてください",
+      "automate": "自動化する",
+      "automatePlaceholder": "何が起きたら何をするか教えてください"
+    },
     "emptyPromptDesc": "ファイル、メール、メッセージ全体から素早い回答と詳細な回答を並べて提示します。",
     "generatingDeep": "詳細な回答を生成中…",
     "askDazzi": "AIに聞く",

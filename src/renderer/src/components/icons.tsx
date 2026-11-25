@@ -43,6 +43,7 @@ import {
 	Film,
 	Flag,
 	FoldVertical,
+	Folder as FolderOutline,
 	HardDrive,
 	History,
 	Image as ImageGlyph,
@@ -242,6 +243,8 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 /** 자동화 (Figma 611:3601): a failed rule's badge, a document, an image, a rule that may change files. */
 export const CircleXIcon = glyph(CircleX, 14, 2);
 export const FileTextIcon = glyph(FileText, 14, 2);
+/** An outline folder for an action on folders (the AI tab's "organize" hint); a folder item itself uses `FolderGlyph`. */
+export const FolderOutlineIcon = glyph(FolderOutline, 14, 2);
 export const ImageIcon = glyph(ImageGlyph, 14, 2);
 export const FilePenIcon = glyph(FilePen, 13, 2);
 

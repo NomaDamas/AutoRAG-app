@@ -346,6 +346,18 @@
     "emptyHistory": "没有保存的对话。",
     "emptyHistorySearch": "没有与“{{query}}”匹配的对话",
     "emptyPromptTitle": "想查找什么内容？",
+    "capability": {
+      "hints": "可以做的事",
+      "remove": "移除{{name}}",
+      "find": "查找",
+      "findPlaceholder": "说说你要找的文件",
+      "summarize": "总结",
+      "summarizePlaceholder": "说说要总结的文档",
+      "organize": "整理",
+      "organizePlaceholder": "说说你想怎么整理",
+      "automate": "自动化",
+      "automatePlaceholder": "说说发生什么时要做什么"
+    },
     "emptyPromptDesc": "在文件、邮件和消息中全局搜索，同时提供快速回答与深度回答。",
     "generatingDeep": "正在撰写深度回答…",
     "askDazzi": "询问 AI",

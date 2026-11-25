@@ -346,6 +346,18 @@
     "emptyHistory": "No saved chats.",
     "emptyHistorySearch": "No chats matching \"{{query}}\"",
     "emptyPromptTitle": "What can I find for you?",
+    "capability": {
+      "hints": "Things you can do",
+      "remove": "Remove {{name}}",
+      "find": "Find",
+      "findPlaceholder": "Describe the file you’re looking for",
+      "summarize": "Summarize",
+      "summarizePlaceholder": "Name the document to summarize",
+      "organize": "Organize",
+      "organizePlaceholder": "Say how you’d like things organized",
+      "automate": "Automate",
+      "automatePlaceholder": "Say what should happen, and when"
+    },
     "emptyPromptDesc": "Search across files, emails, and chats for quick and deep answers side by side.",
     "generatingDeep": "Generating deep answer…",
     "askDazzi": "Ask AI",
