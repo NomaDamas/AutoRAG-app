@@ -14,7 +14,6 @@ import {
 	BrowserWindow,
 	clipboard,
 	ipcMain,
-	nativeImage,
 	nativeTheme,
 	screen,
 	ShareMenu,
@@ -74,7 +73,7 @@ import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } fr
 import { createVideoPlayback } from "./video-playback";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
-import { isDatalessFile } from "./provider-access";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -414,13 +413,8 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "stream":
 			if (kind === "image" && (await isDatalessFile(path))) {
 				const document = await readPreviewFile(path, 0);
-				try {
-					const image = await nativeImage.createThumbnailFromPath(path, { width: 1440, height: 1440 });
-					if (!image.isEmpty()) return { ...document, mime: "image/png", bytes: image.toPNG() };
-				} catch {
-					// Fall through to streaming the file on demand.
-				}
-				return document;
+				const thumb = await datalessQuickLookPng(path);
+				return thumb === null ? document : { ...document, mime: "image/png", bytes: thumb };
 			}
 			return readPreviewFile(path, 0);
 		case "query":
@@ -438,6 +432,10 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {
 				const document = await readPreviewFile(path, 0);
+				if (await isDatalessFile(path)) {
+					const fast = await datalessQuickLookPng(path);
+					if (fast !== null) return { ...document, bytes: fast };
+				}
 				const thumbnail = (await readEmbeddedThumbnail(path, "odg").catch((error: unknown) => {
 					console.warn(`quick-look: OpenDocument thumbnail for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
 					return null;

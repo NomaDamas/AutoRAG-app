@@ -11,17 +11,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listArchive } from "../src/main/archive-list";
 import { createIconProvider } from "../src/main/file-icon";
 import { readImageMetadata } from "../src/main/image-metadata";
+import { extractVideoFrame } from "../src/main/video-frame";
 import { readNativePreview } from "../src/preview/node/apple";
 import { readAudioMetadata } from "../src/preview/node/audio-metadata";
 import { previewData } from "../src/preview/node/data";
 import { fileDetails, sha256File } from "../src/preview/node/details";
 import { readEmbeddedImage } from "../src/preview/node/embedded-image";
+import { readHeicPreview } from "../src/preview/node/heic";
 import { readIworkPreview } from "../src/preview/node/iwork";
 import { exportWithQuickLook } from "../src/preview/node/keynote-render";
 import { readEmbeddedThumbnail } from "../src/preview/node/odf";
 import { previewResponseForPath } from "../src/preview/node/protocol";
 import { isDatalessFile, withReadableFile } from "../src/preview/node/provider-access";
+import { readRasterPreview } from "../src/preview/node/raster";
+import { readHead } from "../src/preview/node/read-file";
 import { pixelSize } from "../src/preview/node/sips";
+import { readTiffPreview } from "../src/preview/node/tiff";
+import { planVideoAudio } from "../src/preview/node/video-audio";
 import { FIXTURE_7Z } from "./archive-fixtures";
 import { buildIwa, concat, pbBytes, pbVarint } from "./iwa-fixture";
 vi.mock("node:child_process", async (original) => {
@@ -367,5 +373,149 @@ describe("preview provider access", () => {
 		vi.mocked(childProcess.execFile).mockClear();
 		expect(await isDatalessFile(localPath)).toBe(false);
 		expect(childProcess.execFile).not.toHaveBeenCalled();
+	});
+	it.skipIf(process.platform !== "darwin")("skips ffmpeg in extractVideoFrame and planVideoAudio on dataless videos so 500MB webm/mov files never trigger background iCloud downloads", async () => {
+		const webmPath = join(dir, "facecam-4k.webm");
+		await fs.writeFile(webmPath, Buffer.from("fake-webm-data"));
+		const realStat = await realFs.stat(webmPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === webmPath) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		const realExecFile = await vi.importActual<typeof childProcess>("node:child_process");
+		const spawnedCommands: string[] = [];
+		vi.mocked(childProcess.execFile).mockImplementation(((command: string, ...rest: unknown[]) => {
+			spawnedCommands.push(command);
+			if (command === "/usr/bin/stat") {
+				const cb = rest.at(-1) as (err: null, stdout: string, stderr: string) => void;
+				cb(null, "compressed,dataless\n", "");
+				return {} as childProcess.ChildProcess;
+			}
+			return (realExecFile.execFile as (...a: unknown[]) => childProcess.ChildProcess)(command, ...rest);
+		}) as typeof childProcess.execFile);
+		expect(await extractVideoFrame(webmPath, 128, { command: "ffmpeg-must-not-run" })).toBeNull();
+		expect(await planVideoAudio(webmPath, { command: "ffmpeg-must-not-run" })).toEqual({ kind: "native" });
+		expect(spawnedCommands.filter((cmd) => cmd.includes("ffmpeg"))).toEqual([]);
+	});
+	it.skipIf(process.platform !== "darwin")("skips Quick Look thumbnailing on dataless plain-text files (.csv/.md/.tsv) and upgrades the icon cache when a slow thumbnail finishes after timeout", async () => {
+		const csvPath = join(dir, "verdict.csv");
+		await fs.writeFile(csvPath, "a,b\n1,2\n");
+		const realStat = await realFs.stat(csvPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === csvPath) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		vi.mocked(childProcess.execFile).mockImplementation(((command: string, ...rest: unknown[]) => {
+			if (command === "/usr/bin/stat") {
+				const cb = rest.at(-1) as (err: null, stdout: string, stderr: string) => void;
+				cb(null, "compressed,dataless\n", "");
+				return {} as childProcess.ChildProcess;
+			}
+			throw new Error(`unexpected command ${command}`);
+		}) as typeof childProcess.execFile);
+		const thumbSpy = vi.fn(async () => PNG);
+		const sysSpy = vi.fn(async () => JPEG);
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: thumbSpy,
+			systemIcon: sysSpy,
+			warn: () => undefined,
+		});
+		await provider.icons([{ path: csvPath, ext: "csv", mtimeMs: 1 }]);
+		expect(thumbSpy).not.toHaveBeenCalled();
+		expect(sysSpy).toHaveBeenCalledTimes(1);
+		expect(provider.read(csvPath, 1)).toEqual(JPEG);
+
+		// Late thumbnail arrival upgrades cached fallback icon instead of leaving generic icon stuck
+		vi.useFakeTimers();
+		try {
+			const started = Promise.withResolvers<void>();
+			const late = Promise.withResolvers<Uint8Array | null>();
+			const slowProvider = createIconProvider({
+				platform: "darwin",
+				thumbnailTimeoutMs: 15,
+				thumbnail: async () => {
+					started.resolve();
+					return late.promise;
+				},
+				systemIcon: async () => JPEG,
+				warn: () => undefined,
+			});
+			const photoPath = join(dir, "slow-cloud.png");
+			const iconsPromise = slowProvider.icons([{ path: photoPath, ext: "png", mtimeMs: 2 }]);
+			await started.promise;
+			await vi.advanceTimersByTimeAsync(20);
+			await iconsPromise;
+			expect(slowProvider.read(photoPath, 2)).toEqual(JPEG);
+			late.resolve(PNG);
+			for (let tick = 0; tick < 6; tick += 1) await Promise.resolve();
+			expect(slowProvider.read(photoPath, 2)).toEqual(PNG);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+	it.skipIf(process.platform !== "darwin")("serves dataless HEIC, TIFF, and raster previews from Quick Look thumbnail cache without sips or POSIX open", async () => {
+		const heicPath = join(dir, "photo.heic");
+		const tiffPath = join(dir, "scan.tiff");
+		const psdPath = join(dir, "design.psd");
+		for (const p of [heicPath, tiffPath, psdPath]) await fs.writeFile(p, PNG);
+		const realStat = await realFs.stat(heicPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if ([heicPath, tiffPath, psdPath].includes(String(args[0]))) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		vi.mocked(childProcess.execFile).mockImplementation(((command: string, ...rest: unknown[]) => {
+			if (command === "/usr/bin/stat") {
+				const cb = rest.at(-1) as (err: null, stdout: string, stderr: string) => void;
+				cb(null, "compressed,dataless\n", "");
+				return {} as childProcess.ChildProcess;
+			}
+			throw new Error(`sips must not run on dataless fast path: ${command}`);
+		}) as typeof childProcess.execFile);
+		vi.mocked(fs.open).mockClear();
+		const datalessThumbnail = vi.fn(async () => PNG);
+		expect((await readHeicPreview(heicPath, { datalessThumbnail })).bytes).toEqual(PNG);
+		expect((await readTiffPreview(tiffPath, { datalessThumbnail })).bytes).toEqual(PNG);
+		expect((await readRasterPreview(psdPath, { datalessThumbnail })).bytes).toEqual(PNG);
+		expect(datalessThumbnail).toHaveBeenCalledTimes(3);
+		expect(fs.open).not.toHaveBeenCalled();
+	});
+	it.skipIf(process.platform !== "darwin")("coordinates dataless readHead and byte-range streams directly without blocking libuv fs.open or createReadStream", async () => {
+		const docPath = join(dir, "cloud-note.txt");
+		const body = Buffer.from("0123456789abcdef-icloud-stream");
+		await fs.writeFile(docPath, body);
+		const realStat = await realFs.stat(docPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === docPath) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		const realExecFile = await vi.importActual<typeof childProcess>("node:child_process");
+		vi.mocked(childProcess.execFile).mockImplementation(((command: string, ...rest: unknown[]) => {
+			if (command === "/usr/bin/stat") {
+				const cb = rest.at(-1) as (err: null, stdout: string, stderr: string) => void;
+				cb(null, "compressed,dataless\n", "");
+				return {} as childProcess.ChildProcess;
+			}
+			return (realExecFile.execFile as (...a: unknown[]) => childProcess.ChildProcess)(command, ...rest);
+		}) as typeof childProcess.execFile);
+		vi.mocked(fs.open).mockClear();
+		vi.mocked(nodeFs.createReadStream).mockClear();
+		expect(Buffer.from(await readHead(docPath, 10))).toEqual(body.subarray(0, 10));
+		const response = await previewResponseForPath(docPath, "bytes=4-15");
+		expect(Buffer.from(await response.arrayBuffer())).toEqual(body.subarray(4, 16));
+		expect(fs.open).not.toHaveBeenCalled();
+		expect(nodeFs.createReadStream).not.toHaveBeenCalled();
 	});
 });

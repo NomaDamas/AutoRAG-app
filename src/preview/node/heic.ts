@@ -1,15 +1,16 @@
 import type { PreviewDocument } from "../shared/contract";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { PREVIEW_BYTE_CAP, readPreviewFile } from "./read-file";
 import { convertWithSips, type SipsConversion, type SipsRun } from "./sips";
-
 /** The MIME type the converted bytes carry; the viewer keys on it to skip its own decoder. */
 export const HEIC_PREVIEW_MIME = "image/jpeg";
 /** sips `formatOptions`: JPEG quality 0-100. */
 const JPEG_QUALITY = "85";
 
 export type HeicRun = SipsRun;
-export type HeicDeps = SipsConversion;
-
+export interface HeicDeps extends SipsConversion {
+	readonly datalessThumbnail?: (path: string) => Promise<Uint8Array | null>;
+}
 /**
  * The HEIC preview document. The in-renderer wasm decoder takes tens of
  * seconds on a camera-size photo and never finished on a 24MP iPhone HEIC;
@@ -20,6 +21,10 @@ export type HeicDeps = SipsConversion;
  */
 export async function readHeicPreview(path: string, deps: HeicDeps = {}): Promise<PreviewDocument> {
 	const info = await readPreviewFile(path, 0);
+	if (deps.run === undefined && (await isDatalessFile(path))) {
+		const thumb = await (deps.datalessThumbnail ?? datalessQuickLookPng)(path);
+		if (thumb !== null) return { ...info, mime: "image/png", bytes: thumb };
+	}
 	const jpeg = await convertWithSips(path, "preview.jpg", ["-s", "format", "jpeg", "-s", "formatOptions", JPEG_QUALITY], deps);
 	if (jpeg !== null) return { ...info, mime: HEIC_PREVIEW_MIME, bytes: jpeg };
 	return readPreviewFile(path, PREVIEW_BYTE_CAP, true);

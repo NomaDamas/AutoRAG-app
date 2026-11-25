@@ -142,8 +142,8 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 			current = URL.createObjectURL(blob);
 			setUrl(current);
 		};
-		// The main process already decoded it with the OS (macOS): a plain JPEG.
-		if (file.mime === "image/jpeg") {
+		// The main process already decoded it with the OS (macOS): a plain JPEG or PNG.
+		if (file.mime === "image/jpeg" || file.mime === "image/png") {
 			show(new Blob([copyBytes(bytes)], { type: file.mime }));
 		} else {
 			import("heic-to/csp")

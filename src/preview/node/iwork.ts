@@ -2,7 +2,7 @@ import type { FileHandle } from "node:fs/promises";
 import { extname } from "node:path";
 import { keynoteSlideImageNames } from "../shared/iwork-slides";
 import type { ZipEntry } from "../shared/zip-list";
-import { isDatalessFile } from "./provider-access";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { extractZipEntry as extract, withZip } from "./zip-read";
 /** The page images iWork stores, best first: the full-size first page, then the web-sized one. */
 const PREVIEW_NAMES = ["preview.jpg", "preview-web.jpg"] as const;
@@ -72,20 +72,6 @@ export interface IworkPreviewDeps {
 	readonly datalessThumbnail?: (path: string) => Promise<Uint8Array | null>;
 }
 
-const DATALESS_PREVIEW_EDGE = 1440;
-
-async function defaultDatalessThumbnail(path: string): Promise<Uint8Array | null> {
-	try {
-		// Dynamic: `electron` is only available in Electron main, not in Node unit tests.
-		const { nativeImage } = await import("electron");
-		const image = await nativeImage.createThumbnailFromPath(path, { width: DATALESS_PREVIEW_EDGE, height: DATALESS_PREVIEW_EDGE });
-		if (image.isEmpty()) return null;
-		return image.toPNG();
-	} catch {
-		return null;
-	}
-}
-
 /**
  * What an iWork package (`.numbers`, `.pages`, `.key`) carries for the preview.
  * Apple saves a ZIP whose `preview.jpg` is the first sheet, page, or slide
@@ -100,7 +86,7 @@ async function defaultDatalessThumbnail(path: string): Promise<Uint8Array | null
  */
 export async function readIworkPreview(path: string, deps: IworkPreviewDeps = {}): Promise<IworkPreview | null> {
 	if (await isDatalessFile(path)) {
-		const thumb = await (deps.datalessThumbnail ?? defaultDatalessThumbnail)(path);
+		const thumb = await (deps.datalessThumbnail ?? datalessQuickLookPng)(path);
 		if (thumb !== null) return { firstPage: thumb, pages: null };
 	}
 	return withZip(path, async (handle, entries) => {

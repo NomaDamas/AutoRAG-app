@@ -27,6 +27,25 @@ export async function isDatalessFile(path: string): Promise<boolean> {
 	});
 	return promise;
 }
+
+export const DATALESS_QUICK_LOOK_EDGE = 1440;
+
+/**
+ * High-resolution PNG from macOS's `QLThumbnailGenerator` (`nativeImage.createThumbnailFromPath`)
+ * for an unmaterialized cloud placeholder, answering in tens of milliseconds when cached by iCloud
+ * without downloading the file itself. Null off macOS, outside Electron, or when empty.
+ */
+export async function datalessQuickLookPng(path: string, maxEdge = DATALESS_QUICK_LOOK_EDGE): Promise<Uint8Array | null> {
+	if (process.platform !== "darwin") return null;
+	try {
+		// Dynamic: `electron` is only available in Electron main, not in Node unit tests.
+		const { nativeImage } = await import("electron");
+		const image = await nativeImage.createThumbnailFromPath(path, { width: maxEdge, height: maxEdge });
+		return image.isEmpty() ? null : image.toPNG();
+	} catch {
+		return null;
+	}
+}
 /** Darwin EDEADLK is 11; libuv may expose it only as an unmapped negative errno. */
 export function needsFileCoordination(error: unknown): boolean {
 	return process.platform === "darwin" && typeof error === "object" && error !== null &&

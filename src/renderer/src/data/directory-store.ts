@@ -42,6 +42,8 @@ const DEFAULT_CAPACITY = 32;
 const DEFAULT_ICON_FLUSH_MS = 60;
 /** File versions remembered as already asked for an icon. */
 const ICON_REQUEST_MEMORY = 20_000;
+/** Rows enriched per wave so the visible screenful paints thumbnails without waiting for hundreds of off-screen rows. */
+const ENRICH_WAVE_SIZE = 24;
 
 export interface DirectorySource {
 	list(dir: string): Promise<readonly FinderEntry[]>;
@@ -166,22 +168,51 @@ export function createDirectoryStore(options: {
 		}
 	};
 
-	/** Both background passes for rows the sidecar has not heard about yet. */
-	const enrich = (entries: readonly FinderEntry[]): void => {
+	async function runWaves<T>(
+		items: readonly FinderEntry[],
+		isActive: () => boolean,
+		step: (wave: readonly FinderEntry[]) => Promise<T>,
+		apply: (result: T, wave: readonly FinderEntry[]) => void,
+		label: string,
+	): Promise<void> {
+		try {
+			for (let offset = 0; offset < items.length; offset += ENRICH_WAVE_SIZE) {
+				if (!isActive()) return;
+				const wave = items.slice(offset, offset + ENRICH_WAVE_SIZE);
+				const result = await step(wave);
+				apply(result, wave);
+			}
+		} catch (error) {
+			console.error(label, error);
+		}
+	}
+
+	/** Both background passes for rows the sidecar has not heard about yet, waved so the first screenful paints at once. */
+	const enrichFor = (entries: readonly FinderEntry[], isActive: () => boolean = () => true): void => {
 		const needKind = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasKind(entry));
 		const needMetadata = entries.filter((entry) => hasFileVersion(entry) && !sidecar.hasMetadata(entry));
 		if (needKind.length > 0) {
-			source
-				.enrich(needKind)
-				.then((enriched) => sidecar.applyEnrichment(enriched))
-				.catch((error: unknown) => console.error("background enrichment failed", error));
+			void runWaves(
+				needKind,
+				isActive,
+				(wave) => source.enrich(wave),
+				(enriched) => sidecar.applyEnrichment(enriched),
+				"background enrichment failed",
+			);
 		}
 		if (needMetadata.length > 0) {
-			source
-				.finderMetadata(needMetadata)
-				.then((enriched) => sidecar.applyMetadata(enriched, needMetadata))
-				.catch((error: unknown) => console.error("background metadata failed", error));
+			void runWaves(
+				needMetadata,
+				isActive,
+				(wave) => source.finderMetadata(wave),
+				(enriched, wave) => sidecar.applyMetadata(enriched, wave),
+				"background metadata failed",
+			);
 		}
+	};
+
+	const enrich = (entries: readonly FinderEntry[]): void => {
+		enrichFor(entries);
 	};
 
 	const create = (dir: string): DirectoryRecord => {
@@ -197,7 +228,7 @@ export function createDirectoryStore(options: {
 				read: (path, paths) => source.readEntries(path, paths),
 				apply: (path, patch) => {
 					publish(path, record, { ...record.snapshot, entries: applyEntryPatch(record.snapshot.entries, patch) });
-					enrich(patch.entries);
+					enrichFor(patch.entries, () => records.get(dir) === record);
 				},
 				isCurrent: () => records.get(dir) === record,
 				onError: (error) => {
@@ -232,7 +263,7 @@ export function createDirectoryStore(options: {
 			record.applied = request;
 			const entries = reconcileListing(record.snapshot.entries, result.entries);
 			publish(dir, record, { entries, loaded: true, loading: false, error: null });
-			enrich(entries);
+			enrichFor(entries, () => records.get(dir) === record);
 		} else if (current && result.kind === "error" && mode === "navigate") {
 			record.applied = request;
 			publish(dir, record, { entries: [], loaded: true, loading: false, error: result.error });

@@ -35,6 +35,7 @@ import { extname } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { EMBEDDED_IMAGE_EXTENSIONS, readEmbeddedImage } from "../preview/node/embedded-image";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS } from "../preview/node/odf";
+import { isDatalessFile } from "../preview/node/provider-access";
 import { GOOGLE_DRIVE_EXTENSIONS } from "../preview/shared/google-drive";
 import { RAW_PHOTO_EXTENSIONS } from "../preview/shared/raster-formats";
 import { errorMessage } from "./fs-entry";
@@ -71,8 +72,18 @@ export const ICON_CACHE_MAX_ENTRIES = 4096;
 export const ICON_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
 const THUMBNAIL_TIMEOUT_MS = 4000;
+/** Cold iCloud CloudKit thumbnail round-trips take 3–7s without downloading the file; keep a dedicated budget and concurrency cap. */
+const DATALESS_THUMBNAIL_TIMEOUT_MS = 15_000;
+const DATALESS_THUMBNAIL_CONCURRENCY = 4;
 const SYSTEM_ICON_TIMEOUT_MS = 4000;
-
+/** Plain-text extensions have no cloud-cached visual thumbnail in iCloud; skip Quick Look on dataless placeholders so `getFileIcon` answers in ~1ms. */
+const DATALESS_TEXT_ONLY_EXTENSIONS: Readonly<Record<string, true>> = {
+	md: true,
+	markdown: true,
+	mdx: true,
+	csv: true,
+	tsv: true,
+};
 /**
  * Extensions for which a content thumbnail is useful and Quick Look has a
  * stable visual representation. Plain text/source files deliberately stay on
@@ -408,6 +419,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	// own lane: the user is staring at the panel while a listing batch can
 	// hold every shared permit until the deadline.
 	const thumbnailGate = createPriorityGate(thumbnailConcurrency);
+	const datalessGate = createPriorityGate(Math.min(thumbnailConcurrency, DATALESS_THUMBNAIL_CONCURRENCY));
 	const previewGate = createPriorityGate(previewConcurrency);
 	const systemGate = createPriorityGate(systemConcurrency);
 	let nextBatchPriority = 0;
@@ -468,25 +480,43 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	/** One bounded native thumbnail call; a failure or deadline degrades to "no thumbnail" and is logged. */
 	async function generateNative(target: IconTarget, gate: PriorityGate, priority: number): Promise<Uint8Array | null> {
 		const size = target.size ?? ICON_SIZE;
-		await gate.acquire(priority);
+		const ext = target.ext.toLowerCase();
+		const dataless = platform === "darwin" && (await isDatalessFile(target.path));
+		if (dataless && Object.hasOwn(DATALESS_TEXT_ONLY_EXTENSIONS, ext)) return null;
+		const activeGate = dataless && gate === thumbnailGate ? datalessGate : gate;
+		const timeoutMs = dataless && deps.thumbnailTimeoutMs === undefined ? DATALESS_THUMBNAIL_TIMEOUT_MS : thumbnailTimeoutMs;
+		await activeGate.acquire(priority);
+		let timedOut = false;
+		let rawPromise: Promise<Uint8Array | null> | null = null;
 		try {
 			let bytes: Uint8Array | null = null;
 			try {
-				bytes = await withTimeout(thumbnail(target.path, size), thumbnailTimeoutMs, "thumbnail");
+				rawPromise = thumbnail(target.path, size);
+				bytes = await withTimeout(rawPromise, timeoutMs, "thumbnail");
 			} catch (error) {
+				timedOut = true;
 				if (platform !== "win32" || size <= WINDOWS_CACHED_THUMBNAIL_SIZE) throw error;
 				warn(`file-icon: ${size}px thumbnail for ${target.path} failed, retrying at ${WINDOWS_CACHED_THUMBNAIL_SIZE}px: ${errorMessage(error)}`);
 			}
 			if (bytes === null && platform === "win32" && size > WINDOWS_CACHED_THUMBNAIL_SIZE) {
-				bytes = await withTimeout(thumbnail(target.path, WINDOWS_CACHED_THUMBNAIL_SIZE), thumbnailTimeoutMs, "thumbnail");
+				bytes = await withTimeout(thumbnail(target.path, WINDOWS_CACHED_THUMBNAIL_SIZE), timeoutMs, "thumbnail");
 			}
 			return bytes;
 		} catch (error) {
+			if (timedOut && rawPromise !== null) {
+				const key = cacheKey(target);
+				void rawPromise.then(
+					(lateBytes) => {
+						if (lateBytes !== null && lateBytes.byteLength > 0) cache.set(key, lateBytes);
+					},
+					() => undefined,
+				);
+			}
 			// One unreadable/timed-out file must not cost the rest of the batch.
 			warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
 			return null;
 		} finally {
-			gate.release();
+			activeGate.release();
 		}
 	}
 
