@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
+import { pdfDocumentSource } from "../../../preview/ui/pdf-config";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import type { FinderEntry } from "../data/entries";
 import { hasFileVersion } from "../data/entries";
@@ -44,7 +45,7 @@ async function pdfFirstPage(path: string, width: number): Promise<string | null>
 		pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 		pdfWorkerReady = true;
 	}
-	const task = pdfjs.getDocument({ url: previewStreamUrl(path), disableAutoFetch: true });
+	const task = pdfjs.getDocument(pdfDocumentSource(previewStreamUrl(path)));
 	try {
 		const page = await (await task.promise).getPage(1);
 		const natural = page.getViewport({ scale: 1 });

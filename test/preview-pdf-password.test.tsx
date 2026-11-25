@@ -19,11 +19,13 @@ interface FakeTask {
 	reject: (error: Error) => void;
 }
 const tasks: FakeTask[] = [];
+const getDocumentCalls: unknown[] = [];
 
 vi.mock("pdfjs-dist", () => ({
 	GlobalWorkerOptions: {},
 	PasswordResponses: { NEED_PASSWORD: 1, INCORRECT_PASSWORD: 2 },
-	getDocument: () => {
+	getDocument: (source: unknown) => {
+		getDocumentCalls.push(source);
 		let resolve: (pdf: unknown) => void = () => undefined;
 		let reject: (error: Error) => void = () => undefined;
 		const promise = new Promise<unknown>((ok, fail) => {
@@ -59,6 +61,7 @@ let resize: ReturnType<typeof vi.fn<QuickLookChrome["resize"]>>;
 beforeEach(async () => {
 	await setAppLanguage("en");
 	tasks.length = 0;
+	getDocumentCalls.length = 0;
 	textEntry = vi.fn();
 	report = vi.fn();
 	resize = vi.fn();
@@ -168,6 +171,20 @@ describe("PdfView on an encrypted PDF", () => {
 		});
 		expect(report).toHaveBeenCalledWith({ width: 700, height: 900 }, "clamp");
 		expect(resize).not.toHaveBeenCalled();
+	});
+
+	it("passes bundled CMap, standard font, wasm, and ICC URLs to pdf.js", () => {
+		expect(getDocumentCalls).toHaveLength(1);
+		expect(getDocumentCalls[0]).toEqual(
+			expect.objectContaining({
+				disableAutoFetch: true,
+				cMapPacked: true,
+				cMapUrl: expect.stringMatching(/\/pdfjs\/cmaps\/$/),
+				standardFontDataUrl: expect.stringMatching(/\/pdfjs\/standard_fonts\/$/),
+				wasmUrl: expect.stringMatching(/\/pdfjs\/wasm\/$/),
+				iccUrl: expect.stringMatching(/\/pdfjs\/iccs\/$/),
+			}),
+		);
 	});
 
 	it("still falls back for a PDF that fails for another reason", async () => {
