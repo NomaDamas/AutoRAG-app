@@ -32,6 +32,10 @@ export interface AutomationsShellDeps {
 	readonly autoStartService?: boolean;
 	/** Store a rule's name (an empty one goes back to the derived title). */
 	readonly renameRule?: (id: string, name: string) => Promise<void>;
+	/** The 채팅 half of the AI 에이전트 tab's segment. */
+	readonly showChat?: () => void;
+	/** 새 자동화 and 말로 만들기: bring the AI chat column up to make a rule in words. */
+	readonly talk?: () => void;
 }
 
 export interface AutomationsShell {
@@ -306,6 +310,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			if (rule !== null) edit(rule);
 		},
 		onAdd: add,
+		onShowChat: () => latest.current.showChat?.(),
+		onTalk: () => latest.current.talk?.(),
 		onCreate: async (draft) => {
 			showProgress(t("automations.toast.creating"), true);
 			try {

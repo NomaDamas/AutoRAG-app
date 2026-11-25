@@ -1,12 +1,12 @@
 /**
- * The 자동화 tab (Figma 621:4556, 621:4882, 621:5262), one centred column in three places:
- * - 내 자동화: 새 자동화 만들기… opens the card that writes a rule straight to the rules file, 내 자동화 lists every rule
- *   (status dot, name, when it runs, how its last run went, ›), and 추천 자동화 fill the card.
- * - a rule's own page (› on its row): its name, which a click renames in place, the card to change and save it, and
- *   its 실행 기록 read from the rule's run log.
- * - 전체 기록: every rule's runs, newest first, with 실패만 보기.
- * A footer line keeps the background service's state and its switch. It only draws and reports: the rules come from
- * the shared store, and delete asks before it removes anything.
+ * The AI 에이전트 tab's 자동화 side (Figma 672:3718, 672:3740, 676:646, 676:790), one centred column in three places:
+ * - the list: with no rules, 내 파일에서 찾은 자동화 (recommendations that open to show what they would do, and
+ *   추가하기 writes one at once); with rules, 내 자동화 (status dot, name, when it runs, the switch, ›), 전체 기록 보기,
+ *   and the recommendations not taken yet. 새 자동화 and 말로 만들기 open the AI chat column.
+ * - a rule's own page (› on its row), under the breadcrumb 자동화 › name: the name, which a click renames in place,
+ *   the card to change and save it, and its 실행 기록 read from the rule's run log.
+ * - 전체 기록, under the breadcrumb 자동화 › 전체 기록: every rule's runs, newest first, by day.
+ * It only draws and reports: the rules come from the shared store, and delete asks before it removes anything.
  */
 
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
@@ -17,7 +17,8 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon, WarningIcon, ZapIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { AgentSegment } from "./AgentSegment";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -54,6 +55,10 @@ export interface AutomationsViewProps {
 	/** Right click on a row (`id`) or on the empty space (`null`), at the pointer. */
 	readonly onContextMenu: (id: string | null, at: { readonly x: number; readonly y: number }) => void;
 	readonly onOpenFolder: (path: string) => void;
+	/** The 채팅 half of the AI 에이전트 tab's segment. */
+	readonly onShowChat?: (() => void) | undefined;
+	/** 새 자동화 and 말로 만들기: open the AI chat column to make a rule in words. */
+	readonly onTalk?: (() => void) | undefined;
 }
 
 const TONE_DOT: Readonly<Record<RunTone, string>> = {
@@ -588,30 +593,6 @@ function Section({ title, aside, muted = false, children }: { readonly title: st
 	);
 }
 
-/** 내 자동화 | 전체 기록: the two places the column shows (Figma 621:4556, 621:5262). */
-function Segmented<T extends string>({ value, options, onChange }: { readonly value: T; readonly options: readonly { readonly value: T; readonly label: string }[]; readonly onChange: (value: T) => void }): ReactElement {
-	return (
-		<div role="tablist" className="inline-flex gap-2 rounded-[9px] bg-chrome p-2" data-automation-tabs>
-			{options.map((option) => (
-				<button
-					key={option.value}
-					type="button"
-					role="tab"
-					aria-selected={option.value === value}
-					data-tab={option.value}
-					className={cn(
-						"h-28 rounded-[7px] border-0 px-14 text-[13px] cursor-pointer",
-						option.value === value ? "bg-window font-medium text-ink shadow-[0_0_0_0.5px_var(--border)]" : "bg-transparent text-ink-muted hover:text-ink",
-					)}
-					onClick={() => onChange(option.value)}
-				>
-					{option.label}
-				</button>
-			))}
-		</div>
-	);
-}
-
 /** A rule's runs from its log, newest first, read again whenever any rule's last run changes. */
 function useRunHistory(ids: readonly string[], changed: string): Readonly<Record<string, readonly AutomationRun[]>> {
 	const [history, setHistory] = useState<Readonly<Record<string, readonly AutomationRun[]>>>({});
@@ -754,15 +735,7 @@ function AutomationDetail({
 	return (
 		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
 			<div className="flex flex-col gap-6">
-				<button
-					type="button"
-					data-action="automation-back"
-					className="inline-flex flex-none items-center gap-4 self-start border-0 bg-transparent p-0 text-meta leading-[16px] text-ink-muted cursor-pointer hover:text-ink"
-					onClick={onBack}
-				>
-					<ChevronLeftIcon size={12} />
-					{t("places.automations")}
-				</button>
+				<Breadcrumb current={ruleTitle(rule)} onRoot={onBack} />
 				<div className="flex min-w-0 items-center gap-8">
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
@@ -796,29 +769,61 @@ function AutomationDetail({
 	);
 }
 
-/** 전체 기록 (Figma 621:5262): every rule's runs, newest first; 실패만 보기 keeps the failed ones; a row opens its rule. */
-function AllRuns({ rules, history, onOpen }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void }): ReactElement {
+/** Where the page is under 자동화 (Figma 676:646, 676:790): 자동화 goes back to the list, the last word is this page. */
+function Breadcrumb({ current, onRoot }: { readonly current: string; readonly onRoot: () => void }): ReactElement {
 	const { t } = useTranslation();
-	const [failOnly, setFailOnly] = useState(false);
+	return (
+		<nav aria-label={t("automations.breadcrumb")} className="flex min-w-0 items-center gap-6 text-[13px] leading-[18px]" data-automation-breadcrumb>
+			<button type="button" data-action="automation-back" className="flex-none border-0 bg-transparent p-0 text-ink-muted cursor-pointer hover:text-ink" onClick={onRoot}>
+				{t("places.automations")}
+			</button>
+			<ChevronRightIcon size={12} className="flex-none text-ink-faint" />
+			<span aria-current="page" className="min-w-0 truncate font-medium text-ink">
+				{current}
+			</span>
+		</nav>
+	);
+}
+
+/** The day a run falls on, as the 전체 기록 heading says it: 오늘, 어제, or the date. */
+function dayLabel(at: number, t: TFunction, language: string, now: number = Date.now()): string {
+	const start = (time: number): number => new Date(time).setHours(0, 0, 0, 0);
+	const days = Math.round((start(now) - start(at)) / 86_400_000);
+	if (days === 0) return t("automations.all.today");
+	if (days === 1) return t("automations.all.yesterday");
+	return new Intl.DateTimeFormat(language, { month: "long", day: "numeric" }).format(at);
+}
+
+/** 전체 기록 (Figma 676:646): every rule's runs, newest first, under the day they ran; a row opens its rule. */
+function AllRunsPage({ rules, history, onOpen, onBack }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void; readonly onBack: () => void }): ReactElement {
+	const { t, i18n } = useTranslation();
 	const all = rules
 		.flatMap((rule) => (history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ rule, run })))
 		.sort((a, b) => b.run.startedAt - a.run.startedAt);
-	const shown = failOnly ? all.filter(({ run }) => runTone(run) === "fail") : all;
+	const days: { label: string; runs: typeof all }[] = [];
+	for (const item of all) {
+		const label = dayLabel(item.run.startedAt, t, i18n.language);
+		const last = days[days.length - 1];
+		if (last !== undefined && last.label === label) last.runs.push(item);
+		else days.push({ label, runs: [item] });
+	}
 	return (
-		<section className="flex flex-col gap-8" data-automation-all-runs>
-			<div className="flex items-center gap-8">
-				<span className="text-meta leading-[16px] text-ink-muted">{t("automations.all.count", { count: all.length })}</span>
-				<span className="flex-1" />
-				<span className="text-meta leading-[16px] text-ink-body">{t("automations.all.failOnly")}</span>
-				<Switch checked={failOnly} dataSwitchId="automation-fail-only" ariaLabel={t("automations.all.failOnly")} onChange={() => setFailOnly((was) => !was)} />
-			</div>
-			{/* Like a rule's 실행 기록 (Figma 641:13600, 641:13747): plain lines between hairlines, no box, and the empty line the same way. */}
-			{shown.length === 0 ? (
-				<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{failOnly ? t("automations.all.noFails") : t("automations.inspector.noRuns")}</p>
+		<section className="flex flex-col gap-6" data-automation-all-runs>
+			<Breadcrumb current={t("automations.all.title")} onRoot={onBack} />
+			<h1 className="m-0 text-[20px] font-medium leading-[28px] text-ink">{t("automations.all.title")}</h1>
+			{all.length === 0 ? (
+				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 			) : (
-				<div role="list" aria-label={t("automations.tabs.all")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
-					{shown.map(({ rule, run }) => (
-						<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} flat />
+				<div className="mt-10 flex flex-col gap-18">
+					{days.map((day) => (
+						<div key={day.label} className="flex flex-col">
+							<h2 className="m-0 border-b-[0.5px] border-divider pb-6 text-meta font-medium leading-[16px] text-ink-muted">{day.label}</h2>
+							<div role="list" aria-label={day.label} className="flex flex-col">
+								{day.runs.map(({ rule, run }) => (
+									<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} flat />
+								))}
+							</div>
+						</div>
 					))}
 				</div>
 			)}
@@ -826,11 +831,198 @@ function AllRuns({ rules, history, onOpen }: { readonly rules: readonly Automati
 	);
 }
 
-export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon, onRetryStatus }: AutomationsViewProps): ReactElement {
+/* ------------------------------------------------------------ recommendations -- */
+
+/** The folders the OS reports, read once. */
+function useLocations(): readonly FsLocation[] {
+	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
+	useEffect(() => {
+		let live = true;
+		void window.autorag?.fs
+			?.locations()
+			.then((loaded) => {
+				if (live) setLocations(loaded);
+			})
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, []);
+	return locations;
+}
+
+export type TemplateId = Template["id"];
+
+function templateOf(id: TemplateId): Template {
+	return TEMPLATES.find((template) => template.id === id) ?? TEMPLATES[0]!;
+}
+
+/** A recommendation as the rule it would write; null until the OS has said where its folder is. */
+function templateDraft(template: Template, locations: readonly FsLocation[], task: string, folder?: string | null): AutomationDraft | null {
+	const path = folder ?? locations.find((location) => location.icon === template.folder && location.available)?.path ?? null;
+	if (path === null) return null;
+	return {
+		paths: [path],
+		events: EVENTS[template.event],
+		include: KIND_GLOBS[template.kind],
+		...(template.run === undefined ? { agent: { profile: PROFILES[template.mode], task } } : { run: template.run }),
+	};
+}
+
+/** A rule already does what the recommendation would: the same files, the same changes, and the same kind of work. */
+export function templateTaken(rules: readonly AutomationRule[], id: TemplateId): boolean {
+	const template = templateOf(id);
+	return rules.some(
+		(rule) =>
+			sameList(rule.include, KIND_GLOBS[template.kind]) &&
+			sameList(rule.events, EVENTS[template.event]) &&
+			(template.run === undefined ? rule.agent !== undefined : rule.agent === undefined && rule.run.join(" ") === template.run.join(" ")),
+	);
+}
+
+/**
+ * One recommendation (Figma 672:3718): the chevron, its name over when it runs, and 추가하기. A click on the row opens
+ * it downward to show what it would do, read-only (언제, 할 일); 추가하기 writes it at once, open or not.
+ */
+function RecommendationCard({ template, locations, onAdd }: { readonly template: Template; readonly locations: readonly FsLocation[]; readonly onAdd: (draft: AutomationDraft) => Promise<boolean> }): ReactElement {
 	const { t } = useTranslation();
-	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
-	const [tab, setTab] = useState<"mine" | "all">("mine");
-	const [composerOpen, setComposerOpen] = useState(false);
+	const [open, setOpen] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const task = t(`automations.templates.${template.id}.task` as LocaleKey);
+	const draft = templateDraft(template, locations, task);
+	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
+	return (
+		<div className="flex flex-col gap-10 rounded-12 border border-border bg-window px-16 py-12" data-template={template.id} data-open={open ? "true" : undefined}>
+			<div className="flex items-center gap-10">
+				<button
+					type="button"
+					aria-expanded={open}
+					className="flex min-w-0 flex-1 items-center gap-10 border-0 bg-transparent p-0 text-left cursor-pointer"
+					onClick={() => setOpen((was) => !was)}
+				>
+					<ChevronDownIcon size={13} className={cn("flex-none text-ink-muted transition-transform duration-(--dur-color)", open && "rotate-180")} />
+					<span className="flex min-w-0 flex-1 flex-col gap-1">
+						<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						<span className="truncate text-meta leading-[17px] text-ink-muted">{when}</span>
+					</span>
+				</button>
+				<button
+					type="button"
+					data-action="automation-template-add"
+					disabled={draft === null || busy}
+					className={cn(
+						"inline-flex h-28 flex-none items-center rounded-6 px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
+						open ? "border-0 bg-accent text-on-accent hover:bg-accent-hover" : "border border-border bg-window text-ink hover:bg-hover",
+					)}
+					onClick={() => {
+						if (draft === null) return;
+						setBusy(true);
+						void onAdd(draft).finally(() => setBusy(false));
+					}}
+				>
+					{t("automations.recs.add")}
+				</button>
+			</div>
+			{open ? (
+				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-16 gap-y-4 rounded-8 bg-subtle-alt px-12 py-8 text-meta leading-[18px]">
+					<dt className="text-ink-muted">{t("automations.create.when")}</dt>
+					<dd className="m-0 text-ink">{when}</dd>
+					<dt className="text-ink-muted">{t("automations.create.task")}</dt>
+					<dd className="m-0 text-ink">{task}</dd>
+				</dl>
+			) : null}
+		</div>
+	);
+}
+
+/**
+ * The card a chat suggestion opens into (Figma 672:3678; the narrow one in the 자동화 column, 672:3740): the rule the
+ * conversation suggests, filled in, as the 언제 sentence of chips and the 할 일 line. Nothing is written until 추가하기.
+ */
+export function AutomationSuggestionCard({
+	templateId,
+	narrow = false,
+	onCreate,
+	onCancel,
+}: {
+	readonly templateId: TemplateId;
+	readonly narrow?: boolean;
+	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	readonly onCancel: () => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const template = templateOf(templateId);
+	const locations = useLocations();
+	const [folder, setFolder] = useState<string | null>(null);
+	const [kind, setKind] = useState<KindId>(template.kind);
+	const [event, setEvent] = useState<EventId>(template.event);
+	const [task, setTask] = useState(() => t(`automations.templates.${template.id}.task` as LocaleKey));
+	const [busy, setBusy] = useState(false);
+	const standard = standardFolders(locations);
+	const chosen = folder ?? locations.find((location) => location.icon === template.folder && location.available)?.path ?? standard[0]?.value ?? null;
+	// A template that runs a program stays one only while nothing about it was changed; otherwise it is the agent's rule.
+	const program = template.run !== undefined && kind === template.kind && event === template.event && task.trim() === t(`automations.templates.${template.id}.task` as LocaleKey) ? template.run : null;
+	const draft: AutomationDraft | null =
+		chosen === null
+			? null
+			: {
+					paths: [chosen],
+					events: EVENTS[event],
+					include: KIND_GLOBS[kind],
+					...(program === null ? { agent: { profile: PROFILES[template.mode], task: task.trim() } } : { run: program }),
+				};
+	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
+	const events: readonly ChipOption<EventId>[] = (["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) }));
+	const chips: Readonly<Record<string, ReactNode>> = {
+		folder: <ChipSelect value={chosen} options={standard} label={chosen === null ? t("automations.create.pickFolder") : folderLabel(chosen)} icon={<FolderGlyph size={13} />} testId="automation-suggest-folder" onChange={setFolder} />,
+		kind: <ChipSelect value={kind} options={kinds} label={t("automations.create.kindLabel")} testId="automation-suggest-kind" onChange={setKind} />,
+		event: <ChipSelect value={event} options={events} label={t("automations.create.eventLabel")} testId="automation-suggest-event" onChange={setEvent} />,
+	};
+	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
+	const canSubmit = draft !== null && task.trim().length > 0 && !busy;
+	return (
+		<div className={cn("flex flex-col rounded-12 border border-border bg-window", narrow ? "gap-6 p-10" : "gap-10 px-14 py-12")} data-automation-suggest={templateId}>
+			{narrow ? <span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span> : null}
+			<div className="flex flex-wrap items-center gap-6">
+				{sentence.map((part, index) =>
+					part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
+				)}
+			</div>
+			{narrow ? <span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.task")}</span> : null}
+			<input
+				value={task}
+				aria-label={t("automations.create.task")}
+				placeholder={t("automations.create.taskPlaceholder")}
+				data-testid="automation-suggest-task"
+				className={cn("h-28 rounded-6 border-[0.5px] border-divider bg-subtle-alt px-8 text-meta text-ink outline-none focus:border-accent", narrow ? "w-full" : "w-auto min-w-[160px] self-start field-sizing-content max-w-full")}
+				onChange={(change) => setTask(change.target.value)}
+			/>
+			<div className="flex items-center justify-end gap-12">
+				<button type="button" className="border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink" onClick={onCancel}>
+					{t("common.cancel")}
+				</button>
+				<button
+					type="button"
+					data-action="automation-suggest-create"
+					disabled={!canSubmit}
+					className="inline-flex h-28 items-center rounded-6 border-0 bg-accent px-10 text-meta font-medium text-on-accent cursor-pointer hover:bg-accent-hover disabled:cursor-default disabled:opacity-50"
+					onClick={() => {
+						if (draft === null) return;
+						setBusy(true);
+						void onCreate(draft).finally(() => setBusy(false));
+					}}
+				>
+					{t("automations.recs.add")}
+				</button>
+			</div>
+		</div>
+	);
+}
+
+export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
+	const { t } = useTranslation();
+	const [page, setPage] = useState<"list" | "all">("list");
+	const locations = useLocations();
 	const broken = state.configError !== null;
 	const history = useRunHistory(
 		[...new Set([...state.rules.map((rule) => rule.id), ...(editing === null ? [] : [editing.id])])],
@@ -838,40 +1030,28 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 	);
 	// 수정, from anywhere (the list, a menu, the folder inspector, Quick Look), opens the rule's own page.
 	const detail = editing;
-	const open = (id: string): void => onEdit(id);
+	const open = (id: string): void => {
+		setPage("list");
+		onEdit(id);
+	};
 	const scrollRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		scrollRef.current?.scrollTo?.({ top: 0 });
-	}, [detail?.id, tab]);
+	}, [detail?.id, page]);
+	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
+	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} onAdd={onCreate} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
-			{/* The AI 에이전트 tab's head: the mark and the name on the left, + 새 자동화 on the right. */}
+			{/* The AI 에이전트 tab's head (Figma 672:3718): the mark and the name on the left, 채팅 | 자동화 in the middle. */}
 			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab px-12 select-none" data-automations-head>
 				<span className="flex min-w-0 items-center gap-8">
 					<span className="grid flex-none place-items-center text-accent">
-						<ZapIcon size={14} />
+						<SparklesIcon />
 					</span>
-					<strong className="truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.automations")}</strong>
+					<strong className="truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.aiSearch")}</strong>
 				</span>
+				<AgentSegment value="automations" onChange={(value) => (value === "chat" ? onShowChat?.() : undefined)} />
 				<span />
-				<span className="flex justify-end">
-					{/* With no rules the 새 자동화 card is already open on the page, so there is nothing for the button to open. */}
-					{state.rules.length === 0 && detail === null ? null : (
-					<button
-						type="button"
-						data-action="automation-composer-open"
-						className="inline-flex h-28 flex-none items-center gap-4 rounded-6 border-0 bg-transparent px-8 text-meta font-medium text-ink-muted cursor-pointer hover:bg-hover hover:text-ink"
-						onClick={() => {
-							if (detail !== null) onCancelEdit?.();
-							setTab("mine");
-							setComposerOpen(true);
-						}}
-					>
-						<TabPlusIcon size={14} />
-						{t("automations.create.headButton")}
-					</button>
-					)}
-				</span>
 			</div>
 			<div
 				ref={scrollRef}
@@ -883,10 +1063,8 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				{/* The page reads one size up from the rest of the window (13px body to 14px, 12px to 13px), and its spacing and
-					    icons scale with it, so it holds its own beside the 파일 and AI 에이전트 tabs. The head bar keeps their size. */}
-				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-48 [zoom:1.077]">
-				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
+				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-32">
+				<div className="mx-auto flex w-full max-w-[640px] flex-col gap-24">
 					{state.error === null ? null : (
 						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
 						<NoticeCard
@@ -918,92 +1096,50 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							onDelete={() => onAskDelete(detail.id)}
 							onDraftChange={onDraftChange}
 						/>
+					) : page === "all" ? (
+						<AllRunsPage rules={state.rules} history={history} onOpen={open} onBack={() => setPage("list")} />
+					) : state.rules.length === 0 ? (
+						// Figma 672:3718: with no rules the page is only what the person's files suggest, and a way to ask in words.
+						<section className="flex flex-col gap-10" data-automation-recommendations>
+							<h2 className="m-0 mb-2 text-[15px] font-medium leading-[22px] text-ink">{t("automations.recs.title")}</h2>
+							{recommendationCards}
+							<p className="m-0 mt-6 flex items-center gap-8 text-meta leading-[18px] text-ink-muted">
+								{t("automations.recs.more")}
+								<button type="button" data-action="automation-talk" className="border-0 bg-transparent p-0 text-meta font-medium text-accent-text underline underline-offset-2 cursor-pointer" onClick={() => onTalk?.()}>
+									{t("automations.recs.talk")}
+								</button>
+							</p>
+						</section>
 					) : (
 						<>
-							{/* The two places sit with the page they switch, centred over it, not in the head bar. */}
-							<div className="flex justify-center">
-								<Segmented
-									value={tab}
-									options={[
-										{ value: "mine", label: t("automations.tabs.rules") },
-										{ value: "all", label: t("automations.tabs.all") },
-									]}
-									onChange={setTab}
-								/>
-							</div>
-							{tab === "all" ? (
-								<AllRuns rules={state.rules} history={history} onOpen={open} />
-							) : (
-								<>
-									{composerOpen || state.rules.length === 0 || filled !== null ? (
-										<Section title={t("automations.create.title")}>
-											{/* The aurora behind the card (tokens.css §8): the place where Dazzi is asked to make something. */}
-											<div className="ai-glow-host" data-ai-glow>
-												<div className="ai-glow" aria-hidden="true" />
-												<NewAutomationCard
-													onCreate={async (draft) => {
-														const ok = await onCreate(draft);
-														if (ok) {
-															setComposerOpen(false);
-															setFilled(null);
-														}
-														return ok;
-													}}
-													onUpdate={onUpdate}
-													onCancelEdit={onCancelEdit}
-													onDraftChange={onDraftChange}
-													closable={state.rules.length > 0}
-													onClose={() => {
-														setComposerOpen(false);
-														setFilled(null);
-													}}
-													editing={null}
-													filled={filled}
-												/>
-											</div>
-										</Section>
-									) : null}
-									{state.rules.length === 0 ? null : (
-										<Section title={`${t("automations.mine")} ${state.rules.length}`}>
-											{/* One soft shadow on the whole list, not on each row, so it lifts the group the same however many rules there are. */}
-											<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
-												{state.rules.map((rule) => (
-													<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
-												))}
-											</div>
-										</Section>
-									)}
-									<Section title={t("automations.templates.title")}>
-										{/* Figma 641:13493: three cards side by side. The one whose words are in the card above is outlined, so it is clear what the card shows. */}
-										<div className="flex items-stretch gap-8">
-											{TEMPLATES.map((template) => {
-												const shown = filled?.template.id === template.id && (composerOpen || state.rules.length === 0);
-												return (
-													<button
-														key={template.id}
-														type="button"
-														data-template={template.id}
-														aria-pressed={shown}
-														className={cn(
-															"flex min-w-0 flex-1 flex-col items-stretch gap-4 rounded-12 border bg-subtle-alt px-14 py-10 text-left cursor-pointer transition-[border-color,box-shadow] duration-(--dur-color) hover:bg-hover-row",
-															shown ? "border-accent shadow-[0_0_0_3px_var(--accent-soft)]" : "border-transparent",
-														)}
-														onClick={() => {
-															setFilled({ template, at: Date.now() });
-															setComposerOpen(true);
-														}}
-													>
-														<span className="flex items-center gap-4">
-															<span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-[21px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-															<ChevronRightIcon size={12} className="flex-none text-ink-faint" />
-														</span>
-														<span className="text-meta leading-[16px] text-ink-muted">{t(`automations.templates.${template.id}.desc` as LocaleKey)}</span>
-													</button>
-												);
-											})}
-										</div>
-									</Section>
-								</>
+							<section className="flex flex-col gap-8">
+								<div className="flex items-center gap-8">
+									<h2 className="m-0 flex-1 text-[14px] font-medium leading-[20px] text-ink">{t("automations.mine")}</h2>
+									<button
+										type="button"
+										data-action="automation-composer-open"
+										className="inline-flex h-28 flex-none items-center gap-4 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink cursor-pointer hover:bg-hover"
+										onClick={() => onTalk?.()}
+									>
+										<TabPlusIcon size={13} />
+										{t("automations.create.headButton")}
+									</button>
+								</div>
+								{/* One soft shadow on the whole list, not on each row, so it lifts the group the same however many rules there are. */}
+								<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
+									{state.rules.map((rule) => (
+										<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
+									))}
+								</div>
+								<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 text-meta font-medium text-accent-text underline underline-offset-2 cursor-pointer" onClick={() => setPage("all")}>
+									{t("automations.all.open")}
+								</button>
+							</section>
+							{recommendations.length === 0 ? null : (
+								<section className="flex flex-col gap-8" data-automation-recommendations>
+									<h2 className="m-0 text-meta leading-[16px] text-ink-muted">{t("automations.recs.section")}</h2>
+									{recommendationCards}
+								</section>
 							)}
 						</>
 					)}

@@ -1,5 +1,6 @@
 import {
 	forwardRef,
+	useContext,
 	useEffect,
 	useImperativeHandle,
 	useLayoutEffect,
@@ -67,6 +68,11 @@ import { FileMention } from "./FileMention";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
+import { AgentSegment } from "./AgentSegment";
+import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
+import { AutomationsContext } from "./AutomationsTab";
+import { templateTaken } from "./AutomationsView";
+import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 
 import { IndexNoticeBanner } from "./IndexNotice";
 import { CompactingStatus, ContextNoticeView } from "./ContextNotice";
@@ -88,7 +94,9 @@ type Capability = (typeof CAPABILITIES)[number]["id"];
 const autorag = window.autorag;
 
 /** History search fires this long after the last keystroke, so typing stays smooth. */
-const CENTERED = "mx-auto w-full max-w-[820px]";
+/** The composer's column (Figma 672:3638: 680 of the 959 frame); the conversation reads in a slightly narrower one. */
+const CENTERED = "mx-auto w-full max-w-[680px]";
+const MESSAGES = "mx-auto w-full max-w-[620px]";
 
 /**
  * Imperative surface the shell drives on the active AI Search tab: ⌘K focuses
@@ -149,6 +157,8 @@ export interface AiSearchPanelProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source, by its alias (a button of the AI fix). */
 	readonly onOpenSource: (alias: string) => void;
+	/** The 자동화 half of the head's 채팅 | 자동화 (absent on the phone, which has its own tabs). */
+	readonly onShowAutomations?: (() => void) | undefined;
 	/**
 	 * A citation chip or a source card was tapped. The desktop shows evidence in the
 	 * inspector beside the chat, so it leaves this out; the phone shell has no room
@@ -175,7 +185,7 @@ export function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
+	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false, onShowAutomations },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -232,6 +242,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [queued, setQueued] = useState<readonly string[]>([]);
 	/** The hint picked in the empty tab; cleared once the conversation starts. */
 	const [capability, setCapability] = useState<Capability | null>(null);
+	/** The automation this turn's answer suggests under it, and how far the person took it. */
+	const [suggestion, setSuggestion] = useState<{ readonly id: SuggestableTemplate; readonly phase: NudgePhase | "gone" } | null>(null);
+	const automationsShell = useContext(AutomationsContext);
 	const queuedRef = useRef(queued);
 	queuedRef.current = queued;
 	/** The current run already showed its Quick answer (read by steer timing). */
@@ -945,7 +958,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// A fresh conversation puts the composer in the middle with the hints under it;
 	// the first question sends it back to the bottom.
 	const centered = showEmpty && !phone && pastTurns.length === 0 && interactionRequest === null && queued.length === 0;
-	const rowComposer = centered && !attachments.some(isThumbnailAttachment) && voiceNotice === null;
+	// One row (Figma 672:3638, 672:3658): the mode, the field, the button; thumbnails and a dictation note need the taller box.
+	const rowComposer = !phone && !attachments.some(isThumbnailAttachment) && voiceNotice === null;
 	const hintsHidden = capability === null && query.trim().length > 0;
 	const pickedCapability = CAPABILITIES.find((item) => item.id === capability) ?? null;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
@@ -955,6 +969,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		if (!centered) setCapability(null);
 	}, [centered]);
+	// A new question drops the last answer's suggestion; a finished answer may offer one (Figma 672:3658).
+	useEffect(() => {
+		setSuggestion(null);
+	}, [submittedQuery]);
+	const answered = !searching && submittedQuery !== null && (quickReady || deepReady);
+	useEffect(() => {
+		if (!answered || phone || automationsShell === null || submittedQuery === null) return;
+		const sources = [...(quick?.evidence ?? []), ...(deep?.evidence ?? [])].map((item) => `${item.title} ${item.source ?? ""}`).join(" ");
+		const rules = automationsShell.props.state.rules;
+		const id = suggestTemplate(`${submittedQuery} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
+		if (id !== null) setSuggestion((current) => current ?? { id, phase: "nudge" });
+	}, [answered]);
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -1027,6 +1053,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				</span>
 				<strong className="flex-none text-sm font-medium leading-[19.5px] text-ink">{t("aiSearch.title")}</strong>
 				<span className="flex-1" />
+				{/* 채팅 | 자동화 (Figma 672:3638) sits in the middle of the head, whatever the two sides hold. */}
+				{onShowAutomations === undefined ? null : (
+					<span className="pointer-events-none absolute inset-x-0 top-0 flex h-tab items-center justify-center">
+						<span className="pointer-events-auto">
+							<AgentSegment value="chat" onChange={(side) => (side === "automations" ? onShowAutomations() : undefined)} />
+						</span>
+					</span>
+				)}
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
@@ -1112,7 +1146,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			) : null}
 
 			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
-				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
+				<div className={cn(MESSAGES, "flex flex-col space-y-16")}>
 					{showEmpty ? (
 						phone ? (
 							<div className="ai-empty ai-empty-phone">
@@ -1240,6 +1274,19 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										/>
 									</div>
 								</div>
+							) : null}
+							{answered && suggestion !== null && suggestion.phase !== "gone" && automationsShell !== null ? (
+								<AutomationNudge
+									template={suggestion.id}
+									phase={suggestion.phase}
+									onPhase={(phase) => setSuggestion({ id: suggestion.id, phase })}
+									onLater={() => {
+										putOff(suggestion.id);
+										setSuggestion({ id: suggestion.id, phase: "gone" });
+									}}
+									onCreate={automationsShell.props.onCreate}
+									onView={() => onShowAutomations?.()}
+								/>
 							) : null}
 							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
 							{searching && compacting ? (
@@ -1446,14 +1493,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							aria-label={t("aiSearch.capability.hints")}
 							aria-hidden={hintsHidden ? true : undefined}
 						>
-							{CAPABILITIES.filter((item) => item.id !== capability).map((item) => (
+							{CAPABILITIES.map((item) => (
 								<button
 									key={item.id}
 									type="button"
 									tabIndex={hintsHidden ? -1 : undefined}
-									className="inline-flex h-26 cursor-pointer items-center gap-4 rounded-full border-0 bg-transparent px-8 text-meta text-ink-muted transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink-body"
+									aria-pressed={item.id === capability}
+									className={cn(
+										"inline-flex h-26 cursor-pointer items-center gap-4 rounded-full border-0 px-8 text-meta transition-colors duration-(--dur-color) ease-out",
+										item.id === capability ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink-body",
+									)}
 									onClick={() => {
-										setCapability(item.id);
+										setCapability((was) => (was === item.id ? null : item.id));
 										inputRef.current?.focus();
 									}}
 								>

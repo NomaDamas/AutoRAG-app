@@ -259,12 +259,12 @@ describe("Favorites: dropping a folder between rows", () => {
 });
 
 describe("Favorites: reordering by drag", () => {
-	it("makes the customizable rows draggable and the two app rows not", () => {
+	it("makes the customizable rows draggable and the AI Agent app row not", () => {
 		renderSidebar(WITH_PIN);
 		expect(rowIds()).toEqual(["place:home", "place:desktop", "place:documents", "place:downloads", "custom:/Users/me/Work"]);
 		for (const id of rowIds()) expect(rowOf(id).getAttribute("draggable")).toBe("true");
-		const appRows = [...host.querySelectorAll<HTMLElement>(".side-group > .relative")].slice(0, 2);
-		expect(appRows).toHaveLength(2);
+		const appRows = [...host.querySelectorAll<HTMLElement>(".side-group > .relative")].slice(0, 1);
+		expect(appRows).toHaveLength(1);
 		for (const row of appRows) expect(row.getAttribute("draggable")).toBeNull();
 	});
 

@@ -55,25 +55,26 @@ const labels = (): string[] => [...host.querySelectorAll(".sidebar__item-label")
 
 describe("Sidebar app rows", () => {
 	it.each([
-		["ko", ["AI 에이전트", "자동화"]],
-		["en", ["AI Agent", "Automations"]],
-		["ja", ["AI エージェント", "自動化"]],
-		["zh", ["AI 智能体", "自动化"]],
-	] as const)("names AI Chat and Automations in %s", async (language, expected) => {
+		["ko", "AI 에이전트"],
+		["en", "AI Agent"],
+		["ja", "AI エージェント"],
+		["zh", "AI 智能体"],
+	] as const)("names the AI Agent row in %s, with no Automations row beside it", async (language, expected) => {
 		await act(() => setAppLanguage(language));
 		renderSidebar(null);
-		expect(labels().slice(0, 2)).toEqual(expected);
+		expect(labels()[0]).toBe(expected);
+		expect(host.querySelectorAll(".sidebar__item")).toHaveLength(1);
 	});
 
-	it("marks only the Automations row active on the Automations tab, and hands the row to the shell on click", () => {
-		const onNavigate = renderSidebar(AUTOMATIONS_PATH);
+	it("marks the AI Agent row active on an Automations tab (the shell passes AI_SEARCH_PATH), and hands the row to the shell on click", () => {
+		const onNavigate = renderSidebar(AI_SEARCH_PATH);
 		const rows = [...host.querySelectorAll<HTMLElement>(".sidebar__item")];
 		const active = rows.filter((row) => row.getAttribute("aria-current") === "true");
 		expect(active).toHaveLength(1);
-		expect(active[0]?.querySelector(".sidebar__item-label")?.textContent).toBe("자동화");
-		act(() => rows[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ view: "automations", path: AUTOMATIONS_PATH }));
-		expect(onNavigate).not.toHaveBeenCalledWith(expect.objectContaining({ path: AI_SEARCH_PATH }));
+		expect(active[0]?.querySelector(".sidebar__item-label")?.textContent).toBe("AI 에이전트");
+		act(() => rows[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ view: "aiSearch", path: AI_SEARCH_PATH }));
+		expect(onNavigate).not.toHaveBeenCalledWith(expect.objectContaining({ path: AUTOMATIONS_PATH }));
 	});
 });
 

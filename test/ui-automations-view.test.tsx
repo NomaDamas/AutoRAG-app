@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AutomationsView, type AutomationsViewProps } from "../src/renderer/src/components/AutomationsView";
+import { AutomationsView, templateTaken, type AutomationsViewProps } from "../src/renderer/src/components/AutomationsView";
 import type { AutomationRule, AutomationRun, AutomationsSnapshot } from "../src/shared/automation-contract";
 import type { FsLocation } from "../src/shared/fs-contract";
 import { setAppLanguage } from "../src/shared/i18n";
@@ -135,27 +135,60 @@ describe("AutomationsView list", () => {
 		expect(host.querySelector("[data-rule-last-run]")).toBeNull();
 	});
 
-	it("names its sections in the interface language, counts the rules, and opens the 새 자동화 card from the header button", async () => {
+	it("heads the page as the AI Agent tab with 채팅 | 자동화, and 채팅 goes back to the chat", async () => {
 		await setAppLanguage("en");
-		render(props());
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations 3", "Suggested Automations"]);
-		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation");
-		expect([...host.querySelectorAll('[data-automation-tabs] [role="tab"]')].map((tab) => tab.textContent)).toEqual(["Automations", "All runs"]);
+		const onShowChat = vi.fn();
+		render(props({ onShowChat }));
+		expect(text(host.querySelector("[data-automations-head] strong"))).toBe("AI Agent");
+		const segment = host.querySelector('[data-agent-segment][role="tablist"]');
+		expect(segment?.getAttribute("data-agent-segment")).toBe("automations");
+		const sides = [...(segment?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])];
+		expect(sides.map((side) => [side.dataset.side, side.textContent, side.getAttribute("aria-selected")])).toEqual([
+			["chat", "Chat", "false"],
+			["automations", "Automations", "true"],
+		]);
+		click(sides[1]);
+		expect(onShowChat).not.toHaveBeenCalled();
+		click(sides[0]);
+		expect(onShowChat).toHaveBeenCalledTimes(1);
 	});
 
-	it("outlines the suggestion whose words fill the 새 자동화 card, and 취소 beside 저장 closes the card", () => {
-		render(props());
-		const card = (id: string): HTMLElement | null => host.querySelector<HTMLElement>(`[data-template="${id}"]`);
+	it("names its sections in the interface language, and 새 자동화 hands making a rule to the chat instead of opening a card", async () => {
+		await setAppLanguage("en");
+		const onTalk = vi.fn();
+		render(props({ onTalk }));
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations", "Suggested"]);
+		const open = host.querySelector('[data-action="automation-composer-open"]');
+		expect(text(open)).toBe("New automation");
+		click(open);
+		expect(onTalk).toHaveBeenCalledTimes(1);
 		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
-		expect(host.querySelector('[data-ai-glow]')).toBeNull();
-		click(card("pdf"));
-		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
-		expect(host.querySelector('[data-ai-glow]')).not.toBeNull();
-		expect(card("pdf")?.getAttribute("aria-pressed")).toBe("true");
-		expect(card("screenshot")?.getAttribute("aria-pressed")).toBe("false");
-		click(host.querySelector('[data-action="automation-cancel-edit"]'));
-		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
-		expect(card("pdf")?.getAttribute("aria-pressed")).toBe("false");
+		// The old 내 자동화 | 전체 기록 segment is gone; 전체 기록 is a link under the list.
+		expect(host.querySelector("[data-automation-tabs]")).toBeNull();
+		expect(text(host.querySelector('[data-action="automation-all-runs"]'))).toBe("See all runs");
+	});
+
+	it("suggests only the recommendations no rule already does", () => {
+		const pdfRule = rule("pdf-notes", { run: [], agent: { profile: "file-organizer", task: "요약" }, include: ["**/*.pdf"], events: ["create"] });
+		render(props({ state: state([pdfRule, failing]) }));
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "refresh"]);
+		const refreshRule = rule("refresh", { run: ["autorag", "refresh"], include: [], events: ["create", "update"] });
+		render(props({ state: state([pdfRule, refreshRule]) }));
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot"]);
+	});
+});
+
+describe("templateTaken", () => {
+	it("counts a rule only when it watches the same files and changes and does the same kind of work", () => {
+		const agentPdf = rule("a", { run: [], agent: { profile: "file-triage", task: "t" }, include: ["**/*.pdf"], events: ["create"] });
+		expect(templateTaken([agentPdf], "pdf")).toBe(true);
+		// The same files, but a program instead of an agent.
+		expect(templateTaken([rule("b", { include: ["**/*.pdf"], events: ["create"] })], "pdf")).toBe(false);
+		// The same agent, but other changes.
+		expect(templateTaken([{ ...agentPdf, events: ["create", "update"] }], "pdf")).toBe(false);
+		expect(templateTaken([rule("c", { run: ["autorag", "refresh"], include: [], events: ["update", "create"] })], "refresh")).toBe(true);
+		expect(templateTaken([rule("d", { run: ["autorag", "search", "x"], include: [], events: ["create", "update"] })], "refresh")).toBe(false);
+		expect(templateTaken([], "screenshot")).toBe(false);
 	});
 });
 
@@ -196,15 +229,26 @@ describe("AutomationsView background service", () => {
 });
 
 describe("AutomationsView empty and error states", () => {
-	it("offers the 새 자동화 card and 추천 자동화 but no 내 자동화 list when there are no rules", () => {
-		render(props({ state: state([]) }));
+	it("offers only the recommendations and 말로 만들기 when there are no rules: no 내 자동화 list, no 새 자동화 card", () => {
+		const onTalk = vi.fn();
+		render(props({ state: state([]), onTalk }));
 		expect(rows()).toEqual([]);
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["새 자동화", "추천 자동화"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["내 파일에서 찾은 자동화"]);
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "pdf", "refresh"]);
+		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
+		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
+		expect(host.querySelector('[data-action="automation-all-runs"]')).toBeNull();
+		expect(text(host.querySelector("[data-automation-recommendations]"))).toContain("원하는 게 없나요?");
+		const talk = host.querySelector('[data-action="automation-talk"]');
+		expect(text(talk)).toBe("말로 만들기");
+		click(talk);
+		expect(onTalk).toHaveBeenCalledTimes(1);
 	});
 
 	it("shows nothing but the frame before the first read finishes, instead of a false empty list", () => {
 		render(props({ state: { ...state([]), ready: false } }));
 		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
+		expect(host.querySelector("[data-automation-recommendations]")).toBeNull();
 	});
 
 	it("says when the rules file cannot be read and shows the reason, not an empty list", () => {
@@ -250,6 +294,10 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		const name = host.querySelector('[data-action="automation-rename"]');
 		expect(name?.getAttribute("title")).toBe("이름 바꾸기");
 		expect(name?.querySelector("svg")).not.toBeNull();
+		// The way back is the breadcrumb: 자동화 › the rule's name.
+		const crumbs = host.querySelector("[data-automation-breadcrumb]");
+		expect(text(crumbs?.querySelector('[data-action="automation-back"]'))).toBe("자동화");
+		expect(text(crumbs?.querySelector('[aria-current="page"]'))).toBe(text(name));
 		click(host.querySelector('[data-action="automation-back"]'));
 		expect(onCancelEdit).toHaveBeenCalledTimes(1);
 	});
@@ -351,66 +399,110 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 	});
 });
 
-describe("AutomationsView 전체 기록 (Figma 621:5262)", () => {
-	it("lists every rule's runs newest first, keeps only failures on 실패만 보기, and opens a rule from its run", async () => {
-		runLogs["downloads-pdf-summary"] = [{ startedAt: NOW - 3 * 60_000, durationMs: 1000, eventCount: 1, exitCode: 0, signal: null, timedOut: false }];
-		runLogs["hwp-to-pdf"] = [{ startedAt: NOW - 19 * 3_600_000, durationMs: 800, eventCount: 1, exitCode: null, signal: null, timedOut: false, error: "spawn hwp5 ENOENT" }];
+describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
+	it("lists every rule's runs newest first under the day they ran, and opens a rule from its run", async () => {
+		const today = new Date(NOW).setHours(0, 0, 0, 0);
+		runLogs["downloads-pdf-summary"] = [{ startedAt: Math.max(today, NOW - 60_000), durationMs: 1000, eventCount: 1, exitCode: 0, signal: null, timedOut: false }];
+		runLogs["hwp-to-pdf"] = [{ startedAt: today - 3_600_000, durationMs: 800, eventCount: 1, exitCode: null, signal: null, timedOut: false, error: "spawn hwp5 ENOENT" }];
 		const p = props();
 		render(p);
 		await settle();
-		click(host.querySelector('[data-tab="all"]'));
+		click(host.querySelector('[data-action="automation-all-runs"]'));
 		await act(async () => {
 			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
+		const page = (): HTMLElement | null => host.querySelector("[data-automation-all-runs]");
+		expect(rows()).toEqual([]);
+		expect(text(page()?.querySelector("h1"))).toBe("전체 기록");
+		expect(text(page()?.querySelector('[data-automation-breadcrumb] [aria-current="page"]'))).toBe("전체 기록");
+		expect([...(page()?.querySelectorAll("h2") ?? [])].map((day) => day.textContent)).toEqual(["오늘", "어제"]);
 		const runs = (): Element[] => [...host.querySelectorAll("[data-automation-all-runs] [data-run]")];
 		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("새 PDF → Dazzi에게 맡기기"), expect.stringContaining("hwp5")]);
-		expect(text(host.querySelector("[data-automation-all-runs]"))).toContain("2회 실행");
-		click(host.querySelector('[data-switch-id="automation-fail-only"]') ?? host.querySelector('[data-automation-all-runs] [role="switch"]'));
-		expect(runs()).toHaveLength(1);
-		click(runs()[0]);
+		// 실패만 보기 is gone: every run shows, with no switch to hide the good ones.
+		expect(page()?.querySelector('[role="switch"]')).toBeNull();
+		click(runs()[1]);
 		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
 		Reflect.deleteProperty(runLogs, "downloads-pdf-summary");
 		Reflect.deleteProperty(runLogs, "hwp-to-pdf");
 	});
+
+	it("says there are no runs yet, and 자동화 in the breadcrumb returns to the list", async () => {
+		render(props({ state: state([never]) }));
+		await settle();
+		click(host.querySelector('[data-action="automation-all-runs"]'));
+		await settle();
+		expect(host.querySelector("[data-automation-all-runs] [data-runs-empty]")).not.toBeNull();
+		click(host.querySelector('[data-automation-breadcrumb] [data-action="automation-back"]'));
+		expect(host.querySelector("[data-automation-all-runs]")).toBeNull();
+		expect(rows().map((row) => row.dataset.ruleId)).toEqual(["screens"]);
+	});
 });
 
-describe("AutomationsView 새 자동화 card", () => {
-	const create = (): HTMLButtonElement | null => host.querySelector('[data-action="automation-create"]');
-	const task = (): HTMLTextAreaElement => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')!;
-	const sentence = (): string => [...(host.querySelector('[data-testid="automation-new-when"]')?.children ?? [])].map((part) => text(part)).join(" ");
-	const openCard = (): void => click(host.querySelector('[data-action="automation-composer-open"]'));
+describe("AutomationsView 추천 자동화 (Figma 672:3718)", () => {
+	const card = (id: string): HTMLElement | null => host.querySelector<HTMLElement>(`[data-template="${id}"]`);
 
-	it("reads the 언제 sentence with the first standard folder, and creates a read-only agent rule from it", async () => {
-		const p = props();
+	it("opens a recommendation downward to read what it would do, without writing anything", async () => {
+		const p = props({ state: state([]) });
 		render(p);
 		await settle();
-		openCard();
+		const toggle = card("pdf")?.querySelector<HTMLButtonElement>("[aria-expanded]");
+		expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+		expect(card("pdf")?.querySelector("dl")).toBeNull();
+		expect(text(card("pdf"))).toContain("새 PDF 요약");
+		click(toggle);
+		expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+		const terms = [...(card("pdf")?.querySelectorAll("dl dt") ?? [])].map((term) => text(term));
+		const values = [...(card("pdf")?.querySelectorAll("dl dd") ?? [])].map((value) => text(value));
+		expect(terms).toEqual(["언제", "Dazzi가 할 일"]);
+		expect(values[0]).toContain("다운로드");
+		expect(values[1]).toBe("핵심을 3줄로 요약해서 메모로 남겨 줘");
+		// Read-only: no field to type in, and nothing was written.
+		expect(card("pdf")?.querySelector("input, textarea")).toBeNull();
+		expect(p.onCreate).not.toHaveBeenCalled();
+		click(toggle);
+		expect(card("pdf")?.querySelector("dl")).toBeNull();
+	});
+
+	it("writes the rule at once from 추가하기, in the template's standard folder", async () => {
+		const p = props({ state: state([]) });
+		render(p);
 		await settle();
-		expect(sentence()).toBe("다운로드 에 PDF 파일 이 새로 생기면");
-		expect(create()?.disabled).toBe(true);
-		act(() => type(task(), "핵심을 3줄로 요약해 줘"));
-		expect(create()?.disabled).toBe(false);
+		const add = (id: string): HTMLButtonElement | null | undefined => card(id)?.querySelector<HTMLButtonElement>('[data-action="automation-template-add"]');
+		expect(text(add("pdf"))).toBe("추가하기");
 		await act(async () => {
-			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			add("pdf")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
 		expect(p.onCreate).toHaveBeenCalledWith({
 			paths: ["/Users/jeffrey/Downloads"],
 			events: ["create"],
 			include: ["**/*.pdf"],
-			agent: { profile: "file-triage", task: "핵심을 3줄로 요약해 줘" },
+			agent: { profile: "file-organizer", task: "핵심을 3줄로 요약해서 메모로 남겨 줘" },
 		});
+		// The search refresh stays a command, not an agent rule.
+		await act(async () => {
+			add("refresh")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(p.onCreate).toHaveBeenLastCalledWith({ paths: ["/Users/jeffrey/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
+	});
+});
+
+describe("AutomationsView a rule's 설정 card", () => {
+	const editing = rule("pdf", { run: [], agent: { profile: "file-triage", task: "핵심을 3줄로 요약해 줘" }, paths: ["/Users/jeffrey/Downloads"], include: ["**/*.pdf"], events: ["create"] });
+	const save = (): HTMLButtonElement | null => host.querySelector('[data-action="automation-update"]');
+	const sentence = (): string => [...(host.querySelector('[data-testid="automation-new-when"]')?.children ?? [])].map((part) => text(part)).join(" ");
+
+	it("reads the 언제 sentence from the rule, with 저장 waiting for a change", async () => {
+		render(props({ editing }));
 		await settle();
-		// Made: the card folds back into its line, and the new rule is in 내 자동화.
-		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
-		expect(host.querySelector('[data-action="automation-composer-open"]')).not.toBeNull();
+		expect(sentence()).toBe("다운로드 에 PDF 파일 이 새로 생기면");
+		expect(save()?.disabled).toBe(true);
 	});
 
-	it("changes the folder, the kind, the change and the permission from their chips", async () => {
-		const p = props();
-		render(p);
-		await settle();
-		openCard();
+	it("changes the folder, the kind, the change and the permission from their chips, and saves them", async () => {
+		const onUpdate = vi.fn(async () => true);
+		render(props({ editing, onUpdate }));
 		await settle();
 		click(host.querySelector('[data-testid="automation-new-folder"]'));
 		click(host.querySelector('[data-testid="automation-new-folder-/Users/jeffrey/Desktop"]'));
@@ -421,43 +513,14 @@ describe("AutomationsView 새 자동화 card", () => {
 		click(host.querySelector('[data-testid="automation-new-mode"]'));
 		click(host.querySelector('[data-testid="automation-new-mode-write"]'));
 		expect(sentence()).toBe("데스크탑 에 이미지 파일 이 생기거나 바뀌면");
-		act(() => type(task(), "이름을 정리해 줘"));
+		expect(save()?.disabled).toBe(false);
 		await act(async () => {
-			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			save()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
-		expect(p.onCreate).toHaveBeenCalledWith(expect.objectContaining({ paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], agent: { profile: "file-organizer", task: "이름을 정리해 줘" } }));
-	});
-
-	it("fills the card from a 추천 자동화 row, and keeps the search refresh a command until its words are changed", async () => {
-		const p = props();
-		render(p);
-		await settle();
-		click(host.querySelector('[data-template="refresh"]'));
-		// The card opens with the row; its folder waits for the OS's folders to load.
-		await settle();
-		expect(task().value).toBe("검색에 바로 반영해 줘");
-		// The 읽기 / 파일 수정 허용 chip shows on this card too.
-		expect(host.querySelector('[data-testid="automation-new-mode"]')).not.toBeNull();
-		await act(async () => {
-			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-			await Promise.resolve();
-		});
-		expect(p.onCreate).toHaveBeenCalledWith({ paths: ["/Users/jeffrey/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
-	});
-
-	it("hides + 새 자동화 while there are no rules, and 취소 empties a card a 추천 자동화 filled", async () => {
-		render(props({ state: state([]) }));
-		await settle();
-		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
-		// The empty card has nothing to undo.
-		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
-		click(host.querySelector('[data-template="refresh"]'));
-		await settle();
-		expect(task().value).toBe("검색에 바로 반영해 줘");
-		click(host.querySelector('[data-action="automation-cancel-edit"]'));
-		await settle();
-		expect(task().value).toBe("");
-		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
+		expect(onUpdate).toHaveBeenCalledWith(
+			"pdf",
+			expect.objectContaining({ paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], agent: { profile: "file-organizer", task: "핵심을 3줄로 요약해 줘" } }),
+		);
 	});
 });

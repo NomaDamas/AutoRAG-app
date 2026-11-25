@@ -2,7 +2,7 @@ import type { DragEvent, MouseEvent, ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
-import { SparklesIcon, TabCloseIcon, TabPlusIcon, ZapIcon } from "./icons";
+import { SparklesIcon, TabCloseIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface TabView {
@@ -102,7 +102,8 @@ export function TabStrip({
 							onSelect(tab.id);
 						}}
 					>
-						{tab.aiSearch ? <SparklesIcon size={11} className="flex-none text-accent" /> : tab.automations === true ? <ZapIcon size={11} className="flex-none text-accent" /> : null}
+						{/* The 자동화 side is the AI 에이전트 tab too: one mark for both. */}
+						{tab.aiSearch || tab.automations === true ? <SparklesIcon size={11} className="flex-none text-accent" /> : null}
 						<span className="min-w-0 truncate">{tab.title}</span>
 					</button>
 					{canClose ? (

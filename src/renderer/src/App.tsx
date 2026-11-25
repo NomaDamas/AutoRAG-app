@@ -904,6 +904,12 @@ export function App(): ReactElement {
 		onError: showErrorToast,
 		names: automationNames,
 		autoStartService: true,
+		showChat: () => finder?.showAiSearch(),
+		talk: () => {
+			setInspectorVisible(true);
+			// The column's chat field takes the words; it is drawn on the next frame when the column was closed.
+			requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-automation-assistant] textarea")?.focus());
+		},
 		renameRule: async (id, name) => {
 			const next: Record<string, string> = { ...ruleNamesNow() };
 			if (name.trim().length === 0) delete next[id];
@@ -915,10 +921,8 @@ export function App(): ReactElement {
 	const toolbarTitle =
 		path === SETTINGS_PATH
 			? t("settings.title")
-			: automationsTabActive
-				? t("places.automations")
-				: aiTabActive
-					? t("places.aiSearch")
+			: automationsTabActive || aiTabActive
+				? t("places.aiSearch")
 					: finder?.searching === true
 						? t("finderComponents.searchToolbarTitle")
 						: finder?.inTrashLocation === true
@@ -967,7 +971,7 @@ export function App(): ReactElement {
 			>
 				<div className="min-w-0 min-h-0 overflow-hidden" style={settingsOpen ? HIDDEN_STYLE : undefined} inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
-						activePath={aiTabActive ? AI_SEARCH_PATH : automationsTabActive ? AUTOMATIONS_PATH : (finder?.activeNavPath ?? null)}
+						activePath={aiTabActive || automationsTabActive ? AI_SEARCH_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
 						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
@@ -1116,6 +1120,7 @@ export function App(): ReactElement {
 													requestSettingsCategory(`source:${alias}`);
 													finder?.openSettings();
 												}}
+												onShowAutomations={() => finder?.showAutomations()}
 											/>
 											</div>
 										</div>

@@ -416,6 +416,10 @@
       "compacted": "Summarized the earlier conversation.",
       "compactedHint": "The earlier conversation is remembered as a summary. Mention again anything that was left out.",
       "trimmed": "The search result was long, so only part of it was read."
+    },
+    "segment": {
+      "label": "AI Agent view",
+      "chat": "Chat"
     }
   },
   "appError": {
@@ -566,7 +570,7 @@
       "statusTitle": "Couldn't check the automations",
       "statusHint": "Check again in a moment, or let the AI agent find the cause and fix it.",
       "retry": "Check again",
-        "configHint": "Fix the rule in AI Agent or edit the file by hand."
+      "configHint": "Fix the rule in AI Agent or edit the file by hand."
     },
     "daemon": {
       "on": "Running in the background",
@@ -779,10 +783,32 @@
     "all": {
       "count": "Runs: {{count}}",
       "failOnly": "Failures only",
-      "noFails": "No failed runs recorded"
+      "noFails": "No failed runs recorded",
+      "title": "All runs",
+      "open": "See all runs",
+      "today": "Today",
+      "yesterday": "Yesterday"
     },
     "assistant": {
       "caption": "Ask the AI to create or change an automation"
+    },
+    "breadcrumb": "Location",
+    "recs": {
+      "title": "Automations for your files",
+      "section": "Suggested",
+      "add": "Add",
+      "more": "Not what you need?",
+      "talk": "Describe one"
+    },
+    "nudge": {
+      "pdf": "An automation could summarize each new PDF as it arrives.",
+      "screenshot": "An automation could give each new screenshot a name you can recognize.",
+      "refresh": "An automation could update search whenever a document changes.",
+      "make": "Create",
+      "later": "Later",
+      "lead": "Here's the automation. Change any part, then select Add.",
+      "created": "Automation created. Turn it on or off on the Automations side.",
+      "view": "View"
     }
   },
   "osMenu": {
