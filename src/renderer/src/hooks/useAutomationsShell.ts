@@ -156,6 +156,9 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		setConfirmId(null);
 		if (rule === null || deleting) return;
 		const index = rules.findIndex((candidate) => candidate.id === rule.id);
+		// A rule deleted from its own page leaves for the list at once, not when the CLI has finished removing it.
+		const leftItsPage = editingId === rule.id;
+		if (leftItsPage) setEditingId(null);
 		setDeleting(true);
 		clearUndoTimer();
 		setUndoMessage(null);
@@ -163,6 +166,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		try {
 			await store.remove(rule.id);
 		} catch (cause) {
+			// Not deleted after all: back to the page it was deleted from.
+			if (leftItsPage) setEditingId(rule.id);
 			latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 			return;
 		} finally {
@@ -181,7 +186,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			setUndoMessage(null);
 			store.clearUndo();
 		}, UNDO_MS);
-	}, [byId, confirmId, deleting, rules, store, clearUndoTimer]);
+	}, [byId, confirmId, deleting, editingId, rules, store, clearUndoTimer]);
 
 	const dismissUndoToast = useCallback(() => {
 		setDeletingMessage(null);

@@ -61,7 +61,7 @@ import {
 import { HISTORY_SEARCH_DEBOUNCE_MS, groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, FileTextIcon, FolderOutlineIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SearchIcon, SparklesIcon, TabCloseIcon, ZapIcon } from "./icons";
+import { ArrowDownIcon, ArrowUpIcon, CheckIcon, CloseIcon, FileTextIcon, FolderOutlineIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SearchIcon, SparklesIcon, TabCloseIcon, ZapIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { FileMention } from "./FileMention";
@@ -322,6 +322,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
+	/** The chat follows its newest line only while the person is at the bottom; scrolling up lets go, and the floating button brings it back. */
+	const followRef = useRef(true);
+	const [awayFromBottom, setAwayFromBottom] = useState(false);
 	const historySeq = useRef(0);
 	const historyDebounce = useRef<number | null>(null);
 	const startedAtRef = useRef(0);
@@ -524,8 +527,27 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	useEffect(() => {
 		const body = bodyRef.current;
-		if (body !== null) body.scrollTop = body.scrollHeight;
+		if (body !== null && followRef.current) body.scrollTop = body.scrollHeight;
 	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions]);
+
+	useEffect(() => {
+		followRef.current = true;
+		setAwayFromBottom(false);
+	}, [submittedQuery]);
+	const onBodyScroll = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		const away = body.scrollHeight - body.scrollTop - body.clientHeight > 120;
+		followRef.current = !away;
+		setAwayFromBottom(away);
+	};
+	const scrollToBottom = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		followRef.current = true;
+		setAwayFromBottom(false);
+		body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+	};
 
 	const shortcutSettings = useShortcutSettings();
 	const historyShortcutLabel = useFormattedShortcut("aiToggleHistory");
@@ -1158,7 +1180,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				</>
 			) : null}
 
-			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
+			<div className="relative flex min-h-0 flex-1 flex-col">
+			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16" onScroll={onBodyScroll}>
 				<div className={cn(MESSAGES, "flex flex-col space-y-16")}>
 					{showEmpty ? (
 						phone ? (
@@ -1338,6 +1361,31 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					) : null}
 				</div>
 			</div>
+			{awayFromBottom ? (
+				// Scrolled up: a round button floats above the composer. While Dazzi is answering it shows the loader, and the arrow on hover.
+				<button
+					type="button"
+					data-action="scroll-to-bottom"
+					aria-label={t("aiSearch.scrollToBottom")}
+					title={t("aiSearch.scrollToBottom")}
+					className="group absolute bottom-12 left-1/2 z-10 grid size-32 -translate-x-1/2 cursor-pointer place-items-center rounded-full border border-border bg-window p-0 text-ink shadow-[0_2px_8px_rgba(0,0,0,0.14)] transition-colors duration-(--dur-color) ease-out hover:bg-hover"
+					onClick={scrollToBottom}
+				>
+					{searching ? (
+						<>
+							<span className="flex group-hover:hidden" aria-hidden="true">
+								<SeedLoader />
+							</span>
+							<span className="hidden group-hover:flex" aria-hidden="true">
+								<ArrowDownIcon size={16} />
+							</span>
+						</>
+					) : (
+						<ArrowDownIcon size={16} />
+					)}
+				</button>
+			) : null}
+			</div>
 
 			<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
 				{interactionRequest !== null ? (
@@ -1346,6 +1394,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					</div>
 				) : (
 				<div className={CENTERED}>
+					{centered ? <h2 className="m-0 mb-20 text-center text-[24px] font-bold leading-[32px] text-ink" data-chat-start-heading>{t("aiSearch.startHeading")}</h2> : null}
 					{attachments.some((att) => !isThumbnailAttachment(att)) ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
 							{attachments.map((att, index) => (isThumbnailAttachment(att) ? null : <DraftPill key={`${att.id}:${att.name}`} att={att} onRemove={() => removeAttachment(index)} />))}
@@ -1452,7 +1501,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										searching
 											? t("aiSearch.steerPlaceholder")
 											: pickedCapability === null
-												? t("inspector.chat.placeholderAny")
+												? t("aiSearch.askPlaceholder")
 												: t(`aiSearch.capability.${pickedCapability.id}Placeholder`)
 									}
 									ariaLabel={t("aiSearch.askDazzi")}

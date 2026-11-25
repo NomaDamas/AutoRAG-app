@@ -1265,8 +1265,11 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-32">
-				<div className="mx-auto flex w-full max-w-[640px] flex-col gap-24">
+				{/* Like the chat tab's start: the page sits in the middle of the pane, a little above the true middle (1 : 1.2), and runs
+				    from the top once it is taller than the pane. */}
+				<div className="flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40 pt-32">
+				<div className="flex-1" aria-hidden="true" />
+				<div className="mx-auto flex w-full max-w-[640px] flex-none flex-col gap-24">
 					{state.error === null ? null : (
 						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
 						<NoticeCard
@@ -1356,6 +1359,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 						</>
 					)}
 				</div>
+				<div className="flex-[1.2]" aria-hidden="true" />
 				</div>
 			</div>
 		</section>

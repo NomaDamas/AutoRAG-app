@@ -345,6 +345,9 @@
     "searchHistory": "チャット履歴を検索",
     "emptyHistory": "保存されたチャットはありません。",
     "emptyHistorySearch": "\"{{query}}\"に一致するチャットはありません",
+    "scrollToBottom": "一番下へ移動",
+    "startHeading": "何をお手伝いしましょうか？",
+    "askPlaceholder": "Dazziに何でも聞いてください",
     "emptyPromptTitle": "何をお探しですか？",
     "capability": {
       "hints": "できること",
@@ -804,7 +807,7 @@
         "refreshChanged": "書類でこの1週間に変わったファイルが{{count}}件あります"
       },
       "hero": "ファイルが追加・変更されたとき、Dazziが自動で処理します",
-      "heroCaption": "あなたのファイルから見つけた自動化から始めてみてください。"
+      "heroCaption": "あなたのファイルから見つけたおすすめの自動化から始めてみてください。"
     },
     "nudge": {
       "pdf": "新しい PDF が届くたびに要約しておく自動化を作れます。",

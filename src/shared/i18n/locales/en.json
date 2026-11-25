@@ -345,6 +345,9 @@
     "searchHistory": "Search chat history",
     "emptyHistory": "No saved chats.",
     "emptyHistorySearch": "No chats matching \"{{query}}\"",
+    "scrollToBottom": "Scroll to the bottom",
+    "startHeading": "What can I help you with?",
+    "askPlaceholder": "Ask Dazzi anything",
     "emptyPromptTitle": "What can I find for you?",
     "capability": {
       "hints": "Things you can do",
@@ -804,7 +807,7 @@
         "refreshChanged": "Files changed in Documents this past week: {{count}}"
       },
       "hero": "Dazzi takes care of your files as they arrive or change",
-      "heroCaption": "Start with one we found in your files."
+      "heroCaption": "Start with a recommended automation we found in your files."
     },
     "nudge": {
       "pdf": "An automation could summarize each new PDF as it arrives.",

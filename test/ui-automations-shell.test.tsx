@@ -344,6 +344,36 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules).toHaveLength(1);
 	});
 
+	it("leaves the rule's own page for the list as soon as the delete is confirmed, and comes back if it fails", async () => {
+		const h = await mount([rule("a"), rule("b")]);
+		const remove = h.bridge.remove;
+		let finish: () => void = () => undefined;
+		let fail = false;
+		const gate = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		h.bridge.remove = async (id) => {
+			await gate;
+			if (fail) throw new Error("nope");
+			return remove(id);
+		};
+		act(() => h.shell().props.onEdit("a"));
+		expect(h.shell().props.editing?.id).toBe("a");
+		act(() => h.shell().props.onAskDelete("a"));
+		let done: Promise<void> = Promise.resolve();
+		act(() => {
+			done = h.shell().confirmDelete();
+		});
+		// The CLI has not finished, yet the page is already the list.
+		expect(h.shell().props.editing).toBeNull();
+		fail = true;
+		await act(async () => {
+			finish();
+			await done;
+		});
+		expect(h.shell().props.editing?.id).toBe("a");
+	});
+
 	it("delete is refused for a rule that no longer exists", async () => {
 		const h = await mount([rule("a")]);
 		act(() => h.shell().props.onAskDelete("gone"));

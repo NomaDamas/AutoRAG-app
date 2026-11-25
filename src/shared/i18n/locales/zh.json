@@ -345,6 +345,9 @@
     "searchHistory": "搜索对话记录",
     "emptyHistory": "没有保存的对话。",
     "emptyHistorySearch": "没有与“{{query}}”匹配的对话",
+    "scrollToBottom": "滚动到底部",
+    "startHeading": "有什么可以帮你的？",
+    "askPlaceholder": "向 Dazzi 随便问点什么",
     "emptyPromptTitle": "想查找什么内容？",
     "capability": {
       "hints": "可以做的事",
@@ -804,7 +807,7 @@
         "refreshChanged": "文稿中最近一周有 {{count}} 个文件发生了变化"
       },
       "hero": "文件新增或变化时，Dazzi 会自动处理",
-      "heroCaption": "从我们在你的文件中找到的自动化开始吧。"
+      "heroCaption": "从我们在你的文件中找到的推荐自动化开始吧。"
     },
     "nudge": {
       "pdf": "可以创建一个自动化，每当有新 PDF 时自动总结。",
