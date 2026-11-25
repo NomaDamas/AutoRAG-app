@@ -73,6 +73,7 @@ import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } fr
 import { createVideoPlayback } from "./video-playback";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -410,6 +411,12 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 	}
 	switch (byteNeed(kind)) {
 		case "stream":
+			if (kind === "image" && (await isDatalessFile(path))) {
+				const document = await readPreviewFile(path, 0);
+				const thumb = await datalessQuickLookPng(path);
+				return thumb === null ? document : { ...document, mime: "image/png", bytes: thumb };
+			}
+			return readPreviewFile(path, 0);
 		case "query":
 			return readPreviewFile(path, 0);
 		case "prefix":
@@ -425,6 +432,10 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {
 				const document = await readPreviewFile(path, 0);
+				if (await isDatalessFile(path)) {
+					const fast = await datalessQuickLookPng(path);
+					if (fast !== null) return { ...document, bytes: fast };
+				}
 				const thumbnail = (await readEmbeddedThumbnail(path, "odg").catch((error: unknown) => {
 					console.warn(`quick-look: OpenDocument thumbnail for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
 					return null;

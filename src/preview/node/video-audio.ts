@@ -13,7 +13,7 @@ import {
 	type AudioProbe,
 	type VideoAudioPlan,
 } from "../shared/video-audio";
-
+import { isDatalessFile, withReadableFile } from "./provider-access";
 /**
  * The ffmpeg half of the video-audio sidecar (see shared/video-audio.ts for why
  * it exists): finds out whether a video's sound needs it, and serves the track as
@@ -62,8 +62,23 @@ export function ffmpegListing(command: string, path: string, timeoutMs: number):
 }
 
 async function runProbe(command: string, path: string, timeoutMs: number): Promise<AudioProbe | null> {
-	const listing = await ffmpegListing(command, path, timeoutMs);
-	return listing === null ? null : parseAudioProbe(listing);
+	try {
+		return await withReadableFile(
+			path,
+			async (localPath) => {
+				const listing = await ffmpegListing(command, localPath, timeoutMs);
+				if (listing === null) return null;
+				const parsed = parseAudioProbe(listing);
+				if (parsed.streams.length === 0 && parsed.durationSeconds === null && localPath === path) {
+					throw new Error("ffmpeg probe returned no streams");
+				}
+				return parsed;
+			},
+			true,
+		);
+	} catch {
+		return { durationSeconds: null, streams: [] };
+	}
 }
 
 /** The audio streams and duration of `path`; null when there is no ffmpeg, no such file, or ffmpeg ran out of time. */
@@ -94,6 +109,9 @@ async function probeAudio(path: string, deps: VideoAudioDeps): Promise<AudioProb
 
 /** How the panel gets the sound of the video at `path`: its own track, or the ffmpeg-decoded sidecar of the track Chromium cannot play. */
 export async function planVideoAudio(path: string, deps: VideoAudioDeps = {}): Promise<VideoAudioPlan> {
+	// Never spawn a parallel `ffmpeg -i` probe on an unmaterialized cloud video:
+	// let `<video>` stream its byte range without a competing full-file download.
+	if (await isDatalessFile(path)) return { kind: "native" };
 	const probe = await probeAudio(path, deps);
 	const track = probe === null ? null : pickSidecarTrack(probe);
 	return track === null ? { kind: "native" } : { kind: "sidecar", track: track.ordinal, codec: track.codec };

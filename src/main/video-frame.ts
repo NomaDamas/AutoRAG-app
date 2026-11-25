@@ -12,6 +12,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { isDatalessFile } from "../preview/node/provider-access";
 
 /** Containers whose frame is drawn by ffmpeg rather than asked of the OS. */
 const VIDEO_FRAME_EXTENSIONS: Readonly<Record<string, true>> = { mkv: true, webm: true, ogv: true, avi: true };
@@ -68,6 +69,9 @@ function runFfmpeg(command: string, args: string[], timeoutMs: number): Promise<
  * installed or the clip has no video frame; rejects when ffmpeg fails.
  */
 export async function extractVideoFrame(path: string, size: number, deps: VideoFrameDeps = {}): Promise<Uint8Array | null> {
+	// Never run ffmpeg on an unmaterialized cloud placeholder (e.g. a 500MB dataless .webm):
+	// POSIX reads trigger a full-file iCloud download in `bird` and starve Quick Look thumbnails.
+	if (await isDatalessFile(path)) return null;
 	const command = deps.command ?? "ffmpeg";
 	const timeoutMs = deps.timeoutMs ?? FFMPEG_TIMEOUT_MS;
 	// A seek past the end exits cleanly with no output, so an empty answer retries from the start.

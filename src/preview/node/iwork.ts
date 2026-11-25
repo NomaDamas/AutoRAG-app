@@ -2,8 +2,8 @@ import type { FileHandle } from "node:fs/promises";
 import { extname } from "node:path";
 import { keynoteSlideImageNames } from "../shared/iwork-slides";
 import type { ZipEntry } from "../shared/zip-list";
+import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
 import { extractZipEntry as extract, withZip } from "./zip-read";
-
 /** The page images iWork stores, best first: the full-size first page, then the web-sized one. */
 const PREVIEW_NAMES = ["preview.jpg", "preview-web.jpg"] as const;
 /** The Keynote slide tree lives here; its name is the same in every `.key`. */
@@ -63,16 +63,32 @@ async function readKeySlides(handle: FileHandle, entries: readonly ZipEntry[], f
 	return slides;
 }
 
+export interface IworkPreviewDeps {
+	/**
+	 * Fast macOS Quick Look thumbnail for an unmaterialized cloud file (`SF_DATALESS`),
+	 * returning PNG/JPEG bytes without triggering an iCloud download. Defaults to
+	 * Electron's `nativeImage.createThumbnailFromPath` at 1440px.
+	 */
+	readonly datalessThumbnail?: (path: string) => Promise<Uint8Array | null>;
+}
+
 /**
  * What an iWork package (`.numbers`, `.pages`, `.key`) carries for the preview.
  * Apple saves a ZIP whose `preview.jpg` is the first sheet, page, or slide
  * exactly as the app drew it, and a Keynote deck also carries a 356px render
  * of every slide under `Data/st-*` plus the show's slide order in
  * `Index/Document.iwa`. Only the file's tail (the directory) and those entries
- * are read, so a multi-gigabyte deck costs the same as a small one. Null when
- * the package is the older directory form, is not a ZIP, or has no image.
+ * are read, so a multi-gigabyte deck costs the same as a small one. For an
+ * unmaterialized iCloud placeholder (`SF_DATALESS`), macOS Quick Look already
+ * holds a high-resolution preview in its thumbnail cache and serves it in tens
+ * of milliseconds without downloading the whole package or blocking libuv.
+ * Null when the package is the older directory form, is not a ZIP, or has no image.
  */
-export async function readIworkPreview(path: string): Promise<IworkPreview | null> {
+export async function readIworkPreview(path: string, deps: IworkPreviewDeps = {}): Promise<IworkPreview | null> {
+	if (await isDatalessFile(path)) {
+		const thumb = await (deps.datalessThumbnail ?? datalessQuickLookPng)(path);
+		if (thumb !== null) return { firstPage: thumb, pages: null };
+	}
 	return withZip(path, async (handle, entries) => {
 		const firstPage = await readFirstPage(handle, entries);
 		if (firstPage === null) return null;

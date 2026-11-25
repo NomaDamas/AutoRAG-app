@@ -1,4 +1,5 @@
 import { type FileHandle, open } from "node:fs/promises";
+import { withReadableFile } from "./provider-access";
 import type { EmbeddedThumbnail } from "./odf";
 
 /** How much of each end of the file is scanned: an XMP packet is written at one end of it. */
@@ -70,24 +71,26 @@ function thumbnailIn(window: Uint8Array): EmbeddedThumbnail | null | "cut" {
  * file never gets half a JPEG.
  */
 export async function readXmpThumbnail(path: string, options: XmpReadOptions = {}): Promise<EmbeddedThumbnail | null> {
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		if (size === 0) return null;
-		// A file with no more than both windows is scanned in one piece, so a packet
-		// lying between them is still found.
-		const single = size <= 2 * WINDOW_BYTES;
-		const head = await readRange(handle, 0, single ? size : WINDOW_BYTES, options.onRead);
-		if (head === null) return null;
-		const found = thumbnailIn(head);
-		if (found === "cut") return null;
-		if (found !== null) return found;
-		if (single) return null;
-		const tail = await readRange(handle, size - WINDOW_BYTES, WINDOW_BYTES, options.onRead);
-		if (tail === null) return null;
-		const later = thumbnailIn(tail);
-		return later === "cut" ? null : later;
-	} finally {
-		await handle.close();
-	}
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const { size } = await handle.stat();
+			if (size === 0) return null;
+			// A file with no more than both windows is scanned in one piece, so a packet
+			// lying between them is still found.
+			const single = size <= 2 * WINDOW_BYTES;
+			const head = await readRange(handle, 0, single ? size : WINDOW_BYTES, options.onRead);
+			if (head === null) return null;
+			const found = thumbnailIn(head);
+			if (found === "cut") return null;
+			if (found !== null) return found;
+			if (single) return null;
+			const tail = await readRange(handle, size - WINDOW_BYTES, WINDOW_BYTES, options.onRead);
+			if (tail === null) return null;
+			const later = thumbnailIn(tail);
+			return later === "cut" ? null : later;
+		} finally {
+			await handle.close();
+		}
+	});
 }

@@ -9,6 +9,9 @@ import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
 import toolPins from "../shared/tool-pins.json";
 import { createToolVersionsService } from "./tool-versions";
+// Expand libuv's default 4-thread pool before any async fs work runs so concurrent
+// multi-pane listings, watches, and previews never queue behind 4 worker threads.
+process.env.UV_THREADPOOL_SIZE ??= "16";
 import {
 	app,
 	autoUpdater as nativeAutoUpdater,

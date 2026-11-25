@@ -11,6 +11,7 @@ import { open } from "node:fs/promises";
 // exifr ships CommonJS; electron-vite externalizes it, so take the interop default.
 import exifr from "exifr";
 import type { FsImageMetadata } from "../shared/fs-contract";
+import { isDatalessFile } from "../preview/node/provider-access";
 
 /** Extensions exifr can read a metadata block from. */
 export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
@@ -129,9 +130,11 @@ function hasAnyValue(image: FsImageMetadata): boolean {
 export async function readImageMetadata(path: string, ext: string): Promise<FsImageMetadata | null> {
 	if (!IMAGE_EXTENSIONS.has(ext.toLowerCase())) return null;
 	try {
+		// Never open/read an unmaterialized cloud placeholder during folder metadata scans:
+		// POSIX reads trigger multi-second iCloud downloads and starve libuv's threadpool.
+		if (await isDatalessFile(path)) return null;
 		const head = await readHead(path);
 		if (head === null) return null;
-		// exifr types `parse` as `Promise<any>`; the tag bag is opaque until mapped.
 		const parsed = (await exifr.parse(head, {
 			tiff: true,
 			exif: true,

@@ -1,6 +1,7 @@
 import { open } from "node:fs/promises";
 import { RAW_PHOTO_EXTENSIONS } from "../shared/raster-formats";
 import type { EmbeddedThumbnail } from "./odf";
+import { withReadableFile } from "./provider-access";
 
 /** Camera containers whose embedded JPEGs can be shown without a RAW decoder. */
 export const RAW_EXTENSIONS: ReadonlySet<string> = new Set(RAW_PHOTO_EXTENSIONS);
@@ -303,13 +304,15 @@ export async function readRawPreviewFromReader(reader: RawPreviewReader, ext: st
 /** Read only directory/box ranges and the selected displayable JPEG, never the RAW sensor payload. */
 export async function readRawPreview(path: string, ext: string, options: RawPreviewOptions = {}): Promise<EmbeddedThumbnail | null> {
 	if (!RAW_EXTENSIONS.has(ext.toLowerCase())) return null;
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		return await readRawPreviewFromReader({ size, read: async (position, length) => {
-			const bytes = new Uint8Array(length);
-			const { bytesRead } = await handle.read(bytes, 0, length, position);
-			return bytesRead === length ? bytes : bytes.subarray(0, bytesRead);
-		} }, ext, options);
-	} finally { await handle.close(); }
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const { size } = await handle.stat();
+			return await readRawPreviewFromReader({ size, read: async (position, length) => {
+				const bytes = new Uint8Array(length);
+				const { bytesRead } = await handle.read(bytes, 0, length, position);
+				return bytesRead === length ? bytes : bytes.subarray(0, bytesRead);
+			} }, ext, options);
+		} finally { await handle.close(); }
+	});
 }
