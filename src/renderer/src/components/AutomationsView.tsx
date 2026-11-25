@@ -1118,9 +1118,9 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons[template.id]} onAdd={onCreate} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
-			{/* The AI 에이전트 tab's head (Figma 672:3718): the name on the left (no mark), 채팅 | 자동화 in the middle. */}
+			{/* The AI 에이전트 tab's head (Figma 672:3718): only 채팅 | 자동화 in the middle; the 자동화 side shows no name on the left. */}
 			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab px-12 select-none" data-automations-head>
-				<strong className="min-w-0 truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.aiSearch")}</strong>
+				<span />
 				<AgentSegment value="automations" onChange={(value) => (value === "chat" ? onShowChat?.() : undefined)} />
 				<span />
 			</div>
