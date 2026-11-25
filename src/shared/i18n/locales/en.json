@@ -418,7 +418,8 @@
     },
     "segment": {
       "label": "AI Agent view",
-      "chat": "Chat"
+      "chat": "Chat",
+      "automations": "My automations"
     }
   },
   "appError": {

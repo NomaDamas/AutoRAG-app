@@ -1207,7 +1207,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			{/* The AI 에이전트 tab's head (Figma 672:3718): only 채팅 | 자동화 in the middle; the 자동화 side shows no name on the left. */}
-			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab px-12 select-none" data-automations-head>
+			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab border-b border-divider px-12 select-none" data-automations-head>
 				<span />
 				<AgentSegment value="automations" onChange={(value) => (value === "chat" ? onShowChat?.() : undefined)} />
 				<span />

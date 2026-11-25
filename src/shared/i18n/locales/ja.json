@@ -418,7 +418,8 @@
     },
     "segment": {
       "label": "AI エージェントの表示",
-      "chat": "チャット"
+      "chat": "チャット",
+      "automations": "マイ自動化"
     }
   },
   "appError": {

@@ -418,7 +418,8 @@
     },
     "segment": {
       "label": "AI 에이전트 화면",
-      "chat": "채팅"
+      "chat": "채팅",
+      "automations": "내 자동화"
     }
   },
   "appError": {

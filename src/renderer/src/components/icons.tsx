@@ -53,6 +53,7 @@ import {
 	List,
 	Maximize2,
 	MessagesSquare,
+	MessageSquare,
 	Mic,
 	Monitor,
 	PackageOpen,
@@ -160,6 +161,8 @@ export const ExpandCornersIcon = glyph(Expand, 16, 1.75);
 export const ArrowLeftIcon = glyph(ArrowLeft, 13, 2.2);
 
 export const MessagesIcon = glyph(MessagesSquare, 12, 2);
+/** One speech bubble: the 채팅 side of the AI 에이전트 head (Figma 672:3658). */
+export const ChatBubbleIcon = glyph(MessageSquare, 13, 1.8);
 
 export const ChevronDownIcon = glyph(ChevronDown, 10, 3);
 

@@ -1058,7 +1058,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
+			<div className="ai-head flex flex-none items-center gap-8 h-tab border-b border-divider px-12 select-none">
 				{/* The chat's title (no mark), cut before the 채팅 | 자동화 segment in the middle; a new chat shows none. */}
 				{chatTitle === null ? null : (
 					<strong className="min-w-0 max-w-[calc(50%-144px)] truncate text-sm font-medium leading-[19.5px] text-ink" title={chatTitle} data-chat-title>

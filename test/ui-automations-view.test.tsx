@@ -141,18 +141,18 @@ describe("AutomationsView list", () => {
 		expect(host.querySelector("[data-rule-last-run]")).toBeNull();
 	});
 
-	it("heads the page with only 채팅 | 자동화, no name on the left, and 채팅 goes back to the chat", async () => {
+	it("heads the page with only 채팅 | 내 자동화, no name on the left, and 채팅 goes back to the chat", async () => {
 		await setAppLanguage("en");
 		const onShowChat = vi.fn();
 		render(props({ onShowChat }));
 		expect(host.querySelector("[data-automations-head] strong")).toBeNull();
-		expect(text(host.querySelector("[data-automations-head]"))).toBe("ChatAutomations");
+		expect(text(host.querySelector("[data-automations-head]"))).toBe("ChatMy automations");
 		const segment = host.querySelector('[data-agent-segment][role="tablist"]');
 		expect(segment?.getAttribute("data-agent-segment")).toBe("automations");
 		const sides = [...(segment?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])];
 		expect(sides.map((side) => [side.dataset.side, side.textContent, side.getAttribute("aria-selected")])).toEqual([
 			["chat", "Chat", "false"],
-			["automations", "Automations", "true"],
+			["automations", "My automations", "true"],
 		]);
 		click(sides[1]);
 		expect(onShowChat).not.toHaveBeenCalled();
