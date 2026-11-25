@@ -1377,7 +1377,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 									<button
 										type="button"
 										data-action="automation-composer-open"
-										className="inline-flex h-28 flex-none items-center gap-4 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink cursor-pointer hover:bg-hover"
+										className="inline-flex h-28 flex-none items-center gap-4 rounded-6 border border-accent bg-accent px-10 text-meta font-medium text-on-accent cursor-pointer hover:border-accent-hover hover:bg-accent-hover"
 										onClick={() => onTalk?.()}
 									>
 										<TabPlusIcon size={13} />
