@@ -2,16 +2,16 @@
  * The quick-search launcher window: a small frameless window a system-wide shortcut summons over whatever app is in
  * front (Raycast / Spotlight style). It is created hidden at startup, so a press only has to place and show it.
  *
- * macOS gets a `panel` window, which floats over full-screen apps and appears on every Space. Windows gets an
- * always-on-top window without a taskbar button. Dismissing it (Escape, a click elsewhere, a copy) gives the foreground
- * back to the app the person was in: Windows does that itself when the focused window hides; on macOS the app hides
- * itself unless one of Dazzi's own windows was in front when the launcher was summoned.
+ * macOS gets a `panel` window, which floats over full-screen apps and appears on every Space without activating the
+ * app; hiding just the panel returns keyboard focus to whatever app stayed frontmost without disturbing Dazzi's own
+ * windows. Windows gets an always-on-top window without a taskbar button and minimizes before hiding on `restore` so
+ * the previous window regains the foreground.
  *
  * Space previews the focused row in a Quick Look panel of the launcher's own (`attachPreview`), floated above it. Focus
  * moving between the launcher and that panel is not a dismissal; focus leaving both is.
  */
 
-import { app, BrowserWindow, ipcMain, nativeTheme, screen } from "electron";
+import { BrowserWindow, ipcMain, nativeTheme, screen } from "electron";
 import { LANGUAGE_FLAG } from "../shared/language-contract";
 import { QUICK_SEARCH_CHANNELS, type QuickSearchHideMode, type QuickSearchStatus } from "../shared/quick-search-contract";
 import type { AppSettings } from "../shared/settings-contract";
@@ -76,8 +76,6 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	whenQuitting(() => {
 		quitting = true;
 	});
-	/** A Dazzi window was in front when the launcher was summoned: dismissing it must not hide the app on macOS. */
-	let appWasActive = false;
 
 	const create = (): BrowserWindow => {
 		const created = new BrowserWindow({
@@ -139,10 +137,11 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 		if (current === null || current.isDestroyed() || !current.isVisible()) return;
 		// Windows activates nothing when the foreground window hides (measured: the foreground title went empty, or
 		// stayed "Quick Search"). Minimizing first makes it activate the next window in z-order, which is the app the
-		// person summoned the launcher over; the next summon restores the window before showing it.
+		// person summoned the launcher over; the next summon restores the window before showing it. On macOS the
+		// launcher is a non-activating `panel`, so hiding only this window hands key focus back without calling
+		// `app.hide()` (which would hide every other open Dazzi window too).
 		if (mode === "restore" && process.platform === "win32") current.minimize();
 		current.hide();
-		if (mode === "restore" && darwin && !appWasActive) app.hide();
 	};
 
 	window = create();
@@ -178,8 +177,6 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 				hide("restore");
 				return;
 			}
-			const focused = BrowserWindow.getFocusedWindow();
-			appWasActive = focused !== null && focused !== current && focused !== preview;
 			const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 			if (current.isMinimized()) current.restore();
 			current.setBounds(launcherBounds(display.workArea));

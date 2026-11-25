@@ -1348,10 +1348,11 @@ summons a small window over any app. Pieces:
   one another app holds (`status().error === "taken"`, shown in Settings), and releases the chord while Settings
   records a new one (`quick-search:recording`) so the keys reach the recorder.
 - `src/main/quick-search-window.ts` creates the window hidden at startup (`quick-search.html`, preload
-  `quick-search.mjs`): a `panel` window on macOS, an always-on-top window without a taskbar button on Windows. Hiding
-  with `restore` gives the foreground back (macOS hides the app unless a Dazzi window was in front); actions that open
-  something (`handoff`) leave it to what they opened. On Windows/Linux it is destroyed with the last app window so
-  closing the Finder still quits.
+  `quick-search.mjs`): a non-activating `panel` window on macOS, an always-on-top window without a taskbar button on
+  Windows. Hiding with `restore` hides only the launcher (on macOS the `panel` never deactivated the frontmost app, so
+  keyboard focus returns without hiding Dazzi's other windows; on Windows it minimizes first so the previous window
+  regains the foreground); actions that open something (`handoff`) leave focus to what they opened. On Windows/Linux it
+  is destroyed with the last app window so closing the Finder still quits.
 - The page (`src/renderer/src/launcher/QuickSearch.tsx`, model in `state/launcher.ts`) talks to the fs worker over its
   own port, like the Finder: `search` (file names), `contentSearch` (below), `enrichEntries`, `open`, `reveal`,
   `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
