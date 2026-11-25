@@ -1028,7 +1028,7 @@ function RecommendationCard({
 				</button>
 			</div>
 			{open ? (
-				<dl className="m-0 grid grid-cols-[minmax(40px,auto)_1fr] gap-x-12 gap-y-6 rounded-8 bg-subtle-alt px-12 py-10 text-meta leading-[14px] [&>dt]:whitespace-nowrap">
+				<dl className={cn("m-0 grid grid-cols-[minmax(40px,auto)_1fr] gap-x-12 gap-y-6 rounded-8 px-12 py-10 text-meta leading-[14px] [&>dt]:whitespace-nowrap", quiet ? "bg-window" : "bg-subtle-alt")}>
 					<dt className="text-ink-muted">{t("automations.create.when")}</dt>
 					<dd className="m-0 text-ink">{when}</dd>
 					<dt className="text-ink-muted">{t("automations.create.task")}</dt>
