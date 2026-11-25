@@ -1223,11 +1223,12 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			{/* The AI 에이전트 tab's head: only 채팅 | 자동화 at the very middle, the same height as the chat side's and with no line under it. */}
-			{/* Pinned to the middle like the chat side's: a narrow head cuts the segment at both edges, never moves it. */}
-			<div className="automations-head relative flex flex-none items-center justify-center h-48 overflow-hidden select-none" data-automations-head>
-				<span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+			{/* Laid out at the page's own least width (--pane-min-width), like the chat side's head: a narrower pane cuts the
+			    segment on the right with the page under it, never moves it toward the left. */}
+			<div className="automations-head flex-none overflow-hidden select-none" data-automations-head>
+				<div className="flex h-48 min-w-(--pane-min-width) items-center justify-center">
 					<AgentSegment value="automations" onChange={(value) => (value === "chat" ? onShowChat?.() : undefined)} />
-				</span>
+				</div>
 			</div>
 			<div
 				ref={scrollRef}
