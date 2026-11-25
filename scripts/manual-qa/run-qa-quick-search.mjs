@@ -245,8 +245,11 @@ try {
 	check("Escape closes the panel first", (await page.locator(".qs__panel").count()) === 0 && (await launcherVisible()));
 	await page.keyboard.press("Escape");
 	check("Escape clears the query next", (await page.locator(".qs__input").inputValue()) === "");
+	const finderVisible = () =>
+		app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().endsWith("/index.html") && window.isVisible()));
 	await page.keyboard.press("Escape");
 	check("a third Escape hides the launcher", Boolean(await waitFor(async () => !(await launcherVisible()), 3000)));
+	check("dismissing the launcher leaves the main Dazzi window open", await finderVisible());
 	if (isMac) check("the app that was in front gets the foreground back", Boolean(await waitFor(() => frontmost() === outsider, 4000)), frontmost());
 	if (isMac) {
 		// Focus leaving the launcher and its preview for another app is a dismissal: both go away. The launcher is a
