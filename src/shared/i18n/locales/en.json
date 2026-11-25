@@ -793,8 +793,7 @@
       "caption": "Ask the AI to create or change an automation"
     },
     "recs": {
-      "title": "Suggested for your files",
-      "section": "Suggested",
+      "section": "More to try",
       "add": "Add",
       "more": "Not what you need?",
       "talk": "Make one in chat",
@@ -803,7 +802,9 @@
         "screenshot": "Unnamed screenshots on your Desktop: {{count}}",
         "refreshAgo": "Your Documents folder was last indexed {{time}}",
         "refreshChanged": "Files changed in Documents this past week: {{count}}"
-      }
+      },
+      "hero": "Dazzi takes care of your files as they arrive or change",
+      "heroCaption": "Start with one we found in your files."
     },
     "nudge": {
       "pdf": "An automation could summarize each new PDF as it arrives.",

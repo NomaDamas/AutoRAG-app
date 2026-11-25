@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, ZapIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
@@ -952,9 +952,12 @@ function RecommendationCard({
 	locations,
 	reason,
 	glow = false,
+	quiet = false,
 	onAdd,
 }: {
 	readonly template: Template;
+	/** Once there are rules the recommendations step back: a row in one grouped list on a faint ground, no stroke, smaller words. */
+	readonly quiet?: boolean;
 	readonly locations: readonly FsLocation[];
 	/** While there are no rules the recommendations are the page's invitation: a soft aurora sits behind each card. */
 	readonly glow?: boolean;
@@ -969,7 +972,11 @@ function RecommendationCard({
 	const draft = templateDraft(template, locations, task);
 	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
 	const card = (
-		<div className={cn("flex flex-col gap-12 rounded-12 border bg-window px-16 py-14", glow ? "border-transparent" : "border-border")} data-template={template.id} data-open={open ? "true" : undefined}>
+		<div
+			className={cn("flex flex-col", quiet ? "gap-10 py-10 pr-14 pl-16" : cn("gap-12 rounded-12 border bg-window px-16 py-14", glow ? "border-transparent" : "border-border"))}
+			data-template={template.id}
+			data-open={open ? "true" : undefined}
+		>
 			<div className="flex items-center gap-10">
 				<button
 					type="button"
@@ -977,9 +984,13 @@ function RecommendationCard({
 					className="flex min-w-0 flex-1 items-center gap-10 border-0 bg-transparent p-0 text-left cursor-pointer"
 					onClick={() => setOpen((was) => !was)}
 				>
-					<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
+					{quiet ? (
+						<SparklesIcon size={13} className="flex-none text-ink-faint" />
+					) : (
+						<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
+					)}
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
-						<span className="truncate text-[14px] font-medium leading-[17px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
 						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined ? undefined : "true"}>
 							{reason ?? when}
 						</span>
@@ -990,7 +1001,8 @@ function RecommendationCard({
 					data-action="automation-template-add"
 					disabled={draft === null || busy}
 					className={cn(
-						"inline-flex h-28 flex-none items-center rounded-6 border px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
+						"inline-flex flex-none items-center rounded-6 border px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
+						quiet ? "h-26" : "h-28",
 						open ? "border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover" : "border-border bg-window text-ink-body hover:bg-hover",
 					)}
 					onClick={() => {
@@ -1276,9 +1288,14 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 					) : page === "all" ? (
 						<AllRunsPage rules={state.rules} history={history} onOpen={open} onBack={() => setPage("list")} />
 					) : state.rules.length === 0 ? (
-						// Figma 672:3718: with no rules the page is only what the person's files suggest, and a way to ask in words.
+						// With no rules the recommendations are the page: a line on what automations do, what the person's files
+						// suggest (glowing: the AI offers them), and a way to ask in words.
 						<section className="flex flex-col gap-10" data-automation-recommendations>
-							<h2 className="m-0 mb-2 text-[15px] font-bold leading-[22px] text-ink">{t("automations.recs.title")}</h2>
+							<div className="mb-8 flex flex-col gap-4" data-automation-hero>
+								<ZapIcon size={22} className="text-accent" />
+								<h2 className="m-0 mt-2 text-[17px] font-bold leading-[24px] text-ink">{t("automations.recs.hero")}</h2>
+								<p className="m-0 text-[13px] leading-[19px] text-ink-muted">{t("automations.recs.heroCaption")}</p>
+							</div>
 							{recommendationCards}
 							<p className="m-0 mt-6 flex items-center gap-8 text-meta leading-[18px] text-ink-muted">
 								{t("automations.recs.more")}
@@ -1313,9 +1330,14 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 								</button>
 							</section>
 							{recommendations.length === 0 ? null : (
+								// Under the person's own rules the recommendations are one quiet grouped list: no glow, no stroke.
 								<section className="flex flex-col gap-8" data-automation-recommendations>
 									<h2 className="m-0 text-meta leading-[16px] text-ink-muted">{t("automations.recs.section")}</h2>
-									{recommendationCards}
+									<div className="flex flex-col overflow-hidden rounded-12 bg-hover [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider" data-quiet-recommendations>
+										{recommendations.map((template) => (
+											<RecommendationCard key={template.id} quiet template={template} locations={locations} reason={reasons[template.id]} onAdd={onCreate} />
+										))}
+									</div>
 								</section>
 							)}
 						</>

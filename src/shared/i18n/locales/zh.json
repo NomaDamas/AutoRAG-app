@@ -793,8 +793,7 @@
       "caption": "创建或修改自动化时，可以询问 AI"
     },
     "recs": {
-      "title": "根据你的文件推荐的自动化",
-      "section": "推荐",
+      "section": "还可以试试",
       "add": "添加",
       "more": "没有想要的？",
       "talk": "在聊天中创建",
@@ -803,7 +802,9 @@
         "screenshot": "桌面上有 {{count}} 张未命名的截图",
         "refreshAgo": "文稿文件夹上次更新索引是在{{time}}",
         "refreshChanged": "文稿中最近一周有 {{count}} 个文件发生了变化"
-      }
+      },
+      "hero": "文件新增或变化时，Dazzi 会自动处理",
+      "heroCaption": "从我们在你的文件中找到的自动化开始吧。"
     },
     "nudge": {
       "pdf": "可以创建一个自动化，每当有新 PDF 时自动总结。",

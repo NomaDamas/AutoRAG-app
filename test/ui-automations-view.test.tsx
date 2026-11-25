@@ -164,7 +164,7 @@ describe("AutomationsView list", () => {
 		await setAppLanguage("en");
 		const onTalk = vi.fn();
 		render(props({ onTalk }));
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations", "Suggested"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations", "More to try"]);
 		const open = host.querySelector('[data-action="automation-composer-open"]');
 		expect(text(open)).toBe("New automation");
 		click(open);
@@ -250,7 +250,7 @@ describe("AutomationsView empty and error states", () => {
 		const onTalk = vi.fn();
 		render(props({ state: state([]), onTalk }));
 		expect(rows()).toEqual([]);
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["내 파일에서 찾은 추천 자동화"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["파일이 생기거나 바뀔 때 Dazzi가 알아서 처리합니다"]);
 		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "pdf", "refresh"]);
 		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
@@ -268,8 +268,8 @@ describe("AutomationsView empty and error states", () => {
 			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 		const reason = (id: string): string => text(host.querySelector(`[data-template="${id}"] button[aria-expanded]`)?.lastElementChild?.lastElementChild ?? null);
-		expect(reason("pdf")).toBe("다운로드에 PDF가 3개 있어요");
-		expect(reason("screenshot")).toBe("데스크탑에 이름 없는 스크린샷이 2개 있어요");
+		expect(reason("pdf")).toBe("다운로드에 PDF가 3개 있습니다");
+		expect(reason("screenshot")).toBe("데스크탑에 이름 없는 스크린샷이 2개 있습니다");
 		// Nothing in Documents changed this week and no index run was seen, so the card says when it would run.
 		expect(host.querySelector(`[data-template="refresh"] [data-recommendation-reason]`)).toBeNull();
 	});
