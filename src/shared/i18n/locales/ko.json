@@ -1489,8 +1489,9 @@
     },
     "automations": {
       "errors": {
-        "daemonOffFailed": "자동화를 끄지 못했습니다: {{reason}}",
-        "daemonOnFailed": "자동화를 켜지 못했습니다: {{reason}}",
+        "daemonOffFailed": "자동화를 끄지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        "daemonOnScheduler": "자동화를 켜지 못했습니다. Windows 작업 스케줄러에 등록하지 못했습니다. 이 PC의 권한이나 보안 정책이 막고 있을 수 있습니다.",
+        "daemonOnFailed": "자동화를 켜지 못했습니다. 잠시 후 다시 시도해 주세요.",
         "unreadable": "자동화 규칙 파일을 읽을 수 없습니다: {{reason}}",
         "unknownRule": "‘{{id}}’ 규칙을 찾을 수 없습니다.",
         "cliFailed": "자동화 상태를 확인하지 못했습니다: {{reason}}",

@@ -1489,8 +1489,9 @@
     },
     "automations": {
       "errors": {
-        "daemonOffFailed": "Could not turn automations off: {{reason}}",
-        "daemonOnFailed": "Could not turn automations on: {{reason}}",
+        "daemonOffFailed": "Could not turn automations off. Please try again in a moment.",
+        "daemonOnScheduler": "Could not turn automations on. Windows Task Scheduler did not accept the registration; permissions or security policy on this PC may be blocking it.",
+        "daemonOnFailed": "Could not turn automations on. Please try again in a moment.",
         "unreadable": "Cannot read the automation rules file: {{reason}}",
         "unknownRule": "No rule named “{{id}}”.",
         "cliFailed": "Could not check the automations: {{reason}}",

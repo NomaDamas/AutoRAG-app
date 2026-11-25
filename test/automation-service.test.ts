@@ -489,6 +489,11 @@ describe("readableCliText", () => {
 		expect(text).not.toContain("\uFFFD");
 	});
 
+	it("reads the error of a pretty-printed multi-line --json answer", () => {
+		const raw = JSON.stringify({ ok: false, error: "schtasks /Create failed (exit 1)" }, null, 2);
+		expect(readableCliText(raw)).toBe("schtasks /Create failed (exit 1)");
+	});
+
 	it("leaves plain text as it is", () => {
 		expect(readableCliText("exit 2: bad flag")).toBe("exit 2: bad flag");
 	});
@@ -711,19 +716,15 @@ describe("createAutomationService setDaemon", () => {
 		expect(removed.daemon).toEqual({ platform: "darwin", installed: false, running: false });
 	});
 
-	it("translates a failing install, keeping the beginning of what the CLI said", async () => {
+	it("tells a failing install in one plain sentence, without what the CLI said", async () => {
 		const dir = await home();
-		const stderr = `${"x".repeat(400)}\n`;
 		const cli = service(dir, {
 			...fakeCli(dir),
-			run: async () => ({ code: 3, stdout: "", stderr }),
+			run: async () => ({ code: 3, stdout: "", stderr: '{ "ok": false, "error": "boom /XML C:\\x" }' }),
 		});
-
-		const message = t("main.automations.errors.daemonOnFailed", { reason: cliFailureReason({ code: 3, stdout: "", stderr }) });
-		await expect(cli.setDaemon(true)).rejects.toThrow(message);
-		// The window gets the start of what the CLI said, not all 400 characters of it.
-		expect(message).toContain("x".repeat(300));
-		expect(message).not.toContain("x".repeat(301));
+		const error = await cli.setDaemon(true).catch((e: unknown) => e as Error);
+		expect((error as Error).message).toBe(t("main.automations.errors.daemonOnFailed"));
+		expect((error as Error).message).not.toContain("boom");
 	});
 });
 

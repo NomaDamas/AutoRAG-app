@@ -134,17 +134,20 @@ export function runLibrarianCli(command: string, args: readonly string[], env: N
  */
 export function readableCliText(raw: string): string {
 	let text = raw;
-	const last = raw
+	const rows = raw
 		.split("\n")
 		.map((row) => row.trim())
-		.filter((row) => row.length > 0)
-		.at(-1);
-	if (last !== undefined) {
+		.filter((row) => row.length > 0);
+	// The CLI may print the answer pretty-printed over several lines, or as one line after other output.
+	for (const candidate of [raw.trim(), rows.at(-1) ?? ""]) {
 		try {
-			const parsed: unknown = JSON.parse(last);
-			if (isJsonObject(parsed) && typeof parsed.error === "string" && parsed.error.trim().length > 0) text = parsed.error;
+			const parsed: unknown = JSON.parse(candidate);
+			if (isJsonObject(parsed) && typeof parsed.error === "string" && parsed.error.trim().length > 0) {
+				text = parsed.error;
+				break;
+			}
 		} catch {
-			// Not JSON: the text is shown as it is.
+			// Not JSON: the next candidate, or the text as it is.
 		}
 	}
 	return text
@@ -436,7 +439,14 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 			}),
 		setDaemon: async (enabled) => {
 			const result = await deps.run(["automate", enabled ? "install" : "uninstall", "--json"]);
-			if (result.code !== 0) throw new Error(t(enabled ? "main.automations.errors.daemonOnFailed" : "main.automations.errors.daemonOffFailed", { reason: cliFailureReason(result) }));
+			if (result.code !== 0) {
+				const reason = cliFailureReason(result);
+				// Windows Task Scheduler refused the registration: its own words are unreadable code-page text, so say what it means.
+				if (enabled && /schtasks/iu.test(reason)) throw new Error(t("main.automations.errors.daemonOnScheduler"));
+				// The CLI's words are for a log, not for the window: they are often code-page noise or a JSON dump, so the notice only says it failed.
+				console.warn("automation daemon change failed:", reason);
+				throw new Error(t(enabled ? "main.automations.errors.daemonOnFailed" : "main.automations.errors.daemonOffFailed"));
+			}
 			return freshSnapshot();
 		},
 		start: (onChange) => {
