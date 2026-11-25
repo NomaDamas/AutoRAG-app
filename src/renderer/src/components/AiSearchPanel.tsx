@@ -1,4 +1,5 @@
 import {
+	Fragment,
 	forwardRef,
 	useContext,
 	useEffect,
@@ -72,7 +73,8 @@ import { InteractionDock } from "./InteractionDock";
 import { AgentSegment } from "./AgentSegment";
 import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
 import { AutomationsContext } from "./AutomationsTab";
-import { templateTaken } from "./AutomationsView";
+import { AutomationDraftCard, templateTaken } from "./AutomationsView";
+import { isAutomationRequest } from "../state/automation-intent";
 import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 
 import { IndexNoticeBanner } from "./IndexNotice";
@@ -247,6 +249,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [capability, setCapability] = useState<Capability | null>(null);
 	/** The automation this turn's answer suggests under it, and how far the person took it. */
 	const [suggestion, setSuggestion] = useState<{ readonly id: SuggestableTemplate; readonly phase: NudgePhase | "gone" } | null>(null);
+	// "자동화 만들어줘" asked here: the person's words, the reply, and the empty 새 자동화 card, as the 자동화 sidebar
+	// answers its 새 자동화 button. Each keeps its place after the turns asked before it (`after`) and is not a search.
+	const [starters, setStarters] = useState<readonly { readonly key: string; readonly ask: string; readonly after: number; readonly added: boolean }[]>([]);
 	const automationsShell = useContext(AutomationsContext);
 	const queuedRef = useRef(queued);
 	queuedRef.current = queued;
@@ -529,7 +534,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null && followRef.current) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions, starters]);
 
 	useEffect(() => {
 		followRef.current = true;
@@ -703,7 +708,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const runId = searchIdRef.current;
 		const action = composerAction({ searching: runId !== null, altKey });
 		if (action === "ask") {
-			if (text.length > 0) void runSearch(text, attachments);
+			if (text.length === 0) return;
+			if (automationsShell !== null && !phone && capability === null && attachments.length === 0 && isAutomationRequest(text)) {
+				setQuery("");
+				followRef.current = true;
+				setStarters((current) => [...current, { key: crypto.randomUUID(), ask: text, after: pastTurns.length + (submittedQueryRef.current === null ? 0 : 1), added: false }]);
+				return;
+			}
+			void runSearch(text, attachments);
 			return;
 		}
 		if (text.length === 0 || runId === null) return;
@@ -804,6 +816,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setChatId(null);
 		setChatTitle(null);
 		setPastTurns([]);
+		setStarters([]);
 		setHistoryOpen(false);
 		setDeepElapsed(null);
 	}
@@ -815,6 +828,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const turns = restoreChat(record.messages);
 		const latest = turns[turns.length - 1];
 		if (latest === undefined) return;
+		setStarters([]);
 		const assistant = latest.assistant;
 		setPastTurns(
 			turns.slice(0, -1).map((turn) => ({
@@ -988,7 +1002,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// panel of that run shows it: another tab's panel has a different run id.
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
-	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
+	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady && starters.length === 0;
 	// A fresh conversation puts the composer in the middle with the hints under it;
 	// the first question sends it back to the bottom.
 	const centered = showEmpty && !phone && pastTurns.length === 0 && interactionRequest === null && queued.length === 0;
@@ -1014,6 +1028,33 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const id = suggestTemplate(`${submittedQuery} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
 		if (id !== null) setSuggestion((current) => current ?? { id, phase: "nudge" });
 	}, [answered]);
+	/** The 새 자동화 starters asked after `after` turns: the person's words, the reply, and the card, rising one after another. */
+	const startersAt = (after: number): ReactElement[] =>
+		starters
+			.filter((starter) => starter.after === after)
+			.map((starter) => (
+				<div key={starter.key} className="flex flex-col gap-14" data-automation-starter>
+					<div className="message user-msg flex justify-end animate-rise [animation-fill-mode:both]">
+						<div className="bubble max-w-bubble-max rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{starter.ask}</div>
+					</div>
+					<p className="m-0 text-body leading-[1.55] text-ink animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
+					<div className="max-w-[480px] animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+						{starter.added || automationsShell === null ? (
+							<AutomationNudge template="pdf" phase="created" onPhase={() => undefined} onLater={() => undefined} onCreate={async () => false} onView={() => onShowAutomations?.()} />
+						) : (
+							<AutomationDraftCard
+								initial={null}
+								onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
+								onCreate={async (draft) => {
+									const ok = await automationsShell.props.onCreate(draft);
+									if (ok) setStarters((current) => current.map((item) => (item.key === starter.key ? { ...item, added: true } : item)));
+									return ok;
+								}}
+							/>
+						)}
+					</div>
+				</div>
+			));
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -1207,9 +1248,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						)
 					) : null}
 
+					{startersAt(0)}
 					{pastTurns.map((turn, index) => (
+						<Fragment key={index}>
 						<PastTurnView
-							key={index}
 							turn={turn}
 							turnIndex={index}
 							activeSource={evidenceSource}
@@ -1223,6 +1265,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							onRephrase={prefill}
 							phone={phone}
 						/>
+						{startersAt(index + 1)}
+						</Fragment>
 					))}
 
 					{submittedQuery === null ? null : (
@@ -1340,6 +1384,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					)}
 
 					{stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped")}</div> : null}
+
+					{submittedQuery === null ? null : startersAt(pastTurns.length + 1)}
 
 					{queued.length > 0 ? (
 						<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
