@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutomationsView, templateTaken, type AutomationsViewProps } from "../src/renderer/src/components/AutomationsView";
 import type { AutomationRule, AutomationRun, AutomationsSnapshot } from "../src/shared/automation-contract";
 import type { FsLocation } from "../src/shared/fs-contract";
+import { resetErrorFixStoreForTests } from "../src/renderer/src/hooks/useErrorFix";
 import { setAppLanguage } from "../src/shared/i18n";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -297,6 +298,22 @@ describe("AutomationsView empty and error states", () => {
 		const details = [...host.querySelectorAll("button")].find((button) => button.textContent === "자세히 보기");
 		click(details);
 		expect(text(host)).toContain("자동화 상태를 확인하지 못했습니다: boom");
+	});
+
+	it("gives the failure card way to one line while the AI repair runs, and brings the card back when it stops", async () => {
+		const autorag = Reflect.get(globalThis, "autorag") as Record<string, unknown>;
+		const before = autorag.errorFix;
+		autorag.errorFix = { onEvent: () => () => undefined, start: () => new Promise(() => undefined), cancel: async () => undefined };
+		try {
+			render(props({ state: state([rule("a")], { error: "자동화 상태를 확인하지 못했습니다: boom" }) }));
+			click([...host.querySelectorAll("button")].find((button) => button.textContent === "AI로 해결하기"));
+			expect(host.querySelector("[data-automation-fixing]")?.textContent).toContain("AI가 원인을 찾아 고치는 중입니다");
+			expect(text(host)).not.toContain("AI로 해결하기");
+			expect(rows()).toHaveLength(1);
+		} finally {
+			autorag.errorFix = before;
+			resetErrorFixStoreForTests();
+		}
 	});
 
 	it("reads the status again from the failure card's 다시 확인", () => {

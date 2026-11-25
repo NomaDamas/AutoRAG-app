@@ -571,6 +571,8 @@
     "errors": {
       "config": "无法读取规则文件",
       "statusTitle": "无法检查自动化状态",
+      "fixing": "AI 正在查找并修复原因…",
+      "fixingView": "查看进度",
       "statusHint": "可以稍后重新检查，也可以让 AI 代理查找原因并修复。",
       "retry": "重新检查",
       "configHint": "请在 AI 智能体中修正规则，或直接编辑该文件。"

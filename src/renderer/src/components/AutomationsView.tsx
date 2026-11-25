@@ -19,7 +19,8 @@ import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
 import { SparklesIcon, ZapIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
-import { startErrorFix } from "../hooks/useErrorFix";
+import { SeedLoader } from "./SeedLoader";
+import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
 import { StatusDot } from "./primitives/StatusDot";
@@ -1228,6 +1229,8 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	const [page, setPage] = useState<"list" | "all">("list");
 	const locations = useLocations();
 	const broken = state.configError !== null;
+	// A repair of this very error is running: the card gives way to one line saying so, and comes back if the repair did not clear the error.
+	const fixing = useErrorFixStore().sessions.find((session) => session.message === state.error && session.run.status === "running");
 	const history = useRunHistory(
 		[...new Set([...state.rules.map((rule) => rule.id), ...(editing === null ? [] : [editing.id])])],
 		state.rules.map((rule) => rule.lastRun?.startedAt ?? 0).join(","),
@@ -1270,7 +1273,15 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 				<div className="flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40 pt-32">
 				<div className="flex-1" aria-hidden="true" />
 				<div className="mx-auto flex w-full max-w-[640px] flex-none flex-col gap-24">
-					{state.error === null ? null : (
+					{state.error === null ? null : fixing !== undefined ? (
+						<div role="status" data-automation-fixing className="flex h-40 items-center gap-8 rounded-12 border border-border px-14 text-meta text-ink-muted">
+							<SeedLoader />
+							<span className="shimmer min-w-0 flex-1 truncate">{t("automations.errors.fixing")}</span>
+							<button type="button" className="flex-none border-0 bg-transparent p-0 text-meta text-accent-text cursor-pointer hover:underline" onClick={() => openErrorFixDialog(fixing.id)}>
+								{t("automations.errors.fixingView")}
+							</button>
+						</div>
+					) : (
 						// Figma 644:253: the shared notice card; the raw reason stays behind 자세히 보기, and the way on is 다시 확인 or AI로 해결하기.
 						<NoticeCard
 							role="alert"
