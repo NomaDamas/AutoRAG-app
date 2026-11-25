@@ -238,6 +238,8 @@ export function App(): ReactElement {
 	/* ------------------------------------------------ v7 shell chrome state */
 	const [sidebarVisible, setSidebarVisible] = useState(() => loadFlag(SIDEBAR_KEY, true));
 	const [inspectorVisible, setInspectorVisible] = useState(() => loadFlag(INSPECTOR_KEY, true));
+	/** When 새 자동화 (or 채팅으로 만들기) was last pressed: the 자동화 column then starts a rule with an empty card. */
+	const [automationStarter, setAutomationStarter] = useState<number | null>(null);
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
@@ -905,10 +907,10 @@ export function App(): ReactElement {
 		names: automationNames,
 		autoStartService: true,
 		showChat: () => finder?.showAiSearch(),
+		// The column opens (or stays open) and starts a rule: 새 자동화 만들기, the reply, and an empty card, each press anew.
 		talk: () => {
 			setInspectorVisible(true);
-			// The column's chat field takes the words; it is drawn on the next frame when the column was closed.
-			requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-automation-assistant] textarea")?.focus());
+			setAutomationStarter(Date.now());
 		},
 		renameRule: async (id, name) => {
 			const next: Record<string, string> = { ...ruleNamesNow() };
@@ -1157,7 +1159,8 @@ export function App(): ReactElement {
 								}
 								chatView={
 									// The 자동화 tab's chat is the whole column: once it has a conversation it shows it, whatever the file inspector's mode.
-									chatTabId === null || chatTab.chat === null ? null : (
+									// A rule being started shows the column's chat too, before it has a conversation.
+									chatTabId === null || (chatTab.chat === null && automationStarter === null) ? null : (
 										<InspectorChatView
 											tab={chatTab}
 											targetName={t("places.automations")}
@@ -1179,6 +1182,8 @@ export function App(): ReactElement {
 											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
 											onReveal={(target) => finder?.revealEvidence(target)}
 											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}
+											newAutomation={automationStarter}
+											onNewAutomationDone={() => setAutomationStarter(null)}
 											standalone
 										/>
 									)

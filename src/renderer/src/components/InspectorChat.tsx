@@ -34,7 +34,7 @@ import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
 import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
 import { AutomationsContext } from "./AutomationsTab";
-import { templateTaken } from "./AutomationsView";
+import { AutomationDraftCard, templateTaken } from "./AutomationsView";
 import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
@@ -797,6 +797,10 @@ export interface InspectorChatViewProps {
 	 * the AI Agent tab and does not close back to another view, because it is the whole column.
 	 */
 	readonly standalone?: boolean;
+	/** When 새 자동화 was last pressed: the column shows the request, the reply and an empty card at its end, anew each time. */
+	readonly newAutomation?: number | null;
+	/** The empty card was cancelled: the column goes back to what it showed before. */
+	readonly onNewAutomationDone?: () => void;
 }
 
 export function InspectorChatView({
@@ -819,6 +823,8 @@ export function InspectorChatView({
 	onReveal,
 	onPreview,
 	standalone = false,
+	newAutomation = null,
+	onNewAutomationDone,
 }: InspectorChatViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [historyOpen, setHistoryOpen] = useState(false);
@@ -836,6 +842,8 @@ export function InspectorChatView({
 		const id = suggestTemplate(`${last.question} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
 		setSuggestion(id === null ? null : { key: lastKey, id, phase: "nudge" });
 	}, [lastAnswered, lastKey]);
+	// The rule 새 자동화 started here: added (the card gives way to the line that says so) or still being filled in.
+	const [starterAdded, setStarterAdded] = useState<number | null>(null);
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -923,6 +931,30 @@ export function InspectorChatView({
 						onCreate={automationsShell.props.onCreate}
 					/>
 				) : null}
+				{newAutomation === null || automationsShell === null ? null : (
+					// Figma 672:3740: the person's 새 자동화 만들기, the reply, and the card, rising one after another.
+					<div key={newAutomation} className="flex flex-col gap-10" data-automation-starter>
+						<div className="flex max-w-[90%] self-end animate-rise [animation-fill-mode:both]">
+							<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window">{t("automations.starter.ask")}</div>
+						</div>
+						<p className="m-0 text-sm leading-[1.5] text-ink-body animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
+						<div className="animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+							{starterAdded === newAutomation ? (
+								<AutomationNudge narrow template="pdf" phase="created" onPhase={() => undefined} onLater={() => undefined} onCreate={async () => false} />
+							) : (
+								<AutomationDraftCard
+									initial={null}
+									onCancel={() => onNewAutomationDone?.()}
+									onCreate={async (draft) => {
+										const ok = await automationsShell.props.onCreate(draft);
+										if (ok) setStarterAdded(newAutomation);
+										return ok;
+									}}
+								/>
+							)}
+						</div>
+					</div>
+				)}
 				{tab.queued.length === 0 ? null : (
 					<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
 						{tab.queued.map((text, index) => (

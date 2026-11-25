@@ -3,9 +3,9 @@
  * - the list: with no rules, 내 파일에서 찾은 자동화 (recommendations that open to show what they would do, and
  *   추가하기 writes one at once); with rules, 내 자동화 (status dot, name, when it runs, the switch, ›), 전체 기록 보기,
  *   and the recommendations not taken yet. 새 자동화 and 말로 만들기 open the AI chat column.
- * - a rule's own page (› on its row), under the breadcrumb 자동화 › name: the name, which a click renames in place,
+ * - a rule's own page (› on its row), under ‹ 뒤로가기: the name, which a click renames in place,
  *   the card to change and save it, and its 실행 기록 read from the rule's run log.
- * - 전체 기록, under the breadcrumb 자동화 › 전체 기록: every rule's runs, newest first, by day.
+ * - 전체 기록, under ‹ 뒤로가기: every rule's runs, newest first, by day.
  * It only draws and reports: the rules come from the shared store, and delete asks before it removes anything.
  */
 
@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
@@ -555,7 +555,7 @@ function RuleRow({
 			data-rule-id={rule.id}
 			// Opening a rule selects it, and the selection outlives the trip back to
 			// the list, so it draws no fill: the row looks as it did before it was opened.
-			className="flex items-center gap-10 px-12 py-10 select-none cursor-pointer bg-window hover:bg-hover-row"
+			className="flex items-center gap-14 py-10 pr-14 pl-16 select-none cursor-pointer bg-window hover:bg-hover-row"
 			onClick={() => {
 				onSelect(rule.id);
 				onOpen(rule.id);
@@ -568,15 +568,16 @@ function RuleRow({
 		>
 			{/* Figma 672:3740: how the last run went, before the name. */}
 			<RunDot tone={runDotTone(rule.lastRun)} />
-			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-2">
-				<span className="truncate text-[13px] font-medium leading-[21px] text-ink">{ruleTitle(rule)}</span>
-				<span className="truncate text-badge leading-[16px] text-ink-muted">{whenText(rule)}</span>
+			{/* The same title and caption sizes as a recommendation's (Figma 672:3740): 14px over 12px. */}
+			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
+				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
+				<span className="truncate text-meta leading-[17px] text-ink-muted">{whenText(rule)}</span>
 			</div>
 			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
 			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
 				<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-rule-on" />
 			</span>
-			<ChevronRightIcon size={16} className="flex-none text-ink-faint" />
+			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
 		</div>
 	);
 }
@@ -741,7 +742,7 @@ function AutomationDetail({
 	return (
 		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
 			<div className="flex flex-col gap-6">
-				<Breadcrumb current={ruleTitle(rule)} onRoot={onBack} />
+				<BackLink onBack={onBack} />
 				<div className="flex min-w-0 items-center gap-8">
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
@@ -775,19 +776,19 @@ function AutomationDetail({
 	);
 }
 
-/** Where the page is under 자동화 (Figma 676:646, 676:790): 자동화 goes back to the list, the last word is this page. */
-function Breadcrumb({ current, onRoot }: { readonly current: string; readonly onRoot: () => void }): ReactElement {
+/** The way back to the list from a page under it (a rule's own page, 전체 기록): ‹ 뒤로가기, quiet until hovered. */
+function BackLink({ onBack }: { readonly onBack: () => void }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<nav aria-label={t("automations.breadcrumb")} className="flex min-w-0 items-center gap-6 text-[13px] leading-[18px]" data-automation-breadcrumb>
-			<button type="button" data-action="automation-back" className="flex-none border-0 bg-transparent p-0 text-ink-muted cursor-pointer hover:text-ink" onClick={onRoot}>
-				{t("places.automations")}
-			</button>
-			<ChevronRightIcon size={12} className="flex-none text-ink-faint" />
-			<span aria-current="page" className="min-w-0 truncate font-medium text-ink">
-				{current}
-			</span>
-		</nav>
+		<button
+			type="button"
+			data-action="automation-back"
+			className="inline-flex flex-none items-center gap-4 self-start border-0 bg-transparent p-0 text-meta leading-[16px] text-ink-muted cursor-pointer hover:text-ink"
+			onClick={onBack}
+		>
+			<ChevronLeftIcon size={12} />
+			{t("automations.back")}
+		</button>
 	);
 }
 
@@ -815,7 +816,7 @@ function AllRunsPage({ rules, history, onOpen, onBack }: { readonly rules: reado
 	}
 	return (
 		<section className="flex flex-col gap-6" data-automation-all-runs>
-			<Breadcrumb current={t("automations.all.title")} onRoot={onBack} />
+			<BackLink onBack={onBack} />
 			<h1 className="m-0 text-[20px] font-medium leading-[28px] text-ink">{t("automations.all.title")}</h1>
 			{all.length === 0 ? (
 				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
@@ -968,7 +969,7 @@ function RecommendationCard({
 	const draft = templateDraft(template, locations, task);
 	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
 	const card = (
-		<div className="flex flex-col gap-12 rounded-12 border border-border bg-window px-16 py-14" data-template={template.id} data-open={open ? "true" : undefined}>
+		<div className={cn("flex flex-col gap-12 rounded-12 border bg-window px-16 py-14", glow ? "border-transparent" : "border-border")} data-template={template.id} data-open={open ? "true" : undefined}>
 			<div className="flex items-center gap-10">
 				<button
 					type="button"
@@ -1116,38 +1117,41 @@ export function AutomationDraftCard({
 	onCreate,
 	onCancel,
 }: {
-	readonly initial: AutomationDraft;
+	/** The rule to show filled in; null for an empty card (새 자동화) where every chip still asks. */
+	readonly initial: AutomationDraft | null;
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
 	readonly onCancel: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const locations = useLocations();
-	const first = initial.paths[0] ?? null;
+	const blank = initial === null;
+	const rule: AutomationDraft = initial ?? { paths: [], events: [], include: [], agent: { profile: PROFILES.read, task: "" } };
+	const first = rule.paths[0] ?? null;
 	const [folder, setFolder] = useState<string | null>(first);
-	const [kind, setKind] = useState<KindId | null>(kindOf(initial.include));
-	const [event, setEvent] = useState<EventId | null>(eventOf(initial.events));
-	const [task, setTask] = useState(initial.agent?.task ?? "");
+	const [kind, setKind] = useState<KindId | null>(blank ? null : kindOf(rule.include));
+	const [event, setEvent] = useState<EventId | null>(blank ? null : eventOf(rule.events));
+	const [task, setTask] = useState(rule.agent?.task ?? "");
 	const [busy, setBusy] = useState(false);
 	const standard = standardFolders(locations);
 	const folders = folder === null || standard.some((option) => option.value === folder) ? standard : [...standard, { value: folder, label: folderLabel(folder), icon: <FolderGlyph size={13} /> }];
 	const draft: AutomationDraft | null =
-		folder === null
+		folder === null || (blank && (kind === null || event === null))
 			? null
 			: {
-					paths: folder === first ? initial.paths : [folder],
-					events: event === null ? initial.events : EVENTS[event],
-					include: kind === null ? initial.include : KIND_GLOBS[kind],
-					...(initial.agent === undefined ? { run: initial.run ?? [] } : { agent: { profile: initial.agent.profile, task: task.trim() } }),
+					paths: folder === first ? rule.paths : [folder],
+					events: event === null ? rule.events : EVENTS[event],
+					include: kind === null ? rule.include : KIND_GLOBS[kind],
+					...(rule.agent === undefined ? { run: rule.run ?? [] } : { agent: { profile: rule.agent.profile, task: task.trim() } }),
 				};
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
 	const events: readonly ChipOption<EventId>[] = (["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) }));
 	const chips: Readonly<Record<string, ReactNode>> = {
 		folder: <ChipSelect value={folder} options={folders} label={folder === null ? t("automations.create.pickFolder") : folderLabel(folder)} icon={<FolderGlyph size={13} />} testId="automation-request-folder" onChange={setFolder} />,
-		kind: <ChipSelect value={kind} options={kinds} label={kind === null ? t("automations.kinds.noun", { kinds: kindsText(initial.include) }) : t("automations.create.kindLabel")} testId="automation-request-kind" onChange={setKind} />,
-		event: <ChipSelect value={event} options={events} label={event === null ? t("automations.create.event.other") : t("automations.create.eventLabel")} testId="automation-request-event" onChange={setEvent} />,
+		kind: <ChipSelect value={kind} options={kinds} label={kind === null && !blank ? t("automations.kinds.noun", { kinds: kindsText(rule.include) }) : t("automations.create.kindLabel")} testId="automation-request-kind" onChange={setKind} />,
+		event: <ChipSelect value={event} options={events} label={event === null && !blank ? t("automations.create.event.other") : t("automations.create.eventLabel")} testId="automation-request-event" onChange={setEvent} />,
 	};
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
-	const canSubmit = draft !== null && (initial.agent === undefined ? (initial.run?.length ?? 0) > 0 : task.trim().length > 0) && !busy;
+	const canSubmit = draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0) && !busy;
 	return (
 		<div className="flex flex-col gap-8 rounded-12 border border-border bg-window p-12" data-automation-request>
 			<span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span>
@@ -1156,10 +1160,10 @@ export function AutomationDraftCard({
 					part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
 				)}
 			</div>
-			<span className="text-badge leading-[15px] text-ink-muted">{initial.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
-			{initial.agent === undefined ? (
+			<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
+			{rule.agent === undefined ? (
 				<code className="block rounded-6 bg-subtle-alt px-8 py-6 font-mono text-badge leading-[16px] text-ink [overflow-wrap:anywhere]" data-testid="automation-request-command">
-					{(initial.run ?? []).join(" ")}
+					{(rule.run ?? []).join(" ")}
 				</code>
 			) : (
 				<textarea
@@ -1302,7 +1306,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 										<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
 									))}
 								</div>
-								<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 text-meta font-medium text-accent-text underline underline-offset-2 cursor-pointer" onClick={() => setPage("all")}>
+								<button type="button" data-action="automation-all-runs" className="self-end border-0 bg-transparent p-0 pr-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
 									{t("automations.all.open")}
 								</button>
 							</section>

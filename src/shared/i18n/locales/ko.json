@@ -792,7 +792,6 @@
     "assistant": {
       "caption": "자동화를 만들거나 고칠 때 AI에게 물어보세요"
     },
-    "breadcrumb": "현재 위치",
     "recs": {
       "title": "내 파일에서 찾은 추천 자동화",
       "section": "추천",
@@ -818,7 +817,12 @@
     },
     "request": {
       "command": "실행할 명령"
-    }
+    },
+    "starter": {
+      "ask": "새 자동화 만들기",
+      "reply": "원하는 양식을 선택하거나 채팅으로 자동화를 추가할 수 있습니다."
+    },
+    "back": "뒤로가기"
   },
   "osMenu": {
     "ask": "Dazzi에게 물어보기",

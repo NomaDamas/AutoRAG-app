@@ -323,10 +323,8 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		const name = host.querySelector('[data-action="automation-rename"]');
 		expect(name?.getAttribute("title")).toBe("이름 바꾸기");
 		expect(name?.querySelector("svg")).not.toBeNull();
-		// The way back is the breadcrumb: 자동화 › the rule's name.
-		const crumbs = host.querySelector("[data-automation-breadcrumb]");
-		expect(text(crumbs?.querySelector('[data-action="automation-back"]'))).toBe("자동화");
-		expect(text(crumbs?.querySelector('[aria-current="page"]'))).toBe(text(name));
+		// The way back is ‹ 뒤로가기.
+		expect(text(host.querySelector('[data-action="automation-back"]'))).toBe("뒤로가기");
 		click(host.querySelector('[data-action="automation-back"]'));
 		expect(onCancelEdit).toHaveBeenCalledTimes(1);
 	});
@@ -443,7 +441,7 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		const page = (): HTMLElement | null => host.querySelector("[data-automation-all-runs]");
 		expect(rows()).toEqual([]);
 		expect(text(page()?.querySelector("h1"))).toBe("전체 기록");
-		expect(text(page()?.querySelector('[data-automation-breadcrumb] [aria-current="page"]'))).toBe("전체 기록");
+		expect(text(page()?.querySelector('[data-action="automation-back"]'))).toBe("뒤로가기");
 		expect([...(page()?.querySelectorAll("h2") ?? [])].map((day) => day.textContent)).toEqual(["오늘", "어제"]);
 		const runs = (): Element[] => [...host.querySelectorAll("[data-automation-all-runs] [data-run]")];
 		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("새 PDF → Dazzi에게 맡기기"), expect.stringContaining("hwp5")]);
@@ -455,13 +453,13 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		Reflect.deleteProperty(runLogs, "hwp-to-pdf");
 	});
 
-	it("says there are no runs yet, and 자동화 in the breadcrumb returns to the list", async () => {
+	it("says there are no runs yet, and ‹ 뒤로가기 returns to the list", async () => {
 		render(props({ state: state([never]) }));
 		await settle();
 		click(host.querySelector('[data-action="automation-all-runs"]'));
 		await settle();
 		expect(host.querySelector("[data-automation-all-runs] [data-runs-empty]")).not.toBeNull();
-		click(host.querySelector('[data-automation-breadcrumb] [data-action="automation-back"]'));
+		click(host.querySelector('[data-automation-all-runs] [data-action="automation-back"]'));
 		expect(host.querySelector("[data-automation-all-runs]")).toBeNull();
 		expect(rows().map((row) => row.dataset.ruleId)).toEqual(["screens"]);
 	});

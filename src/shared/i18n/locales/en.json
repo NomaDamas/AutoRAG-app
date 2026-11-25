@@ -792,7 +792,6 @@
     "assistant": {
       "caption": "Ask the AI to create or change an automation"
     },
-    "breadcrumb": "Location",
     "recs": {
       "title": "Suggested for your files",
       "section": "Suggested",
@@ -818,7 +817,12 @@
     },
     "request": {
       "command": "Command"
-    }
+    },
+    "starter": {
+      "ask": "Create a new automation",
+      "reply": "Fill in the form, or describe the automation in chat to add it."
+    },
+    "back": "Back"
   },
   "osMenu": {
     "ask": "Ask Dazzi",

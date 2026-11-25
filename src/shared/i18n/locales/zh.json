@@ -792,7 +792,6 @@
     "assistant": {
       "caption": "创建或修改自动化时，可以询问 AI"
     },
-    "breadcrumb": "当前位置",
     "recs": {
       "title": "根据你的文件推荐的自动化",
       "section": "推荐",
@@ -818,7 +817,12 @@
     },
     "request": {
       "command": "要运行的命令"
-    }
+    },
+    "starter": {
+      "ask": "新建自动化",
+      "reply": "可以在表单中选择，或在聊天中描述来添加自动化。"
+    },
+    "back": "返回"
   },
   "osMenu": {
     "ask": "向 Dazzi 提问",
