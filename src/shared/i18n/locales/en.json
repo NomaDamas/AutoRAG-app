@@ -3643,16 +3643,14 @@
       "skip": "Skip",
       "finish": "Done",
       "clickHint": "Click it to try",
-      "sendHint": "Send it yourself",
-      "typingHint": "Typing…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "Here is how to ask",
-        "body": "Let's try it on the files we just read. Click send, or change the text and ask your own."
+        "title": "Ask about your files",
+        "body": "We drafted something to ask from your own documents.\nClick send to try it."
       },
       "cite": {
-        "title": "Got an answer — click the citation number",
-        "body": "Every answer is grounded in your files. Click the blue number to open the exact source.",
+        "title": "Answers show their sources",
+        "body": "Click a number to see, in the info pane on the right, which file that sentence came from.",
         "waitingTitle": "Finding the answer",
         "waitingBody": "Reading what's inside your files.",
         "noCiteTitle": "Here's your answer",
@@ -3661,16 +3659,16 @@
         "failedBody": "You can rephrase the question and ask again."
       },
       "evidence": {
-        "title": "Sources gather here",
-        "body": "The exact passage from the original. Click its title to go to the file."
+        "title": "Jump to the original file",
+        "body": "Click the source title. The folder holding that file opens in a new tab."
       },
       "duplicates": {
-        "title": "Click the stacked document",
-        "body": "Copies and older versions fold into one row. Click it to expand all versions."
+        "title": "Similar files stay together",
+        "body": "Similar files are stacked into one row.\nClick it to open them and see which is the latest."
       },
       "versions": {
         "title": "Check the latest version here",
-        "body": "Identical and near-identical documents side by side. Click one to jump to it."
+        "body": "The info pane shows the latest version and its near-copies.\nThe other copies are kept as they are."
       }
     },
     "signin": {
