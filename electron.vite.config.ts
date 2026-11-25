@@ -1,8 +1,67 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, extname, join, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "electron-vite";
 import type { Plugin } from "vite";
+
+const require = createRequire(import.meta.url);
+const PDFJS_ROOT = dirname(require.resolve("pdfjs-dist/package.json"));
+const PDFJS_ASSET_DIRS = ["cmaps", "standard_fonts", "wasm", "iccs"] as const;
+const PDFJS_ASSET_CONTENT_TYPES: Readonly<Record<string, string>> = {
+	".bcmap": "application/octet-stream",
+	".pfb": "application/octet-stream",
+	".ttf": "font/ttf",
+	".wasm": "application/wasm",
+	".js": "text/javascript; charset=utf-8",
+	".icc": "application/vnd.iccprofile",
+};
+
+/**
+ * Expose pdf.js's runtime support directories (`cmaps`, `standard_fonts`,
+ * `wasm`, `iccs`) at `pdfjs/<dir>/` in both the Vite dev server and the
+ * production `out/renderer/` bundle. Without `cmaps/`, PDFs using predefined
+ * CJK CMaps with unembedded CIDFonts (such as `UniKS-UTF16-H`) drop every
+ * glyph; without `standard_fonts/`, standard-14 fallback fonts fail to load.
+ */
+const pdfjsSupportAssets: Plugin = {
+	name: "autorag-pdfjs-support-assets",
+	configureServer(server) {
+		server.middlewares.use("/pdfjs/", (req, res, next) => {
+			const pathname = decodeURIComponent((req.url ?? "").split("?")[0] ?? "");
+			const parts = pathname.replace(/^\/+/, "").split("/");
+			if (parts.length !== 2) return next();
+			const [dir, file] = parts;
+			if (!dir || !file || !(PDFJS_ASSET_DIRS as readonly string[]).includes(dir)) return next();
+			if (file.includes("..") || file.includes("\0")) return next();
+			const contentType = PDFJS_ASSET_CONTENT_TYPES[extname(file).toLowerCase()];
+			if (contentType === undefined) return next();
+			const full = join(PDFJS_ROOT, dir, file);
+			try {
+				const body = readFileSync(full);
+				res.setHeader("Content-Type", contentType);
+				res.end(body);
+			} catch {
+				next();
+			}
+		});
+	},
+	generateBundle() {
+		for (const dir of PDFJS_ASSET_DIRS) {
+			const folder = join(PDFJS_ROOT, dir);
+			for (const entry of readdirSync(folder)) {
+				if (PDFJS_ASSET_CONTENT_TYPES[extname(entry).toLowerCase()] === undefined) continue;
+				const full = join(folder, entry);
+				if (!statSync(full).isFile()) continue;
+				this.emitFile({
+					type: "asset",
+					fileName: `pdfjs/${dir}/${entry}`,
+					source: readFileSync(full),
+				});
+			}
+		}
+	},
+};
 
 /**
  * Ship the rebuilt libarchive engine beside the bundled archive worker, which
@@ -65,7 +124,7 @@ export default defineConfig({
 		},
 	},
 	renderer: {
-		plugins: [tailwindcss()],
+		plugins: [tailwindcss(), pdfjsSupportAssets],
 		oxc: {
 			jsx: { runtime: "automatic" },
 		},

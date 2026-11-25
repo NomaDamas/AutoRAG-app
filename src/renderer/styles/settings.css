@@ -1035,9 +1035,13 @@
 	flex-direction: column;
 }
 
+.settings-view .settings-menu:has(.settings-model-picker.is-searching) {
+	width: min(380px, calc(100vw - 24px));
+}
+
 .settings-view .settings-menu.settings-submenu {
 	z-index: 16;
-	width: 256px;
+	width: min(360px, calc(100vw - 24px));
 	overflow: visible;
 	display: flex;
 	flex-direction: column;
@@ -1176,6 +1180,40 @@
 	white-space: nowrap;
 	color: var(--text-muted);
 	font-size: var(--font-size-badge);
+}
+
+.settings-view .settings-menu-item.is-model {
+	align-items: center;
+	min-height: 40px;
+	padding: 6px var(--space-8);
+}
+
+.settings-view .settings-model-item-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.settings-view .settings-model-item-text > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-primary);
+	font-size: 12.5px;
+	line-height: 1.3;
+}
+
+.settings-view .settings-menu-item.is-model small {
+	flex: none;
+	max-width: none;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+	font-size: 11px;
+	line-height: 1.3;
 }
 
 .settings-view .settings-menu-item > svg {
@@ -4636,8 +4674,8 @@
 }
 
 .settings-view .ai-roles .settings-trigger {
-	width: 152px;
-	min-width: 0;
+	min-width: 152px;
+	max-width: 240px;
 	height: 36px;
 	padding: 0 12px;
 	border: 1px solid var(--border);

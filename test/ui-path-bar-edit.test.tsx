@@ -31,6 +31,8 @@ function render(props: { path?: string; onNavigate?: (path: string) => void; onG
 				path={path}
 				crumbs={breadcrumbTrail(path, Number.MAX_SAFE_INTEGER)}
 				selectedName={null}
+				selectedPath={null}
+				onCopyPath={() => {}}
 				onNavigate={props.onNavigate ?? (() => {})}
 				onGoToPath={props.onGoToPath ?? (() => Promise.resolve(true))}
 				completePath={props.completePath ?? (() => Promise.resolve([]))}
