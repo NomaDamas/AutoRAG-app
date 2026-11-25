@@ -14,7 +14,7 @@
  *                      to the Info view (Figma 328:3991, 328:5742).
  */
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contract";
 import { useTranslation } from "react-i18next";
@@ -32,6 +32,10 @@ import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
+import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
+import { AutomationsContext } from "./AutomationsTab";
+import { templateTaken } from "./AutomationsView";
+import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
 import {
@@ -819,6 +823,19 @@ export function InspectorChatView({
 	const { t } = useTranslation();
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const turns = tab.chat?.turns ?? [];
+	// The automation the last answer suggests under it, as in the AI 에이전트 chat (Figma 672:3658, 672:3740).
+	const automationsShell = useContext(AutomationsContext);
+	const last = turns[turns.length - 1];
+	const lastKey = `${tab.chat?.chatId ?? ""}:${turns.length}`;
+	const lastAnswered = last !== undefined && !running && (quickTextOf(last) !== "" || deepTextOf(last) !== "");
+	const [suggestion, setSuggestion] = useState<{ readonly key: string; readonly id: SuggestableTemplate; readonly phase: NudgePhase | "gone" } | null>(null);
+	useEffect(() => {
+		if (!lastAnswered || last === undefined || automationsShell === null || suggestion?.key === lastKey) return;
+		const sources = [...(last.quick?.evidence ?? []), ...(last.deep?.evidence ?? [])].map((item) => `${item.title} ${item.source ?? ""}`).join(" ");
+		const rules = automationsShell.props.state.rules;
+		const id = suggestTemplate(`${last.question} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
+		setSuggestion(id === null ? null : { key: lastKey, id, phase: "nudge" });
+	}, [lastAnswered, lastKey]);
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -893,6 +910,19 @@ export function InspectorChatView({
 						onPreview={onPreview}
 					/>
 				))}
+				{suggestion !== null && suggestion.key === lastKey && suggestion.phase !== "gone" && lastAnswered && automationsShell !== null ? (
+					<AutomationNudge
+						narrow
+						template={suggestion.id}
+						phase={suggestion.phase}
+						onPhase={(phase) => setSuggestion({ ...suggestion, phase })}
+						onLater={() => {
+							putOff(suggestion.id);
+							setSuggestion({ ...suggestion, phase: "gone" });
+						}}
+						onCreate={automationsShell.props.onCreate}
+					/>
+				) : null}
 				{tab.queued.length === 0 ? null : (
 					<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
 						{tab.queued.map((text, index) => (

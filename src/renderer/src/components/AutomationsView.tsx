@@ -950,10 +950,13 @@ function RecommendationCard({
 	template,
 	locations,
 	reason,
+	glow = false,
 	onAdd,
 }: {
 	readonly template: Template;
 	readonly locations: readonly FsLocation[];
+	/** While there are no rules the recommendations are the page's invitation: a soft aurora sits behind each card. */
+	readonly glow?: boolean;
 	/** Why it is worth having, from the person's files; without one the card says when it would run. */
 	readonly reason: string | undefined;
 	readonly onAdd: (draft: AutomationDraft) => Promise<boolean>;
@@ -964,7 +967,7 @@ function RecommendationCard({
 	const task = t(`automations.templates.${template.id}.task` as LocaleKey);
 	const draft = templateDraft(template, locations, task);
 	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
-	return (
+	const card = (
 		<div className="flex flex-col gap-12 rounded-12 border border-border bg-window px-16 py-14" data-template={template.id} data-open={open ? "true" : undefined}>
 			<div className="flex items-center gap-10">
 				<button
@@ -1007,6 +1010,15 @@ function RecommendationCard({
 				</dl>
 			) : null}
 		</div>
+	);
+	return glow ? (
+		// Lower than the composer's glow: it invites, it does not call.
+		<div className="ai-glow-host [--ai-glow-opacity:0.16] [--ai-glow-opacity-focus:0.24] [--ai-glow-blur:18px]" data-ai-glow>
+			<div className="ai-glow" aria-hidden="true" />
+			{card}
+		</div>
+	) : (
+		card
 	);
 }
 
@@ -1203,7 +1215,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	}, [detail?.id, page]);
 	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
 	const reasons = useRecommendationReasons(locations);
-	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons[template.id]} onAdd={onCreate} />);
+	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons[template.id]} glow={state.rules.length === 0} onAdd={onCreate} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			{/* The AI 에이전트 tab's head (Figma 672:3718): only 채팅 | 자동화 in the middle; the 자동화 side shows no name on the left. */}

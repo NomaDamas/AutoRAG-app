@@ -183,6 +183,16 @@ describe("AutomationsView list", () => {
 		render(props({ state: state([pdfRule, refreshRule]) }));
 		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot"]);
 	});
+
+	it("draws the soft glow behind each recommendation only while there are no rules", () => {
+		render(props({ state: state([]) }));
+		const cards = [...host.querySelectorAll<HTMLElement>("[data-template]")];
+		expect(cards.length).toBe(3);
+		expect(cards.every((card) => card.parentElement?.hasAttribute("data-ai-glow") === true)).toBe(true);
+		render(props({ state: state([failing]) }));
+		expect(host.querySelector("[data-automation-recommendations] [data-ai-glow]")).toBeNull();
+		expect(host.querySelectorAll("[data-template]").length).toBeGreaterThan(0);
+	});
 });
 
 describe("templateTaken", () => {
