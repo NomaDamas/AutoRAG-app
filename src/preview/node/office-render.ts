@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { OfficePage } from "../shared/contract";
+import { withReadableFile } from "./provider-access";
 import { PREVIEW_BYTE_CAP } from "./read-file";
 
 /** Quick Look lays a 26-slide deck out in about 1.3s; a dense document is faster. */
@@ -125,53 +126,56 @@ export async function renderOfficeHtml(path: string, deps: OfficeRenderDeps = {}
 	const maxBytes = deps.maxBytes ?? PREVIEW_BYTE_CAP;
 	const dir = await mkdtemp(join(tmpdir(), "autorag-office-"));
 	try {
-		await run("/usr/bin/qlmanage", ["-p", path, "-o", dir], { timeoutMs: QUICK_LOOK_TIMEOUT_MS });
-		const pack = join(dir, `${basename(path)}.qlpreview`);
-		const pagePath = join(pack, "Preview.html");
-		if (!(await exists(pagePath))) {
-			warn(`quick-look: Office preview for ${path} produced no page`);
-			return null;
-		}
-		const html = await readFile(pagePath, "utf8");
-		const names = (await readdir(pack)).filter((name) => SAFE_NAME.test(name) && html.includes(name));
-		const attachments = new Map<string, OfficeAttachment>();
-		for (const name of names) {
-			const ext = extension(name);
-			if (ext === "css") attachments.set(name, { kind: "css", text: await readFile(join(pack, name), "utf8") });
-			else if (MIME_BY_EXT[ext] !== undefined) attachments.set(name, { kind: "data", mime: MIME_BY_EXT[ext], bytes: await readFile(join(pack, name)) });
-		}
-		// Each picture is rasterized at 3x its own drawn width, so a 66px icon is not
-		// drawn at the 2048px a full-slide picture needs (that cost 3.3s on a 26-slide
-		// deck). Widths are rounded up to the next power of two so the pictures fall
-		// into a few sips runs: a process start costs more than a small picture.
-		const byTarget = new Map<number, string[]>();
-		for (const [name, width] of pdfWidths(html)) {
-			if (!names.includes(name)) continue;
-			const wanted = Math.min(RASTER_MAX, Math.max(RASTER_MIN, Math.ceil(width * RASTER_SCALE)));
-			const target = Math.min(RASTER_MAX, 2 ** Math.ceil(Math.log2(wanted)));
-			byTarget.set(target, [...(byTarget.get(target) ?? []), name]);
-		}
-		await Promise.all(
-			[...byTarget].map(async ([target, group]) => {
-				const out = join(dir, `raster-${target}`);
-				try {
-					await mkdir(out);
-					await run("/usr/bin/sips", ["-s", "format", "png", "--resampleWidth", String(target), ...group.map((name) => join(pack, name)), "--out", out], { timeoutMs: SIPS_TIMEOUT_MS });
-					for (const name of group) {
-						const png = join(out, `${name.slice(0, -4)}.png`);
-						if (await exists(png)) attachments.set(name, { kind: "data", mime: "image/png", bytes: await readFile(png) });
-					}
-				} catch (error) {
-					warn(`quick-look: could not rasterize pictures of ${path}: ${error instanceof Error ? error.message : String(error)}`);
+		return await withReadableFile(
+			path,
+			async (localPath) => {
+				await run("/usr/bin/qlmanage", ["-p", localPath, "-o", dir], { timeoutMs: QUICK_LOOK_TIMEOUT_MS });
+				const pack = join(dir, `${basename(localPath)}.qlpreview`);
+				const pagePath = join(pack, "Preview.html");
+				if (!(await exists(pagePath))) throw new Error(`Quick Look produced no page for ${basename(path)}`);
+				const html = await readFile(pagePath, "utf8");
+				const names = (await readdir(pack)).filter((name) => SAFE_NAME.test(name) && html.includes(name));
+				const attachments = new Map<string, OfficeAttachment>();
+				for (const name of names) {
+					const ext = extension(name);
+					if (ext === "css") attachments.set(name, { kind: "css", text: await readFile(join(pack, name), "utf8") });
+					else if (MIME_BY_EXT[ext] !== undefined) attachments.set(name, { kind: "data", mime: MIME_BY_EXT[ext], bytes: await readFile(join(pack, name)) });
 				}
-			}),
+				// Each picture is rasterized at 3x its own drawn width, so a 66px icon is not
+				// drawn at the 2048px a full-slide picture needs (that cost 3.3s on a 26-slide
+				// deck). Widths are rounded up to the next power of two so the pictures fall
+				// into a few sips runs: a process start costs more than a small picture.
+				const byTarget = new Map<number, string[]>();
+				for (const [name, width] of pdfWidths(html)) {
+					if (!names.includes(name)) continue;
+					const wanted = Math.min(RASTER_MAX, Math.max(RASTER_MIN, Math.ceil(width * RASTER_SCALE)));
+					const target = Math.min(RASTER_MAX, 2 ** Math.ceil(Math.log2(wanted)));
+					byTarget.set(target, [...(byTarget.get(target) ?? []), name]);
+				}
+				await Promise.all(
+					[...byTarget].map(async ([target, group]) => {
+						const out = join(dir, `raster-${target}`);
+						try {
+							await mkdir(out);
+							await run("/usr/bin/sips", ["-s", "format", "png", "--resampleWidth", String(target), ...group.map((name) => join(pack, name)), "--out", out], { timeoutMs: SIPS_TIMEOUT_MS });
+							for (const name of group) {
+								const png = join(out, `${name.slice(0, -4)}.png`);
+								if (await exists(png)) attachments.set(name, { kind: "data", mime: "image/png", bytes: await readFile(png) });
+							}
+						} catch (error) {
+							warn(`quick-look: could not rasterize pictures of ${path}: ${error instanceof Error ? error.message : String(error)}`);
+						}
+					}),
+				);
+				const page = standaloneOfficeHtml(html, (name) => (SAFE_NAME.test(name) ? (attachments.get(name) ?? null) : null));
+				if (Buffer.byteLength(page) > maxBytes) {
+					warn(`quick-look: Office preview for ${path} is larger than ${maxBytes} bytes`);
+					return null;
+				}
+				return page;
+			},
+			true,
 		);
-		const page = standaloneOfficeHtml(html, (name) => (SAFE_NAME.test(name) ? (attachments.get(name) ?? null) : null));
-		if (Buffer.byteLength(page) > maxBytes) {
-			warn(`quick-look: Office preview for ${path} is larger than ${maxBytes} bytes`);
-			return null;
-		}
-		return page;
 	} catch (error) {
 		warn(`quick-look: Quick Look could not render ${path}: ${error instanceof Error ? error.message : String(error)}`);
 		return null;

@@ -6,6 +6,8 @@ import { DocxView, RtfView } from "./documents";
 import { Segmented, ToolbarSlot, useChrome } from "./chrome";
 import { FallbackView } from "./fallback";
 import { PptxView } from "./pptx";
+import { looksLikeText } from "../shared/text-sample";
+import { TextView } from "./code";
 
 type Read<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly code: LegacyOfficeError["code"] };
 
@@ -169,6 +171,7 @@ export function LegacyDocView({ file }: { readonly file: PreviewDocument }): Rea
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (container === "zip") return <DocxView file={file} />;
 	if (container === "rtf") return <RtfView file={file} />;
+	if (container === "other" && looksLikeText(bytes)) return <TextView file={file} />;
 	const office = file.office;
 	if (office !== null && mode === "page") {
 		if (office.html !== null) return <PageWithSwitch html={office.html} firstPage={office.firstPage} mode={mode} onMode={setMode} />;
@@ -200,6 +203,7 @@ export function LegacyPptView({ file }: { readonly file: PreviewDocument }): Rea
 	const result = useMemo(() => (bytes === null || container !== "ole" ? null : attempt<DeckText>(bytes, readPowerPointDeck)), [bytes, container]);
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.documents.readFailed")} />;
 	if (container === "zip") return <PptxView file={file} />;
+	if (container === "other" && looksLikeText(bytes)) return <TextView file={file} />;
 	const office = file.office;
 	if (office !== null && mode === "page") {
 		if (office.html !== null) return <PageWithSwitch html={office.html} firstPage={office.firstPage} mode={mode} onMode={setMode} />;

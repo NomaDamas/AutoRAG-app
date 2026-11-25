@@ -1618,7 +1618,9 @@
       "invalidCopyText": "복사할 내용이 올바르지 않습니다",
       "notAbsolute": "미리보기 경로가 올바르지 않습니다",
       "missing": "파일을 찾을 수 없습니다",
-      "notFile": "폴더는 미리볼 수 없습니다"
+      "notFile": "폴더는 미리볼 수 없습니다",
+      "invalidEdit": "잘못된 편집 요청",
+      "editUnavailable": "편집 기능이 아직 준비되지 않았습니다"
     },
     "mail": {
       "from": "보낸 사람",
@@ -1684,6 +1686,28 @@
       "searching": "근거 위치 찾는 중…",
       "found": "근거 위치 표시됨",
       "missing": "근거 위치를 찾지 못함"
+    },
+    "markup": {
+      "start": "표시하고 편집",
+      "canvas": "문서 위 표시",
+      "tools": "표시 도구",
+      "pen": "펜",
+      "box": "네모",
+      "underline": "밑줄",
+      "removeLast": "마지막 표시 지우기",
+      "clear": "표시 모두 지우기",
+      "instruction": "편집 지시",
+      "placeholder": "어떻게 바꿀까요? 예: 밑줄 친 날짜를 11월 20일로 바꿔줘",
+      "markCount": "표시 {{count}}개",
+      "send": "편집하기",
+      "working": "편집하는 중…",
+      "changed": "문서를 편집했습니다",
+      "unchanged": "문서는 바뀌지 않았습니다",
+      "undo": "편집 되돌리기",
+      "undone": "문서를 원래대로 되돌렸습니다",
+      "undoFailed": "문서가 편집 후 바뀌어 되돌리지 않았습니다",
+      "cancelled": "편집을 멈췄습니다",
+      "failed": "편집하지 못했습니다: {{message}}"
     }
   },
   "settingsCore": {
@@ -3547,5 +3571,113 @@
     "open": "시스템 설정 열기",
     "confirm": "확인하고 계속",
     "rowName": "전체 디스크 접근"
+  },
+  "documentEditor": {
+    "unsupportedFile": "{{name}}은(는) Dazzi에서 직접 편집할 수 없는 파일 형식입니다.",
+    "loading": "문서를 불러오는 중…",
+    "loadFailed": "문서를 열지 못했습니다: {{message}}",
+    "saveFailed": "저장하지 못했습니다: {{message}}",
+    "conflict": "이 파일이 외부에서 변경되었습니다. 덮어쓰거나 다시 불러오세요.",
+    "reload": "다시 불러오기",
+    "overwrite": "덮어쓰기",
+    "truncatedWarning": "파일이 4MB를 넘어 일부만 표시됩니다. 데이터 손실을 막기 위해 직접 저장은 비활성화되었습니다.",
+    "status": {
+      "saved": "저장됨",
+      "saving": "저장 중…",
+      "unsaved": "저장 안 됨",
+      "error": "저장 실패"
+    },
+    "modes": {
+      "rich": "서식 편집",
+      "source": "원본"
+    },
+    "toolbar": {
+      "bold": "굵게",
+      "italic": "기울임",
+      "strike": "취소선",
+      "code": "인라인 코드",
+      "h1": "제목 1",
+      "h2": "제목 2",
+      "h3": "제목 3",
+      "bulletList": "글머리 기호 목록",
+      "orderedList": "번호 매기기 목록",
+      "taskList": "체크리스트",
+      "quote": "인용문",
+      "codeBlock": "코드 블록",
+      "table": "표 삽입",
+      "rule": "구분선",
+      "undo": "실행 취소",
+      "redo": "다시 실행",
+      "save": "저장",
+      "aiToggle": "AI 편집",
+      "markupToggle": "표시 후 AI 편집"
+    },
+    "placeholder": "내용을 입력하세요…",
+    "ai": {
+      "title": "AI와 함께 편집",
+      "emptyTitle": "표시하고 바로 요청하세요",
+      "emptyDesc": "문서에 펜·네모·밑줄로 표시하거나 텍스트를 선택한 뒤 여기서 수정할 내용을 입력하면 바로 반영됩니다.",
+      "selectionBadge": "선택 영역 포함 ({{chars}}자)",
+      "marksBadge": "표시 {{count}}개",
+      "placeholder": "AI에게 수정할 내용을 알려주세요… (Enter로 실행)",
+      "send": "적용",
+      "working": "AI가 문서를 수정하는 중…",
+      "changed": "문서를 수정했습니다.",
+      "unchanged": "변경된 내용이 없습니다.",
+      "undo": "AI 편집 되돌리기",
+      "undone": "AI 편집을 되돌렸습니다.",
+      "cancelled": "AI 편집을 취소했습니다.",
+      "failed": "AI 편집 실패: {{message}}"
+    },
+    "package": {
+      "hint": "문서 위에 펜·상자·밑줄로 표시하고 AI에게 수정을 요청하세요.",
+      "openExternal": "기본 앱으로 열기"
+    },
+    "pdf": {
+      "addSignature": "서명 추가",
+      "addText": "텍스트 추가",
+      "cropPage": "자르기",
+      "rotate": "회전",
+      "rotateRight": "오른쪽으로 90도 회전",
+      "moveUp": "페이지 위로 이동",
+      "moveDown": "페이지 아래로 이동",
+      "deletePage": "페이지 삭제",
+      "extractCurrent": "현재 페이지 추출",
+      "extractCount": "선택 {{count}}페이지 추출",
+      "zoomIn": "확대",
+      "zoomOut": "축소",
+      "signatureTitle": "서명 만들기",
+      "uploadSignature": "이미지 불러오기",
+      "savedSignatures": "저장된 서명",
+      "rememberSignature": "다음에도 사용할 수 있게 저장",
+      "placeSignature": "서명 배치",
+      "textPlaceholder": "페이지에 넣을 텍스트나 날짜를 입력하세요…",
+      "placeText": "텍스트 배치",
+      "placementHint": "원하는 위치로 옮기고 크기를 조절한 뒤 적용을 누르세요.",
+      "cropHint": "남길 영역을 드래그해 선택한 뒤 자르기 적용을 누르세요.",
+      "applyCrop": "자르기 적용",
+      "signatureApplied": "서명을 PDF에 저장했습니다.",
+      "textApplied": "텍스트를 PDF에 저장했습니다.",
+      "cropped": "페이지를 잘라 저장했습니다.",
+      "rotated": "페이지를 회전해 저장했습니다.",
+      "pageDeleted": "페이지를 삭제해 저장했습니다.",
+      "extracted": "{{name}}({{count}}페이지)으로 추출했습니다.",
+      "openExtracted": "{{name}} 열기",
+      "undone": "마지막 PDF 편집을 되돌렸습니다.",
+      "encryptedNotice": "암호로 보호된 PDF는 Dazzi에서 직접 편집할 수 없습니다.",
+      "pages": "페이지 목록",
+      "selectPage": "{{page}}페이지 선택",
+      "sidebarTitle": "PDF 직접 편집",
+      "sidebarDesc": "상단 도구 모음에서 서명·텍스트 추가, 페이지 자르기·회전·삭제·추출을 바로 적용할 수 있으며 모든 변경은 실행 취소할 수 있습니다.",
+      "tipSignature": "서명 추가: 직접 그리거나 서명 이미지를 불러와 원하는 위치에 배치",
+      "tipCrop": "자르기: 페이지에서 남길 영역만 드래그해 여백 제거",
+      "tipPages": "페이지 관리: 왼쪽 썸네일에서 순서 이동·삭제·선택 페이지 새 PDF 추출"
+    },
+    "footer": {
+      "lines": "{{count}}줄",
+      "words": "{{count}}단어",
+      "chars": "{{count}}자",
+      "pages": "{{count}}페이지"
+    }
   }
 }

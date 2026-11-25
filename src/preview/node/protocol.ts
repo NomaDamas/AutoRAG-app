@@ -6,13 +6,28 @@ import { pathFromPreviewUrl, videoAudioTrackFromUrl } from "../shared/contract";
 import { parseByteRange } from "../shared/range";
 import { mimeForExtension } from "../shared/registry";
 import { videoAudioResponse } from "./video-audio";
+import { coordinatedRange, needsFileCoordination } from "./provider-access";
 
 function isEnoent(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
+async function* fileChunks(filePath: string, start: number, end: number): AsyncGenerator<Buffer> {
+	let offset = start;
+	try {
+		for await (const chunk of createReadStream(filePath, { start, end })) {
+			offset += chunk.length;
+			yield chunk;
+		}
+	} catch (error) {
+		if (!needsFileCoordination(error)) throw error;
+		// A provider may fail after some bytes were sent; resume without duplicating the prefix.
+		if (offset <= end) yield* coordinatedRange(filePath, offset, end);
+	}
+}
+
 function body(filePath: string, start: number, end: number): ReadableStream<Uint8Array> {
-	return Readable.toWeb(createReadStream(filePath, { start, end })) as ReadableStream<Uint8Array>;
+	return Readable.toWeb(Readable.from(fileChunks(filePath, start, end), { objectMode: false, highWaterMark: 64 * 1024 })) as ReadableStream<Uint8Array>;
 }
 
 /**

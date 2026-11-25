@@ -7,6 +7,7 @@ import { connectionsCustomizerProfile } from "../src/main/agents/profiles/connec
 import { appCustomizerProfile } from "../src/main/agents/profiles/app-customizer";
 import { shortcutCustomizerProfile } from "../src/main/agents/profiles/shortcut-customizer";
 import { magicActionProfile } from "../src/main/agents/profiles/magic-action";
+import { documentEditProfile } from "../src/main/agents/profiles/document-edit";
 import { errorFixProfile, type ErrorFixToolkit } from "../src/main/agents/profiles/error-fix";
 import { createProposalCollector, smartIndexingProfile } from "../src/main/agents/profiles/smart-indexing";
 import { createFolderSurvey } from "../src/main/agents/profiles/folder-stats";
@@ -76,6 +77,18 @@ const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (langu
 				actionLabel: "Test action",
 				prompt: "Summarize the file.",
 				cwd: process.cwd(),
+				agentDir: process.cwd(),
+				env: {},
+			}).systemPrompt,
+	},
+	{
+		name: "document-edit",
+		prompt: (language) =>
+			documentEditProfile({
+				language,
+				path: "/tmp/plan.md",
+				mode: "text",
+				scratchDir: "/tmp/scratch",
 				agentDir: process.cwd(),
 				env: {},
 			}).systemPrompt,

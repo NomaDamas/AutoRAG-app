@@ -225,3 +225,38 @@ export function SmallFolderGlyph(): ReactElement {
 		</svg>
 	);
 }
+
+/** The pen button: mark up the shown document for the edit agent. */
+export function MarkupIcon(): ReactElement {
+	return (
+		<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+			<path d="M12.6 3.6l3.8 3.8-8.7 8.7-4.4.6.6-4.4z" />
+			<path d="M11 5.2l3.8 3.8" />
+		</svg>
+	);
+}
+
+export function PenStrokeIcon(): ReactElement {
+	return (
+		<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+			<path d="M3 14c2.2-4.5 4.2-6.5 5.6-5.6 1.6 1-1.4 5.1.4 5.6 1.5.4 3.2-3.8 4.8-3.3 1.1.3.9 2.2 3.2 2.3" />
+		</svg>
+	);
+}
+
+export function BoxMarkIcon(): ReactElement {
+	return (
+		<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
+			<rect x="3.5" y="5" width="13" height="10" rx="1" />
+		</svg>
+	);
+}
+
+export function UnderlineMarkIcon(): ReactElement {
+	return (
+		<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+			<path d="M6 4v5a4 4 0 0 0 8 0V4" />
+			<path d="M4.5 16.5h11" />
+		</svg>
+	);
+}

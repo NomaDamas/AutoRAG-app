@@ -269,9 +269,32 @@ export const AI_SEARCH_PATH = "AI Search";
  */
 export const AUTOMATIONS_PATH = "Automations";
 
+/**
+ * In-app Document Editor tab prefix: the remainder of the path is the absolute
+ * file path being edited. Never a folder: never listed, watched, or dropped into.
+ */
+export const DOCUMENT_EDITOR_PREFIX = "DocumentEdit:";
+
+export function documentEditorPath(filePath: string): string {
+	return `${DOCUMENT_EDITOR_PREFIX}${filePath}`;
+}
+
+export function isDocumentEditorTabPath(path: string): boolean {
+	return path.startsWith(DOCUMENT_EDITOR_PREFIX) && path.length > DOCUMENT_EDITOR_PREFIX.length;
+}
+
+export function editorFilePathOf(path: string): string | null {
+	return isDocumentEditorTabPath(path) ? path.slice(DOCUMENT_EDITOR_PREFIX.length) : null;
+}
+
+/** Open a new Document Editor tab for `filePath` in the current pane. */
+export function openDocumentEditorTab(state: TabsState, filePath: string): TabsState {
+	return openTabAt(state, documentEditorPath(filePath));
+}
+
 /** Paths a tab shows that are app views, not folders: never listed, watched, or dropped into. */
 export function isVirtualTabPath(path: string): boolean {
-	return path === SETTINGS_PATH || path === AI_SEARCH_PATH || path === AUTOMATIONS_PATH;
+	return path === SETTINGS_PATH || path === AI_SEARCH_PATH || path === AUTOMATIONS_PATH || isDocumentEditorTabPath(path);
 }
 
 /** Sidebar "자동화": the focused tab becomes the rules list; Back returns to where it was. */
@@ -349,6 +372,10 @@ export function tabTitle(tab: { readonly path: string }, view: { readonly query:
 	}
 	if (tab.path === AUTOMATIONS_PATH) {
 		return t("places.automations");
+	}
+	const editedFile = editorFilePathOf(tab.path);
+	if (editedFile !== null) {
+		return basename(editedFile) || editedFile;
 	}
 	const query = view.query.trim();
 	if (query !== "") {

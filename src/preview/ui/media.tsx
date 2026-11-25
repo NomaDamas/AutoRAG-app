@@ -129,9 +129,9 @@ export function HeicView({ file }: { readonly file: PreviewDocument }): ReactEle
 		if (file.mime === "image/jpeg") {
 			show(new Blob([copyBytes(bytes)], { type: file.mime }));
 		} else {
-			import("heic2any")
-				.then((mod) => mod.default({ blob: new Blob([copyBytes(bytes)]), toType: "image/jpeg", quality: 0.82 }))
-				.then((converted) => show(converted instanceof Blob ? converted : converted[0]))
+			import("heic-to/csp")
+				.then((mod) => mod.heicTo({ blob: new Blob([copyBytes(bytes)]), type: "image/jpeg", quality: 0.82 }))
+				.then(show)
 				.catch((caught: unknown) => {
 					if (cancelled) return;
 					setError(caught instanceof Error ? caught.message : t("quickLook.media.heicOpenFailed"));

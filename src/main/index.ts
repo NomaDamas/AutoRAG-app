@@ -34,14 +34,16 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG } from "../shared/onboarding-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
+import { DOCUMENT_EDITOR_CHANNELS } from "../shared/document-editor-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
+import { PREVIEW_CHANNELS } from "../preview/shared/contract";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
@@ -129,6 +131,10 @@ import { openPlanRuntime, resolveConfiguredSessionModel } from "@autorag/librari
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
+import { createDocumentEditService } from "./document-edit-service";
+import { createPdfEditorIo } from "./pdf-editor-io";
+import { createWriteJudge } from "./agents/write-judge";
+import { resolveDecisionBackendsForConfig } from "./decision-model";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
@@ -138,6 +144,7 @@ import {
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
 	registerAppCustomizerIpcHandlers,
+	registerDocumentEditorIpcHandlers,
 	registerMagicActionIpcHandlers,
 	registerAppUpdateIpcHandlers,
 	registerToolVersionsIpcHandlers,
@@ -925,6 +932,7 @@ app.whenReady().then(async () => {
 		account: ACCOUNT_CHANNELS,
 		modelDownload: MODEL_DOWNLOAD_CHANNELS,
 		errorFix: ERROR_FIX_CHANNELS,
+		documentEditor: DOCUMENT_EDITOR_CHANNELS,
 		appCustomizer: APP_CUSTOMIZER_CHANNELS,
 		magicAction: MAGIC_ACTION_CHANNELS,
 		automations: AUTOMATION_CHANNELS,
@@ -1126,6 +1134,22 @@ app.whenReady().then(async () => {
 	});
 	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
+	const documentEditWriteJudge = createWriteJudge({
+		resolveBackends: () =>
+			resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() }), process.env, process.cwd()),
+	});
+	const documentEditService = createDocumentEditService({
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		homeDir: home,
+		language: () => currentLanguage,
+		backupDir: join(app.getPath("userData"), "document-edit-backups"),
+		writeJudge: documentEditWriteJudge,
+	});
+	setQuickLookDocumentEdit(documentEditService);
+	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
+	registerDocumentEditorIpcHandlers(documentEditService, pdfEditorIo, (event) => sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.aiEvent, event));
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;
 	const getDeviceId = (): Promise<string> => {
@@ -1294,6 +1318,29 @@ app.whenReady().then(async () => {
 		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
 	};
+	setQuickLookEditHandoff((filePath, owner) => {
+		if (mainWindow !== null && !mainWindow.isDestroyed() && owner === mainWindow) {
+			if (mainWindow.isMinimized()) mainWindow.restore();
+			mainWindow.show();
+			mainWindow.focus();
+			mainWindow.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+			return;
+		}
+		if (quittingApp) return;
+		if (mainWindow === null || mainWindow.isDestroyed()) {
+			mainWindow = openFinderWindow();
+			mainWindow.webContents.once("did-finish-load", () => {
+				if (mainWindow !== null && !mainWindow.isDestroyed()) {
+					mainWindow.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+				}
+			});
+		} else {
+			if (mainWindow.isMinimized()) mainWindow.restore();
+			mainWindow.show();
+			mainWindow.focus();
+			mainWindow.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+		}
+	});
 	openWindows();
 	// A first index the person left running behind the app (they started it early) and a quit cut short carries on here.
 	firstRun.resumeIndexing();
@@ -1374,7 +1421,7 @@ app.whenReady().then(async () => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
 		void runQuitCleanup({
-			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()],
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose(), documentEditService.dispose(), pdfEditorIo.dispose()],
 			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
 			onExit: () => app.exit(0),
 		});
