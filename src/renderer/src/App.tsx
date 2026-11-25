@@ -84,8 +84,8 @@ const HIDDEN_STYLE = { display: "none" } as const;
 /** How long a toast stays (--time-toast). */
 const TOAST_MS = 2400;
 
-/** The pane tab strip's height (`h-25`): an AI Search chat sits right below it. */
-const TAB_STRIP_PX = 25;
+/** The pane tab strip's height (`h-24` in TabStrip.tsx, borders included): an AI Search chat sits right below it, level with the Finder content and the 자동화 side. */
+const TAB_STRIP_PX = 24;
 
 /** The sidebar search ref before the first pane publishes its controller. */
 const NO_INPUT = { current: null };
