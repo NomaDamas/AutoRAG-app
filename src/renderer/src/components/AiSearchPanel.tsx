@@ -229,6 +229,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const pastTurnsRef = useRef(pastTurns);
 	pastTurnsRef.current = pastTurns;
 	const chatIdRef = useRef(chatId);
+	/** The head's title: the chat's model-written title, its first question until that arrives, or null for a new chat. */
+	const [chatTitle, setChatTitle] = useState<string | null>(null);
 	/** Which turn and phase's citation chip the user clicked last; null uses the newest non-empty turn. */
 	const [evidenceSource, setEvidenceSource] = useState<EvidenceSelectionSource | null>(null);
 	chatIdRef.current = chatId;
@@ -375,6 +377,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
+			// The title comes after the run is over, for whichever chat it names.
+			if (event.type === "title") {
+				if (event.chatId === chatIdRef.current) setChatTitle(event.title);
+				return;
+			}
 			if (event.searchId !== searchIdRef.current) return;
 			switch (event.type) {
 				case "progress":
@@ -638,6 +645,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeepElapsed(null);
 		setProgress(t("aiSearch.reviewing"));
 		setChatId(nextChatId);
+		// A new chat is headed by its question until the model names it.
+		if (chatIdRef.current === null) setChatTitle(text.replace(/s+/gu, " ").trim());
 		startedAtRef.current = Date.now();
 		setAttachments([]);
 		setQuery("");
@@ -770,6 +779,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSteers([]);
 		setQueued([]);
 		setChatId(null);
+		setChatTitle(null);
 		setPastTurns([]);
 		setHistoryOpen(false);
 		setDeepElapsed(null);
@@ -818,6 +828,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setRevisionsMove(false);
 		setProgress("");
 		setChatId(id);
+		setChatTitle(record.title);
 		setHistoryOpen(false);
 		// The store keeps no timing, so a restored chat shows its deep answer
 		// without a "Worked for Ns" label rather than inventing a duration.
@@ -1048,10 +1059,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDrop={onDockDrop}
 		>
 			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
-				<span className="ai-mark grid flex-none place-items-center text-accent">
-					<SparklesIcon />
-				</span>
-				<strong className="flex-none text-sm font-medium leading-[19.5px] text-ink">{t("aiSearch.title")}</strong>
+				{/* The chat's title (no mark), cut before the 채팅 | 자동화 segment in the middle; a new chat reads AI 에이전트. */}
+				<strong
+					className="min-w-0 max-w-[calc(50%-144px)] truncate text-sm font-medium leading-[19.5px] text-ink"
+					title={chatTitle ?? undefined}
+					data-chat-title={chatTitle === null ? undefined : "true"}
+				>
+					{chatTitle ?? t("aiSearch.title")}
+				</strong>
 				<span className="flex-1" />
 				{/* 채팅 | 자동화 (Figma 672:3638) sits in the middle of the head, whatever the two sides hold. */}
 				{onShowAutomations === undefined ? null : (
