@@ -1059,14 +1059,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDrop={onDockDrop}
 		>
 			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
-				{/* The chat's title (no mark), cut before the 채팅 | 자동화 segment in the middle; a new chat reads AI 에이전트. */}
-				<strong
-					className="min-w-0 max-w-[calc(50%-144px)] truncate text-sm font-medium leading-[19.5px] text-ink"
-					title={chatTitle ?? undefined}
-					data-chat-title={chatTitle === null ? undefined : "true"}
-				>
-					{chatTitle ?? t("aiSearch.title")}
-				</strong>
+				{/* The chat's title (no mark), cut before the 채팅 | 자동화 segment in the middle; a new chat shows none. */}
+				{chatTitle === null ? null : (
+					<strong className="min-w-0 max-w-[calc(50%-144px)] truncate text-sm font-medium leading-[19.5px] text-ink" title={chatTitle} data-chat-title>
+						{chatTitle}
+					</strong>
+				)}
 				<span className="flex-1" />
 				{/* 채팅 | 자동화 (Figma 672:3638) sits in the middle of the head, whatever the two sides hold. */}
 				{onShowAutomations === undefined ? null : (
