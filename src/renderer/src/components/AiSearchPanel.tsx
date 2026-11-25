@@ -1058,7 +1058,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			<div className="ai-head flex flex-none items-center gap-8 h-tab border-b border-divider px-12 select-none">
+			<div className="ai-head flex flex-none items-center gap-8 h-48 px-12 select-none">
 				{/* The chat's title (no mark), cut before the 채팅 | 자동화 segment in the middle; a new chat shows none. */}
 				{chatTitle === null ? null : (
 					<strong className="min-w-0 max-w-[calc(50%-144px)] truncate text-sm font-medium leading-[19.5px] text-ink" title={chatTitle} data-chat-title>
@@ -1066,9 +1066,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					</strong>
 				)}
 				<span className="flex-1" />
-				{/* 채팅 | 자동화 (Figma 672:3638) sits in the middle of the head, whatever the two sides hold. */}
+				{/* 채팅 | 자동화 sits at the very middle of the head, whatever the two sides hold; the head draws no line under it. */}
 				{onShowAutomations === undefined ? null : (
-					<span className="pointer-events-none absolute inset-x-0 top-0 flex h-tab items-center justify-center">
+					<span className="pointer-events-none absolute inset-x-0 top-0 flex h-48 items-center justify-center">
 						<span className="pointer-events-auto">
 							<AgentSegment value="chat" onChange={(side) => (side === "automations" ? onShowAutomations() : undefined)} />
 						</span>

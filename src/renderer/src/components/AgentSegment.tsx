@@ -1,7 +1,8 @@
 /**
- * 채팅 | 내 자동화 at the middle of the AI 에이전트 tab's head (Figma 672:3658): the two sides of one tab, each a 13px
- * glyph and its name. The side shown is a soft grey pill (the divider grey) with a hairline, in medium ink; the
- * other is the glyph and name in faint text, with no box. The pill fits its words: 31px tall, 14px either side.
+ * 채팅 | 내 자동화 at the very middle of the AI 에이전트 tab's head: the two sides of one tab, so it reads as a switch
+ * between two screens. Both sides sit in one grey track, each the same width (at least 112px, 28px tall) with a 13px
+ * glyph and its name in medium weight; the side shown is raised on a light thumb with a soft shadow, the other is in
+ * muted ink, never faint, so it still reads as something to press.
  */
 
 import type { ReactElement } from "react";
@@ -18,7 +19,7 @@ export function AgentSegment({ value, onChange }: { readonly value: AgentSide; r
 		{ value: "automations", label: t("aiSearch.segment.automations"), icon: <ZapIcon size={13} /> },
 	];
 	return (
-		<div role="tablist" aria-label={t("aiSearch.segment.label")} className="flex items-center" data-agent-segment={value}>
+		<div role="tablist" aria-label={t("aiSearch.segment.label")} className="inline-flex items-center rounded-9 bg-segment-track p-3" data-agent-segment={value}>
 			{sides.map((side) => (
 				<button
 					key={side.value}
@@ -27,8 +28,8 @@ export function AgentSegment({ value, onChange }: { readonly value: AgentSide; r
 					aria-selected={side.value === value}
 					data-side={side.value}
 					className={cn(
-						"inline-flex h-31 items-center gap-6 rounded-7 border-[0.5px] px-14 text-[13px] leading-[20px] whitespace-nowrap cursor-pointer transition-colors duration-(--dur-color) ease-out",
-						side.value === value ? "border-border bg-divider font-medium text-ink" : "border-transparent bg-transparent text-ink-faint hover:text-ink",
+						"inline-flex h-28 min-w-112 items-center justify-center gap-6 rounded-7 border-0 px-16 text-[13px] font-medium leading-[20px] whitespace-nowrap cursor-pointer transition-[background,color,box-shadow] duration-(--dur-color) ease-out",
+						side.value === value ? "bg-segment-thumb text-ink shadow-segment-thumb" : "bg-transparent text-ink-muted hover:text-ink",
 					)}
 					onClick={() => {
 						if (side.value !== value) onChange(side.value);

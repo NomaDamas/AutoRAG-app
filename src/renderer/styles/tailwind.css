@@ -71,6 +71,8 @@
 	--color-subtle-alt: var(--bg-subtle-alt);
 	--color-input: var(--bg-input);
 	--color-selected-nav: var(--bg-selected-nav);
+	--color-segment-track: var(--bg-segment-track);
+	--color-segment-thumb: var(--bg-segment-thumb);
 	--color-tabstrip: var(--bg-tabstrip);
 	--color-tabstrip-line: var(--border-tabstrip);
 	--color-tab-from: var(--tab-grad-from);
@@ -369,6 +371,7 @@
 	--shadow-window: var(--shadow-window);
 	--shadow-ql-panel: var(--shadow-ql-panel);
 	--shadow-ql-segment: var(--shadow-ql-segment);
+	--shadow-segment-thumb: var(--shadow-segment-thumb);
 	--shadow-ql-float: var(--shadow-ql-float);
 	--shadow-ql-hud: var(--shadow-ql-hud);
 	--shadow-ql-knob: var(--shadow-ql-knob);
