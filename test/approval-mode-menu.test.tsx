@@ -9,7 +9,7 @@ import { setAppLanguage, t } from "../src/shared/i18n";
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 let modeListeners: ((mode: ApprovalMode) => void)[] = [];
-const getMode = vi.fn(async () => "ask" as ApprovalMode);
+const getMode = vi.fn(async () => "readonly" as ApprovalMode);
 const setMode = vi.fn(async (mode: ApprovalMode) => mode);
 const onMode = vi.fn((listener: (mode: ApprovalMode) => void) => {
 	modeListeners.push(listener);
@@ -27,7 +27,7 @@ beforeEach(async () => {
 	getMode.mockReset();
 	setMode.mockReset();
 	onMode.mockClear();
-	getMode.mockImplementation(async () => "ask");
+	getMode.mockImplementation(async () => "readonly");
 	setMode.mockImplementation(async (mode: ApprovalMode) => mode);
 	Reflect.set(globalThis, "autorag", { interaction: { getMode, setMode, onMode } });
 	host = document.createElement("div");
@@ -63,27 +63,30 @@ function press(target: EventTarget, key: string): void {
 }
 
 describe("ApprovalModeMenu", () => {
-	it("shows Auto while the first read is still pending", () => {
+	it("shows Read-only while the first read is still pending", () => {
 		getMode.mockImplementation(() => new Promise<ApprovalMode>(() => undefined));
 		act(() => root.render(<Harness />));
-		expect(trigger().textContent).toContain(t("interaction.mode.auto.label"));
+		expect(trigger().textContent).toContain(t("interaction.mode.readonly.label"));
 	});
 
 	it("shows the stored mode the read answers with", async () => {
+		getMode.mockImplementation(async () => "full");
 		await renderHarness();
 		expect(getMode).toHaveBeenCalledTimes(1);
-		expect(trigger().textContent).toContain(t("interaction.mode.ask.label"));
+		expect(trigger().textContent).toContain(t("interaction.mode.full.label"));
 	});
 
-	it("lists the three modes with a description each, and marks the current one", async () => {
+	it("lists the two modes (readonly, full) with a description each, and marks the current one", async () => {
 		await renderHarness();
 		act(() => trigger().click());
 
 		expect(items()).toHaveLength(APPROVAL_MODES.length);
+		expect(APPROVAL_MODES).toEqual(["readonly", "full"]);
+		expect(host.textContent).toContain(t("interaction.mode.readonly.desc"));
 		expect(host.textContent).toContain(t("interaction.mode.full.desc"));
 		const checked = items().filter((item) => item.getAttribute("aria-checked") === "true");
 		expect(checked).toHaveLength(1);
-		expect(checked[0]?.textContent).toContain(t("interaction.mode.ask.label"));
+		expect(checked[0]?.textContent).toContain(t("interaction.mode.readonly.label"));
 	});
 
 	it("opens above a trigger that sits at the bottom of the window, without covering it", async () => {
@@ -93,7 +96,6 @@ describe("ApprovalModeMenu", () => {
 		act(() => trigger().click());
 
 		const menu = host.querySelector<HTMLElement>('[role="menu"]')!;
-		// Anchored by its own bottom edge, so the menu clears the pill whatever height its rows render at.
 		expect(menu.style.top).toBe("");
 		expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThanOrEqual(window.innerHeight - triggerTop);
 		expect(Number.parseFloat(menu.style.left)).toBe(40);
@@ -115,7 +117,7 @@ describe("ApprovalModeMenu", () => {
 	});
 
 	it("adopts the mode setMode returns even when it differs from the request", async () => {
-		setMode.mockImplementation(async () => "auto");
+		setMode.mockImplementation(async () => "readonly");
 		await renderHarness();
 		act(() => trigger().click());
 
@@ -124,7 +126,7 @@ describe("ApprovalModeMenu", () => {
 			full?.click();
 		});
 
-		expect(trigger().textContent).toContain(t("interaction.mode.auto.label"));
+		expect(trigger().textContent).toContain(t("interaction.mode.readonly.label"));
 	});
 
 	it("follows a mode another window or the main process pushes", async () => {

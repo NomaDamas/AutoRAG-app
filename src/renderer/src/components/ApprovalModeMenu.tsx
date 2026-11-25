@@ -1,6 +1,6 @@
 /**
- * The approval-mode pill inside the composer (librarian v2.12). It shows the
- * mode now in force — Ask / Auto / Full — and opens a small menu to change it.
+ * The permission-mode pill inside the composer (librarian v2.15). It shows the
+ * mode now in force — Read-only / Full — and opens a small menu to change it.
  * Nothing runs through it: the panel reads the initial mode with
  * `interaction.getMode()`, changes it with `setMode()`, and keeps every window's
  * pill in sync through `onMode`.
@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ShieldAlert, ShieldCheck, ShieldQuestion, type LucideIcon } from "lucide-react";
+import { ChevronDown, ShieldAlert, ShieldCheck, type LucideIcon } from "lucide-react";
 import { APPROVAL_MODES, DEFAULT_APPROVAL_MODE, type ApprovalMode } from "../../../shared/interaction-contract";
 import { cn } from "../lib/cn";
 import { menuPlacement } from "../state/context-menu";
@@ -29,8 +29,7 @@ const MENU_GAP = 4;
 const MENU_VIEWPORT_MARGIN = 8;
 
 const MODE_ICON: Record<ApprovalMode, LucideIcon> = {
-	ask: ShieldQuestion,
-	auto: ShieldCheck,
+	readonly: ShieldCheck,
 	full: ShieldAlert,
 };
 
@@ -50,7 +49,7 @@ export interface ApprovalModeMenuProps {
  * The mode a pill reads and writes: the stored value via `getMode`, every change
  * another window or the main process makes via `onMode`, and a `setMode` that
  * adopts the mode the main process resolved to rather than the one requested.
- * `auto` shows until the first read answers.
+ * `readonly` shows until the first read answers.
  */
 export function useApprovalMode(): { readonly mode: ApprovalMode; readonly setMode: (mode: ApprovalMode) => void } {
 	const [mode, setModeState] = useState<ApprovalMode>(DEFAULT_APPROVAL_MODE);

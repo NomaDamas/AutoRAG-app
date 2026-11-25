@@ -24,6 +24,7 @@ import type {
 } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { migrateLegacyJev } from "./jev-migration";
+import { migrateLegacyPermissionMode } from "./permission-migration";
 import { CALENDAR_MCP_EXPOSURES, syncCalendarMcpConfig } from "./calendar-mcp";
 
 const REDACTED_SECRET = "__AUTORAG_SECRET_REDACTED__";
@@ -672,10 +673,10 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 		apply: (candidate: Record<string, unknown>, previous: Record<string, unknown>) => void,
 	): Promise<AutoRagConfigSnapshot> {
 		const path = currentPath();
-		// A config an earlier Dazzi wrote can carry what the librarian now refuses (`jev: false`); it is rewritten
-		// here so one stale field never blocks every other edit.
+		// A config an earlier Dazzi wrote can carry what the librarian now refuses (`jev: false`, `permissionMode: "auto"`/`"ask"`);
+		// it is rewritten here so one stale field never blocks every other edit.
 		const stored: Record<string, unknown> = (await access(path).then(() => true, () => false)) ? readRawConfigObject(path) : {};
-		const previous = migrateLegacyJev(stored).raw;
+		const previous = migrateLegacyPermissionMode(migrateLegacyJev(stored).raw).raw;
 		const candidate = structuredClone(previous);
 		apply(candidate, previous);
 		// Validation runs before the write: a rejected edit never touches disk.

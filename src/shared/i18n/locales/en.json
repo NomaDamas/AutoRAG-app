@@ -475,19 +475,15 @@
   },
   "interaction": {
     "mode": {
-      "menuLabel": "File change approval",
-      "triggerAria": "File change approval mode",
-      "ask": {
-        "label": "Ask",
-        "desc": "Asks before every shell, write, or edit call. Nothing runs without approval; reading and searching never ask."
-      },
-      "auto": {
-        "label": "Auto",
-        "desc": "Dazzi's judgment model lets safe changes through and asks only about changes to existing files it is unsure about."
+      "menuLabel": "File permissions",
+      "triggerAria": "File permission mode",
+      "readonly": {
+        "label": "Read-only",
+        "desc": "Reads and searches only. OS sandboxing blocks creating, editing, or deleting files."
       },
       "full": {
         "label": "Full",
-        "desc": "Changes files without asking."
+        "desc": "Allows creating, editing, and deleting files."
       }
     },
     "stop": "Stop",

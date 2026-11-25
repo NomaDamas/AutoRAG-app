@@ -99,9 +99,9 @@ describe("interaction request queue", () => {
 
 describe("approval mode labels", () => {
 	it("names a label and a description key per mode", () => {
-		expect(modeLabelKey("ask")).toBe("interaction.mode.ask.label");
-		expect(modeLabelKey("auto")).toBe("interaction.mode.auto.label");
+		expect(modeLabelKey("readonly")).toBe("interaction.mode.readonly.label");
 		expect(modeLabelKey("full")).toBe("interaction.mode.full.label");
+		expect(modeDescriptionKey("readonly")).toBe("interaction.mode.readonly.desc");
 		expect(modeDescriptionKey("full")).toBe("interaction.mode.full.desc");
 	});
 });

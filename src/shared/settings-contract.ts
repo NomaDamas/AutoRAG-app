@@ -91,9 +91,10 @@ export interface AppSettings {
 	/** The OS file-menu entries ("Ask AutoRAG", "Show in AutoRAG") are installed: macOS Quick Actions, Windows Explorer verbs. */
 	readonly osMenuIntegration: boolean;
 	/**
-	 * How much the AI Search agent may do to existing files without asking (librarian v2.12 permission modes):
-	 * `ask` approves every shell/write/edit call, `auto` lets Jev approve what the request covers and asks about the
-	 * rest, `full` never asks. Chosen in the AI Search message box; applies to every agent, running or later.
+	 * Disk permission mode for the AI Search agent (librarian v2.15):
+	 * `readonly` (default) enforces OS-level read-only filesystem sandboxing on shell commands and blocks
+	 * write/edit/mutating tools; `full` allows unrestricted file reads and writes. Chosen in the AI Search
+	 * message box; applies to every agent, running or later.
 	 */
 	readonly approvalMode: ApprovalMode;
 	/**

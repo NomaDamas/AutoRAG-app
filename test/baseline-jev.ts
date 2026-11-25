@@ -16,11 +16,10 @@ function answer(question: Question): RawAnswer {
 	switch (question.type) {
 		case "noul":
 			if (question.id === "follow_up" || question.id.startsWith("citation:")) return { answer: 1 };
-			if (question.id.startsWith("permission_")) return { answer: 1 };
 			return { answer: 0 };
 		case "choice": {
 			const labels = Array.isArray(question.options) ? question.options : Object.keys(question.options ?? {});
-			const winner = question.id === "route" ? "local" : question.id === "permission_gate" ? "deny" : (labels[0] ?? "");
+			const winner = question.id === "route" ? "local" : (labels[0] ?? "");
 			return { answer: winner, distribution: { [winner]: 1 }, confidence: 1 };
 		}
 		case "score":
