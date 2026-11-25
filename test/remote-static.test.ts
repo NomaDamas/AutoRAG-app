@@ -54,6 +54,25 @@ describe("readRemoteStatic", () => {
 		expect(Buffer.from(file?.body ?? []).toString("utf8")).toBe("console.log(1)");
 	});
 
+	it("serves bundled pdf.js CMap, standard font, and ICC support assets", async () => {
+		const root = await mkdtemp(join(tmpdir(), "remote-static-pdfjs-"));
+		directories.push(root);
+		await mkdir(join(root, "pdfjs", "cmaps"), { recursive: true });
+		await mkdir(join(root, "pdfjs", "standard_fonts"), { recursive: true });
+		await mkdir(join(root, "pdfjs", "iccs"), { recursive: true });
+		await writeFile(join(root, "pdfjs", "cmaps", "UniKS-UTF16-H.bcmap"), new Uint8Array([1, 2, 3]));
+		await writeFile(join(root, "pdfjs", "standard_fonts", "FoxitSerif.pfb"), new Uint8Array([4, 5]));
+		await writeFile(join(root, "pdfjs", "iccs", "CGATS001Compat-v2-micro.icc"), new Uint8Array([6]));
+
+		const cmap = await readRemoteStatic(root, "/pdfjs/cmaps/UniKS-UTF16-H.bcmap");
+		const font = await readRemoteStatic(root, "/pdfjs/standard_fonts/FoxitSerif.pfb");
+		const icc = await readRemoteStatic(root, "/pdfjs/iccs/CGATS001Compat-v2-micro.icc");
+
+		expect(cmap?.contentType).toBe("application/octet-stream");
+		expect(font?.contentType).toBe("application/octet-stream");
+		expect(icc?.contentType).toBe("application/vnd.iccprofile");
+	});
+
 	it("refuses paths escaping the renderer root", async () => {
 		// Given a renderer root and a secret outside it.
 		const root = await mkdtemp(join(tmpdir(), "remote-static-root-"));

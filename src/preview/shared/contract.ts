@@ -1,4 +1,5 @@
 import type { AppSettings } from "../../shared/settings-contract";
+import type { DocumentEditEvent, DocumentEditRequest } from "./annotation";
 import type { BinaryKind } from "./binary-kind";
 import type { ArchiveEntry } from "./archive-items";
 import type { KeyUsageName } from "./certificate";
@@ -24,6 +25,8 @@ export const PREVIEW_CHANNELS = {
 	closed: "preview:closed",
 	/** Main -> Finder: move the Finder selection (arrow keys pressed in the preview). */
 	navigate: "preview:navigate",
+	/** Main -> Finder: Quick Look's edit (pen) button was pressed; close Quick Look and open this file in an editor tab. */
+	openEdit: "preview:open-edit",
 	/** Main -> preview window: render this file. */
 	load: "preview:load",
 	/** Main -> preview window: drop the content so media stops. */
@@ -72,6 +75,14 @@ export const PREVIEW_CHANNELS = {
 	share: "preview:share",
 	/** Preview window -> main (invoke): put text on the system clipboard. */
 	copyText: "preview:copy-text",
+	/** Preview window -> main (invoke): have the `document-edit` agent change the shown file as the marks and instruction say. */
+	editStart: "preview:edit-start",
+	/** Preview window -> main (invoke): stop the edit run. */
+	editCancel: "preview:edit-cancel",
+	/** Preview window -> main (invoke): put the file back as it was before the edit run. */
+	editUndo: "preview:edit-undo",
+	/** Main -> preview window: progress, reply, and outcome of an edit run. */
+	editEvent: "preview:edit-event",
 	/** Preview window -> main (send): a text field took or gave up focus; Space and the arrows stay with it while it has focus. */
 	textEntry: "preview:text-entry",
 } as const;
@@ -400,7 +411,7 @@ export type CertificatePreview =
 	| { readonly kind: "container"; readonly container: "pkcs12" | "keychain"; readonly recognized: boolean }
 	| { readonly kind: "unreadable"; readonly reason: "empty" | "notCertificate" };
 
-export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal";
+export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal" | "edit";
 
 export type NavigateDelta = 1 | -1;
 
@@ -427,6 +438,7 @@ export interface PreviewBridge {
 	prefetch(file: PreviewPrefetch): void;
 	onClosed(listener: () => void): () => void;
 	onNavigate(listener: (delta: NavigateDelta) => void): () => void;
+	onOpenEdit(listener: (path: string) => void): () => void;
 }
 
 /** Exposed to the Quick Look window as `window.quickLook`. */
@@ -468,6 +480,12 @@ export interface QuickLookWindowBridge {
 	copyText(text: string): Promise<void>;
 	/** A viewer that shows a text field (the PDF password prompt) reports whether it has one, so the window takes focus and Space and the arrows reach the field. */
 	textEntry(active: boolean): void;
+	/** Runs the `document-edit` agent on the shown file; events arrive on `onEditEvent` under `runId`. Resolves when the run ends. */
+	editDocument(runId: string, request: DocumentEditRequest): Promise<void>;
+	cancelEdit(runId: string): Promise<void>;
+	/** True when the file was put back as it was before run `runId`. */
+	undoEdit(runId: string): Promise<boolean>;
+	onEditEvent(listener: (event: DocumentEditEvent) => void): () => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -662,7 +680,7 @@ export function isQuickLookReady(value: unknown): value is QuickLookReady {
 }
 
 export function isQuickLookAction(value: unknown): value is QuickLookAction {
-	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen" || value === "reveal";
+	return value === "close" || value === "next" || value === "previous" || value === "open" || value === "fullscreen" || value === "reveal" || value === "edit";
 }
 
 export function isNavigateDelta(value: unknown): value is NavigateDelta {

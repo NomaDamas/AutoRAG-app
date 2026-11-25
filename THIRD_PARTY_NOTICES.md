@@ -68,6 +68,14 @@ Notes on what was verified:
 |---|---|---|---|
 | cfb (SheetJS) | 1.2.2 | Apache-2.0 | Reads the OLE2 container of Outlook `.msg` files in Quick Look; also pulled in by `xlsx` and `kordoc` |
 | pdf-lib (and `@pdf-lib/standard-fonts`, `@pdf-lib/upng`) | 1.17.1 | MIT | Andrew Dillon — https://github.com/Hopding/pdf-lib (PDF 1.5 object-stream compaction and embedded image stream rewriting in Reduce Size) |
+| heic-to (CSP build, including libheif/libde265) | 1.6.7 | LGPL-3.0-or-later (wrapper); LGPL for native decoder components | Browser HEIC fallback — https://github.com/hoppergee/heic-to/tree/78345a3fcdb4a1d70d513fce2646aeff0127f7ba; license: https://github.com/hoppergee/heic-to/blob/78345a3fcdb4a1d70d513fce2646aeff0127f7ba/LICENSE |
+
+The HEIC fallback is loaded separately and only when the OS did not decode the
+picture. Its CSP build does not require JavaScript `unsafe-eval`; the app's
+production policy remains unchanged. The unmodified package source and license
+are available at the versioned upstream links above. The archive-engine-only
+permissive-license statement at the top of this file does not apply to this
+HEIC decoder.
 
 ## Bundled typeface
 
@@ -242,3 +250,9 @@ as a separate program it starts with command-line arguments.
 | Ovis remote pairing, device registry, and AccessGate patterns (`src/main/remote/{private-state,devices,auth,gate}.ts`) | MIT | devswha — https://github.com/devswha/ovis |
 | Project Nayuki QR Code generator (Level M byte-mode port in `src/renderer/src/components/settings/QrCode.tsx`) | MIT | Copyright (c) Project Nayuki — https://github.com/nayuki/QR-Code-generator |
 | Tutorial practice photo (`src/main/demo-assets/reference-photo.jpg`, downscaled) | Public domain | NASA, "Buzz Aldrin and the U.S. flag, Apollo 11" (AS11-40-5875) — https://images.nasa.gov/details/as11-40-5875 |
+
+## Document editor
+
+| Component | License | Source |
+|---|---|---|
+| Tiptap (`@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/markdown`, `@tiptap/extension-table`, `@tiptap/extension-task-list`, `@tiptap/extension-task-item`, `@tiptap/extension-placeholder`) | MIT | Tiptap GmbH — https://github.com/ueberdosis/tiptap |

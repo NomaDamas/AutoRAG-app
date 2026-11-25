@@ -20,6 +20,7 @@ import {
 	type PreviewBridge,
 	type QuickLookWindowBridge,
 } from "../shared/contract";
+import { isDocumentEditEvent } from "../shared/annotation";
 import type { VideoAudioPlan } from "../shared/video-audio";
 import { isVideoPlaybackProgress, type VideoPlaybackPlan } from "../shared/video-playback";
 
@@ -45,6 +46,10 @@ export function createPreviewBridge(ipcRenderer: IpcRenderer): PreviewBridge {
 		onNavigate: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.navigate, (delta) => {
 				if (isNavigateDelta(delta)) listener(delta);
+			}),
+		onOpenEdit: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.openEdit, (path) => {
+				if (typeof path === "string" && path.length > 0) listener(path);
 			}),
 	};
 }
@@ -112,5 +117,16 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.copyText, text);
 		},
 		textEntry: (active) => ipcRenderer.send(PREVIEW_CHANNELS.textEntry, active),
+		editDocument: async (runId, request) => {
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.editStart, runId, request);
+		},
+		cancelEdit: async (runId) => {
+			await ipcRenderer.invoke(PREVIEW_CHANNELS.editCancel, runId);
+		},
+		undoEdit: (runId): Promise<boolean> => ipcRenderer.invoke(PREVIEW_CHANNELS.editUndo, runId),
+		onEditEvent: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.editEvent, (event) => {
+				if (isDocumentEditEvent(event)) listener(event);
+			}),
 	};
 }

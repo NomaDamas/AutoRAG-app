@@ -967,7 +967,27 @@ the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.
 runs user-defined right-click Magic Actions on selected files and folders — either executing an arbitrary shell script
 or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
 (`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
-per action) with live `i` intent progress and streamed Markdown output. The rest of Settings has its own assistants in the right
+per action) with live `i` intent progress and streamed Markdown output. The `document-edit` helper
+(`src/main/agents/profiles/document-edit.ts`, `src/main/document-edit-service.ts`, `src/main/document-editor-io.ts`,
+`src/shared/document-editor-contract.ts`, `src/renderer/src/components/DocumentEditorTab.tsx`) powers Dazzi's in-app
+**Document Editor tab** (`DocumentEdit:<path>`). It opens either by clicking the pen button in Quick Look (which closes
+Quick Look and hands the file to a new tab in the Finder window) or by **Option+click** (macOS) / **Alt+click**
+(Windows/Linux) on a file row or tile in Finder. Text documents (Markdown, HTML, plain text) open in a TipTap v3 WYSIWYG
+editor (`WysiwygDocumentEditor.tsx`, Rich/Source switch) and code/CSV/TSV files open in a monospace source editor, both
+with always-on debounced autosave, `⌘S`/`Ctrl+S`, and mtime conflict detection (`documentEditor:*`). Office,
+HWP/HWPX and OpenDocument packages render their preview inside the tab with an interactive SVG mark-up layer
+(`EditorMarkupOverlay.tsx`: pen, box, underline). PDF files open in `PdfDocumentEditor.tsx` (`pdfjs-dist` rendering +
+main-process `src/main/pdf-editor-io.ts` backed by `pdf-lib`): signature pad & saved signatures, text/date stamps,
+page crop (`CropBox`), 90° rotation, reorder, delete, multi-page extraction to a sibling PDF, and snapshot undo.
+Annotations and text selections drawn on text/package documents stream directly into the right-sidebar AI editing chat
+(`DocumentEditorAiSidebar.tsx` + `DocumentEditorSidebarContext.tsx` inside `InspectorColumn`), which runs the
+`document-edit` agent. Its `read`/`ls`/`find`/`grep` refuse credential files and the agent dir outside `skills/`;
+`edit`/`write` reach only that one file and a per-run scratch folder. Text documents get no shell; packages get `bash`
+in the scratch folder to unpack, edit XML and repack, gated by `createWriteGate` + `createWriteJudge` (`write-gate.ts`)
+so writes/deletes outside `[target, scratchDir]` are refused (`allowEnvVars: false`). The service keeps original bytes
+under `<userData>/document-edit-backups` (and PDF snapshots under `<userData>/pdf-editor-backups`) for Undo, refuses Undo
+once the file changed again, and deletes the backups at quit.
+The rest of Settings has its own assistants in the right
 sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`APP_CUSTOMIZER_SURFACES`) in `app-customizer-service.ts` and built on
 `src/main/agents/profiles/customizer-kit.ts` (change log with 4-language summaries, cancel guard): `general-customizer` (Settings → 일반:
 appearance, language, hidden files, launch at login, OS menu, updates, privacy toggles, the quick-search shortcut), `ai-customizer` (AI 모델 and
@@ -1328,10 +1348,11 @@ summons a small window over any app. Pieces:
   one another app holds (`status().error === "taken"`, shown in Settings), and releases the chord while Settings
   records a new one (`quick-search:recording`) so the keys reach the recorder.
 - `src/main/quick-search-window.ts` creates the window hidden at startup (`quick-search.html`, preload
-  `quick-search.mjs`): a `panel` window on macOS, an always-on-top window without a taskbar button on Windows. Hiding
-  with `restore` gives the foreground back (macOS hides the app unless a Dazzi window was in front); actions that open
-  something (`handoff`) leave it to what they opened. On Windows/Linux it is destroyed with the last app window so
-  closing the Finder still quits.
+  `quick-search.mjs`): a non-activating `panel` window on macOS, an always-on-top window without a taskbar button on
+  Windows. Hiding with `restore` hides only the launcher (on macOS the `panel` never deactivated the frontmost app, so
+  keyboard focus returns without hiding Dazzi's other windows; on Windows it minimizes first so the previous window
+  regains the foreground); actions that open something (`handoff`) leave focus to what they opened. On Windows/Linux it
+  is destroyed with the last app window so closing the Finder still quits.
 - The page (`src/renderer/src/launcher/QuickSearch.tsx`, model in `state/launcher.ts`) talks to the fs worker over its
   own port, like the Finder: `search` (file names), `contentSearch` (below), `enrichEntries`, `open`, `reveal`,
   `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call

@@ -6,6 +6,9 @@ import { applyBundledTools } from "./bundled-tools";
 import { inlModelCacheRoot } from "./inl-paths";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
+import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
+import toolPins from "../shared/tool-pins.json";
+import { createToolVersionsService } from "./tool-versions";
 import {
 	app,
 	autoUpdater as nativeAutoUpdater,
@@ -31,14 +34,16 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG } from "../shared/onboarding-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
+import { DOCUMENT_EDITOR_CHANNELS } from "../shared/document-editor-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
+import { PREVIEW_CHANNELS } from "../preview/shared/contract";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
-import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
@@ -106,7 +111,15 @@ import { createPastedImageStore } from "./pasted-images";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
-import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
+import {
+	configureEmbeddingDaemon,
+	DEFAULT_LOCAL_EMBEDDING_MODEL,
+	embeddingDaemonStatus,
+	ensureEmbeddingForConfig,
+	localEmbeddingModel,
+	restartEmbeddingDaemon,
+	stopEmbeddingDaemon,
+} from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
@@ -119,6 +132,10 @@ import { openPlanRuntime, resolveConfiguredSessionModel } from "@autorag/librari
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
+import { createDocumentEditService } from "./document-edit-service";
+import { createPdfEditorIo } from "./pdf-editor-io";
+import { createWriteJudge } from "./agents/write-judge";
+import { resolveDecisionBackendsForConfig } from "./decision-model";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
@@ -128,8 +145,10 @@ import {
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
 	registerAppCustomizerIpcHandlers,
+	registerDocumentEditorIpcHandlers,
 	registerMagicActionIpcHandlers,
 	registerAppUpdateIpcHandlers,
+	registerToolVersionsIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
 	registerDemoIpcHandlers,
@@ -921,6 +940,7 @@ app.whenReady().then(async () => {
 		account: ACCOUNT_CHANNELS,
 		modelDownload: MODEL_DOWNLOAD_CHANNELS,
 		errorFix: ERROR_FIX_CHANNELS,
+		documentEditor: DOCUMENT_EDITOR_CHANNELS,
 		appCustomizer: APP_CUSTOMIZER_CHANNELS,
 		magicAction: MAGIC_ACTION_CHANNELS,
 		automations: AUTOMATION_CHANNELS,
@@ -928,6 +948,7 @@ app.whenReady().then(async () => {
 		indexActivity: INDEX_ACTIVITY_CHANNELS,
 		indexProblem: INDEX_PROBLEM_CHANNELS,
 		appUpdate: APP_UPDATE_CHANNELS,
+		toolVersions: TOOL_VERSIONS_CHANNELS,
 		onboarding: ONBOARDING_CHANNELS,
 		osRequests: OS_REQUEST_CHANNELS,
 		services: SERVICES_CHANNELS,
@@ -1014,6 +1035,48 @@ app.whenReady().then(async () => {
 	registerAppUpdateIpcHandlers(appUpdater);
 	installCheckForUpdatesMenuItem(appUpdater);
 	appUpdater.start();
+	const readLibrarianVersion = (): string => {
+		try {
+			const pkg = JSON.parse(readFileSync(join(app.getAppPath(), "node_modules", "@autorag", "librarian", "package.json"), "utf8")) as { version?: string };
+			if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
+		} catch {
+			// fall back to pin
+		}
+		return toolPins.librarian.version;
+	};
+	const toolVersions = createToolVersionsService({
+		appVersion: app.isPackaged ? app.getVersion() : APP_VERSION,
+		librarianVersion: readLibrarianVersion(),
+		resourcesPath: process.resourcesPath,
+		env: process.env,
+		getModel: async () => {
+			try {
+				const raw = JSON.parse(readFileSync(autoragConfigPath(), "utf8")) as Record<string, unknown>;
+				return localEmbeddingModel(raw) ?? DEFAULT_LOCAL_EMBEDDING_MODEL;
+			} catch {
+				return DEFAULT_LOCAL_EMBEDDING_MODEL;
+			}
+		},
+		daemonStatus: embeddingDaemonStatus,
+		restartDaemon: restartEmbeddingDaemon,
+	});
+	registerToolVersionsIpcHandlers(toolVersions);
+	// Check tools/manifest.json vs pins and running daemon health on launch; never kills user-started daemons or reindexes.
+	void toolVersions.get().then(
+		(snapshot) => {
+			if (snapshot.manifestDrift.length > 0) {
+				console.warn(
+					`[tools] manifest drift vs pins: ${snapshot.manifestDrift.map((d) => `${d.name} (pinned ${d.pinned}, manifest ${d.manifest ?? "missing"})`).join(", ")}`,
+				);
+			}
+			if (snapshot.daemon.outdated) {
+				console.warn(
+					`[tools] running embedding daemon ${snapshot.daemon.version} is older than pinned ${snapshot.daemon.pinnedVersion} (owned=${snapshot.daemon.owned}, port=${snapshot.daemon.port})`,
+				);
+			}
+		},
+		() => undefined,
+	);
 	const userDataDir = app.getPath("userData");
 	const supportedExtensions = supportedExtensionsFromRegistry(createDefaultParserRegistry());
 	const scanOptions = { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES };
@@ -1079,6 +1142,22 @@ app.whenReady().then(async () => {
 	});
 	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
+	const documentEditWriteJudge = createWriteJudge({
+		resolveBackends: () =>
+			resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() }), process.env, process.cwd()),
+	});
+	const documentEditService = createDocumentEditService({
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		homeDir: home,
+		language: () => currentLanguage,
+		backupDir: join(app.getPath("userData"), "document-edit-backups"),
+		writeJudge: documentEditWriteJudge,
+	});
+	setQuickLookDocumentEdit(documentEditService);
+	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
+	registerDocumentEditorIpcHandlers(documentEditService, pdfEditorIo, (event) => sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.aiEvent, event));
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;
 	const getDeviceId = (): Promise<string> => {
@@ -1247,6 +1326,29 @@ app.whenReady().then(async () => {
 		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
 	};
+	setQuickLookEditHandoff((filePath, owner) => {
+		if (mainWindow !== null && !mainWindow.isDestroyed() && owner === mainWindow) {
+			if (mainWindow.isMinimized()) mainWindow.restore();
+			mainWindow.show();
+			mainWindow.focus();
+			mainWindow.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+			return;
+		}
+		if (quittingApp) return;
+		if (mainWindow === null || mainWindow.isDestroyed()) {
+			mainWindow = openFinderWindow();
+			mainWindow.webContents.once("did-finish-load", () => {
+				if (mainWindow !== null && !mainWindow.isDestroyed()) {
+					mainWindow.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+				}
+			});
+		} else {
+			if (mainWindow.isMinimized()) mainWindow.restore();
+			mainWindow.show();
+			mainWindow.focus();
+			mainWindow.webContents.send(PREVIEW_CHANNELS.openEdit, filePath);
+		}
+	});
 	openWindows();
 	// A first index the person left running behind the app (they started it early) and a quit cut short carries on here.
 	firstRun.resumeIndexing();
@@ -1327,7 +1429,7 @@ app.whenReady().then(async () => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
 		void runQuitCleanup({
-			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()],
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose(), documentEditService.dispose(), pdfEditorIo.dispose()],
 			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
 			onExit: () => app.exit(0),
 		});

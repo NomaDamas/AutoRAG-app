@@ -12,7 +12,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Globe, Info, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import { isAppCustomizerSurface, type AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -22,6 +22,7 @@ import { LtrPage } from "./settings/LtrPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
+import { AboutPage } from "./settings/AboutPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
 import { McpPage } from "./settings/McpPage";
@@ -42,7 +43,7 @@ import { Keycap } from "./primitives/Keycap";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "ltr" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "about" | "ai" | "web" | "ltr" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
 /** Legacy ids stay accepted so an old deep link still lands on a page. 검색 범위 (`scope`) is part of 인덱싱 now. */
 type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "scope";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
@@ -55,6 +56,7 @@ type NavLabelKey =
 	| "settingsCore.nav.contextMenu"
 	| "settingsCore.nav.shortcuts"
 	| "settingsCore.nav.remote"
+	| "settingsCore.nav.about"
 	| "settingsCore.nav.ai"
 	| "settingsCore.nav.web"
 	| "settingsCore.nav.indexing"
@@ -91,6 +93,7 @@ export const PAGES = [
 	{ id: "contextMenu", labelKey: "settingsCore.nav.contextMenu", icon: MousePointerClick, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.contextMenu" },
 	{ id: "shortcuts", labelKey: "settingsCore.nav.shortcuts", icon: Keyboard, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.shortcuts" },
 	{ id: "remote", labelKey: "settingsCore.nav.remote", icon: MonitorSmartphone, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.remote" },
+	{ id: "about", labelKey: "settingsCore.nav.about", icon: Info, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.about" },
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
 	{ id: "ltr", labelKey: "settingsCore.nav.ltr", icon: ListOrdered, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ltr" },
@@ -309,6 +312,8 @@ export function SettingsPageContent({
 			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
+		case "about":
+			return <AboutPage />;
 		case "ai":
 			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
 		case "ltr":

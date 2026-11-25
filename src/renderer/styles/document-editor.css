@@ -1,0 +1,196 @@
+/* ============================================================================
+ * In-app Document Editor tab (TipTap WYSIWYG + code/source + AI markup).
+ * Layered in `layer(base)` via app.css so Tailwind utilities keep precedence.
+ * Uses Dazzi v7 Bloom design tokens exclusively.
+ * ========================================================================== */
+
+.doc-editor__prose .tiptap {
+	outline: none;
+	min-height: 100%;
+	color: var(--ink);
+	font-family: var(--font-sans);
+	font-size: 14.5px;
+	line-height: 1.72;
+	word-break: break-word;
+	user-select: text;
+}
+
+.doc-editor__prose .tiptap > :first-child {
+	margin-top: 0;
+}
+
+.doc-editor__prose .tiptap p.is-editor-empty:first-child::before {
+	content: attr(data-placeholder);
+	float: left;
+	height: 0;
+	color: var(--ink-faint);
+	pointer-events: none;
+}
+
+.doc-editor__prose .tiptap h1 {
+	margin: 22px 0 10px;
+	font-size: 24px;
+	font-weight: 600;
+	line-height: 1.3;
+	letter-spacing: -0.02em;
+	color: var(--ink);
+}
+
+.doc-editor__prose .tiptap h2 {
+	margin: 20px 0 8px;
+	font-size: 18px;
+	font-weight: 600;
+	line-height: 1.35;
+	letter-spacing: -0.015em;
+	color: var(--ink);
+	padding-bottom: 4px;
+	border-bottom: 1px solid var(--divider);
+}
+
+.doc-editor__prose .tiptap h3 {
+	margin: 16px 0 6px;
+	font-size: 15.5px;
+	font-weight: 600;
+	line-height: 1.4;
+	color: var(--ink);
+}
+
+.doc-editor__prose .tiptap p {
+	margin: 0 0 10px;
+}
+
+.doc-editor__prose .tiptap ul,
+.doc-editor__prose .tiptap ol {
+	margin: 0 0 12px;
+	padding-left: 22px;
+}
+
+.doc-editor__prose .tiptap ul {
+	list-style-type: disc;
+}
+
+.doc-editor__prose .tiptap ol {
+	list-style-type: decimal;
+}
+
+.doc-editor__prose .tiptap li {
+	margin: 3px 0;
+}
+
+.doc-editor__prose .tiptap li p {
+	margin: 0;
+}
+
+.doc-editor__prose .tiptap ul[data-type="taskList"] {
+	list-style: none;
+	padding-left: 0;
+}
+
+.doc-editor__prose .tiptap ul[data-type="taskList"] li {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.doc-editor__prose .tiptap ul[data-type="taskList"] li > label {
+	flex: 0 0 auto;
+	margin-top: 3px;
+	user-select: none;
+}
+
+.doc-editor__prose .tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+.doc-editor__prose .tiptap ul[data-type="taskList"] li > div {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.doc-editor__prose .tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+	color: var(--ink-muted);
+	text-decoration: line-through;
+}
+
+.doc-editor__prose .tiptap blockquote {
+	margin: 12px 0;
+	padding: 4px 0 4px 14px;
+	border-left: 3px solid var(--border-strong);
+	color: var(--ink-muted);
+}
+
+.doc-editor__prose .tiptap code {
+	padding: 1.5px 5px;
+	border-radius: 5px;
+	background: var(--bg-code);
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	color: var(--ink);
+}
+
+.doc-editor__prose .tiptap pre {
+	margin: 12px 0;
+	padding: 12px 14px;
+	border-radius: 8px;
+	border: 1px solid var(--divider);
+	background: var(--bg-code);
+	overflow-x: auto;
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+	line-height: 1.55;
+}
+
+.doc-editor__prose .tiptap pre code {
+	padding: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: inherit;
+}
+
+.doc-editor__prose .tiptap hr {
+	margin: 18px 0;
+	border: 0;
+	border-top: 1px solid var(--divider);
+}
+
+.doc-editor__prose .tiptap a {
+	color: var(--accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.doc-editor__prose .tiptap table {
+	width: 100%;
+	margin: 14px 0;
+	border-collapse: collapse;
+	table-layout: fixed;
+	font-size: 13.5px;
+}
+
+.doc-editor__prose .tiptap th,
+.doc-editor__prose .tiptap td {
+	min-width: 60px;
+	padding: 7px 10px;
+	border: 1px solid var(--border);
+	vertical-align: top;
+	text-align: left;
+}
+
+.doc-editor__prose .tiptap th {
+	background: var(--bg-subtle);
+	font-weight: 600;
+}
+
+.doc-editor__prose .tiptap .selectedCell::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--accent-soft);
+	pointer-events: none;
+}
+
+.doc-editor__prose .tiptap th,
+.doc-editor__prose .tiptap td {
+	position: relative;
+}

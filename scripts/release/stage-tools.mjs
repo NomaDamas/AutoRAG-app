@@ -45,26 +45,29 @@ import {
 	CACHE_DIR,
 	PLATFORMS,
 	ROOT,
+	crateVersionChecksum,
 	dirSizeBytes,
-	folderToolLayout,
-	pruneNativeForPlatform,
-	pruneDeadWeight,
 	download,
 	extract,
 	fetchText,
 	findFile,
+	folderToolLayout,
 	hostPlatformId,
-	latestCrateVersion,
-	latestNode24,
-	latestRelease,
 	log,
 	mb,
+	npmVersionIntegrity,
 	parseRpaths,
+	pruneDeadWeight,
+	pruneNativeForPlatform,
+	releaseByTag,
 	resolveDylibRef,
 	run,
 } from "./lib.mjs";
-import { VERSION_FLOORS, assertVersionFloor } from "./version-floors.mjs";
+import { GITHUB_ASSET_PATTERNS, assertManifestMatchesPins, assertPinsMeetFloors, assertVersionFloor, deriveVersionFloors, loadToolPins } from "./pins.mjs";
 
+const PINS = loadToolPins();
+const VERSION_FLOORS = deriveVersionFloors(PINS);
+assertPinsMeetFloors(PINS, VERSION_FLOORS);
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const option = (name) => {
@@ -103,19 +106,27 @@ function installBinary(from, name) {
 }
 
 
-/** Newest GitHub release asset matching `pattern`; the server-side sha256 digest verifies the download. */
-async function githubAsset(repo, pattern) {
-	const release = await latestRelease(repo);
+/** Pinned GitHub release asset matching `pattern`; verified against both the pin file sha256 and GitHub's digest. */
+async function githubAsset(name, repo, pattern) {
+	const pin = PINS.tools[name];
+	if (pin === undefined) throw new Error(`tool-pins.json has no pin for ${name}`);
+	const release = await releaseByTag(repo, pin.tag);
 	const asset = release.assets.find((candidate) => pattern.test(candidate.name));
 	if (asset === undefined) throw new Error(`${repo} ${release.tag_name}: no asset matches ${pattern}`);
-	const digest = typeof asset.digest === "string" && asset.digest.startsWith("sha256:") ? asset.digest.slice("sha256:".length) : null;
-	return { release, asset, digest };
+	const publisherDigest = typeof asset.digest === "string" && asset.digest.startsWith("sha256:") ? asset.digest.slice("sha256:".length) : null;
+	const pinnedDigest = pin.assets?.[platformId]?.sha256 ?? null;
+	if (pinnedDigest !== null && publisherDigest !== null && pinnedDigest !== publisherDigest) {
+		throw new Error(`${name} ${pin.tag} (${asset.name}): pinned sha256 ${pinnedDigest} disagrees with GitHub digest ${publisherDigest}`);
+	}
+	const digest = pinnedDigest ?? publisherDigest;
+	return { release, asset, digest, pin };
 }
 
-/** Prebuilt CLIs published as GitHub release archives: download, verify, pull the executable out. */
+/** Prebuilt CLIs published as GitHub release archives: download at pinned tag, verify sha256, pull the executable out. */
 async function stageReleaseBinary({ name, repo, pattern, binary = name, minVersion }) {
-	const { release, asset, digest } = await githubAsset(repo, pattern);
+	const { release, asset, digest, pin } = await githubAsset(name, repo, pattern);
 	const version = release.tag_name.replace(/^v/, "");
+	if (version !== pin.version) throw new Error(`${name}: release tag ${release.tag_name} resolved to ${version}, expected pinned ${pin.version}`);
 	if (minVersion !== undefined) assertVersionFloor(name, version, minVersion);
 	const file = await download(asset.browser_download_url, `${repo.replace("/", "__")}-${asset.name}`, digest);
 	const directory = join(CACHE_DIR, "x", `${name}-${release.tag_name}`);
@@ -126,25 +137,34 @@ async function stageReleaseBinary({ name, repo, pattern, binary = name, minVersi
 	record({ name, version, source: `github.com/${repo} ${asset.name}`, sha256: file.sha256, verifiedAgainstPublisherDigest: digest !== null });
 }
 
-/** Go CLIs that publish no archive for this platform: build the newest tag from source. */
+/** Go CLIs that publish no archive for this platform: build the pinned tag from source. */
 async function stageGoBinary({ name, repo }) {
-	const release = await latestRelease(repo);
-	const tag = release.tag_name;
+	const pin = PINS.tools[name];
+	if (pin === undefined) throw new Error(`tool-pins.json has no pin for ${name}`);
+	const tag = pin.tag;
 	log(`go install ${repo}@${tag}`);
 	const goBin = join(CACHE_DIR, "go-bin", `${name}-${tag}`);
 	rmSync(goBin, { recursive: true, force: true });
 	mkdirSync(goBin, { recursive: true });
 	run("go", ["install", "-trimpath", "-ldflags=-s -w", `github.com/${repo}/cmd/${name}@${tag}`], { env: { GOBIN: goBin, CGO_ENABLED: "0", GOFLAGS: "-mod=mod" } });
 	installBinary(join(goBin, `${name}${exe}`), name);
-	record({ name, version: tag.replace(/^v/, ""), source: `go install github.com/${repo}@${tag}` });
+	record({ name, version: pin.version, source: `go install github.com/${repo}@${tag}` });
 }
 
-/** Rust crates: compile the newest crates.io version into the shared cache. */
+/** Rust crates: verify published crates.io checksum against tool-pins.json, then compile the pinned version. */
 async function stageCargoBinary({ name, crate = name, minVersion }) {
+	const pin = PINS.tools[name];
+	if (pin === undefined) throw new Error(`tool-pins.json has no pin for ${name}`);
+	const version = pin.version;
+	if (minVersion !== undefined) assertVersionFloor(name, version, minVersion);
+	if (typeof pin.checksum === "string" && pin.checksum.length > 0) {
+		const published = await crateVersionChecksum(crate, version);
+		if (published !== pin.checksum) {
+			throw new Error(`${name} (${crate}@${version}): pinned checksum ${pin.checksum} disagrees with crates.io ${published}`);
+		}
+	}
 	const cargoRoot = join(CACHE_DIR, "cargo", name);
 	const targetDir = join(CACHE_DIR, "cargo-target");
-	const version = await latestCrateVersion(crate);
-	if (minVersion !== undefined) assertVersionFloor(name, version, minVersion);
 	const installArgs = ["install", crate, "--version", version, "--locked"];
 	const installed = join(cargoRoot, "bin", `${name}${exe}`);
 	const stamp = join(cargoRoot, "version.txt");
@@ -155,9 +175,8 @@ async function stageCargoBinary({ name, crate = name, minVersion }) {
 		writeFileSync(stamp, version);
 	}
 	installBinary(installed, name);
-	record({ name, version, source: `crates.io ${crate}@${version}` });
+	record({ name, version, source: `crates.io ${crate}@${version}`, ...(pin.checksum ? { sha256: pin.checksum } : {}) });
 }
-
 /**
  * fsearch-cli (macOS): NomaDamas/fsearch-mac, built by its own Homebrew tap. The Homebrew binary
  * links glib/pango/ICU by absolute /opt/homebrew paths, so it is copied together with its dylib
@@ -229,13 +248,18 @@ async function stageFsearch() {
 }
 
 async function stageNode() {
-	const version = await latestNode24();
+	const version = PINS.node.tag;
 	const base = `https://nodejs.org/dist/${version}`;
 	const archive = `node-${version}-${target.nodeSuffix}`;
 	const sums = await fetchText(`${base}/SHASUMS256.txt`);
 	const line = sums.split("\n").find((entry) => entry.endsWith(`  ${archive}`));
 	if (line === undefined) throw new Error(`SHASUMS256.txt has no ${archive}`);
-	const file = await download(`${base}/${archive}`, archive, line.split(/\s+/)[0]);
+	const publisherSha = line.split(/\s+/)[0];
+	const pinnedSha = PINS.node.sha256?.[platformId] ?? null;
+	if (pinnedSha !== null && pinnedSha !== publisherSha) {
+		throw new Error(`node ${version} (${archive}): pinned sha256 ${pinnedSha} disagrees with nodejs.org ${publisherSha}`);
+	}
+	const file = await download(`${base}/${archive}`, archive, pinnedSha ?? publisherSha);
 	const directory = join(CACHE_DIR, "x", `node-${version}`);
 	extract(file.path, directory);
 	const [inner] = readdirSync(directory);
@@ -247,8 +271,20 @@ async function stageNode() {
 	return target.os === "win32" ? join(destination, "node.exe") : join(destination, "bin", "node");
 }
 
-/** The npm-installed CLIs, installed with the bundled Node so native add-ons match its ABI. */
+/** The npm-installed CLIs, pinned from tool-pins.json and installed with the bundled Node so native add-ons match its ABI. */
 async function stageNpmCli(nodePath, packages) {
+	const specs = [];
+	for (const pkg of packages) {
+		const pin = PINS.tools[pkg];
+		if (pin === undefined) throw new Error(`tool-pins.json has no pin for ${pkg}`);
+		if (typeof pin.integrity === "string" && pin.integrity.length > 0) {
+			const published = await npmVersionIntegrity(pkg, pin.version);
+			if (published !== pin.integrity) {
+				throw new Error(`${pkg}@${pin.version}: pinned integrity ${pin.integrity} disagrees with npm registry ${published}`);
+			}
+		}
+		specs.push(`${pkg}@${pin.version}`);
+	}
 	const prefix = join(TOOLS, "npm");
 	rmSync(prefix, { recursive: true, force: true });
 	mkdirSync(prefix, { recursive: true });
@@ -262,7 +298,7 @@ async function stageNpmCli(nodePath, packages) {
 	const nodeDir = join(TOOLS, "node", ...(target.os === "win32" ? [] : ["bin"]));
 	const env = { ...npmEnv, [pathKey]: `${nodeDir}${target.os === "win32" ? ";" : ":"}${process.env[pathKey] ?? ""}` };
 	// better-sqlite3 fetches its prebuilt addon in an install script; every other install script is left blocked.
-	run(nodePath, [npmCli, "install", "--prefix", prefix, "--omit=dev", "--no-package-lock", ...packages], { env });
+	run(nodePath, [npmCli, "install", "--prefix", prefix, "--omit=dev", "--no-package-lock", ...specs], { env });
 	const nodeModules = join(prefix, "node_modules");
 	pruneNativeForPlatform(nodeModules, target);
 	const pruned = pruneDeadWeight(nodeModules);
@@ -273,8 +309,10 @@ async function stageNpmCli(nodePath, packages) {
 		rmSync(join(nodeModules, "@lancedb", "lancedb", "node_modules", nested), { recursive: true, force: true });
 	}
 	const shim = await buildShim();
-	for (const pkg of packages.map((spec) => spec.replace(/@latest$/, ""))) {
+	for (const pkg of packages) {
+		const pin = PINS.tools[pkg];
 		const manifest = JSON.parse(readFileSync(join(nodeModules, pkg, "package.json"), "utf8"));
+		if (manifest.version !== pin.version) throw new Error(`${pkg}: installed ${manifest.version}, expected pinned ${pin.version}`);
 		const floor = VERSION_FLOORS[pkg];
 		if (floor !== undefined) assertVersionFloor(pkg, manifest.version, floor);
 		const bins = typeof manifest.bin === "string" ? { [basename(pkg)]: manifest.bin } : manifest.bin;
@@ -284,7 +322,7 @@ async function stageNpmCli(nodePath, packages) {
 			installBinary(shim, binName);
 			writeFileSync(join(BIN, `${binName}.shim`), `${entryRel}\n`);
 		}
-		record({ name: pkg, version: manifest.version, source: `npm ${pkg}` });
+		record({ name: pkg, version: manifest.version, source: `npm ${pkg}@${manifest.version}`, ...(pin.integrity ? { integrity: pin.integrity } : {}) });
 	}
 }
 
@@ -429,34 +467,30 @@ async function stageVerifyModel() {
 // --------------------------------------------------------------------------
 
 const RELEASE_BINARIES = [
-	{ name: "minsync", repo: "NomaDamas/MinSync", pattern: target.os === "win32" ? /x86_64-pc-windows-msvc\.zip$/ : /aarch64-apple-darwin\.tar\.gz$/, minVersion: VERSION_FLOORS.minsync },
-	{ name: "rhwp", repo: "edwardkim/rhwp", pattern: target.os === "win32" ? /windows-x86_64\.zip$/ : /macos-aarch64\.tar\.gz$/ },
-	{ name: "himalaya", repo: "pimalaya/himalaya", pattern: target.os === "win32" ? /x86_64-windows\.zip$/ : /aarch64-darwin\.tgz$/ },
-	{ name: "rclone", repo: "rclone/rclone", pattern: target.os === "win32" ? /windows-amd64\.zip$/ : /osx-arm64\.zip$/ },
-	{ name: "lark-cli", repo: "larksuite/cli", pattern: target.os === "win32" ? /windows-amd64\.zip$/ : /darwin-arm64\.tar\.gz$/ },
-	...["discrawl", "telecrawl", "wacrawl"].map((name) => ({ name, repo: `openclaw/${name}`, pattern: target.os === "win32" ? /_windows_amd64\.zip$/ : /_darwin_arm64\.tar\.gz$/ })),
-	// lazykatok is an Apple Silicon macOS KakaoTalk client; changeroa/lazykatok publishes one release archive
-	// per version (`lazykatok-<version>-aarch64-apple-darwin.tar.gz`) with a GitHub sha256 digest, so it is
-	// staged like the other release binaries instead of being compiled from git HEAD.
-	...(target.os === "darwin" ? [{ name: "lazykatok", repo: "changeroa/lazykatok", pattern: /^lazykatok-\d+\.\d+\.\d+-aarch64-apple-darwin\.tar\.gz$/, minVersion: VERSION_FLOORS.lazykatok }] : []),
+	{ name: "minsync", repo: PINS.tools.minsync.repo, pattern: GITHUB_ASSET_PATTERNS.minsync[platformId], minVersion: VERSION_FLOORS.minsync },
+	{ name: "rhwp", repo: PINS.tools.rhwp.repo, pattern: GITHUB_ASSET_PATTERNS.rhwp[platformId] },
+	{ name: "himalaya", repo: PINS.tools.himalaya.repo, pattern: GITHUB_ASSET_PATTERNS.himalaya[platformId] },
+	{ name: "rclone", repo: PINS.tools.rclone.repo, pattern: GITHUB_ASSET_PATTERNS.rclone[platformId] },
+	{ name: "lark-cli", repo: PINS.tools["lark-cli"].repo, pattern: GITHUB_ASSET_PATTERNS["lark-cli"][platformId] },
+	...["discrawl", "telecrawl", "wacrawl"].map((name) => ({ name, repo: PINS.tools[name].repo, pattern: GITHUB_ASSET_PATTERNS[name][platformId] })),
+	...(target.os === "darwin" ? [{ name: "lazykatok", repo: PINS.tools.lazykatok.repo, pattern: GITHUB_ASSET_PATTERNS.lazykatok[platformId], minVersion: VERSION_FLOORS.lazykatok }] : []),
 ];
 
-// openclaw/slacrawl and openclaw/notcrawl publish macOS archives but no Windows one: build the newest tag from source there.
+// openclaw/slacrawl and openclaw/notcrawl publish macOS archives but no Windows one: build the pinned tag from source there.
 const GO_CRAWLERS = [
-	{ name: "slacrawl", repo: "openclaw/slacrawl", pattern: /_darwin_arm64\.tar\.gz$/ },
-	{ name: "notcrawl", repo: "openclaw/notcrawl", pattern: /_darwin_arm64\.tar\.gz$/ },
+	{ name: "slacrawl", repo: PINS.tools.slacrawl.repo, pattern: GITHUB_ASSET_PATTERNS.slacrawl["darwin-arm64"] },
+	{ name: "notcrawl", repo: PINS.tools.notcrawl.repo, pattern: GITHUB_ASSET_PATTERNS.notcrawl["darwin-arm64"] },
 ];
 
 // `wombat` (AI Sessions) is published as the crate `wombat-sessions`; `cargo install` still produces the `wombat` binary.
 const CARGO_BINARIES = [
 	{ name: "dupey", minVersion: VERSION_FLOORS.dupey },
-	{ name: "jikji", crate: "jikji-cli" },
+	{ name: "jikji", crate: "jikji-cli", minVersion: VERSION_FLOORS.jikji },
 	{ name: "clawgallery" },
 	{ name: "wombat", crate: "wombat-sessions", minVersion: VERSION_FLOORS.wombat },
 ];
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "kordoc"];
-
 // A full run starts clean; a partial run (--only) touches just the tools it names and keeps the rest.
 if (only === undefined) rmSync(TOOLS, { recursive: true, force: true });
 mkdirSync(BIN, { recursive: true });
@@ -480,5 +514,15 @@ if (!flag("--skip-verify-model") && wanted("verify-model")) await stageVerifyMod
 
 const manifestPath = join(TOOLS, "manifest.json");
 const kept = only !== undefined && existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")).tools.filter((tool) => !staged.some((entry) => entry.name === tool.name)) : [];
-writeFileSync(manifestPath, `${JSON.stringify({ schema: 1, platform: platformId, generatedAt: new Date().toISOString(), tools: [...kept, ...staged] }, null, 2)}\n`);
+const manifest = {
+	schema: 1,
+	platform: platformId,
+	generatedAt: new Date().toISOString(),
+	librarianRef: PINS.librarian.ref,
+	daemon: PINS.daemon,
+	tools: [...kept, ...staged],
+};
+writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+const comparison = assertManifestMatchesPins(manifest, PINS, only !== undefined ? { onlyNames: only } : {});
+process.stdout.write(`\n[release] Pin verification (src/shared/tool-pins.json vs tools/manifest.json):\n${comparison.formatted}\n\n`);
 log(`tools ${mb(dirSizeBytes(TOOLS))}, verify-model ${existsSync(VERIFY_MODEL) ? mb(dirSizeBytes(VERIFY_MODEL)) : "skipped"} -> ${STAGE}`);

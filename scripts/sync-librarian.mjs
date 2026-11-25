@@ -8,38 +8,10 @@ const upstream = join(root, ".upstream", "autorag");
 // What the app installs: the librarian as it would be published, without the clone's node_modules.
 const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
-const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
-// A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.13.5 is the librarian on MinSync 0.6.0: SPLADE sparse retrieval (KURE-Sparse-nano) replaces BM25, Kiwi and
-// `minsync init --language` are gone, and `minSync.embedder.id: "none"` builds a sparse-only index (AutoRAG#2080,
-// #2081). It carries the required decision model (`jev.backend: "sllm"` makes the small chat LLM the decision model,
-// AutoRAG#2091: `jev.fallback` is now a boolean and the sLLM's model is `jev.sllm.model`), opt-in reranking, parallel
-// name search, SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources.
-// Windows cloud-attribute reads quote paths with typographic apostrophes (AutoRAG#2086) and run PowerShell from env so
-// stderr is UTF-8 instead of CP949 mojibake (#2087), dupey skips cloud and network roots (#2085), and the CLI honors
-// the config file's webSearch section (#2083). The loop guard of file automations states the loop invariant instead of
-// banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
-// The decision model is Jev or the small chat LLM: `jev.backend: "sllm"` decides with `jev.sllm.model` and never calls Jev,
-// and `jev.fallback: false` fails a session instead of moving to it (AutoRAG#2091).
-// v2.13.8 adds `refresh.schedule` (index only on AC power / in local time windows / on chosen weekdays; `checkIndexSchedule`
-// is the gate for hosts with their own scheduler, which the app's OS job is, AutoRAG#2104), the agent's exact `calculator`
-// tool (#2109, #2110), the record cut that spreads search hits across documents, on by default (#2108), status reads that
-// reuse recorded duplicate exclusions instead of scanning (#2124), and CLI refreshes stopped by SIGINT/SIGTERM (#2118).
-// v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
-// resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
-// model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
-// v2.13.15 adds the `revise_answer` tool (AutoRAG#2186): verification corrects the first answer claim by claim, and
-// `searchDocumentsStream` yields a `revision` event between `preliminary` and `complete`. When something was corrected,
-// `complete.answer` is the first answer with every correction applied, not a delta. v2.13.14 reads a MinSync index while
-// its first sync is still running (#2183, #2200).
-// v2.14.0 adds learning to rank (AutoRAG#2204): the ranking log (on by default), `autorag ltr` (train, status, delete),
-// the `ltr` and `rankingLog` config keys, and serving a trained model after the reranker (opt-in). The app drives it
-// through `src/main/ltr-service.ts` and shows it on the Search Ranking settings page.
-// v2.14.1 carries AutoRAG#2199 (`createWebTools` in `@autorag/librarian/profiles`) and AutoRAG#2209 (discover and
-// launch the shared `im-not-llm` `inl serve` daemon under `~/.cache/im-not-llm/serve`, and forward `INL_CACHE_DIR` to
-// `wombat`). v2.14.2 requires and installs MinSync 0.7.6 (AutoRAG#2221), which shares the `im-not-llm` cache/serve root.
-const librarianRef = "v2.14.2";
-
+const pins = JSON.parse(readFileSync(join(root, "src", "shared", "tool-pins.json"), "utf8"));
+const remote = `https://github.com/${pins.librarian.repo}.git`;
+// Pinned in src/shared/tool-pins.json alongside the bundled tools it expects (release tag or full commit SHA).
+const librarianRef = pins.librarian.ref;
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
 	if (result.error) throw result.error;

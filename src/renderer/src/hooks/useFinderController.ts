@@ -8,6 +8,7 @@ import { revealTarget, type ScrollRequest } from "./list-reveal";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type CompressFormat, type OpenWithApplication } from "../../../shared/actions-contract";
 import type { QuickLookTarget } from "../../../preview/shared/contract";
+import { documentEditorSurface } from "../../../shared/document-editor-contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -93,13 +94,38 @@ import {
 	type VersionFamilyView,
 	type VersionRelation,
 } from "../state/version-family";
-import { activeTab, AI_SEARCH_PATH, applyColumnChoice, exitVirtualTab, goBack, goForward, isVirtualTabPath, navigateTab, openAiSearchTab, openEvidenceFolderTab, openOrSelectFolderTab, openTab, openTabAt, openTabRevealing, patchActiveTab, selectTab, setActiveTabGrouping, setActiveTabSort, showAiSearchInActiveTab, tabTitle, type TabsState, AUTOMATIONS_PATH } from "../state/tabs";
+import {
+	activeTab,
+	AI_SEARCH_PATH,
+	AUTOMATIONS_PATH,
+	applyColumnChoice,
+	exitVirtualTab,
+	goBack,
+	goForward,
+	isDocumentEditorTabPath,
+	isVirtualTabPath,
+	navigateTab,
+	openAiSearchTab,
+	openEvidenceFolderTab,
+	openOrSelectFolderTab,
+	openTab,
+	openTabAt,
+	openTabRevealing,
+	patchActiveTab,
+	selectTab,
+	setActiveTabGrouping,
+	setActiveTabSort,
+	showAiSearchInActiveTab,
+	tabTitle,
+	type TabsState,
+} from "../state/tabs";
 import {
 	closeWorkspaceTab,
 	evacuateWorkspace,
 	focusTab,
 	focusAiSearchInWorkspace,
 	openOrSelectAutomationsInWorkspace,
+	openOrSelectDocumentEditorInWorkspace,
 	openOrSelectFolderInWorkspace,
 	openOrSelectSettingsInWorkspace,
 	reopenClosedTab as reopenClosedWorkspaceTab,
@@ -239,6 +265,8 @@ export interface FinderController {
 	trashEntry(entry: FinderEntry): void;
 	/** Copy a single entry's path to the system clipboard (inspector chip). */
 	copyEntryPath(entry: FinderEntry): void;
+	/** Copy one absolute path (a path bar segment) to the system clipboard. */
+	copyPathText(path: string): void;
 	/** What this machine can run, so the Inspector action bar never offers a dead button. */
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
@@ -338,6 +366,8 @@ export interface FinderController {
 	focusAiSearch(): void;
 	/** `dazzi <folder>`: focus the tab already showing the folder, else open a new tab on it. */
 	openFolder(path: string): void;
+	/** Open an editable file inside Dazzi's Document Editor tab (Option/Alt+click or Quick Look edit handoff). */
+	openDocumentEditor(path: string): void;
 	/** A filename search from a Settings / AI Search tab returns that tab to its folder. */
 	leaveVirtualTab(): void;
 	back(): void;
@@ -1358,13 +1388,15 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
-	const copyEntryPath = useLatestCallback(
-		(entry: FinderEntry) => {
+	const copyPathText = useLatestCallback(
+		(path: string) => {
 			source
-				.copyPaths([entry.path])
+				.copyPaths([path])
 				.then(() => showToast(t("toasts.copiedPath")))
 				.catch(reportError);
 		});
+
+	const copyEntryPath = useLatestCallback((entry: FinderEntry) => copyPathText(entry.path));
 
 	/**
 	 * Compress runs in the window-wide background queue: a large folder takes
@@ -2311,6 +2343,7 @@ export function useFinderController(
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
 					automations: current.path === AUTOMATIONS_PATH,
+					documentEditor: isDocumentEditorTabPath(current.path),
 				};
 			}),
 		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.
@@ -2390,11 +2423,24 @@ export function useFinderController(
 	const openAiSearch = useLatestCallback(() => setTabsState((state) => openAiSearchTab(state)));
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
 	const openFolder = useLatestCallback((path: string) => updateWorkspace((workspace) => openOrSelectFolderInWorkspace(workspace, path)));
+	const openDocumentEditor = useLatestCallback((filePath: string) => {
+		const ext = fileExtension(filePath);
+		if (documentEditorSurface(ext) === null) {
+			showToast(t("documentEditor.unsupportedFile", { name: basename(filePath) }));
+			return;
+		}
+		updateWorkspace((workspace) => openOrSelectDocumentEditorInWorkspace(workspace, filePath));
+	});
 	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
 	const sortBy = useLatestCallback((key: SortKey) => setTabsState((state) => setActiveTabSort(state, cycleSort(activeTab(state).sort, key))));
 	const focusFinder = useLatestCallback(() => setZone("finder"));
 	const clickRow = useLatestCallback((entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 		setZone("finder");
+		if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && entry.kind === "file") {
+			event.preventDefault();
+			openDocumentEditor(entry.path);
+			return;
+		}
 		patchSelection(
 			applyRowClick(selection, entry.path, orderedKeys, {
 				meta: event.metaKey || event.ctrlKey,
@@ -2404,6 +2450,11 @@ export function useFinderController(
 	});
 	const clickColumnRow = useLatestCallback((pane: number, entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 		setZone("finder");
+		if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && entry.kind === "file") {
+			event.preventDefault();
+			openDocumentEditor(entry.path);
+			return;
+		}
 		if (event.metaKey || event.ctrlKey || event.shiftKey) {
 			// Multi-select stays inside one pane and closes the panes after it.
 			const paneKeys = (paneEntries[pane] ?? []).map((candidate) => candidate.path);
@@ -2470,6 +2521,7 @@ export function useFinderController(
 		newFile,
 		trashEntry,
 		copyEntryPath,
+		copyPathText,
 		actionCapabilities,
 		runEntryAction,
 		runSelectionAction,
@@ -2524,6 +2576,7 @@ export function useFinderController(
 		openAiSearch,
 		focusAiSearch,
 		openFolder,
+		openDocumentEditor,
 		leaveVirtualTab,
 		back,
 		forward,

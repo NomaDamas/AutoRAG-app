@@ -62,6 +62,10 @@ function bridgeWith(): { bridge: QuickLookWindowBridge; calls: Calls } {
 		share: never,
 		copyText: never,
 		textEntry: () => undefined,
+		editDocument: async () => undefined,
+		cancelEdit: async () => undefined,
+		undoEdit: async () => false,
+		onEditEvent: () => () => undefined,
 	};
 	const calls: Calls = {
 		started,

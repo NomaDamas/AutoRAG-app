@@ -22,6 +22,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { assertManifestMatchesPins, loadToolPins } from "./pins.mjs";
 
 const args = process.argv.slice(2);
 const toolsDir = args[0] === undefined ? null : resolve(args[0]);
@@ -56,8 +57,17 @@ process.on("exit", () => rmSync(home, { recursive: true, force: true }));
 
 const manifest = JSON.parse(readFileSync(join(toolsDir, "manifest.json"), "utf8"));
 const versionOf = (name) => manifest.tools.find((tool) => tool.name === name)?.version;
-
 let failures = 0;
+
+// Compare tools/manifest.json against src/shared/tool-pins.json and fail on any drift.
+try {
+	const pinCheck = assertManifestMatchesPins(manifest, loadToolPins());
+	process.stdout.write(`ok   manifest matches src/shared/tool-pins.json (${pinCheck.rows.length} pinned components)\n${pinCheck.formatted}\n`);
+} catch (error) {
+	failures += 1;
+	process.stdout.write(`FAIL manifest matches src/shared/tool-pins.json  <- ${error instanceof Error ? error.message : String(error)}\n`);
+}
+
 function check(label, command, commandArgs, { expect, input, timeoutMs = 120_000 } = {}) {
 	const started = Date.now();
 	const result = spawnSync(command, commandArgs, { env: cleanEnv(home), encoding: "utf8", timeout: timeoutMs, input, cwd: home, windowsHide: true });

@@ -12,7 +12,8 @@ import { BundleView } from "./bundle";
 import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
-import { CloseIcon, FullscreenIcon, ShareIcon } from "./icons";
+import { CloseIcon, FullscreenIcon, MarkupIcon, ShareIcon } from "./icons";
+import { documentEditorSurface } from "../../shared/document-editor-contract";
 import { createSlideSweep } from "./slide-sweep";
 import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
@@ -28,7 +29,6 @@ type StageKind = ViewerKind | "folder" | "bundle" | "error";
 const NO_INTRINSIC_SIZE: Size = { width: 0, height: 0 };
 /** Frames a measured viewer gets to lay out before the window falls back to a page shape. */
 const MEASURE_FRAMES = 12;
-
 /**
  * Viewers that state their own panel size through the chrome (or, for
  * pictures, through their decoded size). The rest are measured from the box
@@ -233,6 +233,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			sweep.clear();
 			seqRef.current = -1;
 			setLoad(null);
+			// Ready for next preview.
 		});
 		return () => {
 			offLoad();
@@ -246,25 +247,32 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		};
 	}, [bridge]);
 
+	const send = useCallback(
+		(seq: number, size: Size, fit: QuickLookFit) => {
+			bridge.ready({ seq, width: size.width, height: size.height, fit });
+		},
+		[bridge],
+	);
 	const report = useCallback(
 		(size: Size, fit: QuickLookFit) => {
 			const seq = seqRef.current;
 			if (seq < 0 || reported.current === seq) return;
 			reported.current = seq;
-			bridge.ready({ seq, width: size.width, height: size.height, fit });
+			send(seq, size, fit);
 		},
-		[bridge],
+		[send],
 	);
 	const resize = useCallback(
 		(size: Size) => {
 			const seq = seqRef.current;
 			if (seq < 0) return;
 			reported.current = seq;
-			bridge.ready({ seq, width: size.width, height: size.height, fit: "clamp" });
+			send(seq, size, "clamp");
 		},
-		[bridge],
+		[send],
 	);
 	const chrome = useMemo<QuickLookChrome>(() => ({ bridge, toolbar, report, resize, hideTitle: setTitleHidden, app }), [bridge, toolbar, report, resize, app]);
+
 
 	const kind: StageKind = load === null ? "fallback" : load.bundle !== null ? "bundle" : load.folder !== null ? "folder" : load.document === null ? "error" : viewerForExtension(extensionOf(load.name));
 	const measured = load !== null && SELF_SIZED[kind] !== true;
@@ -291,6 +299,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	}, [load, measured, report]);
 
 	const material = bridge.platform === "darwin" ? "glass" : "solid";
+	const editable = load !== null && load.document !== null && documentEditorSurface(load.document.ext) !== null;
 	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
 	const { document, folder, bundle } = load;
 	const meta = document === null ? describeExtension(extensionOf(load.name)) : document.package === true ? describeExtension(document.ext) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
@@ -320,6 +329,17 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 						{titleHidden ? "" : load.name}
 					</div>
 					<div ref={setToolbar} className="qlw__slot contents" />
+					{editable ? (
+						<button
+							type="button"
+							className={TOOL_BUTTON}
+							aria-label={t("quickLook.markup.start")}
+							title={t("quickLook.markup.start")}
+							onClick={() => void bridge.request("edit")}
+						>
+							<MarkupIcon />
+						</button>
+					) : null}
 					{bridge.platform === "darwin" ? (
 						<button type="button" className={TOOL_BUTTON} aria-label={t("toolbar.share")} title={t("toolbar.share")} onClick={share}>
 							<ShareIcon />

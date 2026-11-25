@@ -17,7 +17,7 @@ import { seedBundledSparseModel } from "./bundled-sparse-model";
  * (plain Node, as an agent starts the MCP server) has no `<resources>/tools` either: an empty path must not turn
  * into `tools/` under whatever directory the process happens to be in.
  */
-function bundledToolsRoot(input: { readonly resourcesPath: string; readonly env: NodeJS.ProcessEnv }): string | null {
+export function bundledToolsRoot(input: { readonly resourcesPath: string; readonly env: NodeJS.ProcessEnv }): string | null {
 	const override = input.env.AUTORAG_TOOLS_DIR?.trim() ?? "";
 	const root = override.length > 0 ? override : input.resourcesPath.length > 0 ? join(input.resourcesPath, "tools") : "";
 	return root.length > 0 && existsSync(join(root, "bin")) ? root : null;

@@ -46,6 +46,16 @@ the window size once per load, `resize(size)` follows a later user change (the
 자세한 정보 disclosure), and `useHiddenTitle` leaves the toolbar title empty for
 panels that print the name themselves.
 
+### Edit handoff to Document Editor tab
+
+For a document Dazzi can edit (`documentEditMode` in
+`src/preview/shared/annotation.ts`: text, Markdown, HTML, code, CSV/TSV, and
+Office/HWP(X)/OpenDocument packages) the toolbar shows a pen button left of
+share. Pressing it invokes `request("edit")`, which closes Quick Look and sends
+`preview:open-edit` to the Finder window so the file opens in a dedicated
+`DocumentEditorTab` (`DocumentEdit:<path>`) with direct TipTap WYSIWYG/source
+editing (plus autosave) and docked AI mark-up editing.
+
 ## Sizing
 
 `fitQuickLook` takes a fit mode. `aspect` scales media uniformly (images and
@@ -519,6 +529,35 @@ a 64KB sniff of an unknown file, read on as text only when it looks like text.
 The detail calls (details, SHA-256, folder size, audio tags, data rows, archive listings) answer only for the
 path the window is showing, and the hash, folder walk, and archive listing stop when the preview
 moves on.
+
+On macOS, a POSIX read refused with `EDEADLK` (Darwin errno 11, sometimes
+reported by Node as `Unknown system error -11`) is read through Foundation's
+`NSFileCoordinator` via `/usr/bin/osascript`. The bounded read happens inside
+the coordination accessor, allowing a cloud file provider to supply the file
+before its bytes are consumed. Local reads keep the direct path; coordination
+has a 60-second deadline and preserves the viewer's byte cap. Read failures
+become a localized preview error instead of rejecting `preview:show` without
+loading the panel. `test/preview-file-read.test.ts` exercises the real native
+coordinator with a binary document after injecting the POSIX refusal.
+
+Audio tags keep their original reader, switching only a Darwin `EDEADLK` to a
+disk snapshot copied inside the coordinator's accessor and deleted after
+parsing. Byte-range streams recover only the remaining requested range through
+the coordinator's stdout, with bounded chunks and no whole-media copy per seek.
+Native `sips`/`qlmanage` errors trigger a one-byte probe, and a snapshot retry
+happens only if that probe confirms the same provider refusal.
+Successful local conversions incur no probe or snapshot. Native HEIC decoding
+remains first; the browser fallback uses `heic-to/csp`, not eval-based
+`heic2any`, with the production CSP unchanged.
+
+The markup drawing module is lazy-loaded only on pressing the pen. Closing it
+releases text-entry focus and cancels an active edit. Changing files or closing
+the preview clears markup mode; ordinary previews retain their natural sizing
+and do not start the drawing layer's observers.
+
+Legacy `.doc`/`.ppt` files whose bytes are neither OLE, ZIP nor RTF but pass the
+existing text sniff use `TextView`. Their filename/extension is retained; real
+binary Office documents still use their existing native and text readers.
 
 A streamed viewer names the file's version in its URL (`previewStreamUrl(path,
 file)` adds `v=<modifiedAt>:<size>` from the `PreviewDocument`; the protocol

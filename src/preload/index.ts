@@ -2,6 +2,7 @@ import "@sentry/electron/preload";
 import { createAccountBridge } from "./account-bridge";
 import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
+import { createToolVersionsBridge } from "./tool-versions-bridge";
 import { createAutomationBridge } from "./automation-bridge";
 import { createDemoBridge } from "./demo-bridge";
 import { createLtrBridge } from "./ltr-bridge";
@@ -15,6 +16,7 @@ import { QUICK_SEARCH_CHANNELS, type QuickSearchSettingsBridge } from "../shared
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
 import { createErrorFixBridge } from "./error-fix-bridge";
+import { createDocumentEditorBridge } from "./document-editor-bridge";
 import { createMagicActionBridge } from "./magic-action-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
@@ -52,6 +54,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	analytics: createAnalyticsBridge(ipcRenderer),
 	appCustomizer: createAppCustomizerBridge(ipcRenderer),
 	appUpdate: createAppUpdateBridge(ipcRenderer),
+	toolVersions: createToolVersionsBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
 	automations: createAutomationBridge(ipcRenderer),
 	demo: createDemoBridge(ipcRenderer),
@@ -62,6 +65,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	interaction: createInteractionBridge(ipcRenderer),
 	indexProblem: createIndexProblemBridge(ipcRenderer),
 	errorFix: createErrorFixBridge(ipcRenderer),
+	documentEditor: createDocumentEditorBridge(ipcRenderer),
 	magicAction: createMagicActionBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),
