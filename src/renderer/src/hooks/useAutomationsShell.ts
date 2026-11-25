@@ -92,6 +92,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState(false);
+	// The rule being removed: it stays in the list until the CLI is done, but it cannot be opened again.
+	const [deletingId, setDeletingId] = useState<string | null>(null);
 	// The 삭제 중… toast, shown while the delete runs; the window stays usable meanwhile (no modal over it).
 	const [deletingMessage, setDeletingMessage] = useState<string | null>(null);
 	// Making or saving a rule says so in the toast (만드는 중… → 만들었습니다), not on the card's button, so the window stays free.
@@ -160,6 +162,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		const leftItsPage = editingId === rule.id;
 		if (leftItsPage) setEditingId(null);
 		setDeleting(true);
+		setDeletingId(rule.id);
 		clearUndoTimer();
 		setUndoMessage(null);
 		setDeletingMessage(t("automations.toast.deleting", { title: ruleTitle(rule) }));
@@ -172,6 +175,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			return;
 		} finally {
 			setDeleting(false);
+			setDeletingId(null);
 			setDeletingMessage(null);
 		}
 		const left = rules.filter((candidate) => candidate.id !== rule.id);
@@ -284,7 +288,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 					setPreviewId((current) => (current === null ? selectedId : null));
 					return;
 				case "edit":
-					if (selectedRule !== null) edit(selectedRule);
+					if (selectedRule !== null && selectedRule.id !== deletingId) edit(selectedRule);
 					return;
 				case "delete":
 					if (selectedRule !== null) askDelete(selectedRule);
@@ -298,7 +302,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [active, askDelete, confirmId, deleting, edit, menuState, previewId, rules, selectedId, selectedRule]);
+	}, [active, askDelete, confirmId, deleting, deletingId, edit, menuState, previewId, rules, selectedId, selectedRule]);
 
 	// Quick Look belongs to the list tab. A menu or confirm may have been opened from a folder inspector, so they stay.
 	useEffect(() => {
@@ -307,6 +311,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	const props: AutomationsViewProps = {
 		state: view.state,
+		deletingId,
 		daemonBusy: view.daemonBusy,
 		selectedId: selectedRule?.id ?? null,
 		onSelect: setSelectedId,

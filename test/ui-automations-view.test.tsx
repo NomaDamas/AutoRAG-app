@@ -221,6 +221,16 @@ describe("AutomationsView interaction", () => {
 		expect(p.onContextMenu).toHaveBeenCalledWith("downloads-pdf-summary", { x: 40, y: 50 });
 	});
 
+	it("does not open a rule while it is being deleted: the row fades and a click does nothing", () => {
+		const p = props({ deletingId: "hwp-to-pdf" });
+		render(p);
+		expect(rows()[1]?.dataset.deleting).toBe("true");
+		act(() => rows()[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(p.onEdit).not.toHaveBeenCalled();
+		act(() => rows()[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(p.onEdit).toHaveBeenCalledWith("downloads-pdf-summary");
+	});
+
 	it("opens the menu with no rule on the empty space below the rows", () => {
 		const p = props();
 		render(p);

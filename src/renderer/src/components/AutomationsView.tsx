@@ -27,6 +27,8 @@ import { Switch } from "./primitives/Switch";
 
 export interface AutomationsViewProps {
 	readonly state: AutomationsSnapshot;
+	/** The rule being deleted: drawn faded and cannot be opened until it is gone. */
+	readonly deletingId?: string | null;
 	readonly daemonBusy: boolean;
 	readonly selectedId: string | null;
 	readonly onSelect: (id: string) => void;
@@ -534,9 +536,12 @@ function RuleRow({
 	onSelect,
 	onOpen,
 	onContextMenu,
+	deleting = false,
 }: {
 	readonly rule: AutomationRule;
 	readonly selected: boolean;
+	/** Being deleted: faded, and a click, Enter or right click does nothing. */
+	readonly deleting?: boolean;
 	readonly onSelect: (id: string) => void;
 	readonly onOpen: (id: string) => void;
 	readonly onContextMenu: AutomationsViewProps["onContextMenu"];
@@ -555,8 +560,11 @@ function RuleRow({
 			data-rule-id={rule.id}
 			// Opening a rule selects it, and the selection outlives the trip back to
 			// the list, so it draws no fill: the row looks as it did before it was opened.
-			className="flex items-center gap-14 py-10 pr-14 pl-16 select-none cursor-pointer bg-window hover:bg-hover-row"
+			aria-disabled={deleting ? true : undefined}
+			data-deleting={deleting ? "true" : undefined}
+			className={cn("flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window", deleting ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-hover-row")}
 			onClick={() => {
+				if (deleting) return;
 				onSelect(rule.id);
 				onOpen(rule.id);
 			}}
@@ -1237,7 +1245,7 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [page, setPage] = useState<"list" | "all">("list");
 	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
@@ -1253,6 +1261,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 	// 수정, from anywhere (the list, a menu, the folder inspector, Quick Look), opens the rule's own page.
 	const detail = editing;
 	const open = (id: string): void => {
+		if (id === deletingId) return;
 		setPage("list");
 		setFromAll(false);
 		onEdit(id);
@@ -1347,6 +1356,8 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 							rules={state.rules}
 							history={history}
 							onOpen={(id) => {
+								// A rule being deleted has no page to open.
+								if (id === deletingId) return;
 								// The rule's page opens over 전체 기록, which stays where it is behind it.
 								setFromAll(true);
 								onEdit(id);
@@ -1387,10 +1398,10 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 								{/* One soft shadow on the whole list, not on each row, so it lifts the group the same however many rules there are. */}
 								<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
 									{state.rules.map((rule) => (
-										<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
+										<RuleRow key={rule.id} rule={rule} deleting={rule.id === deletingId} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
 									))}
 								</div>
-								<button type="button" data-action="automation-all-runs" className="self-end border-0 bg-transparent p-0 pr-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
+								<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 pl-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
 									{t("automations.all.open")}
 								</button>
 							</section>
