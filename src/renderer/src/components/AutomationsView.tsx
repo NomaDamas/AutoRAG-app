@@ -817,7 +817,7 @@ function AllRunsPage({ rules, history, onOpen, onBack }: { readonly rules: reado
 	return (
 		<section className="flex flex-col gap-6" data-automation-all-runs>
 			<BackLink onBack={onBack} />
-			<h1 className="m-0 text-[20px] font-medium leading-[28px] text-ink">{t("automations.all.title")}</h1>
+			<h1 className="m-0 text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
 			{all.length === 0 ? (
 				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 			) : (
