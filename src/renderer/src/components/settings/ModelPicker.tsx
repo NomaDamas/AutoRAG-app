@@ -19,9 +19,43 @@ interface SubmenuAnchor {
 	readonly trigger: HTMLButtonElement;
 }
 
-const SUBMENU_WIDTH = 256;
+const SUBMENU_WIDTH = 360;
 const SUBMENU_GAP = 4;
 const VIEWPORT_MARGIN = 12;
+
+function modelTitle(model: ModelCatalogEntry): string {
+	const name = model.name.trim();
+	return name.length > 0 && name !== model.id ? `${name}\n${model.id}` : model.id;
+}
+
+function ModelOptionRow({
+	model,
+	checked,
+	onPick,
+}: {
+	readonly model: ModelCatalogEntry;
+	readonly checked: boolean;
+	readonly onPick: (entry: ModelCatalogEntry) => void;
+}): ReactElement {
+	const displayName = model.name || model.id;
+	return (
+		<button
+			type="button"
+			role="menuitemradio"
+			aria-checked={checked}
+			title={modelTitle(model)}
+			className={`settings-menu-item is-model${checked ? " is-selected" : ""}`}
+			data-model-id={`${model.provider}/${model.id}`}
+			onClick={() => onPick(model)}
+		>
+			<div className="settings-model-item-text">
+				<span>{displayName}</span>
+				<small>{model.id}</small>
+			</div>
+			{checked ? <Check size={14} aria-hidden="true" focusable="false" /> : null}
+		</button>
+	);
+}
 
 function groupByProvider(
 	entries: readonly { readonly provider: ProviderSummary; readonly model: ModelCatalogEntry }[],
@@ -128,7 +162,7 @@ export function RolePicker({
 			: t("settingsCore.ai.emptyModels");
 
 	return (
-		<div className="settings-model-picker" onMouseLeave={scheduleClose} onMouseEnter={cancelClose}>
+		<div className={`settings-model-picker${isSearching ? " is-searching" : ""}`} onMouseLeave={scheduleClose} onMouseEnter={cancelClose}>
 			<label className="settings-menu-search">
 				<Search size={14} aria-hidden="true" focusable="false" />
 				<input
@@ -150,24 +184,14 @@ export function RolePicker({
 									<ProviderIcon small provider={bucket.provider} />
 									<span>{bucket.provider.name}</span>
 								</p>
-								{bucket.models.map((model) => {
-									const checked = isModelSelected(selected, model);
-									return (
-										<button
-											key={`${model.provider}/${model.id}`}
-											type="button"
-											role="menuitemradio"
-											aria-checked={checked}
-											className={`settings-menu-item${checked ? " is-selected" : ""}`}
-											data-model-id={`${model.provider}/${model.id}`}
-											onClick={() => onPick(model)}
-										>
-											<span>{model.name || model.id}</span>
-											<small>{model.id}</small>
-											{checked ? <Check size={14} aria-hidden="true" focusable="false" /> : null}
-										</button>
-									);
-								})}
+								{bucket.models.map((model) => (
+									<ModelOptionRow
+										key={`${model.provider}/${model.id}`}
+										model={model}
+										checked={isModelSelected(selected, model)}
+										onPick={onPick}
+									/>
+								))}
 							</div>
 						))
 					)
@@ -330,24 +354,14 @@ function ProviderSubmenu({
 			}}
 		>
 			<div className="settings-submenu-list">
-				{bucket.models.map((model) => {
-					const checked = isModelSelected(selected, model);
-					return (
-						<button
-							key={`${model.provider}/${model.id}`}
-							type="button"
-							role="menuitemradio"
-							aria-checked={checked}
-							className={`settings-menu-item${checked ? " is-selected" : ""}`}
-							data-model-id={`${model.provider}/${model.id}`}
-							onClick={() => onPick(model)}
-						>
-							<span>{model.name || model.id}</span>
-							<small>{model.id}</small>
-							{checked ? <Check size={14} aria-hidden="true" focusable="false" /> : null}
-						</button>
-					);
-				})}
+				{bucket.models.map((model) => (
+					<ModelOptionRow
+						key={`${model.provider}/${model.id}`}
+						model={model}
+						checked={isModelSelected(selected, model)}
+						onPick={onPick}
+					/>
+				))}
 			</div>
 		</div>
 	);
