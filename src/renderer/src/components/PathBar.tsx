@@ -17,6 +17,8 @@ import { FITS, fitPathBar, sameFit, type PathFit } from "../state/path-fit";
 import { volumeLabel, windowsRootPath, type Crumb, type PathCompletion } from "../state/paths";
 import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
+import { ContextMenu } from "./primitives/ContextMenu";
+import type { FinderMenuEntry } from "../state/context-menu";
 
 /**
  * v7 `.pathbar` (proto:.pathbar): macOS path bar at the foot of the Finder column.
@@ -26,6 +28,11 @@ import { FileTile } from "./primitives/FileTile";
  * current folder and as many of its parents as fit stay on the bar in full, and
  * "…" opens a dropdown of the folded ones. Only when even "…" and the current
  * folder do not fit does the last label narrow behind a trailing fade.
+ *
+ * Right-click on a segment offers "Copy Path" (Finder's "Copy as Pathname"): a
+ * folder copies its own path, the file segment the selected file's path, and
+ * the volume label, the gaps and the trailing space the folder in view. The
+ * "…" dropdown's items carry the same menu. A right-click never opens the editor.
  *
  * A click anywhere that is not a folder segment (the gaps, the trailing space,
  * the volume or file segment) turns the bar into a text field holding the full
@@ -40,6 +47,13 @@ interface PathSegment {
 	/** Null marks the decorative volume prefix ("Macintosh HD" / "C:"). */
 	readonly path: string | null;
 	readonly icon: ReactNode;
+	/** What "Copy Path" puts on the clipboard for this segment. */
+	readonly copyPath: string;
+}
+
+/** The one item of the path bar's right-click menu. */
+function copyPathEntries(label: string): readonly FinderMenuEntry[] {
+	return [{ kind: "item", action: "copyPath", label, keycap: null, tone: "default", disabled: false }];
 }
 
 /** Narrowest clipped label slot for the last segment (4px icon gap + a few glyphs). */
@@ -65,7 +79,9 @@ export function PathBar({
 	path,
 	crumbs,
 	selectedName,
+	selectedPath,
 	onNavigate,
+	onCopyPath,
 	onGoToPath,
 	completePath,
 	openEditor,
@@ -75,7 +91,11 @@ export function PathBar({
 	readonly path: string;
 	readonly crumbs: readonly Crumb[];
 	readonly selectedName: string | null;
+	/** Full path of the selected file; "Copy Path" on the file segment copies it. */
+	readonly selectedPath: string | null;
 	readonly onNavigate: (path: string) => void;
+	/** Copy a path to the system clipboard (the Finder's "Copy Path" action). */
+	readonly onCopyPath: (path: string) => void;
 	/** Go to a typed location; resolves false (editor stays open) when it cannot be opened. */
 	readonly onGoToPath: (input: string) => Promise<boolean>;
 	/** Direct child folders whose names complete the draft's last segment. */
@@ -92,10 +112,10 @@ export function PathBar({
 	const segments: PathSegment[] = [];
 	if (driveRoot !== null) {
 		// A Windows drive or share is the top folder of every location on it (D:\Data as well as C:\Users\me), and a place to go.
-		segments.push({ key: "$disk", label: volumeLabel(path), path: driveRoot, icon: <HardDrive size={14} strokeWidth={1.8} /> });
+		segments.push({ key: "$disk", label: volumeLabel(path), path: driveRoot, copyPath: driveRoot, icon: <HardDrive size={14} strokeWidth={1.8} /> });
 	} else if (local && first !== undefined) {
 		// The macOS boot volume is shown above a "Users"-rooted path as a plain label.
-		segments.push({ key: "$disk", label: volumeLabel(first.path), path: null, icon: <HardDrive size={14} strokeWidth={1.8} /> });
+		segments.push({ key: "$disk", label: volumeLabel(first.path), path: null, copyPath: path, icon: <HardDrive size={14} strokeWidth={1.8} /> });
 	}
 	crumbs.forEach((crumb, index) => {
 		const home = local && index === 1;
@@ -103,6 +123,7 @@ export function PathBar({
 			key: crumb.path,
 			label: crumb.label,
 			path: crumb.path,
+			copyPath: crumb.path,
 			icon: home ? <Home size={14} strokeWidth={1.8} /> : <FileTile kind="folder" size={16} />,
 		});
 	});
@@ -111,6 +132,7 @@ export function PathBar({
 			key: "$file",
 			label: selectedName,
 			path: null,
+			copyPath: selectedPath ?? path,
 			icon: <FileTile kind={kindFromExtension(extensionOf(selectedName))} size={16} />,
 		});
 	}
@@ -267,8 +289,35 @@ export function PathBar({
 		options[next]?.focus();
 	};
 
+	// Right-click: "Copy Path" for the segment under the pointer, else for the folder in view.
+	const [copyMenu, setCopyMenu] = useState<{ readonly cursor: { readonly x: number; readonly y: number }; readonly path: string } | null>(null);
+	const closeCopyMenu = useCallback(() => setCopyMenu(null), []);
+	const openCopyMenu = (event: MouseEvent<HTMLElement>): void => {
+		event.preventDefault();
+		event.stopPropagation();
+		if (editing || (event.target as Element).closest("[data-path-menu]") !== null) return;
+		const owner = (event.target as Element).closest<HTMLElement>("[data-copy-path]");
+		setMoreOpen(false);
+		setCopyMenu({ cursor: { x: event.clientX, y: event.clientY }, path: owner?.dataset.copyPath ?? path });
+	};
+	useEffect(() => {
+		if (copyMenu === null) return;
+		const onKey = (event: globalThis.KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			event.stopPropagation();
+			setCopyMenu(null);
+		};
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
+	}, [copyMenu]);
+	// The menu belongs to this folder and closes with the editor.
+	useEffect(() => {
+		setCopyMenu(null);
+	}, [path, editing]);
+
 	const startEditing = (event: MouseEvent<HTMLElement>): void => {
-		if (editing || (event.target as Element).closest("[data-crumb-path], [data-path-more]") !== null) return;
+		if (editing || (event.target as Element).closest("[data-crumb-path], [data-path-more], [data-path-menu]") !== null) return;
 		setDraft(path);
 		setCompletionEnabled(false);
 		setEditFor(path);
@@ -316,6 +365,7 @@ export function PathBar({
 			className={cn("pathbar relative flex h-24 flex-none cursor-text items-center whitespace-nowrap border-t border-border bg-chrome pl-8 pr-24 text-badge text-ink-body", !editing && "overflow-hidden")}
 			aria-label={t("finderComponents.pathBar")}
 			onClick={startEditing}
+			onContextMenu={openCopyMenu}
 		>
 			<div
 				ref={viewportRef}
@@ -385,6 +435,7 @@ export function PathBar({
 							disabled={segment.path === null}
 							title={segment.path ?? segment.label}
 							data-crumb-path={segment.path ?? undefined}
+							data-copy-path={segment.copyPath}
 							className="flex h-28 w-full items-center gap-6 rounded-4 border-0 bg-transparent px-6 text-left text-badge text-ink-body enabled:cursor-pointer enabled:hover:bg-hover enabled:focus-visible:bg-hover disabled:text-ink-faint focus-visible:outline-none"
 							onClick={() => {
 								if (segment.path === null) return;
@@ -396,6 +447,19 @@ export function PathBar({
 							<span className="min-w-0 flex-1 truncate">{segment.label}</span>
 						</button>
 					))}
+				</div>
+			) : null}
+			{copyMenu !== null ? (
+				<div data-path-menu="" className="contents">
+					<ContextMenu
+						cursor={copyMenu.cursor}
+						entries={copyPathEntries(t("contextMenu.copyPath"))}
+						onSelect={() => {
+							onCopyPath(copyMenu.path);
+							setCopyMenu(null);
+						}}
+						onClose={closeCopyMenu}
+					/>
 				</div>
 			) : null}
 			{editing ? (
@@ -475,6 +539,7 @@ function SegmentButton({
 			className={cn(measure ? SEGMENT_CLASS.replace("path-seg ", "") : SEGMENT_CLASS, !measure && segment.path !== null && "cursor-pointer hover:bg-hover hover:text-ink")}
 			title={measure ? undefined : (segment.path ?? segment.label)}
 			data-crumb-path={measure ? undefined : (segment.path ?? undefined)}
+			data-copy-path={measure ? undefined : segment.copyPath}
 			data-measure-segment={measure ? "" : undefined}
 			onClick={measure || segment.path === null ? undefined : () => onNavigate(segment.path ?? "")}
 		>

@@ -46,6 +46,8 @@ function render(onNavigate: (path: string) => void = () => {}): void {
 				path={PATH}
 				crumbs={breadcrumbTrail(PATH, Number.MAX_SAFE_INTEGER)}
 				selectedName={null}
+				selectedPath={null}
+				onCopyPath={() => {}}
 				onNavigate={onNavigate}
 				onGoToPath={() => Promise.resolve(true)}
 				completePath={() => Promise.resolve([])}
