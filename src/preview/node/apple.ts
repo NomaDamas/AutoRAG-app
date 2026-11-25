@@ -31,7 +31,7 @@ function dataField(value: Readonly<Record<string, PlistValue>>, key: string): Ui
 async function readWhole(path: string, cap = PREVIEW_BYTE_CAP): Promise<Uint8Array> {
 	const info = await stat(path);
 	if (!info.isFile() || info.size > cap) throw new Error("Native preview is too large to read");
-	return readFile(path);
+	return readHead(path, info.size);
 }
 
 async function readWebloc(path: string): Promise<NativePreview> {

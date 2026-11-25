@@ -1,4 +1,5 @@
 import { type FileHandle, open } from "node:fs/promises";
+import { withReadableFile } from "./provider-access";
 import type { EmbeddedThumbnail } from "./odf";
 
 /** `icns`, the four bytes that start every icon set. */
@@ -57,44 +58,46 @@ async function readRange(handle: FileHandle, position: number, length: number, o
  */
 export async function readIcnsPreview(path: string, options: IcnsReadOptions = {}): Promise<EmbeddedThumbnail | null> {
 	const want = options.want ?? Number.POSITIVE_INFINITY;
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		const header = await readRange(handle, 0, ENTRY_HEADER_BYTES, options.onRead);
-		if (header === null || !matches(header, SIGNATURE)) return null;
-		const declared = uint32(header, 4);
-		if (declared < ENTRY_HEADER_BYTES) return null;
-		// A length past the end of the file is a truncated download, not a licence to read past it.
-		const end = Math.min(declared, size);
-		let offset = ENTRY_HEADER_BYTES;
-		// Two entries can win: the largest, and the smallest one that still covers `want`.
-		let largest: Candidate | null = null;
-		let covering: Candidate | null = null;
-		for (let seen = 0; offset + ENTRY_HEADER_BYTES <= end && seen < MAX_ENTRIES; seen += 1) {
-			const entry = await readRange(handle, offset, ENTRY_HEADER_BYTES, options.onRead);
-			if (entry === null) break;
-			const length = uint32(entry, 4);
-			// An entry claiming a body the file does not hold ends the table; what was read stands.
-			if (length < ENTRY_HEADER_BYTES || offset + length > end) break;
-			const payload = length - ENTRY_HEADER_BYTES;
-			if (payload >= PNG_HEAD_BYTES && payload <= ENTRY_BYTE_CAP) {
-				const head = await readRange(handle, offset + ENTRY_HEADER_BYTES, PNG_HEAD_BYTES, options.onRead);
-				if (head !== null && matches(head, PNG_SIGNATURE)) {
-					const side = Math.max(uint32(head, IHDR_WIDTH), uint32(head, IHDR_HEIGHT));
-					const area = uint32(head, IHDR_WIDTH) * uint32(head, IHDR_HEIGHT);
-					const candidate = { offset: offset + ENTRY_HEADER_BYTES, length: payload, side, area };
-					// Equal sizes keep the first entry, so the same set always draws the same icon.
-					if (largest === null || area > largest.area) largest = candidate;
-					if (side >= want && (covering === null || area < covering.area)) covering = candidate;
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const { size } = await handle.stat();
+			const header = await readRange(handle, 0, ENTRY_HEADER_BYTES, options.onRead);
+			if (header === null || !matches(header, SIGNATURE)) return null;
+			const declared = uint32(header, 4);
+			if (declared < ENTRY_HEADER_BYTES) return null;
+			// A length past the end of the file is a truncated download, not a licence to read past it.
+			const end = Math.min(declared, size);
+			let offset = ENTRY_HEADER_BYTES;
+			// Two entries can win: the largest, and the smallest one that still covers `want`.
+			let largest: Candidate | null = null;
+			let covering: Candidate | null = null;
+			for (let seen = 0; offset + ENTRY_HEADER_BYTES <= end && seen < MAX_ENTRIES; seen += 1) {
+				const entry = await readRange(handle, offset, ENTRY_HEADER_BYTES, options.onRead);
+				if (entry === null) break;
+				const length = uint32(entry, 4);
+				// An entry claiming a body the file does not hold ends the table; what was read stands.
+				if (length < ENTRY_HEADER_BYTES || offset + length > end) break;
+				const payload = length - ENTRY_HEADER_BYTES;
+				if (payload >= PNG_HEAD_BYTES && payload <= ENTRY_BYTE_CAP) {
+					const head = await readRange(handle, offset + ENTRY_HEADER_BYTES, PNG_HEAD_BYTES, options.onRead);
+					if (head !== null && matches(head, PNG_SIGNATURE)) {
+						const side = Math.max(uint32(head, IHDR_WIDTH), uint32(head, IHDR_HEIGHT));
+						const area = uint32(head, IHDR_WIDTH) * uint32(head, IHDR_HEIGHT);
+						const candidate = { offset: offset + ENTRY_HEADER_BYTES, length: payload, side, area };
+						// Equal sizes keep the first entry, so the same set always draws the same icon.
+						if (largest === null || area > largest.area) largest = candidate;
+						if (side >= want && (covering === null || area < covering.area)) covering = candidate;
+					}
 				}
+				offset += length;
 			}
-			offset += length;
+			const chosen = covering ?? largest;
+			if (chosen === null) return null;
+			const bytes = await readRange(handle, chosen.offset, chosen.length, options.onRead);
+			return bytes === null ? null : { bytes, mime: "image/png" };
+		} finally {
+			await handle.close();
 		}
-		const chosen = covering ?? largest;
-		if (chosen === null) return null;
-		const bytes = await readRange(handle, chosen.offset, chosen.length, options.onRead);
-		return bytes === null ? null : { bytes, mime: "image/png" };
-	} finally {
-		await handle.close();
-	}
+	});
 }

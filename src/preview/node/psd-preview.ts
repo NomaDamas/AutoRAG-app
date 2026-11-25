@@ -1,6 +1,7 @@
 import { type FileHandle, open } from "node:fs/promises";
 import type * as agPsd from "ag-psd";
 import type { PixelData } from "ag-psd";
+import { withReadableFile } from "./provider-access";
 import type { EmbeddedThumbnail } from "./odf";
 import { encodePng } from "./png-encode";
 
@@ -160,17 +161,19 @@ function findThumbnail(resources: Uint8Array): PsdThumbnail | null {
  * large the document is.
  */
 export async function readPsdThumbnail(path: string, options: PsdReadOptions = {}): Promise<PsdThumbnail | null> {
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		const read = rangeReader(handle, size, options.onRead);
-		const sections = await readSections(read, size);
-		if (sections === null || sections.resources.length === 0 || sections.resources.length > SECTION_BYTE_CAP) return null;
-		const resources = await read(sections.resources.offset, sections.resources.length);
-		return resources === null ? null : findThumbnail(resources);
-	} finally {
-		await handle.close();
-	}
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const { size } = await handle.stat();
+			const read = rangeReader(handle, size, options.onRead);
+			const sections = await readSections(read, size);
+			if (sections === null || sections.resources.length === 0 || sections.resources.length > SECTION_BYTE_CAP) return null;
+			const resources = await read(sections.resources.offset, sections.resources.length);
+			return resources === null ? null : findThumbnail(resources);
+		} finally {
+			await handle.close();
+		}
+	});
 }
 
 interface RgbaPicture {
@@ -343,24 +346,26 @@ async function decodeComposite(sections: PsdSections, colorModeData: Uint8Array,
 export async function readPsdComposite(path: string, options: PsdCompositeOptions = {}): Promise<EmbeddedThumbnail | null> {
 	const maxImageDataBytes = options.maxImageDataBytes ?? PSD_COMPOSITE_MAX_IMAGE_DATA_BYTES;
 	const maxSide = options.maxSide ?? PSD_COMPOSITE_MAX_SIDE;
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		const read = rangeReader(handle, size, options.onRead);
-		const sections = await readSections(read, size);
-		if (sections === null) return null;
-		if (sections.imageData.length <= 2 || sections.imageData.length > maxImageDataBytes) return null;
-		if (sections.colorModeData.length > SECTION_BYTE_CAP || sections.resources.length > SECTION_BYTE_CAP) return null;
-		const colorModeData = await read(sections.colorModeData.offset, sections.colorModeData.length);
-		const resources = await read(sections.resources.offset, sections.resources.length);
-		const imageData = await read(sections.imageData.offset, sections.imageData.length);
-		if (colorModeData === null || resources === null || imageData === null) return null;
-		if (!holdsEverySample(sections.header, sections.large, imageData)) return null;
-		const picture = await decodeComposite(sections, colorModeData, resources, imageData);
-		if (picture === null) return null;
-		const scaled = downscale(picture, maxSide);
-		return { bytes: encodePng(scaled.data, scaled.width, scaled.height), mime: "image/png" };
-	} finally {
-		await handle.close();
-	}
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const { size } = await handle.stat();
+			const read = rangeReader(handle, size, options.onRead);
+			const sections = await readSections(read, size);
+			if (sections === null) return null;
+			if (sections.imageData.length <= 2 || sections.imageData.length > maxImageDataBytes) return null;
+			if (sections.colorModeData.length > SECTION_BYTE_CAP || sections.resources.length > SECTION_BYTE_CAP) return null;
+			const colorModeData = await read(sections.colorModeData.offset, sections.colorModeData.length);
+			const resources = await read(sections.resources.offset, sections.resources.length);
+			const imageData = await read(sections.imageData.offset, sections.imageData.length);
+			if (colorModeData === null || resources === null || imageData === null) return null;
+			if (!holdsEverySample(sections.header, sections.large, imageData)) return null;
+			const picture = await decodeComposite(sections, colorModeData, resources, imageData);
+			if (picture === null) return null;
+			const scaled = downscale(picture, maxSide);
+			return { bytes: encodePng(scaled.data, scaled.width, scaled.height), mime: "image/png" };
+		} finally {
+			await handle.close();
+		}
+	});
 }

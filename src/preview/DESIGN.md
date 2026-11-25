@@ -540,15 +540,22 @@ become a localized preview error instead of rejecting `preview:show` without
 loading the panel. `test/preview-file-read.test.ts` exercises the real native
 coordinator with a binary document after injecting the POSIX refusal.
 
-Audio tags keep their original reader, switching only a Darwin `EDEADLK` to a
-disk snapshot copied inside the coordinator's accessor and deleted after
-parsing. Byte-range streams recover only the remaining requested range through
-the coordinator's stdout, with bounded chunks and no whole-media copy per seek.
-Native `sips`/`qlmanage` errors trigger a one-byte probe, and a snapshot retry
-happens only if that probe confirms the same provider refusal.
-Successful local conversions incur no probe or snapshot. Native HEIC decoding
-remains first; the browser fallback uses `heic-to/csp`, not eval-based
-`heic2any`, with the production CSP unchanged.
+Audio tags, ZIP-backed package previews (iWork `.key`/`.numbers`/`.pages` and
+OpenDocument/Sketch/Figma thumbnails via `zip-read.ts`), embedded raster readers
+(RAW, PSD, ICNS, XMP), database/Parquet previews, native Apple previews, and file
+details keep their original direct readers, switching only a Darwin `EDEADLK` to
+a disk snapshot copied inside the coordinator's accessor and deleted after
+reading. Byte-range streams and SHA-256 hashing recover only the remaining
+requested range through the coordinator's stdout, with bounded chunks and no
+whole-file copy. Native `sips`, `qlmanage` (legacy Office and Keynote slide
+exports), `ffmpeg` probe, and archive-worker errors trigger a one-byte probe,
+and a snapshot retry happens only if that probe confirms the same provider
+refusal. Successful local reads and conversions incur no probe or snapshot.
+When macOS's native thumbnailer returns nothing or times out for an iWork file,
+the icon provider falls back to the package's embedded `preview.jpg` (which
+itself coordinates on `EDEADLK`). Native HEIC decoding remains first; the
+browser fallback uses `heic-to/csp`, not eval-based `heic2any`, with the
+production CSP unchanged.
 
 The markup drawing module is lazy-loaded only on pressing the pen. Closing it
 releases text-entry focus and cancels an active edit. Changing files or closing

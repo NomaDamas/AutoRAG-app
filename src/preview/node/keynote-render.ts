@@ -3,6 +3,7 @@ import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes }
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { defaultRun, type OfficeRun } from "./office-render";
+import { withReadableFile } from "./provider-access";
 
 /** `qlmanage` lays a 140-slide deck out in about 9s; this bounds a hung generator. */
 const QUICK_LOOK_TIMEOUT_MS = 120_000;
@@ -61,10 +62,18 @@ export async function exportWithQuickLook(job: { readonly path: string; readonly
 	const run = deps.run ?? defaultRun;
 	const scratch = await mkdtemp(join(tmpdir(), "autorag-keynote-"));
 	try {
-		await run("/usr/bin/qlmanage", ["-p", job.path, "-o", scratch], { timeoutMs: QUICK_LOOK_TIMEOUT_MS });
-		const pack = join(scratch, `${basename(job.path)}.qlpreview`);
-		const html = await readFile(join(pack, "Preview.html"), "utf8").catch(() => null);
-		if (html === null) throw new Error("Quick Look drew no page for this deck");
+		const pack = await withReadableFile(
+			job.path,
+			async (localPath) => {
+				await run("/usr/bin/qlmanage", ["-p", localPath, "-o", scratch], { timeoutMs: QUICK_LOOK_TIMEOUT_MS });
+				const outPack = join(scratch, `${basename(localPath)}.qlpreview`);
+				const previewHtml = await readFile(join(outPack, "Preview.html"), "utf8").catch(() => null);
+				if (previewHtml === null) throw new Error("Quick Look drew no page for this deck");
+				return { pack: outPack, html: previewHtml };
+			},
+			true,
+		);
+		const { html } = pack;
 		const order = quickLookSlideOrder(html);
 		if (order.length === 0) throw new Error("Quick Look drew no slides for this deck");
 		const batches: number[] = [];
@@ -76,7 +85,7 @@ export async function exportWithQuickLook(job: { readonly path: string; readonly
 				const names = order.slice(start, start + SIPS_BATCH);
 				const raw = join(scratch, `raw-${turn}`);
 				await mkdir(raw);
-				await run("/usr/bin/sips", ["-s", "format", "jpeg", "-s", "formatOptions", "85", ...[...new Set(names)].map((name) => join(pack, name)), "--out", raw], { timeoutMs: SIPS_TIMEOUT_MS });
+				await run("/usr/bin/sips", ["-s", "format", "jpeg", "-s", "formatOptions", "85", ...[...new Set(names)].map((name) => join(pack.pack, name)), "--out", raw], { timeoutMs: SIPS_TIMEOUT_MS });
 				for (const [offset, name] of names.entries()) {
 					// Written under a name the watcher ignores, then renamed: a slide file is whole the moment it exists.
 					const slide = join(job.outDir, `slides.${String(start + offset + 1).padStart(3, "0")}.jpeg`);

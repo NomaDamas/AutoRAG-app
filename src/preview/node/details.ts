@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describeBinary } from "../shared/binary-kind";
 import type { FileDetails } from "../shared/contract";
 import { locationCrumbs } from "../shared/location";
+import { coordinatedRange, needsFileCoordination, withReadableFile } from "./provider-access";
 
 const HEAD_BYTES = 4096;
 /** UDIF disk images end with a 512-byte "koly" trailer. */
@@ -29,17 +30,19 @@ function bootVolumeName(): Promise<string | null> {
 }
 
 async function readEnds(path: string, size: number): Promise<{ readonly head: Uint8Array; readonly tail: Uint8Array | null }> {
-	const handle = await open(path, "r");
-	try {
-		const head = new Uint8Array(Math.min(HEAD_BYTES, size));
-		await handle.read(head, 0, head.length, 0);
-		if (size < HEAD_BYTES + TAIL_BYTES) return { head, tail: null };
-		const tail = new Uint8Array(TAIL_BYTES);
-		await handle.read(tail, 0, TAIL_BYTES, size - TAIL_BYTES);
-		return { head, tail };
-	} finally {
-		await handle.close();
-	}
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const head = new Uint8Array(Math.min(HEAD_BYTES, size));
+			await handle.read(head, 0, head.length, 0);
+			if (size < HEAD_BYTES + TAIL_BYTES) return { head, tail: null };
+			const tail = new Uint8Array(TAIL_BYTES);
+			await handle.read(tail, 0, TAIL_BYTES, size - TAIL_BYTES);
+			return { head, tail };
+		} finally {
+			await handle.close();
+		}
+	});
 }
 
 /** Creation date, Finder-style location, and (for executables and disk images) what the binary is. */
@@ -58,9 +61,23 @@ export async function fileDetails(path: string): Promise<FileDetails> {
 /** SHA-256 of a file, streamed; resolves null when `stopped` turns true mid-way. */
 export async function sha256File(path: string, stopped: () => boolean): Promise<string | null> {
 	const hash = createHash("sha256");
-	for await (const chunk of createReadStream(path, { highWaterMark: 1024 * 1024 })) {
-		if (stopped()) return null;
-		hash.update(chunk as Buffer);
+	let offset = 0;
+	try {
+		for await (const chunk of createReadStream(path, { highWaterMark: 1024 * 1024 })) {
+			if (stopped()) return null;
+			const buf = chunk as Buffer;
+			offset += buf.length;
+			hash.update(buf);
+		}
+	} catch (error) {
+		if (!needsFileCoordination(error)) throw error;
+		const { size } = await stat(path);
+		if (offset < size) {
+			for await (const chunk of coordinatedRange(path, offset, size - 1)) {
+				if (stopped()) return null;
+				hash.update(chunk);
+			}
+		}
 	}
 	return hash.digest("hex");
 }

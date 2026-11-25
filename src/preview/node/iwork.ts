@@ -63,6 +63,11 @@ async function readKeySlides(handle: FileHandle, entries: readonly ZipEntry[], f
 	return slides;
 }
 
+/** Only the package's stored first-page image (`preview.jpg` / `preview-web.jpg`), without reading Keynote slide trees. */
+export async function readIworkFirstPage(path: string): Promise<Uint8Array | null> {
+	return withZip(path, async (handle, entries) => readFirstPage(handle, entries));
+}
+
 /**
  * What an iWork package (`.numbers`, `.pages`, `.key`) carries for the preview.
  * Apple saves a ZIP whose `preview.jpg` is the first sheet, page, or slide

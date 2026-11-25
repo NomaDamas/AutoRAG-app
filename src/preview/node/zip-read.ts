@@ -1,6 +1,7 @@
 import { type FileHandle, open } from "node:fs/promises";
 import { inflateSync } from "fflate";
 import { listZipEntries, locateZipDirectory, type ZipEntry } from "../shared/zip-list";
+import { withReadableFile } from "./provider-access";
 
 /** The end-of-central-directory record is 22 bytes plus a comment of at most 65535. */
 const TAIL_BYTES = 22 + 65535;
@@ -38,21 +39,23 @@ export async function extractZipEntry(handle: FileHandle, entry: ZipEntry, cap: 
  * (and null is returned) when the file is not a readable ZIP.
  */
 export async function withZip<T>(path: string, use: (handle: FileHandle, entries: readonly ZipEntry[]) => Promise<T>): Promise<T | null> {
-	const handle = await open(path, "r");
-	try {
-		const { size } = await handle.stat();
-		const tailLength = Math.min(size, TAIL_BYTES);
-		const base = size - tailLength;
-		const tail = await readRange(handle, base, tailLength);
-		const directory = locateZipDirectory(tail);
-		if (directory === null) return null;
-		// The directory normally sits inside the tail; a huge one is read on its own.
-		const inTail = directory.offset >= base;
-		const bytes = inTail ? tail : await readRange(handle, directory.offset, size - directory.offset);
-		const entries = listZipEntries(bytes, inTail ? base : directory.offset);
-		if (entries === null) return null;
-		return await use(handle, entries);
-	} finally {
-		await handle.close();
-	}
+	return withReadableFile(path, async (localPath) => {
+		const handle = await open(localPath, "r");
+		try {
+			const { size } = await handle.stat();
+			const tailLength = Math.min(size, TAIL_BYTES);
+			const base = size - tailLength;
+			const tail = await readRange(handle, base, tailLength);
+			const directory = locateZipDirectory(tail);
+			if (directory === null) return null;
+			// The directory normally sits inside the tail; a huge one is read on its own.
+			const inTail = directory.offset >= base;
+			const bytes = inTail ? tail : await readRange(handle, directory.offset, size - directory.offset);
+			const entries = listZipEntries(bytes, inTail ? base : directory.offset);
+			if (entries === null) return null;
+			return await use(handle, entries);
+		} finally {
+			await handle.close();
+		}
+	});
 }

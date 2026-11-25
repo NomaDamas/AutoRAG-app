@@ -13,6 +13,7 @@ import {
 	type AudioProbe,
 	type VideoAudioPlan,
 } from "../shared/video-audio";
+import { withReadableFile } from "./provider-access";
 
 /**
  * The ffmpeg half of the video-audio sidecar (see shared/video-audio.ts for why
@@ -62,8 +63,23 @@ export function ffmpegListing(command: string, path: string, timeoutMs: number):
 }
 
 async function runProbe(command: string, path: string, timeoutMs: number): Promise<AudioProbe | null> {
-	const listing = await ffmpegListing(command, path, timeoutMs);
-	return listing === null ? null : parseAudioProbe(listing);
+	try {
+		return await withReadableFile(
+			path,
+			async (localPath) => {
+				const listing = await ffmpegListing(command, localPath, timeoutMs);
+				if (listing === null) return null;
+				const parsed = parseAudioProbe(listing);
+				if (parsed.streams.length === 0 && parsed.durationSeconds === null && localPath === path) {
+					throw new Error("ffmpeg probe returned no streams");
+				}
+				return parsed;
+			},
+			true,
+		);
+	} catch {
+		return { durationSeconds: null, streams: [] };
+	}
 }
 
 /** The audio streams and duration of `path`; null when there is no ffmpeg, no such file, or ffmpeg ran out of time. */

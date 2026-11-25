@@ -13,6 +13,7 @@ import { stat } from "node:fs/promises";
 import { Worker } from "node:worker_threads";
 import { collapseToTopLevel, type ArchiveEntry } from "../preview/shared/archive-items";
 import type { ArchivePreview, ArchiveUnreadable } from "../preview/shared/contract";
+import { withReadableFile } from "../preview/node/provider-access";
 
 /** What bounds one listing. */
 export interface ArchiveListLimits {
@@ -52,39 +53,64 @@ type WorkerReply =
  * The top-level children of `sourcePath`, or the reason it cannot be listed.
  * Rejects only when `stopped` says the result is no longer wanted.
  */
+class CorruptArchivePreviewError extends Error {
+	constructor(readonly preview: ArchivePreview) {
+		super("Archive worker could not read file");
+	}
+}
+
+function runArchiveWorker(sourcePath: string, limits: ArchiveListLimits, options: ArchiveListOptions): Promise<ArchivePreview> {
+	const { promise, resolve, reject } = Promise.withResolvers<ArchivePreview>();
+	const worker = new Worker(new URL("./archive-list-worker.mjs", import.meta.url), {
+		workerData: { sourcePath, limits },
+	});
+	const timers: NodeJS.Timeout[] = [];
+	const settle = (finish: () => void): void => {
+		for (const timer of timers) clearTimeout(timer);
+		void worker.terminate();
+		finish();
+	};
+	const unreadable = (reason: ArchiveUnreadable): void => settle(() => resolve({ kind: "unreadable", reason }));
+	timers.push(setTimeout(() => unreadable("tooSlow"), limits.timeoutMs));
+	if (options.stopped !== undefined) {
+		const stopped = options.stopped;
+		const poll = (): void => {
+			if (stopped()) {
+				settle(() => reject(new Error("Archive listing cancelled")));
+				return;
+			}
+			timers.push(setTimeout(poll, STOP_POLL_MS));
+		};
+		poll();
+	}
+	worker.once("message", (reply: WorkerReply) => {
+		if (reply.ok) settle(() => resolve({ kind: "entries", entries: collapseToTopLevel(reply.entries) }));
+		else unreadable(reply.reason);
+	});
+	worker.once("error", () => unreadable("corrupt"));
+	worker.once("exit", (code) => {
+		if (code !== 0) unreadable("corrupt");
+	});
+	return promise;
+}
+
 export async function listArchive(sourcePath: string, options: ArchiveListOptions = {}): Promise<ArchivePreview> {
 	const limits = { ...ARCHIVE_LIST_LIMITS, ...options.limits };
 	if ((await stat(sourcePath)).size > limits.maxInputBytes) return { kind: "unreadable", reason: "tooLarge" };
-	return new Promise<ArchivePreview>((resolve, reject) => {
-		const worker = new Worker(new URL("./archive-list-worker.mjs", import.meta.url), {
-			workerData: { sourcePath, limits },
-		});
-		const timers: NodeJS.Timeout[] = [];
-		const settle = (finish: () => void): void => {
-			for (const timer of timers) clearTimeout(timer);
-			void worker.terminate();
-			finish();
-		};
-		const unreadable = (reason: ArchiveUnreadable): void => settle(() => resolve({ kind: "unreadable", reason }));
-		timers.push(setTimeout(() => unreadable("tooSlow"), limits.timeoutMs));
-		if (options.stopped !== undefined) {
-			const stopped = options.stopped;
-			const poll = (): void => {
-				if (stopped()) {
-					settle(() => reject(new Error("Archive listing cancelled")));
-					return;
+	try {
+		return await withReadableFile(
+			sourcePath,
+			async (localPath) => {
+				const preview = await runArchiveWorker(localPath, limits, options);
+				if (preview.kind === "unreadable" && preview.reason === "corrupt") {
+					throw new CorruptArchivePreviewError(preview);
 				}
-				timers.push(setTimeout(poll, STOP_POLL_MS));
-			};
-			poll();
-		}
-		worker.once("message", (reply: WorkerReply) => {
-			if (reply.ok) settle(() => resolve({ kind: "entries", entries: collapseToTopLevel(reply.entries) }));
-			else unreadable(reply.reason);
-		});
-		worker.once("error", () => unreadable("corrupt"));
-		worker.once("exit", (code) => {
-			if (code !== 0) unreadable("corrupt");
-		});
-	});
+				return preview;
+			},
+			true,
+		);
+	} catch (error) {
+		if (error instanceof CorruptArchivePreviewError) return error.preview;
+		throw error;
+	}
 }
