@@ -16,7 +16,7 @@ import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationRu
 import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
+import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
 import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
 import { startErrorFix } from "../hooks/useErrorFix";
@@ -61,14 +61,18 @@ export interface AutomationsViewProps {
 	readonly onTalk?: (() => void) | undefined;
 }
 
-const TONE_DOT: Readonly<Record<RunTone, string>> = {
+const TONE_DOT: Readonly<Record<RunDotTone, string>> = {
 	ok: "--ok-dot",
-	fail: "--error-orange-dot",
+	error: "--error-orange-dot",
+	fail: "--danger-dot",
 	never: "--text-faint",
 };
 
-/** The status dot: green after a clean run, orange after a failure, a filled grey one before any run. */
-export function RunDot({ tone }: { readonly tone: RunTone }): ReactElement {
+/**
+ * The status dot (Figma 672:3740): green after a clean run, orange when it could not start or finish, red when it ran
+ * and failed, a filled grey one before any run.
+ */
+export function RunDot({ tone }: { readonly tone: RunDotTone }): ReactElement {
 	return (
 		<span data-run-tone={tone} className="flex flex-none">
 			<StatusDot token={TONE_DOT[tone]} />
@@ -562,6 +566,8 @@ function RuleRow({
 				onContextMenu(rule.id, { x: event.clientX, y: event.clientY });
 			}}
 		>
+			{/* Figma 672:3740: how the last run went, before the name. */}
+			<RunDot tone={runDotTone(rule.lastRun)} />
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-2">
 				<span className="truncate text-[13px] font-medium leading-[21px] text-ink">{ruleTitle(rule)}</span>
 				<span className="truncate text-badge leading-[16px] text-ink-muted">{whenText(rule)}</span>
@@ -632,7 +638,7 @@ function RunLine({ run, rule, onOpen, flat = false }: { readonly run: Automation
 	const body = (
 		<>
 			<div className="flex w-full items-center gap-10">
-				<RunDot tone={tone} />
+				<RunDot tone={runDotTone(run)} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
 					<span className="truncate text-[13px] leading-[20px] text-ink">{first}</span>
 					{second === null ? null : <span className="truncate text-badge leading-[17px] text-ink-muted">{second}</span>}
@@ -880,11 +886,78 @@ export function templateTaken(rules: readonly AutomationRule[], id: TemplateId):
 	);
 }
 
+/** The names the OS gives a screenshot it saves (macOS, Windows, in the four interface languages). */
+const SCREENSHOT_NAME = /^(screenshot|screen shot|스크린샷|スクリーンショット|屏幕截图|截屏)/i;
+const IMAGE_FILE = /.(png|jpe?g|heic|gif|webp)$/i;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** How many files directly in `path` pass `keep`; null when the folder cannot be read. */
+async function countFiles(path: string, keep: (entry: { readonly name: string; readonly mtimeMs: number }) => boolean): Promise<number | null> {
+	try {
+		const listing = await window.autorag.fs.listDir(path);
+		return listing.entries.filter((entry) => entry.kind === "file" && keep(entry)).length;
+	} catch {
+		return null;
+	}
+}
+
 /**
- * One recommendation (Figma 672:3718): the chevron, its name over when it runs, and 추가하기. A click on the row opens
- * it downward to show what it would do, read-only (언제, 할 일); 추가하기 writes it at once, open or not.
+ * Why each recommendation is worth having, read from the person's own files (Figma 672:3718): how many PDFs sit in
+ * Downloads, how many screenshots on the Desktop still have the name the OS gave them, and how long ago Documents last
+ * reached search (or, when this app has not seen an index run, how many of its files changed this week). A template
+ * with nothing to point at gets no reason, and its card falls back to when it would run.
  */
-function RecommendationCard({ template, locations, onAdd }: { readonly template: Template; readonly locations: readonly FsLocation[]; readonly onAdd: (draft: AutomationDraft) => Promise<boolean> }): ReactElement {
+function useRecommendationReasons(locations: readonly FsLocation[]): Readonly<Partial<Record<TemplateId, string>>> {
+	const { t } = useTranslation();
+	const [reasons, setReasons] = useState<Readonly<Partial<Record<TemplateId, string>>>>({});
+	useEffect(() => {
+		let live = true;
+		const folder = (icon: Template["folder"]): string | null => locations.find((location) => location.icon === icon && location.available)?.path ?? null;
+		const downloads = folder("downloads");
+		const desktop = folder("desktop");
+		const documents = folder("documents");
+		void (async () => {
+			const next: Partial<Record<TemplateId, string>> = {};
+			const pdfs = downloads === null ? null : await countFiles(downloads, (entry) => /.pdf$/i.test(entry.name));
+			if (pdfs !== null && pdfs > 0) next.pdf = t("automations.recs.reason.pdf", { count: pdfs });
+			const shots = desktop === null ? null : await countFiles(desktop, (entry) => IMAGE_FILE.test(entry.name) && SCREENSHOT_NAME.test(entry.name));
+			if (shots !== null && shots > 0) next.screenshot = t("automations.recs.reason.screenshot", { count: shots });
+			const finished = await window.autorag?.indexActivity
+				?.get()
+				.then((snapshot) => (snapshot.finishedAt === null ? null : Date.parse(snapshot.finishedAt)))
+				.catch(() => null);
+			if (finished !== null && finished !== undefined && Number.isFinite(finished) && Date.now() - finished >= DAY_MS) {
+				next.refresh = t("automations.recs.reason.refreshAgo", { time: relativeTime(finished) });
+			} else if (documents !== null) {
+				const weekAgo = Date.now() - 7 * DAY_MS;
+				const changed = await countFiles(documents, (entry) => entry.mtimeMs >= weekAgo);
+				if (changed !== null && changed > 0) next.refresh = t("automations.recs.reason.refreshChanged", { count: changed });
+			}
+			if (live) setReasons(next);
+		})();
+		return () => {
+			live = false;
+		};
+	}, [locations, t]);
+	return reasons;
+}
+
+/**
+ * One recommendation (Figma 672:3718): the chevron, its name over why it is worth having, and 추가하기. A click on the
+ * row opens it downward to show what it would do, read-only (언제, 할 일); 추가하기 writes it at once, open or not.
+ */
+function RecommendationCard({
+	template,
+	locations,
+	reason,
+	onAdd,
+}: {
+	readonly template: Template;
+	readonly locations: readonly FsLocation[];
+	/** Why it is worth having, from the person's files; without one the card says when it would run. */
+	readonly reason: string | undefined;
+	readonly onAdd: (draft: AutomationDraft) => Promise<boolean>;
+}): ReactElement {
 	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -892,7 +965,7 @@ function RecommendationCard({ template, locations, onAdd }: { readonly template:
 	const draft = templateDraft(template, locations, task);
 	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
 	return (
-		<div className="flex flex-col gap-10 rounded-12 border border-border bg-window px-16 py-12" data-template={template.id} data-open={open ? "true" : undefined}>
+		<div className="flex flex-col gap-12 rounded-12 border border-border bg-window px-16 py-14" data-template={template.id} data-open={open ? "true" : undefined}>
 			<div className="flex items-center gap-10">
 				<button
 					type="button"
@@ -900,10 +973,12 @@ function RecommendationCard({ template, locations, onAdd }: { readonly template:
 					className="flex min-w-0 flex-1 items-center gap-10 border-0 bg-transparent p-0 text-left cursor-pointer"
 					onClick={() => setOpen((was) => !was)}
 				>
-					<ChevronDownIcon size={13} className={cn("flex-none text-ink-muted transition-transform duration-(--dur-color)", open && "rotate-180")} />
-					<span className="flex min-w-0 flex-1 flex-col gap-1">
-						<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-						<span className="truncate text-meta leading-[17px] text-ink-muted">{when}</span>
+					<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
+					<span className="flex min-w-0 flex-1 flex-col gap-2">
+						<span className="truncate text-[14px] font-medium leading-[17px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined ? undefined : "true"}>
+							{reason ?? when}
+						</span>
 					</span>
 				</button>
 				<button
@@ -911,8 +986,8 @@ function RecommendationCard({ template, locations, onAdd }: { readonly template:
 					data-action="automation-template-add"
 					disabled={draft === null || busy}
 					className={cn(
-						"inline-flex h-28 flex-none items-center rounded-6 px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
-						open ? "border-0 bg-accent text-on-accent hover:bg-accent-hover" : "border border-border bg-window text-ink hover:bg-hover",
+						"inline-flex h-28 flex-none items-center rounded-6 border px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
+						open ? "border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover" : "border-border bg-window text-ink-body hover:bg-hover",
 					)}
 					onClick={() => {
 						if (draft === null) return;
@@ -924,7 +999,7 @@ function RecommendationCard({ template, locations, onAdd }: { readonly template:
 				</button>
 			</div>
 			{open ? (
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-16 gap-y-4 rounded-8 bg-subtle-alt px-12 py-8 text-meta leading-[18px]">
+				<dl className="m-0 grid grid-cols-[minmax(40px,auto)_1fr] gap-x-12 gap-y-6 rounded-8 bg-subtle-alt px-12 py-10 text-meta leading-[14px] [&>dt]:whitespace-nowrap">
 					<dt className="text-ink-muted">{t("automations.create.when")}</dt>
 					<dd className="m-0 text-ink">{when}</dd>
 					<dt className="text-ink-muted">{t("automations.create.task")}</dt>
@@ -1039,17 +1114,13 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 		scrollRef.current?.scrollTo?.({ top: 0 });
 	}, [detail?.id, page]);
 	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
-	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} onAdd={onCreate} />);
+	const reasons = useRecommendationReasons(locations);
+	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons[template.id]} onAdd={onCreate} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
-			{/* The AI 에이전트 tab's head (Figma 672:3718): the mark and the name on the left, 채팅 | 자동화 in the middle. */}
+			{/* The AI 에이전트 tab's head (Figma 672:3718): the name on the left (no mark), 채팅 | 자동화 in the middle. */}
 			<div className="automations-head grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-8 h-tab px-12 select-none" data-automations-head>
-				<span className="flex min-w-0 items-center gap-8">
-					<span className="grid flex-none place-items-center text-accent">
-						<SparklesIcon />
-					</span>
-					<strong className="truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.aiSearch")}</strong>
-				</span>
+				<strong className="min-w-0 truncate text-sm font-medium leading-[19.5px] text-ink">{t("places.aiSearch")}</strong>
 				<AgentSegment value="automations" onChange={(value) => (value === "chat" ? onShowChat?.() : undefined)} />
 				<span />
 			</div>
@@ -1101,11 +1172,11 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 					) : state.rules.length === 0 ? (
 						// Figma 672:3718: with no rules the page is only what the person's files suggest, and a way to ask in words.
 						<section className="flex flex-col gap-10" data-automation-recommendations>
-							<h2 className="m-0 mb-2 text-[15px] font-medium leading-[22px] text-ink">{t("automations.recs.title")}</h2>
+							<h2 className="m-0 mb-2 text-[15px] font-bold leading-[22px] text-ink">{t("automations.recs.title")}</h2>
 							{recommendationCards}
 							<p className="m-0 mt-6 flex items-center gap-8 text-meta leading-[18px] text-ink-muted">
 								{t("automations.recs.more")}
-								<button type="button" data-action="automation-talk" className="border-0 bg-transparent p-0 text-meta font-medium text-accent-text underline underline-offset-2 cursor-pointer" onClick={() => onTalk?.()}>
+								<button type="button" data-action="automation-talk" className="border-0 bg-transparent p-0 text-meta text-accent-text cursor-pointer hover:underline" onClick={() => onTalk?.()}>
 									{t("automations.recs.talk")}
 								</button>
 							</p>
@@ -1114,7 +1185,7 @@ export function AutomationsView({ state, selectedId, onSelect, onEdit, onAskDele
 						<>
 							<section className="flex flex-col gap-8">
 								<div className="flex items-center gap-8">
-									<h2 className="m-0 flex-1 text-[14px] font-medium leading-[20px] text-ink">{t("automations.mine")}</h2>
+									<h2 className="m-0 flex-1 text-[14px] font-bold leading-[20px] text-ink">{t("automations.mine")}</h2>
 									<button
 										type="button"
 										data-action="automation-composer-open"

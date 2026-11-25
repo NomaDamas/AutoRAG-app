@@ -793,11 +793,17 @@
     },
     "breadcrumb": "Location",
     "recs": {
-      "title": "Automations for your files",
+      "title": "Suggested for your files",
       "section": "Suggested",
       "add": "Add",
       "more": "Not what you need?",
-      "talk": "Describe one"
+      "talk": "Make one in chat",
+      "reason": {
+        "pdf": "PDFs sitting in Downloads: {{count}}",
+        "screenshot": "Unnamed screenshots on your Desktop: {{count}}",
+        "refreshAgo": "Your Documents folder was last indexed {{time}}",
+        "refreshChanged": "Files changed in Documents this past week: {{count}}"
+      }
     },
     "nudge": {
       "pdf": "An automation could summarize each new PDF as it arrives.",

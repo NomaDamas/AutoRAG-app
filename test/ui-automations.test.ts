@@ -12,6 +12,7 @@ import {
 	relativeTime,
 	ruleTitle,
 	rulesWatching,
+	runDotTone,
 	runTone,
 	whatText,
 	whenText,
@@ -174,6 +175,11 @@ describe("how the last run went", () => {
 		expect(runTone(run())).toBe("ok");
 		expect(runTone(run({ exitCode: 2 }))).toBe("fail");
 		expect(runTone(run({ exitCode: null, timedOut: true }))).toBe("fail");
+		expect(runDotTone(null)).toBe("never");
+		expect(runDotTone(run())).toBe("ok");
+		expect(runDotTone(run({ exitCode: 2 }))).toBe("fail");
+		expect(runDotTone(run({ exitCode: null, timedOut: true }))).toBe("error");
+		expect(runDotTone(run({ exitCode: null, error: "spawn hwp5 ENOENT" }))).toBe("error");
 		expect(runTone(run({ exitCode: null, error: "spawn hwp5 ENOENT" }))).toBe("fail");
 	});
 

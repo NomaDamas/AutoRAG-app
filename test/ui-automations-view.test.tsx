@@ -11,6 +11,11 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 const place = (name: string, path: string, icon: FsLocation["icon"]): FsLocation => ({ name, path, section: "favorites", icon, available: true, scanned: true }) as FsLocation;
 const runLogs: Record<string, readonly AutomationRun[]> = {};
+/** What each folder holds, by name, for the recommendations' reasons. */
+const listings: Record<string, readonly string[]> = {
+	"/Users/jeffrey/Desktop": ["스크린샷 2026-11-20 오후 3.12.04.png", "Screenshot 2026-11-21 101010.png", "여행 계획.png", "메모.txt"],
+	"/Users/jeffrey/Downloads": ["계약서.pdf", "청구서.PDF", "manual.pdf", "setup.zip"],
+};
 Reflect.set(globalThis, "autorag", {
 	automations: { history: async (id: string): Promise<readonly AutomationRun[]> => runLogs[id] ?? [] },
 	fs: {
@@ -19,6 +24,7 @@ Reflect.set(globalThis, "autorag", {
 			place("Documents", "/Users/jeffrey/Documents", "documents"),
 			place("Downloads", "/Users/jeffrey/Downloads", "downloads"),
 		],
+		listDir: async (path: string) => ({ path, entries: (listings[path] ?? []).map((name) => ({ name, path: `${path}/${name}`, kind: "file", mtimeMs: 0 })) }),
 	},
 });
 
@@ -130,8 +136,8 @@ describe("AutomationsView list", () => {
 		render(props({ selectedId: "hwp-to-pdf" }));
 		expect(rows().map((row) => row.getAttribute("aria-selected"))).toEqual(["false", "true", "false"]);
 		expect(rows().every((row) => row.querySelector('[data-sidebar-switch="automation-rule-on"]') !== null)).toBe(true);
-		// The run dot and the last-run words are gone from the row; the rule's page and 전체 기록 say how runs went.
-		expect(host.querySelector("[data-run-tone]")).toBeNull();
+		// Figma 672:3740: every row leads with how its last run went; the last-run words stay on the rule's page.
+		expect(rows().every((row) => row.querySelector("[data-run-tone]") !== null)).toBe(true);
 		expect(host.querySelector("[data-rule-last-run]")).toBeNull();
 	});
 
@@ -229,20 +235,32 @@ describe("AutomationsView background service", () => {
 });
 
 describe("AutomationsView empty and error states", () => {
-	it("offers only the recommendations and 말로 만들기 when there are no rules: no 내 자동화 list, no 새 자동화 card", () => {
+	it("offers only the recommendations and 채팅으로 만들기 when there are no rules: no 내 자동화 list, no 새 자동화 card", () => {
 		const onTalk = vi.fn();
 		render(props({ state: state([]), onTalk }));
 		expect(rows()).toEqual([]);
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["내 파일에서 찾은 자동화"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["내 파일에서 찾은 추천 자동화"]);
 		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "pdf", "refresh"]);
 		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-all-runs"]')).toBeNull();
 		expect(text(host.querySelector("[data-automation-recommendations]"))).toContain("원하는 게 없나요?");
 		const talk = host.querySelector('[data-action="automation-talk"]');
-		expect(text(talk)).toBe("말로 만들기");
+		expect(text(talk)).toBe("채팅으로 만들기");
 		click(talk);
 		expect(onTalk).toHaveBeenCalledTimes(1);
+	});
+
+	it("says why each recommendation is worth having from the person's own files, and falls back to when it runs (Figma 672:3718)", async () => {
+		render(props({ state: state([]) }));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const reason = (id: string): string => text(host.querySelector(`[data-template="${id}"] button[aria-expanded]`)?.lastElementChild?.lastElementChild ?? null);
+		expect(reason("pdf")).toBe("다운로드에 PDF가 3개 있어요");
+		expect(reason("screenshot")).toBe("데스크탑에 이름 없는 스크린샷이 2개 있어요");
+		// Nothing in Documents changed this week and no index run was seen, so the card says when it would run.
+		expect(host.querySelector(`[data-template="refresh"] [data-recommendation-reason]`)).toBeNull();
 	});
 
 	it("shows nothing but the frame before the first read finishes, instead of a false empty list", () => {
@@ -391,7 +409,7 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		});
 		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 (3)"]);
 		const runs = [...host.querySelectorAll("[data-run]")];
-		expect(runs.map((run) => run.querySelector("[data-run-tone]")?.getAttribute("data-run-tone"))).toEqual(["fail", "fail", "ok"]);
+		expect(runs.map((run) => run.querySelector("[data-run-tone]")?.getAttribute("data-run-tone"))).toEqual(["error", "error", "ok"]);
 		expect(text(runs[0])).toContain("파일 1개시간 초과");
 		expect(text(runs[1])).toContain("spawn hwp5 ENOENT");
 		expect(text(runs[2])).toContain("파일 3개완료");

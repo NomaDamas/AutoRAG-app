@@ -235,6 +235,18 @@ export function runTone(run: AutomationRun | null): RunTone {
 	return run.timedOut || run.error !== undefined || run.exitCode !== 0 ? "fail" : "ok";
 }
 
+/**
+ * The run dot's four states: `never` before any run, `ok` after a clean one, `error` when the run could not
+ * start or finish (a missing command, a timeout), and `fail` when it ran to the end and reported failure.
+ */
+export type RunDotTone = "ok" | "error" | "fail" | "never";
+
+export function runDotTone(run: AutomationRun | null): RunDotTone {
+	if (run === null) return "never";
+	if (run.timedOut || run.error !== undefined) return "error";
+	return run.exitCode === 0 ? "ok" : "fail";
+}
+
 export function failReason(run: AutomationRun): string {
 	if (run.timedOut) return t("automations.fail.timeout");
 	if (run.error !== undefined) {

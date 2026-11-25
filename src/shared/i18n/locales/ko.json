@@ -793,11 +793,17 @@
     },
     "breadcrumb": "현재 위치",
     "recs": {
-      "title": "내 파일에서 찾은 자동화",
+      "title": "내 파일에서 찾은 추천 자동화",
       "section": "추천",
       "add": "추가하기",
       "more": "원하는 게 없나요?",
-      "talk": "말로 만들기"
+      "talk": "채팅으로 만들기",
+      "reason": {
+        "pdf": "다운로드에 PDF가 {{count}}개 있어요",
+        "screenshot": "데스크탑에 이름 없는 스크린샷이 {{count}}개 있어요",
+        "refreshAgo": "문서 폴더가 {{time}}에 마지막으로 반영됐어요",
+        "refreshChanged": "문서에서 최근 일주일 동안 바뀐 파일이 {{count}}개 있어요"
+      }
     },
     "nudge": {
       "pdf": "새 PDF가 들어올 때마다 요약해 두는 자동화를 만들 수 있습니다.",
