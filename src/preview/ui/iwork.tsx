@@ -63,7 +63,8 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 
 	useEffect(() => {
 		if (paged || bytes === null) return;
-		const next = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
+		const mime = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 ? "image/png" : "image/jpeg";
+		const next = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: mime }));
 		setFailed(false);
 		setUrl(next);
 		return () => {

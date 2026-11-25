@@ -551,11 +551,15 @@ whole-file copy. Native `sips`, `qlmanage` (legacy Office and Keynote slide
 exports), `ffmpeg` probe, and archive-worker errors trigger a one-byte probe,
 and a snapshot retry happens only if that probe confirms the same provider
 refusal. Successful local reads and conversions incur no probe or snapshot.
-When macOS's native thumbnailer returns nothing or times out for an iWork file,
-the icon provider falls back to the package's embedded `preview.jpg` (which
-itself coordinates on `EDEADLK`). Native HEIC decoding remains first; the
-browser fallback uses `heic-to/csp`, not eval-based `heic2any`, with the
-production CSP unchanged.
+Unmaterialized macOS cloud placeholders (`SF_DATALESS`: `blocks === 0 && size > 0`
+verified by `/usr/bin/stat -f %Sf`, never checked by opening the file) never
+trigger background POSIX reads during folder browsing (`readImageMetadata` and
+`readEmbeddedImage` skip them so libuv's threadpool is never starved by blocking
+iCloud downloads), and Quick Look serves iWork and image placeholders directly
+from macOS's `QLThumbnailGenerator` cache (`nativeImage.createThumbnailFromPath`
+at 1440px) in tens of milliseconds without materializing the package. Native HEIC
+decoding remains first; the browser fallback uses `heic-to/csp`, not eval-based
+`heic2any`, with the production CSP unchanged.
 
 The markup drawing module is lazy-loaded only on pressing the pen. Closing it
 releases text-entry focus and cancels an active edit. Changing files or closing

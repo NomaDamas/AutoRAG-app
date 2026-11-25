@@ -14,6 +14,7 @@ import {
 	BrowserWindow,
 	clipboard,
 	ipcMain,
+	nativeImage,
 	nativeTheme,
 	screen,
 	ShareMenu,
@@ -73,6 +74,7 @@ import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } fr
 import { createVideoPlayback } from "./video-playback";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
+import { isDatalessFile } from "./provider-access";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
 
 /** Media reports its size once decoded; anything slower still shows by then. */
@@ -410,6 +412,17 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 	}
 	switch (byteNeed(kind)) {
 		case "stream":
+			if (kind === "image" && (await isDatalessFile(path))) {
+				const document = await readPreviewFile(path, 0);
+				try {
+					const image = await nativeImage.createThumbnailFromPath(path, { width: 1440, height: 1440 });
+					if (!image.isEmpty()) return { ...document, mime: "image/png", bytes: image.toPNG() };
+				} catch {
+					// Fall through to streaming the file on demand.
+				}
+				return document;
+			}
+			return readPreviewFile(path, 0);
 		case "query":
 			return readPreviewFile(path, 0);
 		case "prefix":

@@ -10,6 +10,7 @@ import { strToU8, zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listArchive } from "../src/main/archive-list";
 import { createIconProvider } from "../src/main/file-icon";
+import { readImageMetadata } from "../src/main/image-metadata";
 import { readNativePreview } from "../src/preview/node/apple";
 import { readAudioMetadata } from "../src/preview/node/audio-metadata";
 import { previewData } from "../src/preview/node/data";
@@ -19,7 +20,7 @@ import { readIworkPreview } from "../src/preview/node/iwork";
 import { exportWithQuickLook } from "../src/preview/node/keynote-render";
 import { readEmbeddedThumbnail } from "../src/preview/node/odf";
 import { previewResponseForPath } from "../src/preview/node/protocol";
-import { withReadableFile } from "../src/preview/node/provider-access";
+import { isDatalessFile, withReadableFile } from "../src/preview/node/provider-access";
 import { pixelSize } from "../src/preview/node/sips";
 import { FIXTURE_7Z } from "./archive-fixtures";
 import { buildIwa, concat, pbBytes, pbVarint } from "./iwa-fixture";
@@ -32,7 +33,9 @@ vi.mock("node:fs/promises", async (original) => {
 	const actual = await original<typeof fs>();
 	const open = vi.fn(actual.open);
 	const readFile = vi.fn(actual.readFile);
-	return { ...actual, open, readFile, default: { ...actual, open, readFile } };
+	const stat = vi.fn(actual.stat);
+	const lstat = vi.fn(actual.lstat);
+	return { ...actual, open, readFile, stat, lstat, default: { ...actual, open, readFile, stat, lstat } };
 });
 vi.mock("node:fs", async (original) => {
 	const actual = await original<typeof nodeFs>();
@@ -278,7 +281,7 @@ describe("preview provider access", () => {
 		const archived = await listArchive(archivePath);
 		expect(archived.kind).toBe("entries");
 	});
-	it("falls back to the embedded iWork preview image when macOS native thumbnailing times out or returns null", async () => {
+	it("does NOT read embedded iWork packages on macOS thumbnails (avoids materializing dataless iCloud files or starving libuv)", async () => {
 		const keyPath = join(dir, "ContextCite.key");
 		await fs.writeFile(keyPath, zipSync({ "preview.jpg": JPEG }));
 		const embedded = vi.fn(async () => PNG);
@@ -286,13 +289,83 @@ describe("preview provider access", () => {
 			platform: "darwin",
 			thumbnail: async () => null,
 			embeddedImage: embedded,
-			systemIcon: async () => null,
+			systemIcon: async () => PNG,
 			warn: () => undefined,
 		});
 		const mtimeMs = 1;
 		const url = await provider.preview({ path: keyPath, ext: "key", mtimeMs });
 		expect(url).not.toBeNull();
-		expect(embedded).toHaveBeenCalledWith(keyPath, "key", 640);
+		expect(embedded).not.toHaveBeenCalled();
 		expect(provider.read(keyPath, mtimeMs, 640)).toEqual(PNG);
+	});
+	it.skipIf(process.platform !== "darwin")("identifies dataless cloud placeholders (blocks === 0, size > 0, SF_DATALESS) without opening or reading them", async () => {
+		const cloudPath = join(dir, "cloud-deck.key");
+		await fs.writeFile(cloudPath, zipSync({ "preview.jpg": JPEG }));
+		const realStat = await realFs.stat(cloudPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === cloudPath) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		vi.mocked(childProcess.execFile).mockImplementationOnce((...args) => {
+			const callback = args.at(-1) as (error: null, stdout: string, stderr: string) => void;
+			callback(null, "compressed,dataless\n", "");
+			return {} as childProcess.ChildProcess;
+		});
+		vi.mocked(fs.open).mockClear();
+		expect(await isDatalessFile(cloudPath)).toBe(true);
+		expect(fs.open).not.toHaveBeenCalled();
+	});
+	it.skipIf(process.platform !== "darwin")("skips EXIF open/read on dataless cloud images so folder browsing never triggers iCloud downloads or blocks libuv", async () => {
+		const imgPath = join(dir, "cloud-icon.png");
+		await fs.writeFile(imgPath, PNG);
+		const realStat = await realFs.stat(imgPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === imgPath) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		vi.mocked(childProcess.execFile).mockImplementationOnce((...args) => {
+			const callback = args.at(-1) as (error: null, stdout: string, stderr: string) => void;
+			callback(null, "compressed,dataless\n", "");
+			return {} as childProcess.ChildProcess;
+		});
+		vi.mocked(fs.open).mockClear();
+		expect(await readImageMetadata(imgPath, "png")).toBeNull();
+		expect(fs.open).not.toHaveBeenCalled();
+	});
+	it.skipIf(process.platform !== "darwin")("serves dataless iWork preview immediately via macOS Quick Look thumbnail without opening/downloading the file", async () => {
+		const keyPath = join(dir, "2-3-RAG와 LLM 평가의 모든것.key");
+		await fs.writeFile(keyPath, zipSync({ "preview.jpg": JPEG }));
+		const realStat = await realFs.stat(keyPath);
+		vi.mocked(fs.stat).mockImplementation(async (...args) => {
+			const st = await realFs.stat(...args);
+			if (args[0] === keyPath) {
+				return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { blocks: 0, size: realStat.size });
+			}
+			return st;
+		});
+		vi.mocked(childProcess.execFile).mockImplementationOnce((...args) => {
+			const callback = args.at(-1) as (error: null, stdout: string, stderr: string) => void;
+			callback(null, "compressed,dataless\n", "");
+			return {} as childProcess.ChildProcess;
+		});
+		const nativeThumb = vi.fn(async () => PNG);
+		vi.mocked(fs.open).mockClear();
+		const preview = await readIworkPreview(keyPath, { datalessThumbnail: nativeThumb });
+		expect(nativeThumb).toHaveBeenCalledWith(keyPath);
+		expect(preview).toEqual({ firstPage: PNG, pages: null });
+		expect(fs.open).not.toHaveBeenCalled();
+	});
+	it.skipIf(process.platform !== "darwin")("does not spawn a subprocess to check SF_DATALESS for normal local files (blocks > 0)", async () => {
+		const localPath = join(dir, "local.png");
+		await fs.writeFile(localPath, PNG);
+		vi.mocked(childProcess.execFile).mockClear();
+		expect(await isDatalessFile(localPath)).toBe(false);
+		expect(childProcess.execFile).not.toHaveBeenCalled();
 	});
 });

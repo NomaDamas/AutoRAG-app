@@ -1,8 +1,32 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, open, rm } from "node:fs/promises";
+import { mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
+/**
+ * True on macOS when `path` is an unmaterialized cloud placeholder (`SF_DATALESS`).
+ * Normal local files have `blocks > 0` (or `size === 0`) and short-circuit on `stat()`
+ * with zero subprocesses; only zero-block non-empty files are verified with `/usr/bin/stat -f %Sf`
+ * so sparse local files are never misclassified. Never opens or reads file data.
+ */
+export async function isDatalessFile(path: string): Promise<boolean> {
+	if (process.platform !== "darwin") return false;
+	try {
+		const info = await stat(path);
+		if (!info.isFile() || info.size === 0 || info.blocks > 0) return false;
+	} catch {
+		return false;
+	}
+	const { promise, resolve } = Promise.withResolvers<boolean>();
+	execFile("/usr/bin/stat", ["-f", "%Sf", path], { timeout: 2000 }, (error, stdout) => {
+		if (error !== null) {
+			resolve(false);
+			return;
+		}
+		resolve(stdout.trim().split(",").includes("dataless"));
+	});
+	return promise;
+}
 /** Darwin EDEADLK is 11; libuv may expose it only as an unmapped negative errno. */
 export function needsFileCoordination(error: unknown): boolean {
 	return process.platform === "darwin" && typeof error === "object" && error !== null &&

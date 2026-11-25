@@ -32,7 +32,7 @@
  */
 
 import { extname } from "node:path";
-import { realpath } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import { EMBEDDED_IMAGE_EXTENSIONS, readEmbeddedImage } from "../preview/node/embedded-image";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS } from "../preview/node/odf";
 import { GOOGLE_DRIVE_EXTENSIONS } from "../preview/shared/google-drive";
@@ -312,12 +312,21 @@ export function isBlankBitmap(bitmap: Uint8Array): boolean {
 	return true;
 }
 
+async function resolveTargetPath(path: string): Promise<string> {
+	try {
+		const info = await lstat(path);
+		return info.isSymbolicLink() ? await realpath(path).catch(() => path) : path;
+	} catch {
+		return path;
+	}
+}
+
 async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const [{ nativeImage }, resolved] = await Promise.all([
 		import("electron"),
-		realpath(path).catch(() => path),
+		resolveTargetPath(path),
 	]);
 	const image = await nativeImage.createThumbnailFromPath(resolved, { width: size, height: size });
 	if (image.isEmpty()) return null;
@@ -363,7 +372,7 @@ async function defaultSystemIcon(path: string): Promise<Uint8Array | null> {
 	// this file is loaded outside Electron (unit tests inject `systemIcon` instead).
 	const [{ app }, resolved] = await Promise.all([
 		import("electron"),
-		realpath(path).catch(() => path),
+		resolveTargetPath(path),
 	]);
 	const image = await app.getFileIcon(resolved, { size: "normal" });
 	return image.isEmpty() ? null : image.toPNG();

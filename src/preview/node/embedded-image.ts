@@ -1,7 +1,7 @@
 import { extname } from "node:path";
 import { readIcnsPreview } from "./icns-preview";
-import { readIworkFirstPage } from "./iwork";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail, type EmbeddedThumbnail } from "./odf";
+import { isDatalessFile } from "./provider-access";
 import { readPsdComposite, readPsdThumbnail } from "./psd-preview";
 import { RAW_EXTENSIONS, readRawPreview } from "./raw-preview";
 import { readXmpThumbnail } from "./xmp-thumbnail";
@@ -15,18 +15,14 @@ export type { EmbeddedThumbnail } from "./odf";
  * and flattened composite, the PNGs inside an icns, and the XMP thumbnail
  * Adobe's apps write into Illustrator and EPS files.
  */
-const IWORK_EXTENSIONS: Readonly<Record<string, true>> = { key: true, numbers: true, pages: true };
-
 export const EMBEDDED_IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
 	...EMBEDDED_THUMBNAIL_EXTENSIONS,
-	...Object.keys(IWORK_EXTENSIONS),
 	...RAW_EXTENSIONS,
 	"psd",
 	"ai",
 	"eps",
 	"icns",
 ]);
-
 export interface EmbeddedImageOptions {
 	/**
 	 * The longest side in pixels the caller will draw (a tile asks for 128, the
@@ -57,11 +53,8 @@ export async function readEmbeddedImage(path: string, ext: string = extname(path
 	const key = ext.toLowerCase().replace(/^\./, "");
 	const want = options.want;
 	const wanting = want === undefined ? {} : { want };
+	if (await isDatalessFile(path)) return null;
 	if (EMBEDDED_THUMBNAIL_EXTENSIONS.has(key)) return readEmbeddedThumbnail(path, key);
-	if (Object.hasOwn(IWORK_EXTENSIONS, key)) {
-		const firstPage = await readIworkFirstPage(path);
-		return firstPage === null ? null : { bytes: firstPage, mime: "image/jpeg" };
-	}
 	if (RAW_EXTENSIONS.has(key)) return readRawPreview(path, key, wanting);
 	switch (key) {
 		case "psd":
