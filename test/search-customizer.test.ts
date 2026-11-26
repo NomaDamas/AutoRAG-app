@@ -327,7 +327,7 @@ describe("search-customizer toolkit & settings-customizer profile", () => {
 
 		await session.prompt("새로고침을 15분마다 하게 해줘");
 
-		expect((await readConfig()).appIndexing?.refreshIntervalMs).toBe(900_000);
+		expect(((await readConfig()).appIndexing as { refreshIntervalMs?: number } | undefined)?.refreshIntervalMs).toBe(900_000);
 		expect(kit.takeChanges()[0]?.kind).toBe("search");
 	});
 

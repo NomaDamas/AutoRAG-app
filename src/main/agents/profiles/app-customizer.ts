@@ -182,25 +182,25 @@ function summarizeContextMenuChange(
 	if (opts.upsertedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 저장: ${opts.upsertedLabel}`;
+				return `자동화 저장: ${opts.upsertedLabel}`;
 			case "ja":
-				return `マジックアクションを保存: ${opts.upsertedLabel}`;
+				return `自動化を保存: ${opts.upsertedLabel}`;
 			case "zh":
-				return `已保存魔法动作: ${opts.upsertedLabel}`;
+				return `已保存自动化: ${opts.upsertedLabel}`;
 			default:
-				return `Saved Magic Action: ${opts.upsertedLabel}`;
+				return `Saved automation: ${opts.upsertedLabel}`;
 		}
 	}
 	if (opts.deletedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 삭제: ${opts.deletedLabel}`;
+				return `자동화 삭제: ${opts.deletedLabel}`;
 			case "ja":
-				return `マジックアクションを削除: ${opts.deletedLabel}`;
+				return `自動化を削除: ${opts.deletedLabel}`;
 			case "zh":
-				return `已删除魔法动作: ${opts.deletedLabel}`;
+				return `已删除自动化: ${opts.deletedLabel}`;
 			default:
-				return `Deleted Magic Action: ${opts.deletedLabel}`;
+				return `Deleted automation: ${opts.deletedLabel}`;
 		}
 	}
 	const parts: string[] = [];
@@ -394,7 +394,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		name: "get_app_settings",
 		label: "Get App Settings",
 		description:
-			"Read Dazzi's current app settings (stored in settings-state.json, separate from AutoRAG config), including the full sidebar customization state, the file right-click context menu customization & custom Magic Actions, and general appearance/Finder preferences.",
+			"Read Dazzi's current app settings (stored in settings-state.json, separate from AutoRAG config), including the full sidebar customization state, the file right-click context menu customization & custom right-click automations, and general appearance/Finder preferences.",
 		parameters: Type.Object({}),
 		execute: async () => {
 			ensureLive();
@@ -680,7 +680,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		name: "update_context_menu",
 		label: "Update Context Menu",
 		description:
-			"Customize which built-in items and sections appear in the file right-click context menu, reorder sections or custom Magic Actions, or reset the context menu to default. IMPORTANT: `Tags` (`builtin:tags` / section `tags`) is mandatory and can NEVER be hidden, and keyboard shortcuts cannot be reassigned.",
+			"Customize which built-in items and sections appear in the file right-click context menu, reorder sections or custom right-click automations, or reset the context menu to default. IMPORTANT: `Tags` (`builtin:tags` / section `tags`) is mandatory and can NEVER be hidden, and keyboard shortcuts cannot be reassigned.",
 		parameters: Type.Object({
 			showItems: Type.Optional(
 				Type.Array(Type.String(), {
@@ -711,12 +711,12 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			),
 			magicActionsOrder: Type.Optional(
 				Type.Array(Type.String(), {
-					description: "Desired order of custom Magic Action IDs.",
+					description: "Desired order of custom right-click automation IDs.",
 				}),
 			),
 			resetToDefault: Type.Optional(
 				Type.Boolean({
-					description: "When true, resets the entire file context menu configuration (including Magic Actions) back to factory defaults.",
+					description: "When true, resets the entire file context menu configuration (including custom right-click automations) back to factory defaults.",
 				}),
 			),
 		}),
@@ -853,15 +853,15 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		Type.Unsafe<T[number]>({ type: "string", enum: [...values], description });
 	const upsertMagicAction = defineTool({
 		name: "upsert_magic_action",
-		label: "Upsert Magic Action",
+		label: "Upsert Right-Click Automation",
 		description: isWindows
-			? "Create or update a custom right-click Magic Action button on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
-			: "Create or update a custom right-click Magic Action button on files/folders. A Magic Action can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
+			? "Create or update a custom right-click automation button on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
+			: "Create or update a custom right-click automation button on files/folders. A right-click automation can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
 		parameters: Type.Object({
 			id: Type.Optional(Type.String({ description: "Stable slug ID (optional on create; derived from label if omitted; pass existing id to update)." })),
 			label: Type.String({ description: "Menu button label shown on right-click (e.g. 'PDF 3줄 요약', '이미지 용량 정리', 'SHA-256 해시 복사')." }),
 			description: Type.Optional(Type.String({ description: "Short description shown in Settings." })),
-			enabled: Type.Optional(Type.Boolean({ description: "Whether this Magic Action is enabled (default true)." })),
+			enabled: Type.Optional(Type.Boolean({ description: "Whether this right-click automation is enabled (default true)." })),
 			selection: Type.Optional(
 				stringEnum(["any", "single", "multiple"], "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items)."),
 			),
@@ -927,7 +927,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			if (normalized === null) {
 				return textResult({
 					ok: false,
-					error: "Invalid Magic Action: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
+					error: "Invalid right-click automation: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
 				});
 			}
 			const currentApp = await deps.settings.get();
@@ -960,10 +960,10 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 
 	const deleteMagicAction = defineTool({
 		name: "delete_magic_action",
-		label: "Delete Magic Action",
-		description: "Remove a custom right-click Magic Action by its ID or display label.",
+		label: "Delete Right-Click Automation",
+		description: "Remove a custom right-click automation by its ID or display label.",
 		parameters: Type.Object({
-			idOrLabel: Type.String({ description: "The ID or exact label of the Magic Action to delete." }),
+			idOrLabel: Type.String({ description: "The ID or exact label of the right-click automation to delete." }),
 		}),
 		execute: (_callId, params) => serialized(async () => {
 			ensureLive();
@@ -976,7 +976,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			if (target === undefined) {
 				return textResult({
 					ok: false,
-					error: `No Magic Action found matching '${params.idOrLabel}'.`,
+					error: `No right-click automation found matching '${params.idOrLabel}'.`,
 				});
 			}
 			const nextContextMenu = normalizeContextMenuSettings({

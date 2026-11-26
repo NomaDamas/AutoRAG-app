@@ -29,7 +29,7 @@ import { createShortcutCustomizerToolkit } from "./shortcut-customizer";
  * Unified Settings Assistant (`settings-customizer`).
  *
  * Composes every domain toolkit (general + document languages, Finder sidebar & right-click context
- * menu + Magic Actions, keyboard shortcuts, AI models + web search, search scope + indexing options
+ * menu + custom right-click automations, keyboard shortcuts, AI models + web search, search scope + indexing options
  * + refresh schedule + duplicates, learning-to-rank, MCP servers, and datasource connections) so a
  * user on ANY Settings tab can edit any setting directly from the right sidebar without switching
  * tabs or hitting artificial cross-tab refusals.
@@ -63,7 +63,7 @@ const SURFACE_CONTEXT: Readonly<Record<string, string>> = {
 	plan: "Settings → Plan & Usage (plan/billing stays on the hosted dashboard, while you can edit any other Dazzi setting from here)",
 	general: "Settings → General (appearance, language, document languages, hidden files, quick search, startup, updates, privacy — plus any other setting)",
 	sidebar: "Settings → Sidebar (sidebar items, sections, ordering, pinned folders — plus any other setting)",
-	contextMenu: "Settings → Context Menu (built-in right-click items, sections, custom Magic Actions — plus any other setting)",
+	contextMenu: "Settings → Context Menu (built-in right-click items, sections, custom right-click automations — plus any other setting)",
 	shortcuts: "Settings → Shortcuts (keyboard shortcuts and presets — plus any other setting)",
 	remote: "Settings → Remote Access (remote access toggles and pairing stay on the page for security, while you can edit any other Dazzi setting from here)",
 	about: "Settings → About (app/tool versions are read-only on this page, while you can edit any other Dazzi setting from here)",
@@ -360,8 +360,8 @@ function systemPrompt(
 		: ["- No shell tool is attached in this session; use the structured inspection tools (such as `scan_coding_agents`) instead."];
 	const scriptNote =
 		platform === "win32"
-			? "For Magic Action scripts on Windows, write PowerShell (`powershell.exe` receiving selected paths in `$args` / `$env:DAZZI_FILES_JSON`)."
-			: "For Magic Action scripts on macOS/Linux, write POSIX `/bin/sh` (`\"$@\"` / `DAZZI_FILES_JSON`).";
+			? "For right-click automation scripts on Windows, write PowerShell (`powershell.exe` receiving selected paths in `$args` / `$env:DAZZI_FILES_JSON`)."
+			: "For right-click automation scripts on macOS/Linux, write POSIX `/bin/sh` (`\"$@\"` / `DAZZI_FILES_JSON`).";
 
 	return [
 		`You are Dazzi's unified Settings Assistant (\`settings-customizer\`), currently open beside ${section}.`,
@@ -370,11 +370,11 @@ function systemPrompt(
 		"## Role & Full Settings Coverage",
 		"You can inspect and edit settings across ALL Dazzi Settings tabs directly from here — the person never needs to switch tabs first:",
 		"- **General & Document Languages**: `get_general_settings`, `update_general_settings` (appearance, app language, hidden files, launch at login, OS right-click menu, auto updates, error reporting, usage analytics, quick-search shortcut), `update_reading` (document languages).",
-		"- **Finder Sidebar & Right-Click Context Menu**: `get_app_settings`, `update_sidebar` (show/hide/reorder items & sections, pin custom folders; `AI Agent` and `Automations` stay locked visible), `update_context_menu` (including `builtin:pinToSidebar` and built-in items/sections), `upsert_magic_action`, `delete_magic_action` (`Tags` stays locked visible). " + scriptNote,
+		"- **Finder Sidebar & Right-Click Context Menu**: `get_app_settings`, `update_sidebar` (show/hide/reorder items & sections, pin custom folders; `AI Agent` and `Automations` stay locked visible), `update_context_menu` (including `builtin:pinToSidebar` and built-in items/sections), `upsert_magic_action`, `delete_magic_action` (custom right-click automations — refer to them in user-facing replies as right-click automations / automations, never as 'Magic Action'; `Tags` stays locked visible). " + scriptNote,
 		"- **Keyboard Shortcuts**: `get_shortcuts`, `update_shortcuts` (presets `macFinder` / `windowsExplorer` / `default`, bind/swap/reset any of the 26 catalog actions; `Esc` and plain arrows stay locked).",
 		"- **AI Models & Web Search**: `get_ai_settings`, `set_model_role` (`answer`, `decomposition`, `jev`, `rerank`), `set_thinking_level`, `update_web_search`, `connect_provider_key`, `scan_coding_agents`, `import_coding_agent_key`, and `import_omp_provider` (when available). OAuth/subscription logins belong to their product and cannot be imported — point to the page's sign-in button.",
 		"- **Search Ranking (Learning to Rank)**: `get_ltr_settings`, `update_ltr_settings` (`rankingLog`, `ltr.enabled`, `ltr.model`, `ltr.autoTrain`).",
-		"- **Indexing, Scope, Schedule & Duplicates**: `get_search_settings`, `update_index_scope` (folders & exclusions), `update_index_options` (refresh cadence, file-name watching, code-folder exclusion), `update_refresh_schedule` (AC-only power and daily time window), `update_duplicates` (exact duplicates, similar-version scan, scan interval).",
+		"- **Indexing, Scope, Schedule & Duplicates**: `get_search_settings`, `get_refresh_schedule`, `repair_refresh_schedule` (diagnose and re-register the OS background refresh schedule), `update_index_scope` (folders & exclusions), `update_index_options` (refresh cadence, file-name watching, code-folder exclusion), `update_refresh_schedule` (AC-only power and daily time window), `update_duplicates` (exact duplicates, similar-version scan, scan interval).",
 		"- **MCP Servers**: `get_connections`, `search_mcp_registry`, `install_mcp_server`, `update_mcp_server`.",
 		"- **Datasource Connections (Connected Apps)**: `get_datasources`, `add_datasource`, `update_datasource`, `update_datasource_connector`, `set_datasource_credential`, `sync_datasource`, `remove_datasource`.",
 		...shellLines,
