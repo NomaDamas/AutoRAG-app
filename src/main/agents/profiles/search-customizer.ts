@@ -18,6 +18,7 @@ import {
 	type JsonObject,
 	type JsonValue,
 } from "../../../shared/settings-contract";
+import { evaluateRefreshScheduleHealth } from "../../../shared/refresh-schedule-health";
 import { DUPEY_SCAN_INTERVALS, REFRESH_INTERVALS } from "../../../shared/settings-options";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 import {
@@ -72,6 +73,7 @@ function localized(ko: string, en: string, ja: string, zh: string): Localized {
 
 const SCOPE_SUMMARY = localized("검색 범위(폴더·제외 항목)를 변경", "Updated the search scope (folders & exclusions)", "検索範囲(フォルダ・除外項目)を変更", "已更新搜索范围（文件夹与排除项）");
 const OPTIONS_SUMMARY = localized("검색 유지 옵션을 변경", "Updated the indexing options", "インデックス維持オプションを変更", "已更新索引选项");
+const SCHEDULE_REPAIR_SUMMARY = localized("자동 업데이트 예약을 다시 등록", "Re-registered the automatic update schedule", "自動更新の予約を再登録", "已重新注册自动更新计划");
 const DUPLICATES_SUMMARY = localized("중복 파일 정리 설정을 변경", "Updated the duplicate-file settings", "重複ファイル設定を変更", "已更新重复文件设置");
 
 const REJECTION_LABEL: Readonly<Record<RejectedRoot["reason"], string>> = {
@@ -342,7 +344,50 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 		},
 	});
 
-	const tools: readonly ToolDefinition[] = [getSearchSettings, updateIndexScope, updateIndexOptions, updateDuplicates];
+	const getRefreshSchedule = defineTool({
+		name: "get_refresh_schedule",
+		label: "Inspect Automatic Refresh Schedule",
+		description:
+			"Read the OS background refresh schedule status (`supported`, `mechanism`, `installed`, `wanted`, `intervalMs`, `lastTickAt`, `paused`, `local`, `sources`, `conflicts`, `error`) and its evaluated health issues (`not-registered`, `overdue`, `failing`, `conflicts`). Use this whenever the person asks why automatic updates stopped, fell behind, failed, or conflicted.",
+		parameters: Type.Object({}),
+		execute: async () => {
+			ensureLive();
+			try {
+				const status = await deps.settings.refreshScheduleGet();
+				return textResult({ ok: true, status, issues: evaluateRefreshScheduleHealth(status) });
+			} catch (error) {
+				return textResult({ ok: false, error: errorText(error) });
+			}
+		},
+	});
+
+	const repairRefreshSchedule = defineTool({
+		name: "repair_refresh_schedule",
+		label: "Re-register Automatic Refresh Schedule",
+		description:
+			"Reconcile Dazzi's OS background refresh job to match the current config (re-installs a missing/unloaded LaunchAgent, cron line, or Task Scheduler task, or removes it if everything is manual). Does not run an immediate index build or touch user files.",
+		parameters: Type.Object({}),
+		execute: async () => {
+			ensureLive();
+			try {
+				const status = await deps.settings.refreshScheduleApply();
+				const ok = status.error === null && (!status.wanted || status.installed);
+				if (ok) record({ kind: "search", summary: SCHEDULE_REPAIR_SUMMARY, fields: ["refreshSchedule"] });
+				return textResult({ ok, status, issues: evaluateRefreshScheduleHealth(status) });
+			} catch (error) {
+				return textResult({ ok: false, error: errorText(error) });
+			}
+		},
+	});
+
+	const tools: readonly ToolDefinition[] = [
+		getSearchSettings,
+		getRefreshSchedule,
+		repairRefreshSchedule,
+		updateIndexScope,
+		updateIndexOptions,
+		updateDuplicates,
+	];
 	return kit.toolkit(tools);
 }
 
@@ -355,21 +400,22 @@ function systemPrompt(language: ReplyLanguage, surface: AppCustomizerSurface): s
 		"",
 		"## Role & Scope",
 		`- This session is about: ${focus}.`,
+		"- `get_refresh_schedule` / `repair_refresh_schedule`: inspect why automatic updates stopped, fell behind, failed, or conflicted, and re-register Dazzi's OS refresh schedule when needed.",
 		"- `update_index_scope`: which folders are indexed (`searchPaths`) and what is left out (`excludePaths`).",
 		"- `update_index_options`: the local refresh cadence (`appIndexing.refreshIntervalMs`), file-name watching (`fsearch.watch`), and automatic code-folder exclusion (`appIndexing.excludeCodeFolders`).",
 		"- `update_duplicates`: whether identical files are shown once (`excludeExactDuplicates`), the similar-version scan (`dupey`), and how often it runs.",
 		"",
 		"## Non-Negotiable Invariants",
 		"- Closed scope: change only the settings above. API keys, credentials, sign-in, remote access, approval mode, and datasource connectors are out of scope — refuse and explain.",
-		"- NEVER run an index build or refresh, and NEVER delete, move, rename or trash any file or folder. The tools only write config values and app preferences.",
+		"- NEVER run an index build or refresh, and NEVER delete, move, rename or trash any file or folder. The tools only write config values, app preferences, and OS refresh schedule registration.",
 		"- A new search folder must be an absolute path that exists on disk; a folder already indexed, or inside one that is, is refused — never duplicated.",
 		"- An exclusion is an absolute path or a glob (`*`, `?`, `[`); every value is written exactly as the Settings page writes it.",
 		"- A cancelled run must stop at once: never claim a change that was not written.",
 		"",
 		"## Workflow",
-		"1. Call `get_search_settings` first when unsure what is currently set.",
-		"2. Apply the change with the matching `update_*` tool: apply the valid part, and report any refused part as a warning.",
-		"3. Summarize in 1-3 short sentences what changed and what was refused.",
+		"1. Call `get_search_settings` (or `get_refresh_schedule` for automatic-update problems) first when unsure what is currently set.",
+		"2. Apply the change with the matching tool (`repair_refresh_schedule` or `update_*`): apply the valid part, and report any refused part as a warning.",
+		"3. Summarize in 1-3 short, plain sentences (avoiding developer jargon) what you found, what changed, and any next step.",
 		"",
 		intentPromptLine(language),
 	].join("\n");

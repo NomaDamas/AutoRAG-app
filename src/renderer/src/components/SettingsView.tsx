@@ -380,6 +380,9 @@ export function SettingsView({
 	const { snapshot, entries, error, changeAppSettings } = data;
 	/** Bumped when the user opens the assistant from a page's hero: the composer takes focus then, never on a plain visit. */
 	const [customizerFocus, setCustomizerFocus] = useState(0);
+	/** Prompt pre-filled into a section's right-sidebar assistant (e.g. from Notification Center "Fix with AI"). */
+	const [assistantPrefill, setAssistantPrefill] = useState<{ readonly surface: AppCustomizerSurface; readonly text: string; readonly nonce: number } | null>(null);
+	const prefillSeq = useRef(0);
 	/** Assistants stay mounted once shown, so a conversation and a running turn survive switching sections. */
 	const [mountedSurfaces, setMountedSurfaces] = useState<readonly AppCustomizerSurface[]>([]);
 	/** The right sidebar hosts this node while a customizable section is open; the assistants render into it. */
@@ -397,12 +400,30 @@ export function SettingsView({
 	}, [showAssistant]);
 	const openAiSettings = useCallback((): void => setCategory("ai"), []);
 
-	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
+	const applyNavigationRequest = useCallback(
+		(request: { readonly category: SettingsCategory; readonly assistantPrompt?: string }): void => {
+			const next = normalizeCategory(request.category);
+			setCategory(next);
+			if (request.assistantPrompt !== undefined && request.assistantPrompt.trim().length > 0) {
+				const targetSurface = sourceAliasOf(next) === null ? customizerSurfaceOf(next) : null;
+				if (targetSurface !== null) {
+					showAssistant?.();
+					setMountedSurfaces((current) => (current.includes(targetSurface) ? current : [...current, targetSurface]));
+					prefillSeq.current += 1;
+					setAssistantPrefill({ surface: targetSurface, text: request.assistantPrompt, nonce: prefillSeq.current });
+					setCustomizerFocus((count) => count + 1);
+				}
+			}
+		},
+		[showAssistant],
+	);
+
+	// The sidebar's indexing block and notification center ask for a page from outside; honour a request made before this view mounted.
 	useEffect(() => {
-		const { initial, detach } = attachSettingsNavigation((next) => setCategory(normalizeCategory(next)));
-		if (initial !== null) setCategory(normalizeCategory(initial));
+		const { initial, detach } = attachSettingsNavigation(applyNavigationRequest);
+		if (initial !== null) applyNavigationRequest(initial);
 		return detach;
-	}, []);
+	}, [applyNavigationRequest]);
 
 	// Something else may have changed the config or the preferences since Settings was loaded (another window, the CLI, the file
 	// edited by hand, an assistant in another session): opening a page shows what is there now.
@@ -596,6 +617,7 @@ export function SettingsView({
 						surface={surface}
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
+						prefill={assistantPrefill !== null && assistantPrefill.surface === surface ? assistantPrefill : null}
 						onSettingsUpdated={changeAppSettings}
 						onChangesApplied={data.reloadAfterAssistant}
 						onOpenAiSettings={openAiSettings}
