@@ -76,6 +76,22 @@ describe("refreshAutoragIndex", () => {
 		expect(outcome).toMatchObject({ ok: true, error: null });
 	});
 
+	it("does not run a CPU-time kill watchdog during a refresh (idle minsync stage and HTTP-waiting minsync sync must never be SIGTERM'd)", async () => {
+		const intervalSpy = vi.spyOn(globalThis, "setInterval");
+		try {
+			refresh.mockResolvedValue(result(undefined));
+			const setup = await fixture();
+
+			const outcome = await refreshAutoragIndex(setup);
+
+			expect(outcome).toMatchObject({ ok: true, error: null });
+			// No 10-second polling interval from the retired CPU stall watchdog may be armed during a refresh.
+			expect(intervalSpy.mock.calls.some(([, ms]) => ms === 10_000)).toBe(false);
+		} finally {
+			intervalSpy.mockRestore();
+		}
+	});
+
 	it("still fails the refresh when fsearch-cli is installed but indexing fails", async () => {
 		refresh.mockResolvedValue(result({ ok: false, reason: "index-failed", message: "database is locked" }));
 

@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	datasourceFailureReport,
-	embedderStallReport,
 	fileTimeoutReport,
 	installErrorReporter,
 	readErrorReportingEnabled,
@@ -190,13 +189,6 @@ describe("datasourceFailureReport", () => {
 		const second = datasourceFailureReport("kakao", "failed at '/b/y.db' (pid 2)", 20);
 		expect(second.fingerprint).toEqual(first.fingerprint);
 		expect(datasourceFailureReport("slack", "failed at '/a/x.db' (pid 1)", 10).fingerprint).not.toEqual(first.fingerprint);
-	});
-});
-
-describe("embedderStallReport", () => {
-	it("is one issue however many restarts a run needed, with the count as data", () => {
-		expect(embedderStallReport(1).fingerprint).toEqual(embedderStallReport(2).fingerprint);
-		expect(embedderStallReport(2).extra).toMatchObject({ retries: 2 });
 	});
 });
 
