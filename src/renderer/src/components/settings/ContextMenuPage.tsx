@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, ChevronRight, Eye, FilePen, FileText, Info, Lock, MousePointerClick, Pencil, Plus, Settings, Sparkles, Terminal, X } from "lucide-react";
+import { Eye, FilePen, Info, Lock, Pencil, Plus, Sparkles, Terminal, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	contextMenuPresetLayout,
 	contextMenuPresetOf,
 	normalizeContextMenuSettings,
-	normalizeExtensionList,
 	normalizeMagicAction,
 	type BuiltinContextMenuItemId,
 	type ContextMenuSectionId,
@@ -15,14 +14,17 @@ import {
 	type HideableContextMenuSectionId,
 	type MagicAction,
 	type MagicActionAgentMode,
+	type MagicActionExecution,
 	type MagicActionSelectionRule,
-	type MagicActionTargetKind,
 	withContextMenuLayout,
 } from "../../../../shared/context-menu-contract";
 import type { ShortcutId } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { formatContextMenuKeycap } from "../../state/context-menu";
 import { cn } from "../../lib/cn";
+import { autoMagicLabel, newMagicActionId, rightClickKindOf, rightClickTarget, type RightClickKind } from "../../state/right-click-trigger";
+import { ChipSelect, type ChipOption } from "../primitives/ChipSelect";
+import { RightClickWhen, RunKindSegment, type RunKind } from "../RightClickWhen";
 import { buttonClass } from "../primitives/button";
 import { Switch } from "../primitives/Switch";
 import { ModalActions, ModalShell, SettingsPageHead } from "./SettingsKit";
@@ -102,191 +104,69 @@ const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, rea
 	],
 };
 
-/** A small segmented choice inside the editor's rows: the picked option is a blue chip (Figma 598:3199). */
-function MiniSegmented<T extends string>({
-	value,
-	options,
-	testId,
-	label,
-	onChange,
-}: {
-	readonly value: T;
-	readonly options: readonly { readonly value: T; readonly label: string }[];
-	readonly testId: string;
-	readonly label: string;
-	readonly onChange: (value: T) => void;
-}): ReactElement {
-	return (
-		<div className="magic-editor-mini-seg" role="radiogroup" aria-label={label} data-testid={testId}>
-			{options.map((option) => (
-				<button
-					key={option.value}
-					type="button"
-					role="radio"
-					aria-checked={option.value === value}
-					className={cn(option.value === value && "is-active")}
-					data-testid={`${testId}-${option.value}`}
-					onClick={() => onChange(option.value)}
-				>
-					{option.label}
-				</button>
-			))}
-		</div>
-	);
-}
-
-/** 읽기만 ▾: the agent's permission, a chip on the instruction card that opens its two choices. */
-function AgentModeChip({
-	value,
-	onChange,
-}: {
-	readonly value: MagicActionAgentMode;
-	readonly onChange: (value: MagicActionAgentMode) => void;
-}): ReactElement {
-	const { t } = useTranslation();
-	const [open, setOpen] = useState(false);
-	const wrapRef = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		if (!open) return;
-		const onDown = (event: MouseEvent): void => {
-			if (wrapRef.current !== null && !wrapRef.current.contains(event.target as Node)) setOpen(false);
-		};
-		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				setOpen(false);
-			}
-		};
-		document.addEventListener("mousedown", onDown);
-		document.addEventListener("keydown", onKey, true);
-		return () => {
-			document.removeEventListener("mousedown", onDown);
-			document.removeEventListener("keydown", onKey, true);
-		};
-	}, [open]);
-	const modes: readonly { readonly value: MagicActionAgentMode; readonly short: string; readonly long: string; readonly Icon: typeof Eye }[] = [
-		{ value: "read", short: t("settingsCore.contextMenu.editor.modeReadShort"), long: t("settingsCore.contextMenu.editor.modeRead"), Icon: Eye },
-		{ value: "organize", short: t("settingsCore.contextMenu.editor.modeOrganizeShort"), long: t("settingsCore.contextMenu.editor.modeOrganize"), Icon: FilePen },
-	];
-	const current = modes.find((mode) => mode.value === value) ?? modes[0]!;
-	return (
-		<div className="magic-editor-mode" ref={wrapRef}>
-			<button
-				type="button"
-				className="magic-editor-mode-chip"
-				data-testid="magic-editor-agent-mode"
-				aria-haspopup="listbox"
-				aria-expanded={open}
-				aria-label={`${t("settingsCore.contextMenu.editor.agentModeField")}: ${current.short}`}
-				onClick={() => setOpen((prev) => !prev)}
-			>
-				<current.Icon size={13} aria-hidden="true" />
-				<span>{current.short}</span>
-				<ChevronDown size={12} aria-hidden="true" />
-			</button>
-			{open ? (
-				<ul className="magic-editor-mode-menu" role="listbox" aria-label={t("settingsCore.contextMenu.editor.agentModeField")}>
-					{modes.map((mode) => (
-						<li key={mode.value}>
-							<button
-								type="button"
-								role="option"
-								aria-selected={mode.value === value}
-								data-testid={`magic-editor-agent-mode-${mode.value}`}
-								onClick={() => {
-									onChange(mode.value);
-									setOpen(false);
-								}}
-							>
-								<mode.Icon size={14} aria-hidden="true" />
-								<span className="magic-editor-mode-text">
-									<span>{mode.short}</span>
-									<small>{mode.long}</small>
-								</span>
-								{mode.value === value ? <Check size={14} aria-hidden="true" /> : null}
-							</button>
-						</li>
-					))}
-				</ul>
-			) : null}
-		</div>
-	);
-}
-
-/** The 매직 액션 만들기 dialog (Figma 598:3131): the name as its title, 처리 방식, the instruction card, then 표시할 대상 and 고급 설정. */
+/**
+ * The 매직 액션 modal: the same form as a 새 자동화 card set to 우클릭하면, so a right-click action reads the same
+ * wherever it is made. The name is the title, filled from what the action does until the person types one; 언제 is
+ * the right-click sentence, its trigger fixed (this list holds only right-click actions); 할 일 is the instruction
+ * or, under 스크립트, the command. The permission chip shows only when an action is changed: a new one starts
+ * read-only. What the form no longer shows (the description, skills and MCP) is kept as the action had it.
+ */
 function MagicActionEditorModal({
 	initial,
+	takenIds,
 	onCancel,
 	onSave,
 }: {
 	readonly initial: MagicAction | null;
+	/** The ids the other actions have, so a new one never replaces one of them. */
+	readonly takenIds: readonly string[];
 	readonly onCancel: () => void;
 	readonly onSave: (action: MagicAction) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const isWindows = hostPlatform() === "win32";
+	const start = initial === null ? { kind: "pdf" as RightClickKind, custom: null } : rightClickKindOf(initial.targetKind, initial.extensions);
 	const [label, setLabel] = useState(initial?.label ?? "");
-	const [description, setDescription] = useState(initial?.description ?? "");
-	const [executionKind, setExecutionKind] = useState<"agent" | "script">(initial?.execution.kind ?? "agent");
-	const [agentMode, setAgentMode] = useState<MagicActionAgentMode>(
-		initial?.execution.kind === "agent" ? initial.execution.mode : "read",
-	);
+	const [runKind, setRunKind] = useState<RunKind>(initial?.execution.kind === "script" ? "script" : "agent");
+	const [agentMode, setAgentMode] = useState<MagicActionAgentMode>(initial?.execution.kind === "agent" ? initial.execution.mode : "read");
 	const [prompt, setPrompt] = useState(initial?.execution.kind === "agent" ? initial.execution.prompt : "");
-	const [useSkills, setUseSkills] = useState<boolean>(
-		initial?.execution.kind === "agent" ? initial.execution.useSkills !== false : true,
-	);
-	const [useMcp, setUseMcp] = useState<boolean>(
-		initial?.execution.kind === "agent" ? initial.execution.useMcp !== false : true,
-	);
 	const [command, setCommand] = useState(initial?.execution.kind === "script" ? initial.execution.command : "");
-	const [selection, setSelection] = useState<MagicActionSelectionRule>(initial?.selection ?? "any");
-	const [targetKind, setTargetKind] = useState<MagicActionTargetKind>(initial?.targetKind ?? "file");
-	const [extensions, setExtensions] = useState<readonly string[]>(initial?.extensions ?? []);
-	const [extensionDraft, setExtensionDraft] = useState("");
+	const [selection, setSelection] = useState<MagicActionSelectionRule>(initial === null ? "single" : initial.selection);
+	const [kind, setKind] = useState<RightClickKind>(start.kind);
+	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(start.custom);
 
-	const canSave =
-		label.trim().length > 0 &&
-		(executionKind === "agent" ? prompt.trim().length > 0 : command.trim().length > 0);
-
-	// A typed extension counts once Enter (or a comma) is pressed, and also when the dialog is saved without it.
-	const commitExtensionDraft = (): void => {
-		const added = normalizeExtensionList(extensionDraft);
-		if (added.length > 0) setExtensions((prev) => normalizeExtensionList([...prev, ...added].join(",")));
-		setExtensionDraft("");
-	};
+	const task = runKind === "agent" ? prompt : command;
+	const name = label.trim().length > 0 ? label.trim() : autoMagicLabel(task);
+	const canSave = name.length > 0 && task.trim().length > 0;
 
 	const submit = (): void => {
 		if (!canSave) return;
+		const execution: MagicActionExecution =
+			runKind === "script"
+				? { kind: "script", command }
+				: {
+						kind: "agent",
+						mode: agentMode,
+						prompt,
+						useSkills: initial?.execution.kind === "agent" ? initial.execution.useSkills !== false : true,
+						useMcp: initial?.execution.kind === "agent" ? initial.execution.useMcp !== false : true,
+					};
 		const normalized = normalizeMagicAction({
-			...(initial?.id === undefined ? {} : { id: initial.id }),
-			label,
-			description,
+			id: initial?.id ?? newMagicActionId(name, takenIds),
+			label: name,
+			...(initial?.description === undefined ? {} : { description: initial.description }),
 			enabled: initial?.enabled ?? true,
 			selection,
-			targetKind,
-			extensions: normalizeExtensionList([...extensions, extensionDraft].join(",")),
-			execution:
-				executionKind === "script"
-					? { kind: "script", command }
-					: { kind: "agent", mode: agentMode, prompt, useSkills, useMcp },
+			...rightClickTarget(kind, customExtensions),
+			execution,
 		});
 		if (normalized !== null) onSave(normalized);
 	};
 
-	const extensionLabel =
-		targetKind === "file" && extensions.length > 0 ? `${extensions.map((ext) => ext.toUpperCase()).join("/")} ` : "";
-	const targetSummary = t(`settingsCore.contextMenu.editor.targetSummary.${selection}.${targetKind}`, { ext: extensionLabel });
-	const advancedSummary =
-		executionKind === "agent"
-			? useSkills || useMcp
-				? t("settingsCore.contextMenu.editor.advancedUses", {
-						list: [useSkills ? t("settingsCore.contextMenu.condSkills") : null, useMcp ? t("settingsCore.contextMenu.condMcp") : null]
-							.filter((part): part is string => part !== null)
-							.join(" · "),
-					})
-				: t("settingsCore.contextMenu.editor.advancedNone")
-			: "";
-	const HeaderIcon = executionKind === "script" ? FileText : Sparkles;
+	const modes: readonly ChipOption<MagicActionAgentMode>[] = [
+		{ value: "read", label: t("settingsCore.contextMenu.editor.modeReadShort"), hint: t("settingsCore.contextMenu.editor.modeRead"), icon: <Eye size={13} aria-hidden="true" /> },
+		{ value: "organize", label: t("settingsCore.contextMenu.editor.modeOrganizeShort"), hint: t("settingsCore.contextMenu.editor.modeOrganize"), icon: <FilePen size={13} aria-hidden="true" /> },
+	];
 
 	return (
 		<ModalShell
@@ -295,221 +175,69 @@ function MagicActionEditorModal({
 			label={initial === null ? t("settingsCore.contextMenu.editor.createTitle") : t("settingsCore.contextMenu.editor.editTitle")}
 		>
 			<div className="magic-editor" data-testid="magic-action-editor-modal">
-				<div className="magic-editor-head">
-					<span className="magic-editor-tile" aria-hidden="true">
-						<HeaderIcon size={20} />
-					</span>
-					<div className="magic-editor-name">
-						<input
-							autoFocus
-							data-testid="magic-editor-label"
-							aria-label={t("settingsCore.contextMenu.editor.labelField")}
-							value={label}
-							placeholder={t("settingsCore.contextMenu.editor.labelPlaceholder")}
-							onChange={(e) => setLabel(e.target.value)}
+				<div className="magic-editor-name">
+					<input
+						autoFocus
+						data-testid="magic-editor-label"
+						aria-label={t("settingsCore.contextMenu.editor.labelField")}
+						value={label}
+						placeholder={autoMagicLabel(task) || t("settingsCore.contextMenu.editor.labelPlaceholder")}
+						onChange={(e) => setLabel(e.target.value)}
+					/>
+				</div>
+
+				<div className="magic-editor-body">
+					<span className="magic-editor-label">{t("rightClickWhen.when")}</span>
+					<RightClickWhen
+						kind={kind}
+						custom={customExtensions}
+						selection={selection}
+						testId="magic-editor-rc"
+						onKind={(next) => {
+							setKind(next);
+							setCustomExtensions(null);
+						}}
+						onCustom={setCustomExtensions}
+						onSelection={setSelection}
+					/>
+					<div className="magic-editor-label-row">
+						<span className="magic-editor-label">{t("rightClickWhen.task")}</span>
+						<RunKindSegment value={runKind} testId="magic-editor-kind" onChange={setRunKind} />
+					</div>
+					{runKind === "agent" ? (
+						<textarea
+							data-testid="magic-editor-prompt"
+							aria-label={t("settingsCore.contextMenu.editor.promptField")}
+							value={prompt}
+							placeholder={t("settingsCore.contextMenu.editor.promptPlaceholder")}
+							onChange={(e) => setPrompt(e.target.value)}
 						/>
-						<span>{t("settingsCore.contextMenu.editor.labelHint")}</span>
-					</div>
-				</div>
-
-				<div className="magic-editor-kind">
-					<span className="magic-editor-caption">{t("settingsCore.contextMenu.editor.executionField")}</span>
-					<div className="magic-editor-seg" role="radiogroup" aria-label={t("settingsCore.contextMenu.editor.executionField")} data-testid="magic-editor-kind">
-						{(
-							[
-								{ value: "agent", label: t("settingsCore.contextMenu.editor.kindAgent"), Icon: Sparkles },
-								{ value: "script", label: t("settingsCore.contextMenu.editor.kindScript"), Icon: FileText },
-							] as const
-						).map((option) => (
-							<button
-								key={option.value}
-								type="button"
-								role="radio"
-								aria-checked={executionKind === option.value}
-								className={cn(executionKind === option.value && "is-active")}
-								data-testid={`magic-editor-kind-${option.value}`}
-								onClick={() => setExecutionKind(option.value)}
-							>
-								<option.Icon size={14} aria-hidden="true" />
-								{option.label}
-							</button>
-						))}
-					</div>
-				</div>
-
-				<div className="magic-editor-card">
-					{executionKind === "agent" ? (
-						<>
-							<textarea
-								data-testid="magic-editor-prompt"
-								aria-label={t("settingsCore.contextMenu.editor.promptField")}
-								value={prompt}
-								placeholder={t("settingsCore.contextMenu.editor.promptPlaceholder")}
-								onChange={(e) => setPrompt(e.target.value)}
-							/>
-							<div className="magic-editor-card-bar">
-								<AgentModeChip value={agentMode} onChange={setAgentMode} />
-							</div>
-						</>
 					) : (
-						<>
-							<textarea
-								data-testid="magic-editor-command"
-								className="is-mono"
-								aria-label={t("settingsCore.contextMenu.editor.commandField")}
-								value={command}
-								placeholder={t(
-									isWindows
-										? "settingsCore.contextMenu.editor.commandPlaceholderWindows"
-										: "settingsCore.contextMenu.editor.commandPlaceholder",
-								)}
-								onChange={(e) => setCommand(e.target.value)}
-							/>
-							<p className="magic-editor-card-hint">
-								{t(
-									isWindows
-										? "settingsCore.contextMenu.editor.commandHintWindows"
-										: "settingsCore.contextMenu.editor.commandHint",
-								)}
-							</p>
-						</>
+						<textarea
+							data-testid="magic-editor-command"
+							className="is-mono"
+							aria-label={t("settingsCore.contextMenu.editor.commandField")}
+							value={command}
+							placeholder={t(isWindows ? "settingsCore.contextMenu.editor.commandPlaceholderWindows" : "settingsCore.contextMenu.editor.commandPlaceholder")}
+							onChange={(e) => setCommand(e.target.value)}
+						/>
 					)}
-				</div>
-
-				<div className="magic-editor-group">
-					<details className="magic-editor-section" open>
-						<summary>
-							<MousePointerClick size={16} aria-hidden="true" />
-							<span className="magic-editor-section-name">{t("settingsCore.contextMenu.editor.targetRow")}</span>
-							<span className="magic-editor-section-value">{targetSummary}</span>
-							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
-						</summary>
-						<div className="magic-editor-sub">
-							<div className="magic-editor-sub-row">
-								<span>{t("settingsCore.contextMenu.editor.targetKindField")}</span>
-								<MiniSegmented
-									value={targetKind}
-									testId="magic-editor-target-kind"
-									label={t("settingsCore.contextMenu.editor.targetKindField")}
-									options={[
-										{ value: "file", label: t("settingsCore.contextMenu.editor.targetFile") },
-										{ value: "folder", label: t("settingsCore.contextMenu.editor.targetFolder") },
-										{ value: "any", label: t("settingsCore.contextMenu.editor.targetBoth") },
-									]}
-									onChange={setTargetKind}
-								/>
-							</div>
-							<div className="magic-editor-sub-row">
-								<span>{t("settingsCore.contextMenu.editor.selectionField")}</span>
-								<MiniSegmented
-									value={selection}
-									testId="magic-editor-selection"
-									label={t("settingsCore.contextMenu.editor.selectionField")}
-									options={[
-										{ value: "any", label: t("settingsCore.contextMenu.editor.selectionAny") },
-										{ value: "single", label: t("settingsCore.contextMenu.editor.selectionSingle") },
-										{ value: "multiple", label: t("settingsCore.contextMenu.editor.selectionMultiple") },
-									]}
-									onChange={setSelection}
-								/>
-							</div>
-							{targetKind !== "folder" ? (
-								<div className="magic-editor-sub-row">
-									<span>{t("settingsCore.contextMenu.editor.extensionsField")}</span>
-									<div className="magic-editor-exts">
-										{extensions.map((ext) => (
-											<button
-												key={ext}
-												type="button"
-												className="magic-editor-ext"
-												aria-label={t("settingsCore.contextMenu.editor.removeExtension", { ext })}
-												onClick={() => setExtensions((prev) => prev.filter((item) => item !== ext))}
-											>
-												{ext}
-												<X size={11} aria-hidden="true" />
-											</button>
-										))}
-										<input
-											data-testid="magic-editor-extensions"
-											aria-label={t("settingsCore.contextMenu.editor.extensionsField")}
-											value={extensionDraft}
-											placeholder={t("settingsCore.contextMenu.editor.extensionsPlaceholder")}
-											onChange={(e) => setExtensionDraft(e.target.value)}
-											onBlur={commitExtensionDraft}
-											onKeyDown={(e) => {
-												if (e.key === "Enter" || e.key === ",") {
-													e.preventDefault();
-													commitExtensionDraft();
-												} else if (e.key === "Backspace" && extensionDraft === "" && extensions.length > 0) {
-													setExtensions((prev) => prev.slice(0, -1));
-												}
-											}}
-										/>
-									</div>
-								</div>
-							) : null}
+					{runKind === "script" ? (
+						<p className="magic-editor-card-hint">{t(isWindows ? "settingsCore.contextMenu.editor.commandHintWindows" : "settingsCore.contextMenu.editor.commandHint")}</p>
+					) : null}
+					{/* The permission is for changing an action, not for making one: a new one starts read-only. */}
+					{initial !== null && runKind === "agent" ? (
+						<div>
+							<ChipSelect value={agentMode} options={modes} label={t("settingsCore.contextMenu.editor.agentModeField")} round testId="magic-editor-agent-mode" onChange={setAgentMode} />
 						</div>
-					</details>
-					<details className="magic-editor-section">
-						<summary>
-							<Settings size={16} aria-hidden="true" />
-							<span className="magic-editor-section-name">{t("settingsCore.contextMenu.editor.advancedRow")}</span>
-							<span className="magic-editor-section-value">{advancedSummary}</span>
-							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
-						</summary>
-						<div className="magic-editor-sub">
-							<label className="magic-editor-field">
-								<span>{t("settingsCore.contextMenu.editor.descriptionField")}</span>
-								<input
-									data-testid="magic-editor-description"
-									value={description}
-									placeholder={t("settingsCore.contextMenu.editor.descriptionPlaceholder")}
-									onChange={(e) => setDescription(e.target.value)}
-								/>
-							</label>
-							{executionKind === "agent" ? (
-								<>
-									<div className="magic-editor-sub-row is-switch">
-										<div className="magic-editor-switch-text">
-											<span>{t("settingsCore.contextMenu.editor.useSkillsField")}</span>
-											<small>{t("settingsCore.contextMenu.editor.useSkillsHint")}</small>
-										</div>
-										<Switch
-											checked={useSkills}
-											dataSwitchId="magic-editor:useSkills"
-											ariaLabel={t("settingsCore.contextMenu.editor.useSkillsField")}
-											onChange={() => setUseSkills((prev) => !prev)}
-										/>
-									</div>
-									<div className="magic-editor-sub-row is-switch">
-										<div className="magic-editor-switch-text">
-											<span>{t("settingsCore.contextMenu.editor.useMcpField")}</span>
-											<small>{t("settingsCore.contextMenu.editor.useMcpHint")}</small>
-										</div>
-										<Switch
-											checked={useMcp}
-											dataSwitchId="magic-editor:useMcp"
-											ariaLabel={t("settingsCore.contextMenu.editor.useMcpField")}
-											onChange={() => setUseMcp((prev) => !prev)}
-										/>
-									</div>
-								</>
-							) : null}
-						</div>
-					</details>
+					) : null}
 				</div>
 
 				<ModalActions>
 					<button type="button" className="linear-btn" data-action="cancel-magic-editor" onClick={onCancel}>
 						{t("common.cancel")}
 					</button>
-					<button
-						type="button"
-						className="linear-btn settings-btn-primary"
-						data-action="save-magic-editor"
-						disabled={!canSave}
-						onClick={submit}
-					>
+					<button type="button" className="linear-btn settings-btn-primary" data-action="save-magic-editor" disabled={!canSave} onClick={submit}>
 						{t("settingsCore.contextMenu.editor.save")}
 					</button>
 				</ModalActions>
@@ -681,12 +409,8 @@ export function ContextMenuPage({
 				: action.extensions.length > 0
 					? action.extensions.map((e) => `.${e}`).join(", ")
 					: t("settingsCore.contextMenu.condAllExtensions");
-		const extras: string[] = [];
-		if (action.execution.kind === "agent") {
-			if (action.execution.useSkills !== false) extras.push(t("settingsCore.contextMenu.condSkills"));
-			if (action.execution.useMcp !== false) extras.push(t("settingsCore.contextMenu.condMcp"));
-		}
-		return [sel, kind, ext, ...extras].filter((part): part is string => part !== null).join(" · ");
+		// Skills and MCP are the agent's own choice, so the row does not list them.
+		return [sel, kind, ext].filter((part): part is string => part !== null).join(" · ");
 	};
 
 	/**
@@ -958,6 +682,7 @@ export function ContextMenuPage({
 			{editorState.open ? (
 				<MagicActionEditorModal
 					initial={editorState.initial}
+					takenIds={contextMenu.magicActions.filter((item) => item.id !== editorState.initial?.id).map((item) => item.id)}
 					onCancel={() => setEditorState({ open: false, initial: null })}
 					onSave={saveMagicAction}
 				/>

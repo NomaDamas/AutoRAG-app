@@ -1826,8 +1826,6 @@
       "condFolderOnly": "フォルダのみ",
       "condAnyKind": "ファイル・フォルダ",
       "condAllExtensions": "すべての拡張子",
-      "condSkills": "スキル",
-      "condMcp": "MCP",
       "sectionsTitle": "右クリックメニューのセクションと項目",
       "lockedBadge": "常時表示",
       "lockedHint": "タグ項目は必須機能のため非表示にできません。",
@@ -1870,61 +1868,19 @@
         "editTitle": "マジックアクションを編集",
         "labelField": "ボタン名",
         "labelPlaceholder": "マジックアクション名",
-        "descriptionField": "説明（任意）",
-        "descriptionPlaceholder": "設定画面に表示する短いメモ",
-        "executionField": "処理方法",
-        "kindAgent": "AIタスク",
-        "kindScript": "スクリプト",
         "agentModeField": "エージェント権限",
         "modeRead": "読み取り・分析のみ（要約・確認・Q&A）",
         "modeOrganize": "ファイル作成・操作を許可（変換・編集・整理・スクリプト）",
         "promptField": "AI エージェントへの指示",
         "promptPlaceholder": "例：選択した文書の要点を箇条書きでまとめ、主な日程を表にしてください。",
-        "useSkillsField": "共有スキルを許可",
-        "useSkillsHint": "AutoRAG エージェントのスキルをこのマジックアクションでも使用します（既定でオン）。",
-        "useMcpField": "接続済み MCP サーバーを許可",
-        "useMcpHint": "Aside MCP など接続済みの MCP サーバーツールを呼び出せるようにします（既定でオン）。",
         "commandField": "実行するコマンド / スクリプト",
         "commandPlaceholder": "例：shasum -a 256 \"$@\" または python3 ~/scripts/process.py \"$@\"",
         "commandHint": "選択したファイルパスは位置引数 (\"$@\") と環境変数 DAZZI_FILES_JSON、DAZZI_FILE、DAZZI_FILE_COUNT で渡されます。",
-        "selectionField": "選択数",
-        "targetKindField": "種類",
-        "extensionsField": "拡張子",
-        "extensionsPlaceholder": "拡張子を入力して Enter",
         "save": "保存",
         "commandPlaceholderWindows": "例：Get-FileHash -Algorithm SHA256 -LiteralPath $args または python ~\\scripts\\process.py @args",
         "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。",
-        "labelHint": "右クリックメニューにこの名前で表示されます",
         "modeReadShort": "読み取りのみ",
-        "modeOrganizeShort": "ファイル変更を許可",
-        "targetRow": "表示する対象",
-        "targetFile": "ファイル",
-        "targetFolder": "フォルダ",
-        "targetBoth": "両方",
-        "selectionAny": "指定なし",
-        "selectionSingle": "1つ",
-        "selectionMultiple": "複数",
-        "removeExtension": "{{ext}} を外す",
-        "advancedRow": "詳細設定",
-        "advancedUses": "{{list}} を使用",
-        "advancedNone": "使用しない",
-        "targetSummary": {
-          "any": {
-            "file": "{{ext}}ファイルを右クリックしたとき",
-            "folder": "フォルダを右クリックしたとき",
-            "any": "ファイルやフォルダを右クリックしたとき"
-          },
-          "single": {
-            "file": "{{ext}}ファイルを1つ右クリックしたとき",
-            "folder": "フォルダを1つ右クリックしたとき",
-            "any": "ファイルかフォルダを1つ右クリックしたとき"
-          },
-          "multiple": {
-            "file": "{{ext}}ファイルを複数右クリックしたとき",
-            "folder": "フォルダを複数右クリックしたとき",
-            "any": "ファイルやフォルダを複数右クリックしたとき"
-          }
-        }
+        "modeOrganizeShort": "ファイル変更を許可"
       },
       "assistant": {
         "title": "右クリックメニュー＆マジックアクション AI エージェント",
@@ -3674,6 +3630,38 @@
       "words": "{{count}}語",
       "chars": "{{count}}文字",
       "pages": "{{count}}ページ"
+    }
+  },
+  "rightClickWhen": {
+    "when": "いつ",
+    "task": "Dazziがすること",
+    "kindLabel": "ファイルの種類",
+    "kind": {
+      "all": "ファイル",
+      "pdf": "PDFファイル",
+      "image": "画像",
+      "document": "文書",
+      "folder": "フォルダ",
+      "both": "ファイルかフォルダ"
+    },
+    "custom": "{{exts}}ファイル",
+    "extPlaceholder": "拡張子を入力してEnter",
+    "countLabel": "選択する数",
+    "count": {
+      "single": "1つ",
+      "multiple": "複数",
+      "any": "いくつでも"
+    },
+    "event": "右クリックした",
+    "sentence": {
+      "single": "{{kind}}を{{count}}{{event}}とき",
+      "multiple": "{{kind}}を{{count}}{{event}}とき",
+      "any": "{{kind}}を{{count}}{{event}}とき"
+    },
+    "runLabel": "実行方法",
+    "run": {
+      "agent": "AI",
+      "script": "スクリプト"
     }
   }
 }

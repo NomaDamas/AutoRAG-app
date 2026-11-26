@@ -1528,6 +1528,71 @@
 	color: var(--text-muted);
 }
 
+/*
+ * The 매직 액션 modal is the 자동화 card's form (언제 / Dazzi가 할 일), so its body matches that card: a 12px muted
+ * label over each part, the right-click sentence of chips, and a bordered 할 일 field. The name above clears the X.
+ */
+.settings-view .magic-editor > .magic-editor-name {
+	padding-right: 32px;
+}
+
+.settings-view .magic-editor-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding-top: 20px;
+}
+
+.settings-view .magic-editor-label {
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: var(--space-4);
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea {
+	height: 72px;
+	min-height: 72px;
+	margin: 0;
+	padding: var(--space-8) var(--space-10);
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+	font-size: 13px;
+	line-height: 20px;
+	resize: none;
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea:focus {
+	border-color: var(--accent);
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-body > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .settings-modal .magic-editor-body > p.magic-editor-card-hint {
+	margin: 0;
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
+}
+
 /* 처리 방식: a full-width segmented control, the picked half a white chip. */
 .settings-view .magic-editor-kind {
 	display: flex;

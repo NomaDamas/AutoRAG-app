@@ -1826,8 +1826,6 @@
       "condFolderOnly": "Folders only",
       "condAnyKind": "Files & folders",
       "condAllExtensions": "All extensions",
-      "condSkills": "Skills",
-      "condMcp": "MCP",
       "sectionsTitle": "Context Menu Sections & Items",
       "lockedBadge": "Always shown",
       "lockedHint": "Tags is a required core item and cannot be hidden.",
@@ -1870,61 +1868,19 @@
         "editTitle": "Edit Magic Action",
         "labelField": "Button Label",
         "labelPlaceholder": "Magic action name",
-        "descriptionField": "Description (optional)",
-        "descriptionPlaceholder": "Short note shown in Settings",
-        "executionField": "Runs as",
-        "kindAgent": "AI Task",
-        "kindScript": "Script",
         "agentModeField": "Agent Capabilities",
         "modeRead": "Read & Analyze Only (summarize, inspect, Q&A)",
         "modeOrganize": "Create & Modify Files (convert, edit, organize, shell)",
         "promptField": "AI Agent Prompt",
         "promptPlaceholder": "e.g. Summarize the key points of the selected document and extract action items as a table.",
-        "useSkillsField": "Allow Shared Skills",
-        "useSkillsHint": "Share skills installed for the AutoRAG agent with this Magic Action (on by default).",
-        "useMcpField": "Allow Connected MCP Servers",
-        "useMcpHint": "Allow calling connected MCP servers (such as Aside MCP) from this Magic Action (on by default).",
         "commandField": "Shell Command / Script",
         "commandPlaceholder": "e.g. shasum -a 256 \"$@\" or python3 ~/scripts/process.py \"$@\"",
         "commandHint": "Selected paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON, DAZZI_FILE, and DAZZI_FILE_COUNT.",
-        "selectionField": "Selection",
-        "targetKindField": "Type",
-        "extensionsField": "Extensions",
-        "extensionsPlaceholder": "Extension + Enter",
         "save": "Save",
         "commandPlaceholderWindows": "e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args or python ~\\scripts\\process.py @args",
         "commandHintWindows": "Runs in Windows PowerShell with selected paths passed in $args and env vars $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, and $env:DAZZI_FILE_COUNT.",
-        "labelHint": "Shown with this name in the right-click menu",
         "modeReadShort": "Read only",
-        "modeOrganizeShort": "Can edit files",
-        "targetRow": "Shows for",
-        "targetFile": "Files",
-        "targetFolder": "Folders",
-        "targetBoth": "Both",
-        "selectionAny": "Any",
-        "selectionSingle": "One",
-        "selectionMultiple": "Several",
-        "removeExtension": "Remove {{ext}}",
-        "advancedRow": "Advanced",
-        "advancedUses": "Uses {{list}}",
-        "advancedNone": "None",
-        "targetSummary": {
-          "any": {
-            "file": "When you right-click {{ext}}files",
-            "folder": "When you right-click folders",
-            "any": "When you right-click files or folders"
-          },
-          "single": {
-            "file": "When you right-click one {{ext}}file",
-            "folder": "When you right-click one folder",
-            "any": "When you right-click one file or folder"
-          },
-          "multiple": {
-            "file": "When you right-click several {{ext}}files",
-            "folder": "When you right-click several folders",
-            "any": "When you right-click several files or folders"
-          }
-        }
+        "modeOrganizeShort": "Can edit files"
       },
       "assistant": {
         "title": "Context Menu & Magic Action AI Agent",
@@ -3674,6 +3630,38 @@
       "words": "{{count}} words",
       "chars": "{{count}} chars",
       "pages": "{{count}} pages"
+    }
+  },
+  "rightClickWhen": {
+    "when": "When",
+    "task": "What Dazzi does",
+    "kindLabel": "File type",
+    "kind": {
+      "all": "any files",
+      "pdf": "PDF files",
+      "image": "images",
+      "document": "documents",
+      "folder": "folders",
+      "both": "files or folders"
+    },
+    "custom": "{{exts}} files",
+    "extPlaceholder": "Type an extension, then Enter",
+    "countLabel": "How many",
+    "count": {
+      "single": "one at a time",
+      "multiple": "several at once",
+      "any": "in any number"
+    },
+    "event": "are right-clicked",
+    "sentence": {
+      "single": "When {{kind}} {{event}} {{count}}",
+      "multiple": "When {{kind}} {{event}} {{count}}",
+      "any": "When {{kind}} {{event}} {{count}}"
+    },
+    "runLabel": "How it runs",
+    "run": {
+      "agent": "AI",
+      "script": "Script"
     }
   }
 }

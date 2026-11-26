@@ -176,29 +176,28 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 
 		const editor = document.querySelector('[data-testid="magic-action-editor-modal"]');
 		expect(editor).not.toBeNull();
-		// Skills & MCP switches default to ON (`aria-checked="true"`)
-		const skillsSwitch = editor!.querySelector<HTMLButtonElement>('[data-sidebar-switch="magic-editor:useSkills"]');
-		const mcpSwitch = editor!.querySelector<HTMLButtonElement>('[data-sidebar-switch="magic-editor:useMcp"]');
-		expect(skillsSwitch?.getAttribute("aria-checked")).toBe("true");
-		expect(mcpSwitch?.getAttribute("aria-checked")).toBe("true");
+		// The modal is the 자동화 form set to 우클릭하면: no skills or MCP switches, and no permission chip on a new action.
+		expect(editor!.querySelector('[data-sidebar-switch="magic-editor:useSkills"]')).toBeNull();
+		expect(editor!.querySelector('[data-sidebar-switch="magic-editor:useMcp"]')).toBeNull();
+		expect(editor!.querySelector('[data-testid="magic-editor-agent-mode"]')).toBeNull();
+		expect(editor!.querySelector('[data-testid="magic-editor-rc-event"]')?.textContent).toBe(t("rightClickWhen.event"));
 
 		await act(async () => {
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-label"]')!, "PDF 3줄 요약");
 			setInputValue(editor!.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-prompt"]')!, "핵심 3줄 요약해줘");
-			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-extensions"]')!, ".pdf, md");
+		});
+		// The file-kind chip takes a typed extension list: Enter turns it into the chip's label.
+		await act(async () => {
+			editor!.querySelector<HTMLButtonElement>('[data-testid="magic-editor-rc-kind"]')?.click();
 		});
 		await act(async () => {
-			editor!.querySelector<HTMLButtonElement>('[data-testid="magic-editor-selection-single"]')?.click();
+			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-rc-ext"]')!, ".pdf, md");
 		});
-		// Enter turns the typed extensions into chips, and 표시할 대상 sums the rule up in one line.
 		await act(async () => {
-			editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-extensions"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+			editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-rc-ext"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 		});
-		expect([...editor!.querySelectorAll(".magic-editor-ext")].map((chip) => chip.textContent)).toEqual(["pdf", "md"]);
-		expect(editor!.querySelector('[data-testid="magic-editor-extensions"]')).toHaveProperty("value", "");
-		expect(editor!.querySelector(".magic-editor-section-value")?.textContent).toBe(
-			t("settingsCore.contextMenu.editor.targetSummary.single.file", { ext: "PDF/MD " }),
-		);
+		expect(editor!.querySelector('[data-testid="magic-editor-rc-kind"]')?.textContent).toBe(t("rightClickWhen.custom", { exts: "PDF/MD" }));
+		expect(editor!.querySelector('[data-testid="magic-editor-rc-count"]')?.textContent).toBe(t("rightClickWhen.count.single"));
 		await settle();
 
 		await act(async () => {
@@ -216,7 +215,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		});
 
 		const actionId = currentSettings.contextMenu.magicActions[0]!.id;
-		expect(host.querySelector(`[data-magic-row="${actionId}"]`)?.textContent).toContain("MCP");
+		expect(host.querySelector(`[data-magic-row="${actionId}"]`)?.textContent).not.toContain("MCP");
 
 		// 나만의 매직 액션 edits (수정 · 삭제, no switch); 우클릭 메뉴 섹션 및 항목 only turns it on or off. Neither shows a kind badge.
 		const [cardRow, sectionRow] = [...host.querySelectorAll<HTMLElement>(`[data-magic-row="${actionId}"]`)];
@@ -228,24 +227,31 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		expect(sectionRow?.textContent).toBe("PDF 3줄 요약");
 		expect(host.querySelector(".sidebar-always-badge.is-plain")).toBeNull();
 
-		// Edit the Magic Action and toggle MCP off
+		// Editing shows the permission chip; allowing file changes keeps the skills and MCP the action had.
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>(`[data-action="edit-magic-${actionId}"]`)?.click();
 		});
 		await settle();
 		const editModal = document.querySelector('[data-testid="magic-action-editor-modal"]');
+		expect(editModal?.querySelector('[data-testid="magic-editor-rc-kind"]')?.textContent).toBe(t("rightClickWhen.custom", { exts: "PDF/MD" }));
 		await act(async () => {
-			editModal?.querySelector<HTMLButtonElement>('[data-sidebar-switch="magic-editor:useMcp"]')?.click();
+			editModal?.querySelector<HTMLButtonElement>('[data-testid="magic-editor-agent-mode"]')?.click();
+		});
+		await act(async () => {
+			editModal?.querySelector<HTMLButtonElement>('[data-testid="magic-editor-agent-mode-organize"]')?.click();
 		});
 		await settle();
 		await act(async () => {
 			editModal?.querySelector<HTMLButtonElement>('[data-action="save-magic-editor"]')?.click();
 		});
 		await settle();
+		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
+		expect(currentSettings.contextMenu.magicActions[0]?.id).toBe(actionId);
 		expect(currentSettings.contextMenu.magicActions[0]?.execution).toMatchObject({
 			kind: "agent",
+			mode: "organize",
 			useSkills: true,
-			useMcp: false,
+			useMcp: true,
 		});
 		// Remove Magic Action
 		await act(async () => {
