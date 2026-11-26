@@ -1338,8 +1338,8 @@ function RecommendationCard({
 		</div>
 	);
 	return glow ? (
-		// A soft light just at the card's edge rather than a wide haze: it invites, it does not call.
-		<div className="ai-glow-host [--ai-glow-opacity:0.32] [--ai-glow-opacity-focus:0.4] [--ai-glow-blur:3px]" data-ai-glow>
+		// Lower than the composer's glow: it invites, it does not call.
+		<div className="ai-glow-host [--ai-glow-opacity:0.28] [--ai-glow-opacity-focus:0.36] [--ai-glow-blur:14px]" data-ai-glow>
 			<div className="ai-glow ai-glow-warm" aria-hidden="true" />
 			{card}
 		</div>
@@ -1746,14 +1746,13 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 					) : state.rules.length === 0 && magicActions.length === 0 ? (
 						// With no rules the recommendations are the page: a line on what automations do, what the person's files
 						// suggest (glowing: the AI offers them), and a way to ask in words.
-						// 14 between the glowing cards so the page shows clean between them; the hero and the line under keep their distance.
-						<section className="flex flex-col gap-14" data-automation-recommendations>
-							<div className="mb-4 flex flex-col gap-4" data-automation-hero>
+						<section className="flex flex-col gap-10" data-automation-recommendations>
+							<div className="mb-8 flex flex-col gap-4" data-automation-hero>
 								<h2 className="m-0 mt-2 text-[17px] font-bold leading-[24px] text-ink">{t("automations.recs.hero")}</h2>
 								<p className="m-0 text-[13px] leading-[19px] text-ink-muted">{t("automations.recs.heroCaption")}</p>
 							</div>
 							{recommendationCards}
-							<p className="m-0 mt-2 flex items-center gap-8 text-meta leading-[18px] text-ink-muted">
+							<p className="m-0 mt-6 flex items-center gap-8 text-meta leading-[18px] text-ink-muted">
 								{t("automations.recs.more")}
 								<button type="button" data-action="automation-talk" className="border-0 bg-transparent p-0 text-meta text-accent-text cursor-pointer hover:underline" onClick={() => onTalk?.()}>
 									{t("automations.recs.talk")}

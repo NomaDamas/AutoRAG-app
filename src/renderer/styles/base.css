@@ -311,12 +311,10 @@ small {
 	opacity: var(--ai-glow-opacity-focus);
 }
 
-/* A recommendation's glow: yellow and blue, as the Settings sidebar AI card, drifting slowly from side to side.
- * A soft light that hugs the card (a 3px blur from its own edge), so the page shows clean between cards instead
- * of the cards' lights running together into one haze. */
+/* A recommendation's glow: yellow and blue, as the Settings sidebar AI card, drifting slowly from side to side. */
 .ai-glow-host > .ai-glow.ai-glow-warm {
-	inset: 0;
-	border-radius: 12px;
+	inset: -5px;
+	border-radius: 16px;
 	background: var(--ai-glow-warm);
 	background-size: 300% 100%;
 }
