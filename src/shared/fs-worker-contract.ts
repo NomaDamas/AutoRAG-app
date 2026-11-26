@@ -58,6 +58,7 @@ export type FsWorkerOp =
 	| "copyPathsToClipboard"
 	| "versionFamilies"
 	| "refreshVersionFamilies"
+	| "versionHistory"
 	| "setScanInterval"
 	/** The Interface language: the worker's user-facing messages follow it. */
 	| "setLanguage"

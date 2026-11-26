@@ -49,6 +49,7 @@ const FS_WORKER_METHODS: Readonly<Record<string, string>> = {
 	recordCreated: "recordCreated",
 	versionFamilies: "versionFamilies",
 	refreshVersionFamilies: "refreshVersionFamilies",
+	versionHistory: "versionHistory",
 	indexStatus: "indexStatus",
 	setIndexExcluded: "setIndexExcluded",
 	indexMap: "indexMap",

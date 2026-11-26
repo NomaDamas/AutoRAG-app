@@ -2,8 +2,8 @@
   "schema": 1,
   "librarian": {
     "repo": "Marker-Inc-Korea/AutoRAG",
-    "ref": "v2.15.0",
-    "version": "2.15.0"
+    "ref": "48b7593262f879ea638290f77dfa22315935b88f",
+    "version": "2.16.0"
   },
   "daemon": {
     "owner": "minsync serve",

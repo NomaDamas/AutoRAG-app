@@ -1,7 +1,7 @@
 import type { IpcRenderer } from "electron";
 import type { ContentSearchResult } from "../shared/content-search-contract";
 import type { SearchDatasource, SourceSearchOutcome } from "../shared/source-search-contract";
-import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsTagCatalog, FsUndoOutcome, FsVersionFamiliesResult } from "../shared/fs-contract";
+import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsTagCatalog, FsUndoOutcome, FsVersionFamiliesResult, FsVersionHistoryMemberInput, FsVersionHistoryResult } from "../shared/fs-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import type { FsWorkerOp } from "../shared/fs-worker-contract";
 import { FS_WORKER_PUSH, type WorkerClient } from "../shared/fs-worker-protocol";
@@ -63,5 +63,6 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		onIndexRefreshed: (listener) =>
 			worker.onPush(FS_WORKER_PUSH.indexRefreshed, (error) => listener(typeof error === "string" ? error : null)),
 		refreshVersionFamilies: () => call<FsVersionFamiliesResult>("refreshVersionFamilies"),
+		versionHistory: (members: readonly FsVersionHistoryMemberInput[]) => call<FsVersionHistoryResult>("versionHistory", members),
 	};
 }

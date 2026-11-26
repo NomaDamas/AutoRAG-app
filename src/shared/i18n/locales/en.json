@@ -292,6 +292,24 @@
       "near": "Similar",
       "contains": "Contains"
     },
+    "versionHistory": {
+      "title": "Version History",
+      "count": "{{count}} versions",
+      "loading": "Comparing changes…",
+      "identical": "Same content as previous",
+      "baseVersion": "Base version",
+      "unsupported": "Text comparison unavailable",
+      "error": "Could not load changes",
+      "vsPrevious": "vs. {{name}}",
+      "addedLines": "+{{count}}",
+      "removedLines": "-{{count}}",
+      "viewDetail": "View diff",
+      "openFile": "Reveal file",
+      "previousLabel": "Previous",
+      "currentLabel": "Current",
+      "truncatedNotice": "Showing key changed sections for this long document.",
+      "close": "Close"
+    },
     "evidencePanel": {
       "emptyTitle": "Answer sources\nwill appear here.",
       "excerpts": "Evidence excerpts",

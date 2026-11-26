@@ -292,6 +292,24 @@
       "near": "相似版本",
       "contains": "包含版本"
     },
+    "versionHistory": {
+      "title": "版本历史",
+      "count": "{{count}} 个版本",
+      "loading": "正在比较变更…",
+      "identical": "与上一版本内容相同",
+      "baseVersion": "基准版本",
+      "unsupported": "不支持文本比较的格式",
+      "error": "无法加载变更内容",
+      "vsPrevious": "对比上一版本（{{name}}）",
+      "addedLines": "+{{count}}行",
+      "removedLines": "-{{count}}行",
+      "viewDetail": "详细对比",
+      "openFile": "定位文件",
+      "previousLabel": "上一版本",
+      "currentLabel": "当前版本",
+      "truncatedNotice": "文档较长，仅展示核心变更片段。",
+      "close": "关闭"
+    },
     "evidencePanel": {
       "emptyTitle": "回答的来源\n将显示在此处。",
       "excerpts": "依据摘录",
