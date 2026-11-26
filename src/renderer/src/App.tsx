@@ -956,8 +956,8 @@ export function App(): ReactElement {
 							requestSettingsCategory("ai");
 							finder?.openSettings();
 						}}
-						onOpenSettingsPage={(category) => {
-							requestSettingsCategory(category);
+						onOpenSettingsPage={(category, options) => {
+							requestSettingsCategory(category, options);
 							finder?.openSettings();
 						}}
 						sourceStatus={sourceStatus}

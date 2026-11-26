@@ -12,6 +12,7 @@ import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { NotificationCenter } from "./NotificationCenter";
 import type { SettingsCategory } from "./SettingsView";
+import type { SettingsNavigationOptions } from "../state/settings-navigation";
 import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
@@ -105,8 +106,8 @@ export function Sidebar({
 	readonly onOpenIndexing: () => void;
 	/** Model download entries open Settings on its AI page. */
 	readonly onOpenAiSettings?: (() => void) | undefined;
-	/** The notification center opens a Settings page by category (`general`, `source:<alias>`). */
-	readonly onOpenSettingsPage?: ((category: SettingsCategory) => void) | undefined;
+	/** The notification center opens a Settings page by category (`general`, `indexing`, `source:<alias>`). */
+	readonly onOpenSettingsPage?: ((category: SettingsCategory, options?: SettingsNavigationOptions) => void) | undefined;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;

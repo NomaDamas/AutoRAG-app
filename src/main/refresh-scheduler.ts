@@ -306,6 +306,8 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 			mechanism,
 			installed,
 			wanted: interval !== null,
+			localScheduled: plan.localIntervalMs !== null,
+			scheduledSourceIds: plan.sources.map((source) => source.id),
 			intervalMs: interval,
 			lastTickAt: state.lastTickAt,
 			local: state.local,
