@@ -377,8 +377,6 @@
     "reviewing": "질문 검토 중…",
     "stopped": "답변 생성을 중단했습니다.",
     "dropHere": "파일을 여기에 놓으세요",
-    "steerPlaceholder": "검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)",
-    "steerSend": "검색 바로잡기",
     "voiceStart": "음성으로 입력",
     "voiceStop": "녹음 끝내고 받아쓰기",
     "voiceCancel": "녹음 취소",
@@ -398,14 +396,19 @@
       "waiting": "설정에서 마이크를 켜고 Dazzi로 돌아오면 바로 녹음을 시작합니다.",
       "stillDenied": "마이크가 아직 꺼져 있습니다. 설정에서 켠 뒤 Dazzi로 돌아오세요."
     },
-    "steerHintLead": "찾는 중에도 입력할 수 있습니다.",
-    "steerHintEnter": "바로잡기",
-    "steerHintAltEnter": "다음 질문",
     "steerPending": "반영 대기 중 · 다음 단계에 전달됩니다",
     "steerDelivered": "검색에 반영됨",
     "steerDropped": "검색이 먼저 끝나 반영되지 않았습니다",
+    "followUp": {
+      "postpone": "다음 질문으로 미루기",
+      "cancel": "취소",
+      "now": "지금 보내기",
+      "edit": "수정",
+      "remove": "삭제",
+      "copy": "복사",
+      "copied": "복사했습니다"
+    },
     "queuedLabel": "다음 질문",
-    "queuedRemove": "다음 질문 취소",
     "historyGroups": {
       "today": "오늘",
       "yesterday": "어제",
@@ -624,7 +627,8 @@
       "matches": "조건에 맞는 파일 {{count}}개",
       "noMatches": "지금은 조건에 맞는 파일이 없습니다",
       "notRun": "아직 실행되지 않음",
-      "runFiles": "파일 {{count}}개"
+      "runFiles": "파일 {{count}}개",
+      "runFilesMore": "{{name}} 외 {{count}}개"
     },
     "quickLook": {
       "when": "언제",
@@ -637,6 +641,7 @@
     "confirm": {
       "title": "‘{{title}}’ 규칙을 삭제할까요?",
       "message": "규칙만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
+      "magicMessage": "우클릭 메뉴에서만 빠지고 파일과 폴더는 그대로 유지됩니다.",
       "action": "삭제"
     },
     "toast": {
@@ -647,7 +652,9 @@
       "saved": "변경 사항을 저장했습니다.",
       "deleting": "‘{{title}}’ 규칙을 삭제하는 중…",
       "undo": "실행 취소",
-      "restored": "‘{{title}}’ 규칙을 되돌렸습니다."
+      "restored": "‘{{title}}’ 규칙을 되돌렸습니다.",
+      "addingToMenu": "우클릭 메뉴에 추가하는 중…",
+      "addedToMenu": "‘{{title}}’ 항목을 우클릭 메뉴에 추가했습니다."
     },
     "kinds": {
       "screenshot": "스크린샷",
@@ -687,7 +694,9 @@
       "program": "{{name}} 프로그램으로 처리"
     },
     "time": {
-      "now": "방금"
+      "now": "방금",
+      "todayAt": "오늘 {{time}}",
+      "yesterdayAt": "어제 {{time}}"
     },
     "lastRun": {
       "never": "아직 실행 안 됨",
@@ -761,6 +770,11 @@
         "desc": "문서 폴더의 파일이 생기거나 바뀌면, 검색에 바로 반영해 줘",
         "task": "검색에 바로 반영해 줘"
       },
+      "translate": {
+        "title": "문서 번역",
+        "desc": "문서 파일 하나를 우클릭하면, 한국어로 번역한 사본을 만들어 줘",
+        "task": "한국어로 번역한 사본을 같은 폴더에 만들어 줘"
+      },
       "add": "추가"
     },
     "row": {
@@ -774,7 +788,8 @@
       "ok": "성공",
       "failed": "실패",
       "settings": "설정",
-      "history": "실행 기록"
+      "history": "실행 기록",
+      "task": "할 일"
     },
     "tabs": {
       "rules": "자동화",
@@ -803,8 +818,8 @@
         "refreshAgo": "문서 폴더가 {{time}}에 마지막으로 반영되었습니다",
         "refreshChanged": "문서에서 최근 일주일 동안 바뀐 파일이 {{count}}개 있습니다"
       },
-      "hero": "파일이 생기거나 바뀔 때 Dazzi가 알아서 처리합니다",
-      "heroCaption": "내 파일에서 찾은 추천 자동화부터 시작해 보세요."
+      "hero": "반복하는 파일 작업은 Dazzi에게 맡기세요",
+      "heroCaption": "파일이 생기거나 바뀔 때, 또는 우클릭할 때 Dazzi가 정해 둔 일을 합니다. 아래 추천부터 시작해 보세요."
     },
     "nudge": {
       "pdf": "새 PDF가 들어올 때마다 요약해 두는 자동화를 만들 수 있습니다.",
@@ -823,7 +838,13 @@
       "ask": "새 자동화 만들기",
       "reply": "원하는 양식을 선택하거나 채팅으로 자동화를 추가할 수 있습니다."
     },
-    "back": "뒤로가기"
+    "back": "뒤로가기",
+    "magic": {
+      "title": "우클릭 메뉴",
+      "on": "우클릭 메뉴에 표시",
+      "kind": "우클릭 메뉴 항목"
+    },
+    "kind": "자동화"
   },
   "osMenu": {
     "ask": "Dazzi에게 물어보기",
@@ -3920,6 +3941,33 @@
       "words": "{{count}}단어",
       "chars": "{{count}}자",
       "pages": "{{count}}페이지"
+    }
+  },
+  "rightClickWhen": {
+    "when": "언제",
+    "task": "할 일",
+    "kindLabel": "파일 종류",
+    "kind": {
+      "all": "모든 파일",
+      "pdf": "PDF 파일",
+      "image": "이미지 파일",
+      "document": "문서 파일",
+      "folder": "폴더",
+      "both": "파일이나 폴더"
+    },
+    "custom": "{{exts}} 파일",
+    "extPlaceholder": "확장자 입력 후 Enter",
+    "countLabel": "선택 개수",
+    "count": {
+      "single": "하나",
+      "multiple": "여러 개",
+      "any": "하나 이상"
+    },
+    "event": "우클릭하면",
+    "sentence": {
+      "single": "{{kind}} {{count}}를 {{event}}",
+      "multiple": "{{kind}} {{count}}를 {{event}}",
+      "any": "{{kind}} {{count}}을 {{event}}"
     }
   }
 }

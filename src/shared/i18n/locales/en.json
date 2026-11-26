@@ -377,8 +377,6 @@
     "reviewing": "Reviewing the query.",
     "stopped": "Generation stopped.",
     "dropHere": "Drop files here",
-    "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
-    "steerSend": "Correct the search",
     "voiceStart": "Dictate with your voice",
     "voiceStop": "Stop recording and transcribe",
     "voiceCancel": "Cancel recording",
@@ -398,14 +396,19 @@
       "waiting": "Turn on the microphone in Settings and come back to Dazzi: recording starts right away.",
       "stillDenied": "The microphone is still off. Turn it on in Settings, then come back to Dazzi."
     },
-    "steerHintLead": "You can type while it searches.",
-    "steerHintEnter": "correct",
-    "steerHintAltEnter": "next question",
     "steerPending": "Waiting · goes in at the next step",
     "steerDelivered": "Applied to the search",
     "steerDropped": "The search ended before this was applied",
+    "followUp": {
+      "postpone": "Ask it next instead",
+      "cancel": "Cancel",
+      "now": "Send now",
+      "edit": "Edit",
+      "remove": "Delete",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
     "queuedLabel": "Next question",
-    "queuedRemove": "Cancel next question",
     "historyGroups": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -624,7 +627,8 @@
       "matches": "Files that match: {{count}}",
       "noMatches": "No files match right now",
       "notRun": "Not run yet",
-      "runFiles": "Files: {{count}}"
+      "runFiles": "Files: {{count}}",
+      "runFilesMore": "{{name}} and {{count}} more"
     },
     "quickLook": {
       "when": "When",
@@ -637,6 +641,7 @@
     "confirm": {
       "title": "Delete the rule “{{title}}”?",
       "message": "Only the rule is removed; the folder and its files stay as they are.",
+      "magicMessage": "It only leaves the right-click menu; your files and folders stay as they are.",
       "action": "Delete"
     },
     "toast": {
@@ -647,7 +652,9 @@
       "saved": "Changes saved.",
       "deleting": "Deleting the rule ‘{{title}}’…",
       "undo": "Undo",
-      "restored": "Restored the rule “{{title}}”."
+      "restored": "Restored the rule “{{title}}”.",
+      "addingToMenu": "Adding to the right-click menu…",
+      "addedToMenu": "Added ‘{{title}}’ to the right-click menu."
     },
     "kinds": {
       "screenshot": "Screenshot",
@@ -687,7 +694,9 @@
       "program": "Handled by {{name}}"
     },
     "time": {
-      "now": "just now"
+      "now": "just now",
+      "todayAt": "Today {{time}}",
+      "yesterdayAt": "Yesterday {{time}}"
     },
     "lastRun": {
       "never": "Not run yet",
@@ -761,6 +770,11 @@
         "desc": "When files in Documents are added or changed, update search right away",
         "task": "Update search right away"
       },
+      "translate": {
+        "title": "Translate a document",
+        "desc": "Right-click a document to make a copy translated into English",
+        "task": "Make a copy translated into English in the same folder"
+      },
       "add": "Add"
     },
     "row": {
@@ -774,7 +788,8 @@
       "ok": "Succeeded",
       "failed": "Failed",
       "settings": "Settings",
-      "history": "Run history"
+      "history": "Run history",
+      "task": "Task"
     },
     "tabs": {
       "rules": "Automations",
@@ -803,8 +818,8 @@
         "refreshAgo": "Your Documents folder was last indexed {{time}}",
         "refreshChanged": "Files changed in Documents this past week: {{count}}"
       },
-      "hero": "Dazzi takes care of your files as they arrive or change",
-      "heroCaption": "Start with a recommended automation we found in your files."
+      "hero": "Leave repetitive file work to Dazzi",
+      "heroCaption": "When a file arrives or changes, or when you right-click it, Dazzi does the job you set. Start with a recommendation below."
     },
     "nudge": {
       "pdf": "An automation could summarize each new PDF as it arrives.",
@@ -823,7 +838,13 @@
       "ask": "Create a new automation",
       "reply": "Fill in the form, or describe the automation in chat to add it."
     },
-    "back": "Back"
+    "back": "Back",
+    "magic": {
+      "title": "Right-click menu",
+      "on": "Show in the right-click menu",
+      "kind": "Right-click menu action"
+    },
+    "kind": "Automation"
   },
   "osMenu": {
     "ask": "Ask Dazzi",
@@ -3920,6 +3941,33 @@
       "words": "{{count}} words",
       "chars": "{{count}} chars",
       "pages": "{{count}} pages"
+    }
+  },
+  "rightClickWhen": {
+    "when": "When",
+    "task": "Task",
+    "kindLabel": "File type",
+    "kind": {
+      "all": "any files",
+      "pdf": "PDF files",
+      "image": "images",
+      "document": "documents",
+      "folder": "folders",
+      "both": "files or folders"
+    },
+    "custom": "{{exts}} files",
+    "extPlaceholder": "Type an extension, then Enter",
+    "countLabel": "How many",
+    "count": {
+      "single": "one at a time",
+      "multiple": "several at once",
+      "any": "in any number"
+    },
+    "event": "are right-clicked",
+    "sentence": {
+      "single": "When {{kind}} {{event}} {{count}}",
+      "multiple": "When {{kind}} {{event}} {{count}}",
+      "any": "When {{kind}} {{event}} {{count}}"
     }
   }
 }

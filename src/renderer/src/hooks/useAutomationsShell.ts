@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import { t } from "../../../shared/i18n/core";
-import type { AutomationsViewProps } from "../components/AutomationsView";
+import { INITIAL_AUTOMATIONS_PLACE, type AutomationsPlace, type AutomationsViewProps } from "../components/AutomationsView";
 import { addPrompt, ruleTitle } from "../state/automations";
 import { ruleKeyAction } from "../state/automations-keys";
 import { ruleMenuEntries, stepRuleSelection, type AutomationsStore, type AutomationsView } from "../state/automations-store";
 import type { FinderMenuAction, FinderMenuEntry } from "../state/context-menu";
+import { appendMagicAction } from "../state/right-click-trigger";
+import { normalizeContextMenuSettings, type MagicAction } from "../../../shared/context-menu-contract";
 
 /** How long the "삭제했어요 · 실행 취소" toast offers its undo. */
 const UNDO_MS = 5000;
@@ -113,6 +115,40 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const latest = useRef(deps);
 	latest.current = deps;
+
+	// The page the 자동화 tab was left on (전체 기록, a right-click action's page), found again when the tab comes back.
+	const [place, setPlace] = useState<AutomationsPlace>(INITIAL_AUTOMATIONS_PLACE);
+
+	// The right-click actions, listed beside the rules: read once, then kept as Settings (or its assistant) changes them.
+	const [magicActions, setMagicActions] = useState<readonly MagicAction[]>([]);
+	useEffect(() => {
+		const settings = window.autorag?.settings;
+		if (settings === undefined) return;
+		let live = true;
+		const apply = (next: { readonly contextMenu?: unknown }): void => {
+			if (live) setMagicActions(normalizeContextMenuSettings(next.contextMenu).magicActions);
+		};
+		void settings.get().then(apply).catch(() => undefined);
+		const off = settings.onChanged?.(apply);
+		return () => {
+			live = false;
+			off?.();
+		};
+	}, []);
+	/** Rewrite the right-click actions from the freshest settings; resolves true once they are saved. */
+	const changeMagicActions = useCallback(async (change: (actions: readonly MagicAction[]) => readonly MagicAction[]): Promise<boolean> => {
+		const settings = window.autorag?.settings;
+		if (settings === undefined) return false;
+		try {
+			const current = normalizeContextMenuSettings((await settings.get()).contextMenu);
+			const saved = await settings.set({ contextMenu: normalizeContextMenuSettings({ ...current, magicActions: change(current.magicActions) }) });
+			setMagicActions(normalizeContextMenuSettings(saved.contextMenu).magicActions);
+			return true;
+		} catch (cause) {
+			latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+			return false;
+		}
+	}, []);
 
 	// No rule runs while the service is off, so the window turns it on once there is something to run: once per
 	// launch, so a failure (shown as a toast) or a later 끄기 is not fought over.
@@ -335,6 +371,38 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 				return false;
 			}
+		},
+		// 우클릭하면 on a 새 자동화 card: the action joins the right-click menu (Settings → 우클릭 메뉴 lists it), under an id
+		// no other action has, and the menu's magic section is shown again if it was hidden.
+		onCreateMagicAction: async (action) => {
+			const settings = window.autorag?.settings;
+			if (settings === undefined) return false;
+			showProgress(t("automations.toast.addingToMenu"), true);
+			try {
+				await appendMagicAction(settings, action);
+				showProgress(t("automations.toast.addedToMenu", { title: action.label }), false);
+				return true;
+			} catch (cause) {
+				clearProgress();
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
+		magicActions,
+		place,
+		onPlaceChange: setPlace,
+		onToggleMagicAction: (id) => {
+			void changeMagicActions((actions) => actions.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
+		},
+		onUpdateMagicAction: async (action) => {
+			showProgress(t("automations.toast.saving"), true);
+			const ok = await changeMagicActions((actions) => actions.map((item) => (item.id === action.id ? action : item)));
+			if (ok) showProgress(t("automations.toast.saved"), false);
+			else clearProgress();
+			return ok;
+		},
+		onDeleteMagicAction: async (id) => {
+			await changeMagicActions((actions) => actions.filter((item) => item.id !== id));
 		},
 		editing: byId(editingId),
 		onUpdate: async (id, next) => {

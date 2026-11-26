@@ -17,13 +17,32 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
+import { normalizeMagicAction, type MagicAction, type MagicActionSelectionRule } from "../../../shared/context-menu-contract";
+import { hostPlatform } from "../lib/shortcuts";
+import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickKindOf, rightClickTarget, type RightClickKind } from "../state/right-click-trigger";
+import { onMagicActionDone } from "../hooks/useMagicAction";
+import { ConfirmDialog } from "./primitives/ConfirmDialog";
+import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
+import { RightClickWhen, rightClickSentence, type RunKind } from "./RightClickWhen";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
 import { StatusDot } from "./primitives/StatusDot";
 import { Switch } from "./primitives/Switch";
+
+/**
+ * Where the 자동화 tab is: the list or 전체 기록, a right-click action's page, and whether a rule's page was opened
+ * from 전체 기록. Kept by the shell, so leaving the tab and coming back finds the page it was left on.
+ */
+export interface AutomationsPlace {
+	readonly page: "list" | "all";
+	readonly magicId: string | null;
+	readonly fromAll: boolean;
+}
+
+export const INITIAL_AUTOMATIONS_PLACE: AutomationsPlace = { page: "list", magicId: null, fromAll: false };
 
 export interface AutomationsViewProps {
 	readonly state: AutomationsSnapshot;
@@ -37,6 +56,19 @@ export interface AutomationsViewProps {
 	readonly onAdd: () => void;
 	/** 만들기: write the rule; resolves true once it is in the rules file. */
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** A 새 자동화 card set to 우클릭하면: add the action to the right-click menu; resolves true once settings have it. */
+	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
+	/** The right-click actions (Settings → 우클릭 메뉴), listed under 내 자동화 beside the rules. */
+	readonly magicActions?: readonly MagicAction[];
+	/** Where the tab was left; without it the tab keeps its place only while it is shown. */
+	readonly place?: AutomationsPlace | undefined;
+	readonly onPlaceChange?: ((place: AutomationsPlace) => void) | undefined;
+	/** A right-click action's page saved a change (its name, 언제, 할 일, permission); resolves true once settings have it. */
+	readonly onUpdateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
+	/** A right-click action's page, 삭제 confirmed: remove it from the right-click menu. */
+	readonly onDeleteMagicAction?: ((id: string) => Promise<void>) | undefined;
+	/** A right-click row's switch: show or hide the action in the right-click menu. */
+	readonly onToggleMagicAction?: ((id: string) => void) | undefined;
 	/** The names people gave their rules; the list redraws when one changes. */
 	readonly names?: Readonly<Record<string, string>>;
 	/** ⋯ → 이름 바꾸기: store a rule's name; an empty one goes back to the derived title. */
@@ -91,8 +123,8 @@ type ModeId = "read" | "write";
 const KIND_GLOBS: Readonly<Record<KindId, readonly string[]>> = {
 	all: [],
 	pdf: ["**/*.pdf"],
-	image: ["png", "jpg", "jpeg", "heic", "gif", "webp"].map((ext) => `**/*.${ext}`),
-	document: ["pdf", "doc", "docx", "hwp", "hwpx", "txt", "md", "ppt", "pptx", "xls", "xlsx"].map((ext) => `**/*.${ext}`),
+	image: IMAGE_EXTENSIONS.map((ext) => `**/*.${ext}`),
+	document: DOCUMENT_EXTENSIONS.map((ext) => `**/*.${ext}`),
 };
 const EVENTS: Readonly<Record<EventId, readonly AutomationEventType[]>> = {
 	create: ["create"],
@@ -120,100 +152,25 @@ const TEMPLATES: readonly Template[] = [
 	{ id: "refresh", folder: "documents", kind: "all", event: "createUpdate", mode: "read", run: ["autorag", "refresh"] },
 ];
 
-interface ChipOption<T extends string> {
-	readonly value: T;
-	readonly label: string;
-	readonly icon?: ReactNode;
+/** A recommendation a right-click starts: the action it would add to the right-click menu. */
+interface RightClickTemplate {
+	readonly id: "translate";
+	readonly clickKind: RightClickKind;
+	readonly selection: MagicActionSelectionRule;
+	readonly mode: ModeId;
 }
 
-/** A word in the 언제 sentence: a small white chip that opens its choices below it. */
-function ChipSelect<T extends string>({
-	value,
-	options,
-	label,
-	icon,
-	round = false,
-	disabled = false,
-	testId,
-	onChange,
-}: {
-	readonly value: T | null;
-	readonly options: readonly ChipOption<T>[];
-	readonly label: string;
-	readonly icon?: ReactNode;
-	readonly round?: boolean;
-	/** Read, not edited: one tone lighter, and it opens nothing. */
-	readonly disabled?: boolean;
-	readonly testId: string;
-	readonly onChange: (value: T) => void;
-}): ReactElement {
-	const [open, setOpen] = useState(false);
-	const ref = useRef<HTMLSpanElement>(null);
-	useEffect(() => {
-		if (!open) return;
-		const onDown = (event: MouseEvent): void => {
-			if (ref.current !== null && !ref.current.contains(event.target as Node)) setOpen(false);
-		};
-		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				setOpen(false);
-			}
-		};
-		document.addEventListener("mousedown", onDown);
-		document.addEventListener("keydown", onKey, true);
-		return () => {
-			document.removeEventListener("mousedown", onDown);
-			document.removeEventListener("keydown", onKey, true);
-		};
-	}, [open]);
-	const current = options.find((option) => option.value === value);
-	return (
-		<span ref={ref} className="relative inline-flex">
-			<button
-				type="button"
-				data-testid={testId}
-				aria-haspopup="listbox"
-				aria-expanded={open}
-				aria-label={label}
-				disabled={disabled}
-				className={cn(
-					"inline-flex items-center gap-4 px-8 py-4 border-[0.5px] border-divider bg-window text-meta leading-[18px] whitespace-nowrap",
-					disabled ? "text-ink cursor-default" : "text-ink cursor-pointer hover:border-border",
-					round ? "rounded-[13px]" : "rounded-[7px]",
-				)}
-				onClick={() => setOpen((was) => !was)}
-			>
-				{current?.icon ?? icon}
-				<span>{current?.label ?? label}</span>
-				<ChevronDownIcon size={12} className="text-ink-muted" />
-			</button>
-			{open ? (
-				<ul role="listbox" aria-label={label} className="absolute left-0 top-[calc(100%+4px)] z-30 m-0 w-max min-w-full list-none rounded-8 border border-border bg-window p-4 shadow-menu">
-					{options.map((option) => (
-						<li key={option.value}>
-							<button
-								type="button"
-								role="option"
-								aria-selected={option.value === value}
-								data-testid={`${testId}-${option.value}`}
-								className="flex w-full items-center gap-6 rounded-6 border-0 bg-transparent px-8 py-5 text-left text-meta text-ink whitespace-nowrap cursor-pointer hover:bg-hover"
-								onClick={() => {
-									onChange(option.value);
-									setOpen(false);
-								}}
-							>
-								{option.icon}
-								<span className="flex-1 whitespace-nowrap">{option.label}</span>
-								{option.value === value ? <CheckIcon size={12} className="text-accent-text" /> : <span className="w-12" />}
-							</button>
-						</li>
-					))}
-				</ul>
-			) : null}
-		</span>
-	);
-}
+/**
+ * The page's recommendations, in order: two folder automations and one right-click automation, so both kinds of
+ * trigger are on offer. 검색 바로 최신화 stays a template for the chat's suggestions but is not recommended here.
+ */
+type Recommendation = { readonly trigger: "folder"; readonly template: Template } | { readonly trigger: "rightClick"; readonly template: RightClickTemplate };
+
+const RECOMMENDATIONS: readonly Recommendation[] = [
+	{ trigger: "folder", template: TEMPLATES[0]! },
+	{ trigger: "folder", template: TEMPLATES[1]! },
+	{ trigger: "rightClick", template: { id: "translate", clickKind: "document", selection: "single", mode: "write" } },
+];
 
 /** A standard folder the OS reports, by its sidebar glyph. */
 function standardFolders(locations: readonly FsLocation[]): readonly ChipOption<string>[] {
@@ -468,7 +425,7 @@ function NewAutomationCard({
 					),
 				)}
 			</div>
-			<span className="mt-4 text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.task")}</span>
+			<span className="mt-4 text-meta font-medium leading-[16px] text-ink-muted">{t(pageMode ? "automations.detail.task" : "automations.create.task")}</span>
 			<textarea
 				ref={taskRef}
 				data-testid="automation-new-task"
@@ -476,7 +433,7 @@ function NewAutomationCard({
 				placeholder={t("automations.create.taskPlaceholder")}
 				aria-label={t("automations.create.task")}
 				className={cn(
-					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
+					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-subtle-alt px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
 					"text-ink focus:border-accent",
 				)}
 				onChange={(change) => {
@@ -578,6 +535,7 @@ function RuleRow({
 			<RunDot tone={runDotTone(rule.lastRun)} />
 			{/* The same title and caption sizes as a recommendation's (Figma 672:3740): 14px over 12px. */}
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
+				{/* Every automation looks alike here; what starts it is said by the line under the name. */}
 				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{whenText(rule)}</span>
 			</div>
@@ -586,6 +544,287 @@ function RuleRow({
 				<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-rule-on" />
 			</span>
 			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
+		</div>
+	);
+}
+
+/**
+ * A right-click action in 내 자동화: the same row as a rule's — the status dot from its last run, the click glyph where a
+ * rule has the bolt, its name over when it shows ("PDF 파일 하나를 우클릭하면"), the on/off switch, and ›, which opens its
+ * own page here in the tab.
+ */
+function MagicActionRow({
+	action,
+	lastRun,
+	onOpen,
+	onToggle,
+}: {
+	readonly action: MagicAction;
+	readonly lastRun: AutomationRun | null;
+	readonly onOpen: (id: string) => void;
+	readonly onToggle?: ((id: string) => void) | undefined;
+}): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<div role="row" data-magic-action-row={action.id} className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row" onClick={() => onOpen(action.id)}>
+			<RunDot tone={runDotTone(lastRun)} />
+			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
+				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
+				<span className="truncate text-meta leading-[17px] text-ink-muted">{rightClickSentence(t, action)}</span>
+			</div>
+			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
+				<Switch checked={action.enabled} onChange={() => onToggle?.(action.id)} ariaLabel={t("automations.magic.on")} dataSwitchId={`magic-action-on:${action.id}`} />
+			</span>
+			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
+		</div>
+	);
+}
+
+/** Right-click actions' runs from their log, newest first, read again whenever a run finishes. */
+function useMagicRunHistory(ids: readonly string[]): Readonly<Record<string, readonly AutomationRun[]>> {
+	const [history, setHistory] = useState<Readonly<Record<string, readonly AutomationRun[]>>>({});
+	const [tick, setTick] = useState(0);
+	useEffect(() => onMagicActionDone(() => setTick((count) => count + 1)), []);
+	const key = ids.join("\n");
+	useEffect(() => {
+		const bridge = window.autorag?.magicAction;
+		if (bridge === undefined || typeof bridge.history !== "function") return;
+		let live = true;
+		// The log is written as the run ends; a moment later it has the run that just finished.
+		const read = (): void => {
+			void Promise.all(ids.map(async (id) => [id, await bridge.history(id).catch(() => [] as readonly AutomationRun[])] as const)).then((entries) => {
+				if (live) setHistory(Object.fromEntries(entries));
+			});
+		};
+		read();
+		const later = tick === 0 ? undefined : setTimeout(read, 400);
+		return () => {
+			live = false;
+			clearTimeout(later);
+		};
+	}, [key, tick]);
+	return history;
+}
+
+/** The name on a right-click action's page: the same field as a rule's — a click turns it into a field, Enter or leaving saves, Esc keeps it. */
+function MagicTitle({ action, onRename }: { readonly action: MagicAction; readonly onRename: (label: string) => void }): ReactElement {
+	const { t } = useTranslation();
+	const [editing, setEditing] = useState(false);
+	const [name, setName] = useState("");
+	const finish = (save: boolean): void => {
+		setEditing(false);
+		const next = name.trim();
+		if (save && next.length > 0 && next !== action.label) onRename(next);
+	};
+	if (editing) {
+		return (
+			<input
+				autoFocus
+				data-testid="magic-title-input"
+				value={name}
+				aria-label={t("automations.row.rename")}
+				className="h-28 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[17px] font-medium leading-[22px] text-ink outline-none"
+				onFocus={(event) => event.currentTarget.select()}
+				onChange={(event) => setName(event.target.value)}
+				onKeyDown={(event) => {
+					event.stopPropagation();
+					if (event.key === "Enter") finish(true);
+					if (event.key === "Escape") finish(false);
+				}}
+				onBlur={() => finish(true)}
+			/>
+		);
+	}
+	return (
+		<button
+			type="button"
+			data-action="magic-rename"
+			title={t("automations.row.rename")}
+			className="group inline-flex h-28 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
+			onClick={() => {
+				setName(action.label);
+				setEditing(true);
+			}}
+		>
+			<span className="truncate text-[17px] font-medium leading-[22px] text-ink">{action.label}</span>
+			<PencilIcon size={14} className="flex-none text-ink-faint group-hover:text-ink-muted" />
+		</button>
+	);
+}
+
+/**
+ * A right-click action's 설정 card: the rule page's card in the right-click form — 언제 as the sentence (the trigger
+ * fixed), 할 일 with AI | 스크립트, and the permission chip. 취소 shows once something differs; 저장 waits for it.
+ */
+function MagicActionCard({ action, onSave }: { readonly action: MagicAction; readonly onSave: (next: MagicAction) => Promise<boolean> }): ReactElement {
+	const { t } = useTranslation();
+	const start = (): {
+		kind: RightClickKind;
+		custom: readonly string[] | null;
+		selection: MagicActionSelectionRule;
+		runKind: RunKind;
+		task: string;
+		mode: ModeId;
+	} => {
+		const { kind, custom } = rightClickKindOf(action.targetKind, action.extensions);
+		return {
+			kind,
+			custom,
+			selection: action.selection,
+			runKind: action.execution.kind === "script" ? "script" : "agent",
+			task: action.execution.kind === "script" ? action.execution.command : action.execution.prompt,
+			mode: action.execution.kind === "agent" && action.execution.mode === "organize" ? "write" : "read",
+		};
+	};
+	const [form, setForm] = useState(start);
+	const [changed, setChanged] = useState(false);
+	const [busy, setBusy] = useState(false);
+	useEffect(() => {
+		setForm(start());
+		setChanged(false);
+	}, [action.id, JSON.stringify(action)]);
+	const set = <K extends keyof ReturnType<typeof start>>(key: K) => (value: ReturnType<typeof start>[K]): void => {
+		setForm((current) => ({ ...current, [key]: value }));
+		setChanged(true);
+	};
+	const script = form.runKind === "script";
+	const modes: readonly ChipOption<ModeId>[] = [
+		{ value: "read", label: t("automations.create.mode.read"), icon: <EyeIcon size={13} /> },
+		{ value: "write", label: t("automations.create.mode.write"), icon: <FilePenIcon /> },
+	];
+	const save = async (): Promise<void> => {
+		const next = normalizeMagicAction({
+			...action,
+			selection: form.selection,
+			...rightClickTarget(form.kind, form.custom),
+			execution: script
+				? { kind: "script", command: form.task }
+				: {
+						kind: "agent",
+						mode: form.mode === "write" ? "organize" : "read",
+						prompt: form.task,
+						useSkills: action.execution.kind === "agent" ? action.execution.useSkills !== false : true,
+						useMcp: action.execution.kind === "agent" ? action.execution.useMcp !== false : true,
+					},
+		});
+		if (next === null || busy) return;
+		setBusy(true);
+		const ok = await onSave(next);
+		setBusy(false);
+		if (ok) setChanged(false);
+	};
+	return (
+		<div className="flex flex-col gap-8 rounded-[14px] border border-border bg-window p-14" data-magic-action-card={action.id}>
+			<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.when")}</span>
+			<RightClickWhen
+				kind={form.kind}
+				custom={form.custom}
+				selection={form.selection}
+				testId="magic-detail-rc"
+				onKind={(kind) => {
+					setForm((current) => ({ ...current, kind, custom: null }));
+					setChanged(true);
+				}}
+				onCustom={set("custom")}
+				onSelection={set("selection")}
+			/>
+			{/* No AI | 스크립트 choice: an action stays what it was made as (the assistant decides that when it makes one). */}
+			<span className="mt-4 flex h-22 items-center text-meta font-medium leading-[16px] text-ink-muted">{t("automations.detail.task")}</span>
+			<textarea
+				data-testid="magic-detail-task"
+				value={form.task}
+				aria-label={t("automations.create.task")}
+				placeholder={
+					script
+						? t(hostPlatform() === "win32" ? "settingsCore.contextMenu.editor.commandPlaceholderWindows" : "settingsCore.contextMenu.editor.commandPlaceholder")
+						: t("automations.create.taskPlaceholder")
+				}
+				className={cn(
+					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-subtle-alt px-10 py-8 text-[13px] leading-[20px] text-ink outline-none placeholder:text-ink-faint focus:border-accent",
+					script && "font-mono text-[12px]",
+				)}
+				onChange={(change) => set("task")(change.target.value)}
+			/>
+			<div className="flex items-center gap-6">
+				{script ? null : <ChipSelect value={form.mode} options={modes} label={t("automations.create.modeLabel")} round testId="magic-detail-mode" onChange={set("mode")} />}
+				<span className="flex-1" />
+				{changed ? (
+					<button
+						type="button"
+						data-action="magic-detail-cancel"
+						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
+						onClick={() => {
+							setForm(start());
+							setChanged(false);
+						}}
+					>
+						{t("common.cancel")}
+					</button>
+				) : null}
+				<button
+					type="button"
+					data-action="magic-detail-save"
+					disabled={!changed || form.task.trim().length === 0}
+					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
+					onClick={() => void save()}
+				>
+					{t("common.save")}
+				</button>
+			</div>
+		</div>
+	);
+}
+
+/** A right-click action's own page, laid out as a rule's: the path back, the name and switch, its 설정 card, its 실행 기록, and 삭제. */
+function MagicActionDetail({
+	action,
+	runs,
+	crumbs,
+	onUpdate,
+	onToggle,
+	onDelete,
+	onOpenFolder,
+}: {
+	readonly action: MagicAction;
+	readonly runs: readonly AutomationRun[] | undefined;
+	readonly crumbs: readonly Crumb[];
+	readonly onUpdate: (next: MagicAction) => Promise<boolean>;
+	readonly onToggle?: ((id: string) => void) | undefined;
+	readonly onDelete: () => void;
+	readonly onOpenFolder?: ((path: string) => void) | undefined;
+}): ReactElement {
+	const { t } = useTranslation();
+	const list = runs ?? [];
+	return (
+		<div className="flex flex-col gap-24" data-magic-action-detail={action.id}>
+			<div className="flex flex-col gap-6">
+				<Breadcrumb crumbs={crumbs} current={action.label} />
+				<div className="flex min-w-0 items-center gap-8">
+					<MagicTitle key={action.id} action={action} onRename={(label) => void onUpdate({ ...action, label })} />
+					<span className="flex-1" />
+					<span className="flex-none text-badge leading-[16px] text-ink-muted">{t("automations.detail.runOn")}</span>
+					<Switch checked={action.enabled} onChange={() => onToggle?.(action.id)} ariaLabel={t("automations.magic.on")} dataSwitchId={`magic-detail-on:${action.id}`} />
+				</div>
+			</div>
+			<Section muted title={t("automations.detail.settings")}>
+				<MagicActionCard action={action} onSave={onUpdate} />
+			</Section>
+			<Section muted title={list.length === 0 ? t("automations.detail.history") : `${t("automations.detail.history")} (${list.length})`}>
+				{list.length === 0 ? (
+					<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
+				) : (
+					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
+						{list.map((run) => (
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
+						))}
+					</div>
+				)}
+			</Section>
+			<div className="flex justify-end">
+				<button type="button" data-action="magic-delete" className="border-0 bg-transparent p-0 text-meta font-medium text-danger-text cursor-pointer hover:opacity-80" onClick={onDelete}>
+					{t("automations.detail.delete")}
+				</button>
+			</div>
 		</div>
 	);
 }
@@ -626,41 +865,85 @@ function useRunHistory(ids: readonly string[], changed: string): Readonly<Record
 	return history;
 }
 
-/** What one run did: how many files it took and how it ended, e.g. "파일 2개 · 시간 초과". */
-function runOutcome(run: AutomationRun, t: TFunction): string {
-	const result = runTone(run) === "ok" ? t("automations.inspector.runDone") : failReason(run);
-	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
-	return [files, result].filter((part): part is string => part !== null && part.length > 0).join(" · ");
+/** Which kind of automation a row is: a folder rule or a right-click (magic) action. */
+type AutomationKind = "rule" | "magic";
+
+const baseName = (path: string): string => path.split(/[\\/]/).filter((part) => part.length > 0).pop() ?? path;
+const parentDir = (path: string): string => {
+	const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+	return cut <= 0 ? path : path.slice(0, cut);
+};
+
+/** What a run is named by: the file it ran on ("회의록.txt", "회의록.txt 외 2개"), or how many when the log has no names. */
+function runFilesTitle(run: AutomationRun, t: TFunction): string | null {
+	const first = run.files?.[0];
+	if (first !== undefined) {
+		const name = baseName(first);
+		const rest = (run.files?.length ?? 1) - 1;
+		return rest === 0 ? name : t("automations.inspector.runFilesMore", { name, count: rest });
+	}
+	return run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
+}
+
+/** How a run ended, as a word: 완료, or why it failed (시간 초과, …). */
+function runResult(run: AutomationRun, t: TFunction): string {
+	return runTone(run) === "ok" ? t("automations.inspector.runDone") : failReason(run);
+}
+
+/** When a run started, on a rule's own page (Figma 676:835): 오늘 14:02, 어제 10:41, or the date. */
+function runAt(at: number, t: TFunction, language: string, now: number = Date.now()): string {
+	const start = (time: number): number => new Date(time).setHours(0, 0, 0, 0);
+	const days = Math.round((start(now) - start(at)) / 86_400_000);
+	const time = new Intl.DateTimeFormat(language, { hour: "2-digit", minute: "2-digit", hour12: false }).format(at);
+	if (days === 0) return t("automations.time.todayAt", { time });
+	if (days === 1) return t("automations.time.yesterdayAt", { time });
+	return new Intl.DateTimeFormat(language, { month: "long", day: "numeric" }).format(at);
 }
 
 /**
- * One line of 실행 기록 (Figma 621:4882): the dot, how many files it took over how it ended (the rule's name over its
- * outcome in 전체 기록), when, and the error a failed run left. The run log counts the files but does not name them.
+ * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, the file the run worked on,
+ * and under it, in 전체 기록, the automation's name and how it ended ("핵심 요약 · 시간 초과"), or on the automation's own
+ * page just how it ended. Then when, and › when the line opens something: its automation from 전체 기록, the file's folder
+ * on a page. A failed run on its own page shows the error it left.
  */
-function RunLine({ run, rule, onOpen, flat = false }: { readonly run: AutomationRun; readonly rule?: AutomationRule; readonly onOpen?: () => void; readonly flat?: boolean }): ReactElement {
-	const { t } = useTranslation();
+function RunLine({
+	run,
+	name,
+	onOpen,
+	absoluteTime = false,
+	flat = false,
+}: {
+	readonly run: AutomationRun;
+	/** The automation's name, in 전체 기록, where runs of every automation are mixed. */
+	readonly name?: string;
+	readonly onOpen?: (() => void) | undefined;
+	/** On an automation's own page the time reads 오늘 14:02, in 전체 기록 3분 전. */
+	readonly absoluteTime?: boolean;
+	readonly flat?: boolean;
+}): ReactElement {
+	const { t, i18n } = useTranslation();
 	const tone = runTone(run);
-	const result = tone === "ok" ? t("automations.inspector.runDone") : failReason(run);
-	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
-	const first = rule !== undefined ? ruleTitle(rule) : (files ?? result);
-	const second = rule !== undefined ? runOutcome(run, t) : files === null ? null : result;
+	const result = runResult(run, t);
+	const files = runFilesTitle(run, t);
+	const first = files ?? (name ?? result);
+	const second = name !== undefined ? `${name} · ${result}` : files === null ? null : result;
 	const body = (
 		<>
 			<div className="flex w-full items-center gap-10">
 				<RunDot tone={runDotTone(run)} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
-					<span className="truncate text-[13px] leading-[20px] text-ink">{first}</span>
-					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted">{second}</span>}
+					<span className="truncate text-[13px] leading-[20px] text-ink" data-run-title>{first}</span>
+					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted" data-run-caption>{second}</span>}
 				</div>
-				<span className="flex-none text-meta leading-[18px] text-ink-muted">{relativeTime(run.startedAt)}</span>
+				<span className="flex-none text-meta leading-[18px] text-ink-muted">{absoluteTime ? runAt(run.startedAt, t, i18n.language) : relativeTime(run.startedAt)}</span>
 				{onOpen === undefined ? null : <ChevronRightIcon size={14} className="flex-none text-ink-faint" />}
 			</div>
-			{tone === "fail" && run.error !== undefined && rule === undefined ? (
+			{tone === "fail" && run.error !== undefined && name === undefined ? (
 				<p className="m-0 w-full rounded-8 bg-subtle-alt px-10 py-7 text-meta leading-[18px] text-ink-body [overflow-wrap:anywhere]">{run.error}</p>
 			) : null}
 		</>
 	);
-	// On a rule's own page the runs are plain lines between hairlines (Figma 641:13600); in 전체 기록 they sit in the rounded list.
+	// On an automation's own page the runs are plain lines between hairlines (Figma 641:13600); in 전체 기록 they sit in the rounded list.
 	const row = cn("flex w-full flex-col items-start gap-6 border-0 py-10 text-left", flat ? "bg-transparent px-4" : "bg-window px-14");
 	return onOpen === undefined ? (
 		<div className={row} data-run={run.startedAt}>
@@ -671,6 +954,12 @@ function RunLine({ run, rule, onOpen, flat = false }: { readonly run: Automation
 			{body}
 		</button>
 	);
+}
+
+/** On an automation's own page a run that names its files opens their folder; one that only counts them opens nothing. */
+function openRunFolder(run: AutomationRun, onOpenFolder: ((path: string) => void) | undefined): (() => void) | undefined {
+	const first = run.files?.[0];
+	return first === undefined || onOpenFolder === undefined ? undefined : () => onOpenFolder(parentDir(first));
 }
 
 /**
@@ -735,6 +1024,7 @@ function AutomationDetail({
 	onUpdate,
 	onDelete,
 	onDraftChange,
+	onOpenFolder,
 }: {
 	readonly rule: AutomationRule;
 	readonly runs: readonly AutomationRun[] | undefined;
@@ -743,6 +1033,7 @@ function AutomationDetail({
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onDelete: () => void;
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
+	readonly onOpenFolder?: ((path: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	// The log is the record; until it has been read (or if it is gone) the rule's last run still shows.
@@ -769,7 +1060,7 @@ function AutomationDetail({
 				) : (
 					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} flat />
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
 						))}
 					</div>
 				)}
@@ -823,13 +1114,23 @@ function dayLabel(at: number, t: TFunction, language: string, now: number = Date
 	return new Intl.DateTimeFormat(language, { month: "long", day: "numeric" }).format(at);
 }
 
-/** 전체 기록 (Figma 676:646): every rule's runs, newest first, under the day they ran; a row opens its rule. */
-function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void; readonly crumbs: readonly Crumb[] }): ReactElement {
+/** One run in 전체 기록, from a rule or a right-click action. */
+interface RunEntry {
+	readonly key: string;
+	readonly kind: AutomationKind;
+	readonly id: string;
+	readonly name: string;
+	readonly run: AutomationRun;
+}
+
+/**
+ * 전체 기록 (Figma 699:3562): every automation's runs — folder rules' and right-click actions' — newest first, under the
+ * day they ran. A row names the file and, under it, the automation and how it ended; › opens that automation's page.
+ */
+function AllRunsPage({ entries, onOpen, crumbs }: { readonly entries: readonly RunEntry[]; readonly onOpen: (entry: RunEntry) => void; readonly crumbs: readonly Crumb[] }): ReactElement {
 	const { t, i18n } = useTranslation();
-	const all = rules
-		.flatMap((rule) => (history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ rule, run })))
-		.sort((a, b) => b.run.startedAt - a.run.startedAt);
-	const days: { label: string; runs: typeof all }[] = [];
+	const all = [...entries].sort((a, b) => b.run.startedAt - a.run.startedAt);
+	const days: { label: string; runs: RunEntry[] }[] = [];
 	for (const item of all) {
 		const label = dayLabel(item.run.startedAt, t, i18n.language);
 		const last = days[days.length - 1];
@@ -839,7 +1140,8 @@ function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: reado
 	return (
 		<section className="flex flex-col gap-6" data-automation-all-runs>
 			<Breadcrumb crumbs={crumbs} current={t("automations.all.title")} />
-			<h1 className="m-0 text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
+			{/* The same 28px row as an automation's renamable title, so the breadcrumb and title line up page to page. */}
+			<h1 className="m-0 flex h-28 items-center text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
 			{all.length === 0 ? (
 				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 			) : (
@@ -848,8 +1150,8 @@ function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: reado
 						<div key={day.label} className="flex flex-col">
 							<h2 className="m-0 border-b-[0.5px] border-divider pb-6 text-meta font-medium leading-[16px] text-ink-muted">{day.label}</h2>
 							<div role="list" aria-label={day.label} className="flex flex-col border-b-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
-								{day.runs.map(({ rule, run }) => (
-									<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} flat />
+								{day.runs.map((entry) => (
+									<RunLine key={entry.key} run={entry.run} name={entry.name} onOpen={() => onOpen(entry)} flat />
 								))}
 							</div>
 						</div>
@@ -982,33 +1284,38 @@ function useRecommendationReasons(locations: readonly FsLocation[]): Reasons | n
  * row opens it downward to show what it would do, read-only (언제, 할 일); 추가하기 writes it at once, open or not.
  */
 function RecommendationCard({
-	template,
-	locations,
+	id,
+	when,
+	task,
+	canAdd,
 	reason,
 	glow = false,
 	quiet = false,
 	onAdd,
 }: {
-	readonly template: Template;
+	/** The template's id: its words in `automations.templates.<id>`. */
+	readonly id: string;
+	/** When it would run, as the automation's own sentence (a folder's change, or a right-click). */
+	readonly when: string;
+	readonly task: string;
+	/** False until it can be written (a folder automation waits for the OS to say where its folder is). */
+	readonly canAdd: boolean;
 	/** Once there are rules the recommendations step back: a row in one grouped list on a faint ground, no stroke, smaller words. */
 	readonly quiet?: boolean;
-	readonly locations: readonly FsLocation[];
 	/** While there are no rules the recommendations are the page's invitation: a soft aurora sits behind each card. */
 	readonly glow?: boolean;
 	/** Why it is worth having, from the person's files; without one the card says when it would run; null while counting. */
 	readonly reason: string | undefined | null;
-	readonly onAdd: (draft: AutomationDraft) => Promise<boolean>;
+	/** 추가하기: write it as a folder rule or a right-click action. */
+	readonly onAdd: () => Promise<boolean>;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [busy, setBusy] = useState(false);
-	const task = t(`automations.templates.${template.id}.task` as LocaleKey);
-	const draft = templateDraft(template, locations, task);
-	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
 	const card = (
 		<div
 			className={cn("flex flex-col", quiet ? "gap-10 py-10 pr-14 pl-16" : cn("gap-12 rounded-12 border bg-window px-16 py-14", glow ? "border-transparent" : "border-border"))}
-			data-template={template.id}
+			data-template={id}
 			data-open={open ? "true" : undefined}
 		>
 			<div className="flex items-center gap-10">
@@ -1018,13 +1325,9 @@ function RecommendationCard({
 					className="flex min-w-0 flex-1 items-center gap-10 border-0 bg-transparent p-0 text-left cursor-pointer"
 					onClick={() => setOpen((was) => !was)}
 				>
-					{quiet ? (
-						<SparklesIcon size={13} className="flex-none text-ink-faint" />
-					) : (
-						<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
-					)}
+					<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
-						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${id}.title` as LocaleKey)}</span>
 						{/* While the reasons are being counted the line keeps its height and shows nothing yet. */}
 						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined || reason === null ? undefined : "true"}>
 							{reason === null ? "\u00a0" : (reason ?? when)}
@@ -1034,16 +1337,16 @@ function RecommendationCard({
 				<button
 					type="button"
 					data-action="automation-template-add"
-					disabled={draft === null || busy}
+					disabled={!canAdd || busy}
 					className={cn(
 						"inline-flex flex-none items-center rounded-6 border px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
 						quiet ? "h-26" : "h-28",
 						open ? "border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover" : "border-border bg-window text-ink-body hover:bg-hover",
 					)}
 					onClick={() => {
-						if (draft === null) return;
+						if (!canAdd) return;
 						setBusy(true);
-						void onAdd(draft).finally(() => setBusy(false));
+						void onAdd().finally(() => setBusy(false));
 					}}
 				>
 					{t("automations.recs.add")}
@@ -1158,16 +1461,27 @@ export function AutomationSuggestionCard({
  * The rule the agent is about to save, filled in (Figma 672:3740): the 언제 sentence of chips over the 할 일 line, or
  * the command a program rule runs, read as it is. A folder, kind or change the chips do not offer stays as written
  * until its chip is changed.
+ *
+ * The change chip also offers 우클릭하면 when the card is handed `onCreateMagicAction`: the sentence then drops the
+ * folder for how many items are picked ("PDF 파일 하나를 우클릭하면"), 할 일 can be a command instead (AI | 스크립트),
+ * and 추가하기 puts the action in the right-click menu instead of the automation list. One form for both triggers.
+ * `rightClickOnly` (Settings → 우클릭 메뉴's 매직 액션 만들기) starts it there and reads the trigger as plain text.
  */
 export function AutomationDraftCard({
 	initial,
 	onCreate,
+	onCreateMagicAction,
 	onCancel,
+	rightClickOnly = false,
 }: {
 	/** The rule to show filled in; null for an empty card (새 자동화) where every chip still asks. */
 	readonly initial: AutomationDraft | null;
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** Where a right-click action can be made from here; without it the change chip has no 우클릭하면. */
+	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	readonly onCancel: () => void;
+	/** Only a right-click action can be made here: the card opens on 우클릭하면 and the trigger cannot change. */
+	readonly rightClickOnly?: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
 	const locations = useLocations();
@@ -1176,13 +1490,18 @@ export function AutomationDraftCard({
 	const first = rule.paths[0] ?? null;
 	const [folder, setFolder] = useState<string | null>(first);
 	const [kind, setKind] = useState<KindId | null>(blank ? null : kindOf(rule.include));
-	const [event, setEvent] = useState<EventId | null>(blank ? null : eventOf(rule.events));
+	const [event, setEvent] = useState<EventId | "rightClick" | null>(rightClickOnly ? "rightClick" : blank ? null : eventOf(rule.events));
 	const [task, setTask] = useState(rule.agent?.task ?? "");
 	const [busy, setBusy] = useState(false);
+	// 우클릭하면: its own file kinds (folders too), how many items, a typed extension list, and AI or a command.
+	const rightClick = event === "rightClick";
+	const [clickKind, setClickKind] = useState<RightClickKind>("pdf");
+	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(null);
+	const [selection, setSelection] = useState<MagicActionSelectionRule>("single");
 	const standard = standardFolders(locations);
 	const folders = folder === null || standard.some((option) => option.value === folder) ? standard : [...standard, { value: folder, label: folderLabel(folder), icon: <FolderGlyph size={13} /> }];
 	const draft: AutomationDraft | null =
-		folder === null || (blank && (kind === null || event === null))
+		event === "rightClick" || folder === null || (blank && (kind === null || event === null))
 			? null
 			: {
 					paths: folder === first ? rule.paths : [folder],
@@ -1191,22 +1510,54 @@ export function AutomationDraftCard({
 					...(rule.agent === undefined ? { run: rule.run ?? [] } : { agent: { profile: rule.agent.profile, task: task.trim() } }),
 				};
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
-	const events: readonly ChipOption<EventId>[] = (["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) }));
+	// A program rule the agent wrote stays a folder rule; anything else may become a right-click action.
+	const offersRightClick = onCreateMagicAction !== undefined && rule.agent !== undefined;
+	const events: readonly ChipOption<EventId | "rightClick">[] = [
+		...(["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) })),
+		...(offersRightClick ? [{ value: "rightClick" as const, label: t("rightClickWhen.event"), divided: true }] : []),
+	];
 	const chips: Readonly<Record<string, ReactNode>> = {
 		folder: <ChipSelect value={folder} options={folders} label={folder === null ? t("automations.create.pickFolder") : folderLabel(folder)} icon={<FolderGlyph size={13} />} testId="automation-request-folder" onChange={setFolder} />,
 		kind: <ChipSelect value={kind} options={kinds} label={kind === null && !blank ? t("automations.kinds.noun", { kinds: kindsText(rule.include) }) : t("automations.create.kindLabel")} testId="automation-request-kind" onChange={setKind} />,
 		event: <ChipSelect value={event} options={events} label={event === null && !blank ? t("automations.create.event.other") : t("automations.create.eventLabel")} testId="automation-request-event" onChange={setEvent} />,
 	};
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
-	const canSubmit = draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0) && !busy;
+	const canSubmit = (rightClick ? task.trim().length > 0 : draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0)) && !busy;
+	/** 우클릭하면: the card as the right-click menu action it makes, named from what it does. */
+	const magicAction = (): MagicAction | null =>
+		normalizeMagicAction({
+			label: autoMagicLabel(task),
+			enabled: true,
+			selection,
+			...rightClickTarget(clickKind, customExtensions),
+			// The card always asks the agent; a script action is made by asking the assistant, which decides.
+			execution: { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
+		});
 	return (
-		<div className="flex flex-col gap-8 rounded-12 border border-border bg-window p-12" data-automation-request>
+		<div className="flex flex-col gap-8 rounded-12 border border-divider bg-window p-12" data-automation-request>
 			<span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span>
-			<div className="flex flex-wrap items-center gap-6">
-				{sentence.map((part, index) =>
-					part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
-				)}
-			</div>
+			{rightClick ? (
+				<RightClickWhen
+					kind={clickKind}
+					custom={customExtensions}
+					selection={selection}
+					event={rightClickOnly ? undefined : chips.event}
+					className="flex flex-wrap items-center gap-6"
+					testId="automation-request-rc"
+					onKind={(next) => {
+						setClickKind(next);
+						setCustomExtensions(null);
+					}}
+					onCustom={setCustomExtensions}
+					onSelection={setSelection}
+				/>
+			) : (
+				<div className="flex flex-wrap items-center gap-6">
+					{sentence.map((part, index) =>
+						part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
+					)}
+				</div>
+			)}
 			<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
 			{rule.agent === undefined ? (
 				<code className="block rounded-6 bg-subtle-alt px-8 py-6 font-mono text-badge leading-[16px] text-ink [overflow-wrap:anywhere]" data-testid="automation-request-command">
@@ -1233,6 +1584,13 @@ export function AutomationDraftCard({
 					disabled={!canSubmit}
 					className="inline-flex h-28 items-center rounded-6 border-0 bg-accent px-10 text-meta font-medium text-on-accent cursor-pointer hover:bg-accent-hover disabled:cursor-default disabled:opacity-50"
 					onClick={() => {
+						if (rightClick) {
+							const action = magicAction();
+							if (action === null || onCreateMagicAction === undefined) return;
+							setBusy(true);
+							void onCreateMagicAction(action).finally(() => setBusy(false));
+							return;
+						}
 						if (draft === null) return;
 						setBusy(true);
 						void onCreate(draft).finally(() => setBusy(false));
@@ -1245,11 +1603,29 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onCreateMagicAction, onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
-	const [page, setPage] = useState<"list" | "all">("list");
-	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
-	const [fromAll, setFromAll] = useState(false);
+	// Which page the tab shows lives with the shell when it is given one, so coming back to the tab finds it again.
+	const [ownPlace, setOwnPlace] = useState<AutomationsPlace>(keptPlace ?? INITIAL_AUTOMATIONS_PLACE);
+	const place = keptPlace ?? ownPlace;
+	// Several steps can change the place in one handler (leave 전체 기록, then open a page): each builds on the last.
+	const placeRef = useRef(place);
+	placeRef.current = place;
+	const movePlace = (change: Partial<AutomationsPlace>): void => {
+		const next = { ...placeRef.current, ...change };
+		placeRef.current = next;
+		if (onPlaceChange === undefined) setOwnPlace(next);
+		else onPlaceChange(next);
+	};
+	const { page, magicId, fromAll } = place;
+	const setPage = (next: AutomationsPlace["page"]): void => movePlace({ page: next });
+	// A right-click action's own page, one step in from the list as a rule's is.
+	const setMagicId = (next: string | null): void => movePlace({ magicId: next });
+	/** A rule's or a right-click action's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
+	const setFromAll = (next: boolean): void => movePlace({ fromAll: next });
+	const magic = magicActions.find((action) => action.id === magicId) ?? null;
+	const magicRuns = useMagicRunHistory(magicActions.map((action) => action.id));
+	const [confirmMagic, setConfirmMagic] = useState<MagicAction | null>(null);
 	const locations = useLocations();
 	const broken = state.configError !== null;
 	// A repair of this very error is running: the card gives way to one line saying so, and comes back if the repair did not clear the error.
@@ -1269,20 +1645,60 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 	const toMain = (): void => {
 		setPage("list");
 		setFromAll(false);
+		setMagicId(null);
 		onCancelEdit?.();
 	};
 	const mainCrumb: Crumb = { label: t("places.automations"), action: "automation-back", onClick: toMain };
 	const allCrumb: Crumb = { label: t("automations.all.title"), action: "automation-crumb-all", onClick: () => {
+		setPage("all");
 		setFromAll(false);
+		setMagicId(null);
 		onCancelEdit?.();
 	} };
 	const scrollRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		scrollRef.current?.scrollTo?.({ top: 0 });
-	}, [detail?.id, page]);
-	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
+	}, [detail?.id, page, magicId]);
+	// A recommendation is gone once something already does it: a folder rule of its shape, or a right-click action with its task.
+	const recommendations = RECOMMENDATIONS.filter((item) =>
+		item.trigger === "folder"
+			? !templateTaken(state.rules, item.template.id)
+			: onCreateMagicAction !== undefined &&
+				!magicActions.some((action) => action.execution.kind === "agent" && action.execution.prompt.trim() === t(`automations.templates.${item.template.id}.task` as LocaleKey).trim()),
+	);
+	/** What a recommendation's card shows and what its 추가하기 writes, for either trigger. */
+	const recommendationProps = (item: Recommendation): Omit<Parameters<typeof RecommendationCard>[0], "glow" | "quiet"> => {
+		const task = t(`automations.templates.${item.template.id}.task` as LocaleKey);
+		if (item.trigger === "rightClick") {
+			const target = { selection: item.template.selection, ...rightClickTarget(item.template.clickKind, null) };
+			const action = normalizeMagicAction({
+				label: t(`automations.templates.${item.template.id}.title` as LocaleKey),
+				enabled: true,
+				...target,
+				execution: { kind: "agent", mode: item.template.mode === "write" ? "organize" : "read", prompt: task },
+			});
+			return {
+				id: item.template.id,
+				when: rightClickSentence(t, target),
+				task,
+				canAdd: action !== null && onCreateMagicAction !== undefined,
+				// No count from the person's files: the line says the right-click, which is what is new about it.
+				reason: reasons === null ? null : undefined,
+				onAdd: async () => (action === null ? false : ((await onCreateMagicAction?.(action)) ?? false)),
+			};
+		}
+		const draft = templateDraft(item.template, locations, task);
+		return {
+			id: item.template.id,
+			when: draft === null ? t(`automations.templates.${item.template.id}.desc` as LocaleKey) : whenText(draftRule(draft)),
+			task,
+			canAdd: draft !== null,
+			reason: reasons === null ? null : reasons[item.template.id],
+			onAdd: async () => (draft === null ? false : onCreate(draft)),
+		};
+	};
 	const reasons = useRecommendationReasons(locations);
-	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} glow={state.rules.length === 0} onAdd={onCreate} />);
+	const recommendationCards = recommendations.map((item) => <RecommendationCard key={item.template.id} {...recommendationProps(item)} glow={state.rules.length === 0} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			{/* The AI 에이전트 tab's head: only 채팅 | 자동화 at the very middle, the same height as the chat side's and with no line under it. */}
@@ -1296,16 +1712,18 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 			<div
 				ref={scrollRef}
 				data-rules-body
-				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+				// The scrollbar's room is kept whether or not the page scrolls, so a long page's column sits where a short one's does.
+				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]"
 				onContextMenu={(event) => {
 					event.preventDefault();
 					onContextMenu(null, { x: event.clientX, y: event.clientY });
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				{/* The page's top edge is fixed a little way down the pane (about where the first screen looks balanced), so opening a menu or a card
-				    only grows it downward and nothing jumps. */}
-				<div className="flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40 pt-[clamp(32px,14vh,140px)]">
+				{/* The list's top edge is fixed a little way down the pane (about where the first screen looks balanced), so opening a menu or a card
+				    only grows it downward and nothing jumps. A page one step in (a rule's or a right-click action's, 전체 기록) is read from the
+				    top, as Settings' pages are: it starts 40px down, the same with or without runs. */}
+				<div className={cn("flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40", detail !== null || magic !== null || page === "all" ? "pt-40" : "pt-[clamp(32px,14vh,140px)]")}>
 				<div className="mx-auto flex w-full max-w-[640px] flex-none flex-col gap-24">
 					{state.error === null ? null : fixing !== undefined ? (
 						<div role="status" data-automation-fixing className="flex h-40 items-center gap-8 rounded-12 border border-border px-14 text-meta text-ink-muted">
@@ -1336,7 +1754,17 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							<p className="m-0 text-meta leading-body text-ink-muted [overflow-wrap:anywhere]">{state.configError}</p>
 							<p className="m-0 text-meta leading-body text-ink-muted">{t("automations.errors.configHint")}</p>
 						</div>
-					) : !state.ready ? null : detail !== null ? (
+					) : !state.ready ? null : magic !== null && detail === null ? (
+						<MagicActionDetail
+							action={magic}
+							runs={magicRuns[magic.id]}
+							crumbs={fromAll ? [mainCrumb, allCrumb] : [mainCrumb]}
+							onUpdate={async (next) => (await onUpdateMagicAction?.(next)) ?? false}
+							onToggle={onToggleMagicAction}
+							onDelete={() => setConfirmMagic(magic)}
+							onOpenFolder={onOpenFolder}
+						/>
+					) : detail !== null ? (
 						<AutomationDetail
 							rule={detail}
 							runs={history[detail.id]}
@@ -1350,21 +1778,34 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 								onAskDelete(detail.id);
 							}}
 							onDraftChange={onDraftChange}
+							onOpenFolder={onOpenFolder}
 						/>
 					) : page === "all" ? (
 						<AllRunsPage
-							rules={state.rules}
-							history={history}
-							onOpen={(id) => {
+							entries={[
+								...state.rules.flatMap((rule) =>
+									(history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ key: `rule-${rule.id}-${run.startedAt}`, kind: "rule" as const, id: rule.id, name: ruleTitle(rule), run })),
+								),
+								...magicActions.flatMap((action) =>
+									(magicRuns[action.id] ?? []).map((run) => ({ key: `magic-${action.id}-${run.startedAt}`, kind: "magic" as const, id: action.id, name: action.label, run })),
+								),
+							]}
+							onOpen={(entry) => {
+								// Either page opens over 전체 기록, which stays where it is behind it and in the page's path.
+								if (entry.kind === "magic") {
+									setFromAll(true);
+									setMagicId(entry.id);
+									return;
+								}
 								// A rule being deleted has no page to open.
-								if (id === deletingId) return;
+								if (entry.id === deletingId) return;
 								// The rule's page opens over 전체 기록, which stays where it is behind it.
 								setFromAll(true);
-								onEdit(id);
+								onEdit(entry.id);
 							}}
 							crumbs={[mainCrumb]}
 						/>
-					) : state.rules.length === 0 ? (
+					) : state.rules.length === 0 && magicActions.length === 0 ? (
 						// With no rules the recommendations are the page: a line on what automations do, what the person's files
 						// suggest (glowing: the AI offers them), and a way to ask in words.
 						<section className="flex flex-col gap-10" data-automation-recommendations>
@@ -1400,18 +1841,27 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 									{state.rules.map((rule) => (
 										<RuleRow key={rule.id} rule={rule} deleting={rule.id === deletingId} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
 									))}
+									{/* The right-click actions are automations too, with another trigger: they sit in the same list. */}
+									{magicActions.map((action) => (
+										<MagicActionRow key={action.id} action={action} lastRun={magicRuns[action.id]?.[0] ?? null} onOpen={(id) => {
+											setFromAll(false);
+											setMagicId(id);
+										}} onToggle={onToggleMagicAction} />
+									))}
 								</div>
-								<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 pl-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
-									{t("automations.all.open")}
-								</button>
+								{state.rules.length === 0 && magicActions.length === 0 ? null : (
+									<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 pl-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
+										{t("automations.all.open")}
+									</button>
+								)}
 							</section>
 							{recommendations.length === 0 ? null : (
 								// Under the person's own rules the recommendations are one quiet grouped list: no glow, no stroke.
 								<section className="flex flex-col gap-8" data-automation-recommendations>
 									<h2 className="m-0 text-meta leading-[16px] text-ink-muted">{t("automations.recs.section")}</h2>
 									<div className="flex flex-col overflow-hidden rounded-12 bg-subtle-alt [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider" data-quiet-recommendations>
-										{recommendations.map((template) => (
-											<RecommendationCard key={template.id} quiet template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} onAdd={onCreate} />
+										{recommendations.map((item) => (
+											<RecommendationCard key={item.template.id} quiet {...recommendationProps(item)} />
 										))}
 									</div>
 								</section>
@@ -1421,6 +1871,25 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 				</div>
 				</div>
 			</div>
+			{confirmMagic === null ? null : (
+				<ConfirmDialog
+					title={t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: confirmMagic.label })}
+					message={t("automations.confirm.magicMessage")}
+					confirmLabel={t("automations.confirm.action")}
+					cancelLabel={t("common.cancel")}
+					danger
+					onCancel={() => setConfirmMagic(null)}
+					onConfirm={() => {
+						const id = confirmMagic.id;
+						setConfirmMagic(null);
+						// A deleted action leaves for the main page, as a deleted rule does, not for the 전체 기록 it was opened from.
+						setPage("list");
+						setFromAll(false);
+						setMagicId(null);
+						void onDeleteMagicAction?.(id);
+					}}
+				/>
+			)}
 		</section>
 	);
 }

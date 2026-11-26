@@ -377,8 +377,6 @@
     "reviewing": "正在核对提问…",
     "stopped": "已停止生成回答。",
     "dropHere": "将文件拖放到此处",
-    "steerPlaceholder": "搜索方向不对？随时纠正（例如：只看上周的消息）",
-    "steerSend": "纠正搜索",
     "voiceStart": "语音输入",
     "voiceStop": "结束录音并转写",
     "voiceCancel": "取消录音",
@@ -398,14 +396,19 @@
       "waiting": "在设置中打开麦克风后回到 Dazzi，就会立即开始录音。",
       "stillDenied": "麦克风仍处于关闭状态。请在设置中打开后回到 Dazzi。"
     },
-    "steerHintLead": "搜索时也可以输入。",
-    "steerHintEnter": "纠正",
-    "steerHintAltEnter": "下一个问题",
     "steerPending": "等待中 · 将在下一步送达",
     "steerDelivered": "已应用到搜索",
     "steerDropped": "搜索已结束，未能应用",
+    "followUp": {
+      "postpone": "改为下一个问题",
+      "cancel": "取消",
+      "now": "立即发送",
+      "edit": "编辑",
+      "remove": "删除",
+      "copy": "复制",
+      "copied": "已复制"
+    },
     "queuedLabel": "下一个问题",
-    "queuedRemove": "取消下一个问题",
     "historyGroups": {
       "today": "今天",
       "yesterday": "昨天",
@@ -624,7 +627,8 @@
       "matches": "符合条件的文件 {{count}} 个",
       "noMatches": "目前没有符合条件的文件",
       "notRun": "尚未运行",
-      "runFiles": "文件 {{count}} 个"
+      "runFiles": "文件 {{count}} 个",
+      "runFilesMore": "{{name}} 等 {{count}} 个"
     },
     "quickLook": {
       "when": "何时",
@@ -637,6 +641,7 @@
     "confirm": {
       "title": "要删除规则“{{title}}”吗？",
       "message": "只会删除这条规则，文件夹和文件保持不变。",
+      "magicMessage": "只会从右键菜单中移除，文件和文件夹保持不变。",
       "action": "删除"
     },
     "toast": {
@@ -647,7 +652,9 @@
       "saved": "已保存更改。",
       "deleting": "正在删除规则“{{title}}”…",
       "undo": "撤销",
-      "restored": "已恢复规则“{{title}}”。"
+      "restored": "已恢复规则“{{title}}”。",
+      "addingToMenu": "正在添加到右键菜单…",
+      "addedToMenu": "已将“{{title}}”添加到右键菜单。"
     },
     "kinds": {
       "screenshot": "截图",
@@ -687,7 +694,9 @@
       "program": "由 {{name}} 处理"
     },
     "time": {
-      "now": "刚刚"
+      "now": "刚刚",
+      "todayAt": "今天 {{time}}",
+      "yesterdayAt": "昨天 {{time}}"
     },
     "lastRun": {
       "never": "尚未运行",
@@ -761,6 +770,11 @@
         "desc": "文稿文件夹中的文件新增或修改时，立即反映到搜索中",
         "task": "立即反映到搜索中"
       },
+      "translate": {
+        "title": "翻译文档",
+        "desc": "右键点击一个文档，生成翻译成中文的副本",
+        "task": "在同一文件夹中生成翻译成中文的副本"
+      },
       "add": "添加"
     },
     "row": {
@@ -774,7 +788,8 @@
       "ok": "成功",
       "failed": "失败",
       "settings": "设置",
-      "history": "运行记录"
+      "history": "运行记录",
+      "task": "任务"
     },
     "tabs": {
       "rules": "自动化",
@@ -803,8 +818,8 @@
         "refreshAgo": "文稿文件夹上次更新索引是在{{time}}",
         "refreshChanged": "文稿中最近一周有 {{count}} 个文件发生了变化"
       },
-      "hero": "文件新增或变化时，Dazzi 会自动处理",
-      "heroCaption": "从我们在你的文件中找到的推荐自动化开始吧。"
+      "hero": "把重复的文件工作交给 Dazzi",
+      "heroCaption": "文件新增或变化时，或右键点击文件时，Dazzi 会完成你设定的工作。从下面的推荐开始吧。"
     },
     "nudge": {
       "pdf": "可以创建一个自动化，每当有新 PDF 时自动总结。",
@@ -823,7 +838,13 @@
       "ask": "新建自动化",
       "reply": "可以在表单中选择，或在聊天中描述来添加自动化。"
     },
-    "back": "返回"
+    "back": "返回",
+    "magic": {
+      "title": "右键菜单",
+      "on": "在右键菜单中显示",
+      "kind": "右键菜单项"
+    },
+    "kind": "自动化"
   },
   "osMenu": {
     "ask": "向 Dazzi 提问",
@@ -3920,6 +3941,33 @@
       "words": "{{count}} 词",
       "chars": "{{count}} 字符",
       "pages": "{{count}} 页"
+    }
+  },
+  "rightClickWhen": {
+    "when": "何时",
+    "task": "任务",
+    "kindLabel": "文件类型",
+    "kind": {
+      "all": "文件",
+      "pdf": "PDF 文件",
+      "image": "图片",
+      "document": "文档",
+      "folder": "文件夹",
+      "both": "文件或文件夹"
+    },
+    "custom": "{{exts}} 文件",
+    "extPlaceholder": "输入扩展名后按 Enter",
+    "countLabel": "选择数量",
+    "count": {
+      "single": "一个",
+      "multiple": "多个",
+      "any": "任意数量的"
+    },
+    "event": "右键点击",
+    "sentence": {
+      "single": "当{{event}}{{count}}{{kind}}时",
+      "multiple": "当{{event}}{{count}}{{kind}}时",
+      "any": "当{{event}}{{count}}{{kind}}时"
     }
   }
 }

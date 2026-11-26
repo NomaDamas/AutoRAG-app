@@ -599,6 +599,9 @@ export function App(): ReactElement {
 		[openQuickLook, revealEvidence],
 	);
 
+	/** The AI 에이전트 side last shown (채팅 or 자동화): the sidebar's AI 에이전트 comes back to it. */
+	const agentSide = useRef<"chat" | "automations">("chat");
+
 	/** Sidebar "AI Search": the focused tab becomes AI Search. */
 	const showAiSearch = useCallback(() => {
 		finder?.showAiSearch();
@@ -917,7 +920,10 @@ export function App(): ReactElement {
 		onError: showErrorToast,
 		names: automationNames,
 		autoStartService: true,
-		showChat: () => finder?.showAiSearch(),
+		showChat: () => {
+			agentSide.current = "chat";
+			finder?.showAiSearch();
+		},
 		// The column opens (or stays open) and starts a rule: 새 자동화 만들기, the reply, and an empty card, each press anew.
 		talk: () => {
 			setInspectorVisible(true);
@@ -990,7 +996,7 @@ export function App(): ReactElement {
 						activePath={aiTabActive || automationsTabActive ? AI_SEARCH_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
-						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
+						onNavigate={(item) => (item.view === "aiSearch" ? (agentSide.current === "automations" ? finder?.showAutomations() : showAiSearch()) : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
 						onOpenUsage={() => {
@@ -1137,7 +1143,10 @@ export function App(): ReactElement {
 													requestSettingsCategory(`source:${alias}`);
 													finder?.openSettings();
 												}}
-												onShowAutomations={() => finder?.showAutomations()}
+												onShowAutomations={() => {
+													agentSide.current = "automations";
+													finder?.showAutomations();
+												}}
 											/>
 											</div>
 										</div>
@@ -1193,6 +1202,9 @@ export function App(): ReactElement {
 											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
 											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
 											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onPostpone={(id) => inspectorChats.postpone(chatTabId, id)}
+											onCancelSteer={(id) => inspectorChats.cancelSteer(chatTabId, id)}
+											onSendNow={(index) => inspectorChats.sendNow(chatTabId, index)}
 											onStop={inspectorChats.stop}
 											onBack={() => inspectorChats.setMode(chatTabId, "info")}
 											onNewChat={() => inspectorChats.reset(chatTabId)}
@@ -1282,6 +1294,9 @@ export function App(): ReactElement {
 											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
 											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
 											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onPostpone={(id) => inspectorChats.postpone(chatTabId, id)}
+											onCancelSteer={(id) => inspectorChats.cancelSteer(chatTabId, id)}
+											onSendNow={(index) => inspectorChats.sendNow(chatTabId, index)}
 											onStop={inspectorChats.stop}
 											onBack={() => inspectorChats.setMode(chatTabId, "info")}
 											onNewChat={() => inspectorChats.reset(chatTabId)}

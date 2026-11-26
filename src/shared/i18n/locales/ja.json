@@ -377,8 +377,6 @@
     "reviewing": "質問を確認中…",
     "stopped": "回答の生成を中止しました。",
     "dropHere": "ここにファイルをドロップ",
-    "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
-    "steerSend": "検索を修正",
     "voiceStart": "音声で入力",
     "voiceStop": "録音を終了して文字起こし",
     "voiceCancel": "録音をキャンセル",
@@ -398,14 +396,19 @@
       "waiting": "設定でマイクをオンにして Dazzi に戻ると、すぐに録音を始めます。",
       "stillDenied": "マイクはまだオフです。設定でオンにしてから Dazzi に戻ってください。"
     },
-    "steerHintLead": "検索中も入力できます。",
-    "steerHintEnter": "修正",
-    "steerHintAltEnter": "次の質問",
     "steerPending": "反映待ち · 次のステップで渡されます",
     "steerDelivered": "検索に反映済み",
     "steerDropped": "反映される前に検索が終了しました",
+    "followUp": {
+      "postpone": "次の質問に回す",
+      "cancel": "キャンセル",
+      "now": "今すぐ送信",
+      "edit": "編集",
+      "remove": "削除",
+      "copy": "コピー",
+      "copied": "コピーしました"
+    },
     "queuedLabel": "次の質問",
-    "queuedRemove": "次の質問を取り消す",
     "historyGroups": {
       "today": "今日",
       "yesterday": "昨日",
@@ -624,7 +627,8 @@
       "matches": "条件に合うファイル {{count}}件",
       "noMatches": "今は条件に合うファイルがありません",
       "notRun": "まだ実行されていません",
-      "runFiles": "ファイル {{count}}件"
+      "runFiles": "ファイル {{count}}件",
+      "runFilesMore": "{{name}} ほか{{count}}件"
     },
     "quickLook": {
       "when": "いつ",
@@ -637,6 +641,7 @@
     "confirm": {
       "title": "ルール「{{title}}」を削除しますか?",
       "message": "ルールだけが削除され、フォルダとファイルはそのまま残ります。",
+      "magicMessage": "右クリックメニューから外れるだけで、ファイルとフォルダはそのまま残ります。",
       "action": "削除"
     },
     "toast": {
@@ -647,7 +652,9 @@
       "saved": "変更を保存しました。",
       "deleting": "ルール「{{title}}」を削除しています…",
       "undo": "取り消す",
-      "restored": "ルール「{{title}}」を元に戻しました。"
+      "restored": "ルール「{{title}}」を元に戻しました。",
+      "addingToMenu": "右クリックメニューに追加しています…",
+      "addedToMenu": "右クリックメニューに「{{title}}」を追加しました。"
     },
     "kinds": {
       "screenshot": "スクリーンショット",
@@ -687,7 +694,9 @@
       "program": "{{name}}で処理"
     },
     "time": {
-      "now": "たった今"
+      "now": "たった今",
+      "todayAt": "今日 {{time}}",
+      "yesterdayAt": "昨日 {{time}}"
     },
     "lastRun": {
       "never": "まだ実行されていません",
@@ -761,6 +770,11 @@
         "desc": "書類フォルダのファイルが追加・変更されたら、すぐ検索に反映して",
         "task": "すぐ検索に反映して"
       },
+      "translate": {
+        "title": "文書を翻訳",
+        "desc": "文書ファイルを右クリックすると、日本語に翻訳したコピーを作ります",
+        "task": "日本語に翻訳したコピーを同じフォルダに作って"
+      },
       "add": "追加"
     },
     "row": {
@@ -774,7 +788,8 @@
       "ok": "成功",
       "failed": "失敗",
       "settings": "設定",
-      "history": "実行履歴"
+      "history": "実行履歴",
+      "task": "やること"
     },
     "tabs": {
       "rules": "自動化",
@@ -803,8 +818,8 @@
         "refreshAgo": "書類フォルダが最後に反映されたのは{{time}}です",
         "refreshChanged": "書類でこの1週間に変わったファイルが{{count}}件あります"
       },
-      "hero": "ファイルが追加・変更されたとき、Dazziが自動で処理します",
-      "heroCaption": "あなたのファイルから見つけたおすすめの自動化から始めてみてください。"
+      "hero": "繰り返しのファイル作業はDazziにおまかせください",
+      "heroCaption": "ファイルが追加・変更されたとき、または右クリックしたときに、Dazziが決めておいた作業を行います。下のおすすめから始めてみてください。"
     },
     "nudge": {
       "pdf": "新しい PDF が届くたびに要約しておく自動化を作れます。",
@@ -823,7 +838,13 @@
       "ask": "新しい自動化を作成",
       "reply": "フォームで選ぶか、チャットで伝えて自動化を追加できます。"
     },
-    "back": "戻る"
+    "back": "戻る",
+    "magic": {
+      "title": "右クリックメニュー",
+      "on": "右クリックメニューに表示",
+      "kind": "右クリックメニューの項目"
+    },
+    "kind": "自動化"
   },
   "osMenu": {
     "ask": "Dazziに質問",
@@ -3920,6 +3941,33 @@
       "words": "{{count}}語",
       "chars": "{{count}}文字",
       "pages": "{{count}}ページ"
+    }
+  },
+  "rightClickWhen": {
+    "when": "いつ",
+    "task": "やること",
+    "kindLabel": "ファイルの種類",
+    "kind": {
+      "all": "ファイル",
+      "pdf": "PDFファイル",
+      "image": "画像",
+      "document": "文書",
+      "folder": "フォルダ",
+      "both": "ファイルかフォルダ"
+    },
+    "custom": "{{exts}}ファイル",
+    "extPlaceholder": "拡張子を入力してEnter",
+    "countLabel": "選択する数",
+    "count": {
+      "single": "1つ",
+      "multiple": "複数",
+      "any": "いくつでも"
+    },
+    "event": "右クリックした",
+    "sentence": {
+      "single": "{{kind}}を{{count}}{{event}}とき",
+      "multiple": "{{kind}}を{{count}}{{event}}とき",
+      "any": "{{kind}}を{{count}}{{event}}とき"
     }
   }
 }

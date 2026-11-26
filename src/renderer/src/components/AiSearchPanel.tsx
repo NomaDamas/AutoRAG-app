@@ -28,7 +28,8 @@ import type { InteractionRequest } from "../../../shared/interaction-contract";
 import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import { chordFromKeyEvent, resolveEffectiveShortcuts } from "../../../shared/shortcuts-contract";
 import { useFormattedShortcut, useShortcutSettings } from "../hooks/useShortcutSettings";
-import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
+import { composerAction, deliverSteers, restoreChat, settleSteers, sortFollowUp, type SteerItem } from "../state/steering";
+import { QueuedBubble, SentActions, SteerBubble } from "./FollowUpBubbles";
 import { frontRequest } from "../state/interaction";
 import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
@@ -384,6 +385,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		[],
 	);
 
+	/** The run is over: corrections never sent leave the chat and, with `requeue`, wait as next questions. */
+	function releaseHeld(requeue: boolean): void {
+		const held = steersRef.current.filter((steer) => steer.status === "held");
+		if (held.length === 0) return;
+		steersRef.current = steersRef.current.filter((steer) => steer.status !== "held");
+		setSteers((current) => current.filter((steer) => steer.status !== "held"));
+		if (requeue) setQueued((current) => [...current, ...held.map((steer) => steer.text)]);
+	}
+
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
 			// The title comes after the run is over, for whichever chat it names.
@@ -437,6 +447,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setRevisionsMove(true);
 					break;
 				case "error":
+					releaseHeld(true);
 					setError(event.message);
 					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
 					setProgress("");
@@ -445,6 +456,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setSearchId(null);
 					break;
 				case "cancelled":
+					releaseHeld(false);
 					setStopped(true);
 					setProgress("");
 					setCompacting(false);
@@ -452,6 +464,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					setSearchId(null);
 					break;
 				case "done":
+					releaseHeld(true);
 					setProgress("");
 					setCompacting(false);
 					setSteers(settleSteers);
@@ -725,16 +738,70 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			return;
 		}
 		const id = crypto.randomUUID();
-		setSteers((current) => [
-			...current,
-			{ id, text, timing: quickShownRef.current ? "after-quick" : "before-quick", status: "pending" },
-		]);
-		void autorag.search.steer(runId, text).then((accepted) => {
-			if (accepted) return;
-			// The run is past its last model request: ask the text as the next question instead.
+		setSteers((current) => [...current, { id, text, timing: quickShownRef.current ? "after-quick" : "before-quick", status: "held" }]);
+		void sortFollowUp(() => autorag.search.classifyFollowUp?.(runId, text) ?? Promise.resolve("next")).then((kind) => {
+			// Postponed, cancelled, or released when the run ended: nothing is left to do.
+			if (heldText(id) === undefined) return;
+			if (kind === "next") {
+				postponeSteer(id);
+				return;
+			}
+			const timing = quickShownRef.current ? "after-quick" : "before-quick";
+			setSteers((current) => current.map((steer) => (steer.id === id ? { ...steer, timing, status: "pending" } : steer)));
+			deliverSteer(runId, id, text);
+		});
+	}
+
+	/** The text of the correction `id` while it is still held in the app. */
+	function heldText(id: string): string | undefined {
+		return steersRef.current.find((steer) => steer.id === id && steer.status === "held")?.text;
+	}
+
+	/** Sends a correction; a run past its last model request does not take it, and it is asked as the next question. */
+	function deliverSteer(runId: string, id: string, text: string): void {
+		const refused = (): void => {
 			setSteers((current) => current.filter((steer) => steer.id !== id));
 			setQueued((current) => [...current, text]);
-		});
+		};
+		void autorag.search.steer(runId, text).then((accepted) => {
+			if (!accepted) refused();
+		}, refused);
+	}
+
+	/** A held correction waits as the next question instead. */
+	function postponeSteer(id: string): void {
+		const text = heldText(id);
+		if (text === undefined) return;
+		setSteers((current) => current.filter((steer) => steer.id !== id));
+		setQueued((current) => [...current, text]);
+	}
+
+	function cancelSteer(id: string): void {
+		setSteers((current) => current.filter((steer) => !(steer.id === id && steer.status === "held")));
+	}
+
+	function unqueue(index: number): void {
+		setQueued((current) => current.filter((_, position) => position !== index));
+	}
+
+	/** Work a waiting question into the answer in flight, now. */
+	function sendQueuedNow(index: number): void {
+		const runId = searchIdRef.current;
+		const text = queuedRef.current[index];
+		if (runId === null || text === undefined) return;
+		const id = crypto.randomUUID();
+		unqueue(index);
+		setSteers((current) => [...current, { id, text, timing: quickShownRef.current ? "after-quick" : "before-quick", status: "pending" }]);
+		deliverSteer(runId, id, text);
+	}
+
+	/** A waiting question back into the composer, after what is typed there. */
+	function editQueued(index: number): void {
+		const text = queuedRef.current[index];
+		if (text === undefined) return;
+		unqueue(index);
+		setQuery((current) => [current.trim(), text].filter((part) => part !== "").join(" "));
+		inputRef.current?.focus();
 	}
 
 	function send(altKey: boolean): void {
@@ -882,9 +949,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setProgress("");
 		setCompacting(false);
 		setStopped(true);
-		setSteers(settleSteers);
-		// Stop ends the whole turn: questions queued behind it go back to the composer, unasked.
-		const unasked = queuedRef.current;
+		const held = steersRef.current.filter((steer) => steer.status === "held").map((steer) => steer.text);
+		setSteers((current) => settleSteers(current.filter((steer) => steer.status !== "held")));
+		// Stop ends the whole turn: what waited behind it goes back to the composer, unasked.
+		const unasked = [...held, ...queuedRef.current];
 		if (unasked.length > 0) {
 			setQuery((current) => [current.trim(), ...unasked].filter((text) => text !== "").join(" "));
 			setQueued([]);
@@ -1050,25 +1118,25 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									if (ok) setStarters((current) => current.map((item) => (item.key === starter.key ? { ...item, added: true } : item)));
 									return ok;
 								}}
+								onCreateMagicAction={async (action) => {
+									// A right-click action is not an automation: the card closes, and the toast says where it went.
+									const ok = (await automationsShell.props.onCreateMagicAction?.(action)) ?? false;
+									if (ok) setStarters((current) => current.filter((item) => item.key !== starter.key));
+									return ok;
+								}}
 							/>
 						)}
 					</div>
 				</div>
 			));
-	const steerLabels = {
-		pending: t("aiSearch.steerPending"),
-		delivered: t("aiSearch.steerDelivered"),
-		dropped: t("aiSearch.steerDropped"),
-	};
-
 	const composerActions = (
 		<div className="composer-actions flex items-center gap-7">
 			{searching && query.trim().length > 0 ? (
 				<button
 					type="submit"
 					className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-					title={t("aiSearch.steerSend")}
-					aria-label={t("aiSearch.steerSend")}
+					title={t("inspector.chat.send")}
+					aria-label={t("inspector.chat.send")}
 				>
 					<ArrowUpIcon />
 				</button>
@@ -1258,7 +1326,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							activeSource={evidenceSource}
 							selectedEvidence={selectedEvidence}
 							onCitation={selectPhaseCitation}
-							steerLabels={steerLabels}
 							imageActions={imageActions}
 							onOpenSettings={onOpenSettings}
 							onOpenSource={onOpenSource}
@@ -1272,7 +1339,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 					{submittedQuery === null ? null : (
 						<div className="message user-msg flex justify-end">
-							<div className="user-bubble-wrap flex max-w-bubble-max flex-col items-end gap-6">
+							<div className="user-bubble-wrap group/bubble flex max-w-bubble-max flex-col items-end gap-6">
 								{submittedAttachments.length > 0 ? (
 									<div className="ref-attachments flex flex-wrap justify-end gap-6">
 										{submittedAttachments.map((att) => (
@@ -1281,6 +1348,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									</div>
 								) : null}
 								<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{submittedQuery}</div>
+								<SentActions text={submittedQuery} className="-mt-4" />
 							</div>
 						</div>
 					)}
@@ -1304,7 +1372,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={() => onOpenSettings("indexing")} onClose={() => setIndexNotice(null)} />}
 
 					{steersBeforeQuick.map((steer) => (
-						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+						<SteerBubble key={steer.id} steer={steer} onPostpone={postponeSteer} onCancel={cancelSteer} />
 					))}
 
 					{submittedQuery === null ? null : (
@@ -1328,7 +1396,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							) : null}
 
 							{steersAfterQuick.map((steer) => (
-								<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+								<SteerBubble key={steer.id} steer={steer} onPostpone={postponeSteer} onCancel={cancelSteer} />
 							))}
 							{contextAfterQuick.map((notice, index) => (
 								<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
@@ -1389,21 +1457,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{submittedQuery === null ? null : startersAt(pastTurns.length + 1)}
 
 					{queued.length > 0 ? (
-						<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
+						<div className="queued-questions flex flex-col items-end gap-12" aria-label={t("aiSearch.queuedLabel")}>
 							{queued.map((text, index) => (
-								<div key={`${index}:${text}`} className="queued-question flex max-w-bubble-max items-center gap-8 rounded-10 border border-dashed border-border-strong px-12 py-6 text-meta text-ink-muted">
-									<span className="flex-none font-medium">{t("aiSearch.queuedLabel")}</span>
-									<span className="min-w-0 truncate text-ink-body">{text}</span>
-									<button
-										type="button"
-										className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
-										aria-label={t("aiSearch.queuedRemove")}
-										title={t("aiSearch.queuedRemove")}
-										onClick={() => setQueued((current) => current.filter((_, position) => position !== index))}
-									>
-										<CloseIcon size={10} />
-									</button>
-								</div>
+								<QueuedBubble key={`${index}:${text}`} text={text} onSendNow={searching ? () => sendQueuedNow(index) : undefined} onEdit={() => editQueued(index)} onRemove={() => unqueue(index)} />
 							))}
 						</div>
 					) : null}
@@ -1423,15 +1479,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{attachments.some((att) => !isThumbnailAttachment(att)) ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
 							{attachments.map((att, index) => (isThumbnailAttachment(att) ? null : <DraftPill key={`${att.id}:${att.name}`} att={att} onRemove={() => removeAttachment(index)} />))}
-						</div>
-					) : null}
-					{searching && !phone ? (
-						<div className="steer-hint flex items-center gap-10 px-4 pb-6 text-tile text-ink-muted select-none" aria-hidden="true">
-							<span className="size-6 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
-							<span className="min-w-0 flex-1 truncate">{t("aiSearch.steerHintLead")}</span>
-							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">{enterKeyLabel()}</kbd> {t("aiSearch.steerHintEnter")}</span>
-							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">{formatShortcut({ key: enterKeyLabel(), alt: true, primary: false })}</kbd> {t("aiSearch.steerHintAltEnter")}</span>
-							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">Esc</kbd> {t("aiSearch.stop")}</span>
 						</div>
 					) : null}
 					<div
@@ -1523,9 +1570,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									onAltEnter={() => send(true)}
 									onPasteImages={pasteImages}
 									placeholder={
-										searching
-											? t("aiSearch.steerPlaceholder")
-											: pickedCapability === null
+										pickedCapability === null
 												? t("aiSearch.askPlaceholder")
 												: t(`aiSearch.capability.${pickedCapability.id}Placeholder`)
 									}
@@ -1640,44 +1685,6 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
 	return <AttachmentThumb att={att} size="message" fallback={chip} />;
 }
 
-/**
- * A correction sent while the run streamed, right-aligned like the question.
- * Waiting: a dashed accent outline that breathes, with a pulsing dot. Taken by
- * the model: a solid bubble with a check. The run ended first: dimmed, struck.
- */
-export function SteerBubble({
-	steer,
-	labels,
-}: {
-	readonly steer: SteerItem;
-	readonly labels: Readonly<Record<SteerItem["status"], string>>;
-}): ReactElement {
-	return (
-		<div className="message steer-msg flex justify-end animate-rise" data-steer-status={steer.status}>
-			<div className="flex max-w-bubble-max flex-col items-end gap-5">
-				<div
-					className={cn(
-						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words whitespace-pre-wrap transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
-						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
-						steer.status === "delivered" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window",
-						steer.status === "dropped" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window line-through opacity-50",
-					)}
-				>
-					{steer.text}
-				</div>
-				<span className={cn("steer-status flex items-center gap-5 text-tile", steer.status === "pending" ? "text-accent-text" : "text-ink-muted")} role="status">
-					{steer.status === "pending" ? (
-						<span className="size-6 flex-none rounded-full bg-accent animate-[pulseDot_1.4s_ease-in-out_infinite]" aria-hidden="true" />
-					) : steer.status === "delivered" ? (
-						<CheckIcon size={11} />
-					) : null}
-					{labels[steer.status]}
-				</span>
-			</div>
-		</div>
-	);
-}
-
 /** A finished earlier turn of the chat, kept so the conversation reads top to bottom. */
 interface PastTurn {
 	readonly question: string;
@@ -1703,7 +1710,6 @@ function PastTurnView({
 	activeSource,
 	selectedEvidence,
 	onCitation,
-	steerLabels,
 	imageActions,
 	onOpenSettings,
 	onOpenSource,
@@ -1716,7 +1722,6 @@ function PastTurnView({
 	readonly activeSource: EvidenceSelectionSource | null;
 	readonly selectedEvidence: number | null;
 	readonly onCitation: (turnIndex: number, phase: "quick" | "deep", number: number) => void;
-	readonly steerLabels: Record<SteerItem["status"], string>;
 	readonly imageActions: ImageActions;
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	readonly onOpenSource: (alias: string) => void;
@@ -1754,7 +1759,7 @@ function PastTurnView({
 	return (
 		<>
 			<div className="message user-msg flex justify-end">
-				<div className="user-bubble-wrap flex max-w-bubble-max flex-col items-end gap-6">
+				<div className="user-bubble-wrap group/bubble flex max-w-bubble-max flex-col items-end gap-6">
 					{turn.attachments.length > 0 ? (
 						<div className="ref-attachments flex flex-wrap justify-end gap-6">
 							{turn.attachments.map((att) => (
@@ -1763,6 +1768,7 @@ function PastTurnView({
 						</div>
 					) : null}
 					<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+					<SentActions text={turn.question} className="-mt-4" />
 				</div>
 			</div>
 			{contextBefore.map((notice, index) => (
@@ -1780,12 +1786,12 @@ function PastTurnView({
 				/>
 			)}
 			{before.map((steer) => (
-				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+				<SteerBubble key={steer.id} steer={steer} />
 			))}
 			<div className="message assistant-msg flex flex-col gap-14">
 				{turn.quickText === "" ? null : prose(turn.quickText, turn.quick, "quick")}
 				{after.map((steer) => (
-					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+					<SteerBubble key={steer.id} steer={steer} />
 				))}
 				{contextAfter.map((notice, index) => (
 					<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />

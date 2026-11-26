@@ -590,7 +590,7 @@ describe("the inspector chat while a run streams", () => {
 		renderRunning({ steer: (text) => (steered.push(text), true) });
 		const input = host.querySelector<HTMLTextAreaElement>("textarea");
 		if (input === null) throw new Error("no input");
-		expect(input.getAttribute("placeholder")).toBe("검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)");
+		expect(input.getAttribute("placeholder")).toBe("이어서 묻기");
 		typeInto(input, "지난주 것만");
 		press(input, {});
 		expect(steered).toEqual(["지난주 것만"]);
@@ -632,6 +632,18 @@ describe("the inspector chat while a run streams", () => {
 			["pending", "한국어로"],
 		]);
 		expect(host.querySelector(".queued-question")?.textContent).toContain("다음 질문");
+		// A sent correction copies under the pointer; one still on its way has nothing to press.
+		expect(bubbles.map((node) => [...node.querySelectorAll("button")].map((button) => button.getAttribute("aria-label")))).toEqual([["복사"], []]);
+	});
+
+	it("offers 미루기 and 취소 under a held correction, and 수정 puts a waiting question back into the draft", () => {
+		renderRunning({ steers: [{ id: "h", text: "지난주 것만", timing: "before-quick", status: "held" }], queued: ["다음 질문"] });
+		const labels = (selector: string): (string | null)[] => [...host.querySelectorAll(`${selector} button`)].map((button) => button.getAttribute("aria-label"));
+		// Without a handler a held bubble shows no icons; the queued one keeps 수정 and 삭제 (no 지금 반영 without a handler).
+		expect(labels(".queued-question")).toEqual(["수정", "삭제"]);
+		const edit = host.querySelector<HTMLButtonElement>('.queued-question button[aria-label="수정"]');
+		act(() => edit?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("다음 질문");
 	});
 
 	it("replaces the composer with the agent's question and sends the pick back through the bridge", () => {

@@ -40,6 +40,7 @@ import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import { DOCUMENT_EDITOR_CHANNELS } from "../shared/document-editor-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import { createMagicActionRunLog } from "./magic-action-runs";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
@@ -98,6 +99,7 @@ import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "..
 import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createChatTitler } from "./chat-title";
+import { createFollowUpSorter } from "./follow-up-sorter";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { createOsClipboard } from "./os-clipboard";
@@ -683,6 +685,11 @@ app.whenReady().then(async () => {
 			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
 			language: () => currentLanguage,
 		}),
+		// A message sent while an answer is in flight: the answer model says whether it corrects it or waits.
+		sortFollowUp: createFollowUpSorter({
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
+		}),
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
@@ -1255,8 +1262,13 @@ app.whenReady().then(async () => {
 	});
 	registerAppCustomizerIpcHandlers(appCustomizerService);
 	app.once("will-quit", () => appCustomizerService.dispose());
+	// Each finished right-click run is kept for the 자동화 tab's status dot and 실행 기록.
+	const magicActionRuns = createMagicActionRunLog({ file: join(app.getPath("userData"), "magic-action-runs.json") });
 	const magicActionService = createMagicActionService({
-		send: (event) => sendToMainWindow(MAGIC_ACTION_CHANNELS.event, event),
+		send: (event) => {
+			magicActionRuns.record(event);
+			sendToMainWindow(MAGIC_ACTION_CHANNELS.event, event);
+		},
 		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
 		agentDir: getAgentDir(),
 		env: process.env,
@@ -1264,7 +1276,7 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		settings: settingsService,
 	});
-	registerMagicActionIpcHandlers(magicActionService, chatStore);
+	registerMagicActionIpcHandlers(magicActionService, chatStore, magicActionRuns);
 	app.once("will-quit", () => magicActionService.dispose());
 	const documentEditWriteJudge = createWriteJudge({
 		resolveBackends: () =>
