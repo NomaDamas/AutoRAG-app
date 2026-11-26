@@ -135,7 +135,7 @@ afterEach(async () => {
 });
 
 describe("Settings → 사이드바 (Sidebar customization; the AI assistant lives on 우클릭 메뉴)", () => {
-	it("renders the Sidebar tab with AI Chat & Automations locked on, and toggles hideable items & presets", async () => {
+	it("renders the Sidebar tab with AI Agent locked on (no Automations row), and toggles hideable items & presets", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
@@ -145,15 +145,12 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		const navButtons = [...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")];
 		expect(navButtons.some((btn) => btn.textContent?.includes("사이드바") && btn.classList.contains("is-active"))).toBe(true);
 
-		// AI 채팅 and 자동화 switches are checked and disabled (locked)
+		// The AI 에이전트 switch is checked and disabled (locked); 자동화 lives inside it, so it has no row
 		const aiSwitch = host.querySelector<HTMLButtonElement>('[data-sidebar-switch="app:aiSearch"]');
-		const autoSwitch = host.querySelector<HTMLButtonElement>('[data-sidebar-switch="app:automations"]');
 		expect(aiSwitch).not.toBeNull();
-		expect(autoSwitch).not.toBeNull();
 		expect(aiSwitch?.disabled).toBe(true);
-		expect(autoSwitch?.disabled).toBe(true);
 		expect(aiSwitch?.getAttribute("aria-checked")).toBe("true");
-		expect(autoSwitch?.getAttribute("aria-checked")).toBe("true");
+		expect(host.querySelector('[data-sidebar-switch="app:automations"]')).toBeNull();
 
 		// Toggling Music hides `place:music`
 		const musicSwitch = host.querySelector<HTMLButtonElement>('[data-sidebar-switch="place:music"]');
@@ -389,7 +386,7 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		// Favorites items live directly inside the `favorites` section card
 		const favCard = sectionCards[0];
 		expect(favCard?.querySelector('[data-sidebar-switch="app:aiSearch"]')).not.toBeNull();
-		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
+		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).toBeNull();
 		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
 		// Sections that cannot be reordered keep no empty grip slot before the icon.
 		for (const card of sectionCards.slice(1)) {
@@ -426,8 +423,13 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		expect(panelOf()).not.toBeNull();
 
 		// A turn started before hiding the right sidebar is still there after reopening it
+		const composer = panelOf()?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
 		await act(async () => {
-			panelOf()?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
+			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(composer, "음악 폴더 숨겨줘");
+			composer?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			panelOf()?.querySelector<HTMLButtonElement>('[data-action="send-customizer-message"]')?.click();
 		});
 		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
 

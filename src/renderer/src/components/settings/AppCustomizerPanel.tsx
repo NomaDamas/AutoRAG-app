@@ -41,18 +41,23 @@ interface SurfaceCopy {
 	readonly unavailable: LocaleKey;
 }
 
+/**
+ * Every assistant but 우클릭 메뉴's opens the same way: one greeting and no example prompts, since most of what those
+ * pages do takes one click and the assistant is there for whatever else the person wants. 우클릭 메뉴 keeps its
+ * examples: Magic Actions are new to people and their requests are long.
+ */
+const OPEN_GREETING = {
+	emptyTitle: "settingsCore.assistantGreeting.title",
+	emptyDesc: "settingsCore.assistantGreeting.desc",
+	placeholder: "settingsCore.assistantGreeting.placeholder",
+	suggestions: [],
+} as const satisfies Pick<SurfaceCopy, "emptyTitle" | "emptyDesc" | "placeholder" | "suggestions">;
+
 /** The context-menu assistant has no copy of its own for the shared states and reuses the sidebar assistant's. */
 const OWN_SURFACE_COPY: Readonly<Record<"sidebar" | "contextMenu" | "shortcuts", SurfaceCopy>> = {
 	sidebar: {
 		title: "settingsCore.sidebar.assistant.title",
-		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
-		emptyDesc: "settingsCore.sidebar.assistant.emptyDesc",
-		placeholder: "settingsCore.sidebar.assistant.placeholder",
-		suggestions: [
-			"settingsCore.sidebar.assistant.promptHideMedia",
-			"settingsCore.sidebar.assistant.promptReorder",
-			"settingsCore.sidebar.assistant.promptReset",
-		],
+		...OPEN_GREETING,
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
@@ -74,15 +79,7 @@ const OWN_SURFACE_COPY: Readonly<Record<"sidebar" | "contextMenu" | "shortcuts",
 	},
 	shortcuts: {
 		title: "settingsCore.shortcuts.assistant.title",
-		emptyTitle: "settingsCore.shortcuts.assistant.emptyTitle",
-		emptyDesc: "settingsCore.shortcuts.assistant.emptyDesc",
-		placeholder: "settingsCore.shortcuts.assistant.placeholder",
-		suggestions: [
-			"settingsCore.shortcuts.assistant.promptMacFinder",
-			"settingsCore.shortcuts.assistant.promptWindowsExplorer",
-			"settingsCore.shortcuts.assistant.promptRenameF2",
-			"settingsCore.shortcuts.assistant.promptReset",
-		],
+		...OPEN_GREETING,
 		thinking: "settingsCore.shortcuts.assistant.thinking",
 		openAiSettings: "settingsCore.shortcuts.assistant.openAiSettings",
 		unavailable: "settingsCore.shortcuts.assistant.unavailable",
@@ -94,10 +91,7 @@ function configSurfaceCopy(surface: ConfigAssistantSurface): SurfaceCopy {
 	const base = `settingsCore.assistants.${surface}` as const;
 	return {
 		title: `${base}.title`,
-		emptyTitle: `${base}.emptyTitle`,
-		emptyDesc: `${base}.emptyDesc`,
-		placeholder: `${base}.placeholder`,
-		suggestions: [`${base}.prompt1`, `${base}.prompt2`, `${base}.prompt3`],
+		...OPEN_GREETING,
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
@@ -489,6 +483,7 @@ export function AppCustomizerPanel({
 						</div>
 						<h3 className="customizer-panel__empty-title">{t(copy.emptyTitle)}</h3>
 						<p className="customizer-panel__empty-desc">{t(copy.emptyDesc)}</p>
+						{copy.suggestions.length === 0 ? null : (
 						<div className="customizer-panel__suggestions">
 							{copy.suggestions.map((key) => (
 								<button
@@ -502,6 +497,7 @@ export function AppCustomizerPanel({
 								</button>
 							))}
 						</div>
+						)}
 					</div>
 				) : (
 					<div className="customizer-panel__turns">

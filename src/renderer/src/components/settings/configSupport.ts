@@ -43,8 +43,10 @@ export function listOf(value: JsonValue | undefined): readonly string[] {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
+/** The message alone: Electron wraps a handler's error as "Error invoking remote method 'x': Error: <message>". */
 export function errorText(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
+	const text = error instanceof Error ? error.message : String(error);
+	return text.replace(/^Error invoking remote method '[^']*': (?:Error: )?/u, "");
 }
 
 /**

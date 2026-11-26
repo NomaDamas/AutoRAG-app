@@ -141,7 +141,7 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
 		const withTimestamp = { ...record, updatedAt };
 		return {
 			...withTimestamp,
-			title: deriveTitle(record.messages, record.title),
+			title: record.summaryTitle ?? deriveTitle(record.messages, record.title),
 			snippet: deriveSnippet(record.messages, record.snippet),
 		};
 	}

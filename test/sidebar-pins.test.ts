@@ -39,9 +39,9 @@ const LOCATIONS: readonly FsLocation[] = [
 
 const settings = (patch: Partial<SidebarSettings> = {}): SidebarSettings => ({ ...DEFAULT_SIDEBAR_SETTINGS, ...patch });
 
-/** The Favorites labels the sidebar draws for `sidebar`, app rows left out. */
+/** The Favorites labels the sidebar draws for `sidebar`, the app row left out. */
 function labels(sidebar: SidebarSettings): string[] {
-	return navGroups(LOCATIONS, [], sidebar)[0]?.items.slice(2).map((item) => item.label) ?? [];
+	return navGroups(LOCATIONS, [], sidebar)[0]?.items.slice(1).map((item) => item.label) ?? [];
 }
 
 describe("shownFavoriteIds", () => {

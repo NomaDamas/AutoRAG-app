@@ -118,7 +118,7 @@ describe("Settings → MCP → servers in Dazzi", () => {
 		await render(SNAPSHOT);
 		await press(host.querySelector('[data-action="remove-mcp-filesystem"]'));
 		const alert = host.querySelector<HTMLElement>(".settings-modal.settings-alert");
-		expect(alert?.querySelector("h2")?.textContent).toBe('Remove "filesystem"?');
+		expect(alert?.querySelector("h2")?.textContent).toBe('Remove ‘filesystem’?');
 		const actions = [...(alert?.querySelectorAll(".settings-modal-actions button") ?? [])];
 		expect(actions.map((button) => button.textContent)).toEqual(["Cancel", "Remove"]);
 		expect(actions[1]?.classList.contains("settings-btn-primary")).toBe(true);

@@ -288,6 +288,52 @@ small {
  * for the motion; only the rows of a closing folder (`ghost`) stop taking the pointer, because they are already
  * gone as far as the user is concerned. Reduced motion never enters this block (the hook starts no motion
  * either), so the list just changes. */
+/* An AI input's aurora (tokens.css §8): a blurred light behind the card that never takes a click, brighter while the
+ * card has focus. The host is the card's positioned wrapper; the card itself sits above it. */
+.ai-glow-host {
+	position: relative;
+	isolation: isolate;
+}
+
+.ai-glow-host > .ai-glow {
+	position: absolute;
+	inset: 6px;
+	z-index: -1;
+	border-radius: 18px;
+	background: var(--ai-glow);
+	filter: blur(var(--ai-glow-blur));
+	opacity: var(--ai-glow-opacity);
+	pointer-events: none;
+	transition: opacity var(--dur-color-slow) ease;
+}
+
+.ai-glow-host:focus-within > .ai-glow {
+	opacity: var(--ai-glow-opacity-focus);
+}
+
+/* A recommendation's glow: yellow and blue, as the Settings sidebar AI card, drifting slowly from side to side. */
+.ai-glow-host > .ai-glow.ai-glow-warm {
+	inset: -5px;
+	border-radius: 16px;
+	background: var(--ai-glow-warm);
+	background-size: 300% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.ai-glow-host > .ai-glow.ai-glow-warm {
+		animation: ai-glow-warm-drift 10s ease-in-out infinite alternate;
+	}
+}
+
+@keyframes ai-glow-warm-drift {
+	from {
+		background-position: 0% 50%;
+	}
+	to {
+		background-position: 100% 50%;
+	}
+}
+
 @media (prefers-reduced-motion: no-preference) {
 	[data-slide="block"],
 	[data-slide="ghost"],

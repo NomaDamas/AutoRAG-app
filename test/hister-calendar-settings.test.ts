@@ -166,13 +166,13 @@ describe("Hister datasource config, status, and keyword-only policy", () => {
 		).rejects.toThrow(/semantic must be a boolean/);
 		await expect(
 			config.set(["datasources", "hister", "connector", "baseUrl"], "not-a-url"),
-		).rejects.toThrow(/http\(s\) URL/);
+		).rejects.toMatchObject({ code: "url-invalid" });
 		await expect(
 			config.set(["datasources", "hister", "connector"], {
 				baseUrl: "http://history.example.com:4433",
 				tokenEnv: "HISTER_TOKEN",
 			}),
-		).rejects.toThrow(/https/);
+		).rejects.toMatchObject({ code: "url-needs-https" });
 
 		const httpsRemote = await config.set(["datasources", "hister", "connector"], {
 			baseUrl: "https://history.example.com:4433",

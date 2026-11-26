@@ -41,7 +41,7 @@ describe("validateName", () => {
 	});
 
 	it("rejects an empty name", () => {
-		expect(validateName("   ", siblings)).toEqual({ ok: false, message: "이름을 입력해 주세요" });
+		expect(validateName("   ", siblings)).toEqual({ ok: false, message: "이름을 입력하세요" });
 	});
 
 	it("rejects a path separator", () => {

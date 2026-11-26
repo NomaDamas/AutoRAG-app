@@ -606,7 +606,10 @@ export function ContextMenuPage({
 		void updateContextMenu({ ...contextMenu, magicActions: next });
 	};
 
+	// The X asks first (the action leaves the right-click menu for good); the modal's 삭제 removes it.
+	const [removing, setRemoving] = useState<MagicAction | null>(null);
 	const removeMagicAction = (id: string): void => {
+		setRemoving(null);
 		void updateContextMenu({
 			...contextMenu,
 			magicActions: contextMenu.magicActions.filter((item) => item.id !== id),
@@ -742,7 +745,7 @@ export function ContextMenuPage({
 							data-action={`remove-magic-${action.id}`}
 							title={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
 							aria-label={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
-							onClick={() => removeMagicAction(action.id)}
+							onClick={() => setRemoving(action)}
 						>
 							<X size={14} strokeWidth={1.5} />
 						</button>
@@ -955,6 +958,20 @@ export function ContextMenuPage({
 				</p>
 			</div>
 
+			{removing === null ? null : (
+				<ModalShell onClose={() => setRemoving(null)}>
+					<h2>{t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: removing.label })}</h2>
+					<p>{t("settingsCore.contextMenu.removeMagicConfirmBody")}</p>
+					<ModalActions>
+						<button type="button" className="linear-btn" autoFocus onClick={() => setRemoving(null)}>
+							{t("common.cancel")}
+						</button>
+						<button type="button" className="linear-btn is-danger" data-action="confirm-remove-magic" onClick={() => removeMagicAction(removing.id)}>
+							{t("common.delete")}
+						</button>
+					</ModalActions>
+				</ModalShell>
+			)}
 			{editorState.open ? (
 				<MagicActionEditorModal
 					initial={editorState.initial}

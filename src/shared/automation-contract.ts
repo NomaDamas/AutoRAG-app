@@ -12,12 +12,15 @@ export const AUTOMATION_CHANNELS = {
 	remove: "automations:remove",
 	restore: "automations:restore",
 	setDaemon: "automations:setDaemon",
+	create: "automations:create",
+	update: "automations:update",
+	history: "automations:history",
 	changed: "automations:changed",
 } as const;
 
 export type AutomationEventType = "create" | "update" | "delete";
 
-/** One run of a rule: the last line of its `automations/logs/<id>.jsonl`. */
+/** One run of a rule: a line of its `automations/logs/<id>.jsonl` (`lastRun` is the last one). */
 export interface AutomationRun {
 	/** Epoch milliseconds. */
 	readonly startedAt: number;
@@ -82,6 +85,9 @@ export interface AutomationsSnapshot {
 	readonly error: string | null;
 }
 
+/** How many of a rule's runs the 자동화 tab shows: its run log keeps every one. */
+export const AUTOMATION_HISTORY_LIMIT = 50;
+
 export const IDLE_AUTOMATIONS: AutomationsSnapshot = {
 	ready: false,
 	rules: [],
@@ -90,6 +96,20 @@ export const IDLE_AUTOMATIONS: AutomationsSnapshot = {
 	configError: null,
 	error: null,
 };
+
+/**
+ * A new rule from the 자동화 tab's 새 자동화 card (Figma 611:3601): the folder, which files, which changes, and either
+ * an instruction for an agent profile or a command. The main process gives it an id and writes it to the rules file.
+ */
+export interface AutomationDraft {
+	readonly paths: readonly string[];
+	readonly events: readonly AutomationEventType[];
+	/** Globs relative to the watched folder; empty takes every file. */
+	readonly include: readonly string[];
+	readonly agent?: { readonly profile: string; readonly task: string };
+	/** The command's argv, for a rule that runs a program instead of an agent. */
+	readonly run?: readonly string[];
+}
 
 /** What `remove` took out of the rules file, exactly as written, so `restore` can put it back. */
 export interface AutomationRemoval {
@@ -106,6 +126,12 @@ export interface AutomationBridge {
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Add a rule; `id` is the one it was given. Rejected when the librarian would refuse the file it leaves. */
+	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
+	/** Rewrite rule `id` from the card; the fields the card does not manage stay as written. */
+	update(id: string, draft: AutomationDraft): Promise<AutomationsSnapshot>;
+	/** Rule `id`'s runs, newest first, at most {@link AUTOMATION_HISTORY_LIMIT}; empty when it never ran. */
+	history(id: string): Promise<readonly AutomationRun[]>;
 	/** Pushed whenever the rules file, a run log, or the daemon changes, whoever changed it. */
 	onChange(listener: (snapshot: AutomationsSnapshot) => void): () => void;
 }

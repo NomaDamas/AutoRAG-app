@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
@@ -19,7 +19,7 @@ import { DocumentEditorSidebarProvider } from "./components/DocumentEditorSideba
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
-import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
+import { InspectorChatDock, InspectorChatHead, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast, type ToastTone } from "./components/primitives/Toast";
 import { pushNotice, setNotificationCenterOpen } from "./state/notifications";
@@ -61,7 +61,7 @@ import { toolbarShareControl, type FileActionTarget } from "./state/file-actions
 import { sessionEvidencePaths } from "./state/evidence";
 import { inspectorEntryFor } from "./state/inspector-target";
 import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
-import { ruleTitle } from "./state/automations";
+import { ruleNamesNow, ruleTitle, setRuleNames } from "./state/automations";
 import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
@@ -86,8 +86,8 @@ const HIDDEN_STYLE = { display: "none" } as const;
 /** How long a toast stays (--time-toast). */
 const TOAST_MS = 2400;
 
-/** The pane tab strip's height (`h-25`): an AI Search chat sits right below it. */
-const TAB_STRIP_PX = 25;
+/** The pane tab strip's height (`h-24` in TabStrip.tsx, borders included): an AI Search chat sits right below it, level with the Finder content and the 자동화 side. */
+const TAB_STRIP_PX = 24;
 
 /** The sidebar search ref before the first pane publishes its controller. */
 const NO_INPUT = { current: null };
@@ -205,6 +205,9 @@ export function App(): ReactElement {
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
+	const [automationNames, setAutomationNames] = useState<AppSettings["automationNames"]>({});
+	// Every rule title in the window reads the names from here; set before anything below renders.
+	setRuleNames(automationNames);
 	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
 	const [contextMenuSettings, setContextMenuSettings] = useState<ContextMenuSettings>(DEFAULT_SETTINGS.contextMenu);
 	const [shortcutSettings, setShortcutSettings] = useState<ShortcutSettings>(DEFAULT_SETTINGS.shortcuts);
@@ -237,6 +240,8 @@ export function App(): ReactElement {
 	/* ------------------------------------------------ v7 shell chrome state */
 	const [sidebarVisible, setSidebarVisible] = useState(() => loadFlag(SIDEBAR_KEY, true));
 	const [inspectorVisible, setInspectorVisible] = useState(() => loadFlag(INSPECTOR_KEY, true));
+	/** When 새 자동화 (or 채팅으로 만들기) was last pressed: the 자동화 column then starts a rule with an empty card. */
+	const [automationStarter, setAutomationStarter] = useState<number | null>(null);
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
@@ -486,6 +491,7 @@ export function App(): ReactElement {
 			// ⌘K: the controller adopts the nearest AI Search tab (or opens one); focus its composer.
 			onFocusComposer: () => deliverToAi({}),
 			onToast: setToast,
+			onErrorToast: showErrorToast,
 			deliverToAi,
 			setListColumns,
 			beginTabDrag: (tabId, event) => {
@@ -683,6 +689,7 @@ export function App(): ReactElement {
 			setSidebarSettings(settings.sidebar);
 			setContextMenuSettings(settings.contextMenu);
 			setShortcutSettings(settings.shortcuts);
+			setAutomationNames(settings.automationNames ?? {});
 			void setAppLanguage(settings.language);
 		};
 		void autorag.settings.get().then(applySettings);
@@ -749,7 +756,9 @@ export function App(): ReactElement {
 	 */
 	const inspectorChats = useInspectorChats(language);
 	const { refresh: refreshInspectorChat, prune: pruneInspectorChats } = inspectorChats;
-	const chatTabId = focusedTab !== null && focusedTab.path !== AI_SEARCH_PATH ? focusedTab.id : null;
+	// The 자동화 tab has a chat of its own, apart from the one the same tab had while it showed a folder: its key is the
+	// tab's id mirrored below zero (-id - 1), so a folder's conversation never shows beside the automations, or back.
+	const chatTabId = focusedTab === null || focusedTab.path === AI_SEARCH_PATH ? null : focusedTab.path === AUTOMATIONS_PATH ? -focusedTab.id - 1 : focusedTab.id;
 	const chatNow = useNow(chatTabId !== null && inspectorVisible, 30_000);
 	const chatTab = chatTabId === null ? EMPTY_INSPECTOR_CHAT_TAB : inspectorChats.tab(chatTabId);
 	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
@@ -791,8 +800,36 @@ export function App(): ReactElement {
 		if (chatTabId !== null && inspectorVisible) refreshInspectorChat(chatTabId);
 	}, [chatTabId, inspectorVisible, chatMode, refreshInspectorChat]);
 	useEffect(() => {
-		pruneInspectorChats(tabs.map((tab) => tab.id));
+		pruneInspectorChats(tabs.flatMap((tab) => [tab.id, -tab.id - 1]));
 	}, [tabs, pruneInspectorChats]);
+
+	// The 자동화 tab's chat is the AI 에이전트's conversation, not one of its own: on the 자동화 tab the column shows the
+	// chat the last AI 에이전트 tab shows, a question asked there continues it, and that AI tab shows the same chat
+	// (re-read from history) the next time it comes to the front. A new chat started on either side becomes the shared one.
+	const lastAiTabRef = useRef<number | null>(null);
+	const sharedChatRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (activeAiTabId === null) return;
+		lastAiTabRef.current = activeAiTabId;
+		const handle = aiHandlesRef.current.get(activeAiTabId);
+		const shared = sharedChatRef.current;
+		if (handle !== undefined && shared !== null && handle.currentChatId() !== shared) deliverToAi({ chat: shared }, activeAiTabId);
+		else if (handle !== undefined && shared !== null) handle.openChat(shared);
+		sharedChatRef.current = null;
+	}, [activeAiTabId, deliverToAi]);
+	const automationsChatKey = automationsTabActive && chatTabId !== null && chatTabId < 0 ? chatTabId : null;
+	useEffect(() => {
+		if (automationsChatKey === null || !inspectorVisible) return;
+		// A chat this column moved on to that the AI tab has not taken yet stays; otherwise follow the AI tab's.
+		if (sharedChatRef.current !== null) return;
+		const lastAi = lastAiTabRef.current;
+		const aiChat = lastAi === null ? null : (aiHandlesRef.current.get(lastAi)?.currentChatId() ?? null);
+		if (aiChat !== null && inspectorChats.tab(automationsChatKey).chat?.chatId !== aiChat) inspectorChats.open(automationsChatKey, aiChat);
+	}, [automationsChatKey, inspectorVisible]);
+	const automationsChatId = automationsChatKey === null ? null : (chatTab.chat?.chatId ?? null);
+	useEffect(() => {
+		if (automationsChatId !== null) sharedChatRef.current = automationsChatId;
+	}, [automationsChatId, chatTab.chat?.updatedAt]);
 	const openChatInAiTab = useCallback(
 		(chatId: string) => {
 			finder?.openAiSearch();
@@ -878,22 +915,35 @@ export function App(): ReactElement {
 		openFolder: (folder) => finder?.openFolder(folder),
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
+		names: automationNames,
+		autoStartService: true,
+		showChat: () => finder?.showAiSearch(),
+		// The column opens (or stays open) and starts a rule: 새 자동화 만들기, the reply, and an empty card, each press anew.
+		talk: () => {
+			setInspectorVisible(true);
+			setAutomationStarter(Date.now());
+		},
+		renameRule: async (id, name) => {
+			const next: Record<string, string> = { ...ruleNamesNow() };
+			if (name.trim().length === 0) delete next[id];
+			else next[id] = name.trim();
+			setAutomationNames(next);
+			await autorag.settings.set({ automationNames: next });
+		},
 	});
 	const editedDocPath = editorFilePathOf(path);
 	const toolbarTitle =
 		path === SETTINGS_PATH
 			? t("settings.title")
-			: automationsTabActive
-				? t("places.automations")
-				: aiTabActive
-					? t("places.aiSearch")
-					: editedDocPath !== null
-						? basename(editedDocPath)
-						: finder?.searching === true
-							? t("finderComponents.searchToolbarTitle")
-							: finder?.inTrashLocation === true
-								? t("places.trash")
-								: isTagPath(path) ? tagNameOf(path) : basename(path);
+			: automationsTabActive || aiTabActive
+				? t("places.aiSearch")
+				: editedDocPath !== null
+					? basename(editedDocPath)
+					: finder?.searching === true
+						? t("finderComponents.searchToolbarTitle")
+						: finder?.inTrashLocation === true
+							? t("places.trash")
+							: isTagPath(path) ? tagNameOf(path) : basename(path);
 	/** The sidebar AI Search item: a drop turns the focused tab into AI Search with the files attached. */
 	const aiSearchDrop = {
 		hovered: aiNavDropHover,
@@ -937,7 +987,7 @@ export function App(): ReactElement {
 			>
 				<div className="min-w-0 min-h-0 overflow-hidden" style={settingsOpen ? HIDDEN_STYLE : undefined} inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
-						activePath={aiTabActive ? AI_SEARCH_PATH : automationsTabActive ? AUTOMATIONS_PATH : (finder?.activeNavPath ?? null)}
+						activePath={aiTabActive || automationsTabActive ? AI_SEARCH_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
 						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
@@ -1024,8 +1074,9 @@ export function App(): ReactElement {
 						onEmptyTrash={() => finder?.requestEmptyTrash()}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
+						fileControls={!aiTabActive && !automationsTabActive}
 					/>
-					<div className="flex min-h-0 flex-1">
+					<div className="flex min-h-0 flex-1" style={{ "--pane-min-width": `calc((100vw - ${sidebarWidth + inspectorWidth}px) / 2)` } as CSSProperties}>
 						<WorkspaceView
 							workspace={workspace}
 							draggingTabId={draggingTabId}
@@ -1056,13 +1107,15 @@ export function App(): ReactElement {
 									return (
 										<div
 											key={id}
-											className={cn("ai-host absolute flex flex-col", motion, box === undefined && "hidden")}
+											className={cn("ai-host absolute flex flex-col overflow-x-hidden", motion, box === undefined && "hidden")}
 											data-ai-tab={id}
 											style={box === undefined ? undefined : percentPlacement(box, TAB_STRIP_PX)}
 											onMouseDownCapture={() => {
 												if (paneId !== undefined) setWorkspace((current) => focusPane(current, paneId));
 											}}
 										>
+											{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the chat is cut on the right instead of squeezed. */}
+											<div className="flex min-h-0 flex-1 flex-col min-w-(--pane-min-width)">
 											<AiSearchPanel
 												ref={(handle) => {
 													if (handle === null) aiHandlesRef.current.delete(id);
@@ -1084,7 +1137,9 @@ export function App(): ReactElement {
 													requestSettingsCategory(`source:${alias}`);
 													finder?.openSettings();
 												}}
+												onShowAutomations={() => finder?.showAutomations()}
 											/>
+											</div>
 										</div>
 									);
 								})
@@ -1099,7 +1154,62 @@ export function App(): ReactElement {
 							// Settings pages other than 사이드바, 우클릭 메뉴 and 단축키 have no AI: the sidebar shows only the faded mark (Figma 367:8769).
 							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
-							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
+							<AutomationInspector
+								// The 자동화 tab's sidebar is the AI chat: it asks about no file, and the agent manages automations with its own tools.
+								// Empty, it still carries the chat head: the history list is there to pick a past chat from.
+								chatHead={
+									chatTabId === null ? undefined : (
+										<InspectorChatHead standalone title={t("places.automations")} currentChatId={null} newChatDisabled onNewChat={() => undefined} onOpenChat={(chatId) => inspectorChats.open(chatTabId, chatId)} />
+									)
+								}
+								chatDock={
+									chatTabId === null ? undefined : (
+										<InspectorChatDock
+											tab={chatTab}
+											now={chatNow}
+											targets={[]}
+											running={chatRunning}
+											request={chatRequest}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, [], true)}
+											onSummarize={() => undefined}
+											onStop={inspectorChats.stop}
+											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
+											standalone
+										/>
+									)
+								}
+								chatView={
+									// The 자동화 tab's chat is the whole column: once it has a conversation it shows it, whatever the file inspector's mode.
+									// A rule being started shows the column's chat too, before it has a conversation.
+									chatTabId === null || (chatTab.chat === null && automationStarter === null) ? null : (
+										<InspectorChatView
+											tab={chatTab}
+											targetName={t("places.automations")}
+											pending={[]}
+											running={chatLive}
+											request={chatRequest}
+											imageActions={imageActions}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, [], false)}
+											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
+											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
+											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onStop={inspectorChats.stop}
+											onBack={() => inspectorChats.setMode(chatTabId, "info")}
+											onNewChat={() => inspectorChats.reset(chatTabId)}
+											onExpand={() => {
+												if (chatTab.chat !== null) openChatInAiTab(chatTab.chat.chatId);
+											}}
+											onOpenChat={(chatId) => inspectorChats.open(chatTabId, chatId)}
+											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
+											onReveal={(target) => finder?.revealEvidence(target)}
+											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}
+											newAutomation={automationStarter}
+											onNewAutomationDone={() => setAutomationStarter(null)}
+											standalone
+										/>
+									)
+								}
+							/>
 						) : editedDocPath !== null ? (
 							<DocumentEditorAiSidebar filePath={editedDocPath} />
 						) : (
@@ -1191,10 +1301,12 @@ export function App(): ReactElement {
 				{toast === null && automations.undoToast === null ? null : (
 					<Toast
 						message={automations.undoToast?.message ?? toast ?? ""}
-						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : "ok"}
+						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : automations.undoToast.busy === true ? "busy" : "ok"}
 						action={
 							automations.undoToast !== null
-								? { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }
+								? automations.undoToast.onUndo === null
+									? undefined
+									: { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo?.() }
 								: toastState?.tone === "error"
 									? {
 											label: t("notifications.viewInCenter"),

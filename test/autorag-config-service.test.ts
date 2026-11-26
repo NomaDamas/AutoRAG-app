@@ -104,10 +104,10 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 		const before = await readFile(fixture.configPath, "utf8");
 
-		await expect(service.set(["workspacePath"], "/elsewhere")).rejects.toThrow(/managed by AutoRAG/);
-		await expect(service.set(["memoryPath"], "/tmp/x.json")).rejects.toThrow(/managed by AutoRAG/);
-		await expect(service.set(["__proto__", "polluted"], true)).rejects.toThrow(/Invalid AutoRAG config path/);
-		await expect(service.set([], {})).rejects.toThrow(/must not be empty/);
+		await expect(service.set(["workspacePath"], "/elsewhere")).rejects.toMatchObject({ code: "path-managed" });
+		await expect(service.set(["memoryPath"], "/tmp/x.json")).rejects.toMatchObject({ code: "path-managed" });
+		await expect(service.set(["__proto__", "polluted"], true)).rejects.toMatchObject({ code: "path-invalid" });
+		await expect(service.set([], {})).rejects.toMatchObject({ code: "path-empty" });
 
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 	});
@@ -172,7 +172,7 @@ describe("createAutoRagConfigService", () => {
 		// The user's own server may be anywhere, but a remote one needs the explicit BYOK shape: a bearer key by env name.
 		await expect(
 			service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "https://api.example.com", dimension: 1024 }),
-		).rejects.toThrow(/apiKeyEnv|loopback/);
+		).rejects.toMatchObject({ code: "remote-needs-key" });
 
 		const ok = await service.set(["minSync", "embedder"], { id: "bge-m3", baseUrl: "http://127.0.0.1:11434", dimension: 1024 });
 		expect(ok.error).toBeNull();
@@ -248,8 +248,8 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 		const before = await readFile(fixture.configPath, "utf8");
 
-		await expect(service.set(["datasources", "slack", "connector", "token"], "xoxb-secret")).rejects.toThrow(/credentials API/);
-		await expect(service.set(["datasources", "slack", "connector"], { env: { password: "hunter2" } })).rejects.toThrow(/credentials API/);
+		await expect(service.set(["datasources", "slack", "connector", "token"], "xoxb-secret")).rejects.toMatchObject({ code: "plaintext-secret" });
+		await expect(service.set(["datasources", "slack", "connector"], { env: { password: "hunter2" } })).rejects.toMatchObject({ code: "plaintext-secret" });
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 	});
 
@@ -259,10 +259,10 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 		const before = await readFile(fixture.configPath, "utf8");
 
-		await expect(service.set(["minSync", "embedder", "baseUrl"], "https://api.example.com/v1")).rejects.toThrow(/apiKeyEnv|loopback/);
-		await expect(service.set(["minSync", "embedder", "baseUrl"], "not a url")).rejects.toThrow(/valid .*URL/);
-		await expect(service.set(["minSync", "embedder", "baseUrl"], "ftp://127.0.0.1/v1")).rejects.toThrow(/http or https/);
-		await expect(service.set(["datasources", "lark", "connector", "embedderBaseUrl"], "https://embed.example.com")).rejects.toThrow(/loopback/);
+		await expect(service.set(["minSync", "embedder", "baseUrl"], "https://api.example.com/v1")).rejects.toMatchObject({ code: "remote-needs-key" });
+		await expect(service.set(["minSync", "embedder", "baseUrl"], "not a url")).rejects.toMatchObject({ code: "url-invalid" });
+		await expect(service.set(["minSync", "embedder", "baseUrl"], "ftp://127.0.0.1/v1")).rejects.toMatchObject({ code: "url-invalid" });
+		await expect(service.set(["datasources", "lark", "connector", "embedderBaseUrl"], "https://embed.example.com")).rejects.toMatchObject({ code: "url-not-loopback" });
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 
 		// A connector's normal remote API URL must not be restricted.
@@ -283,7 +283,7 @@ describe("createAutoRagConfigService", () => {
 			apiKeyEnv: "AUTORAG_EMBEDDING_API_KEY",
 		});
 		expect(own.error).toBeNull();
-		await expect(service.set(["minSync", "embedder"], { id: "openai:x", baseUrl: "https://embed.example.com", dimension: 1024 })).rejects.toThrow(/apiKeyEnv/);
+		await expect(service.set(["minSync", "embedder"], { id: "openai:x", baseUrl: "https://embed.example.com", dimension: 1024 })).rejects.toMatchObject({ code: "remote-needs-key" });
 
 		const dazziCloud = await service.set(["minSync", "embedder"], {
 			id: "openai:qwen/qwen3-embedding-0.6b",
@@ -335,7 +335,7 @@ describe("createAutoRagConfigService", () => {
 		const snapshot = await service.rename(["datasources", "old"], ["datasources", "new"]);
 		expect(snapshot.config.datasources).toEqual({ new: { type: "slack" } });
 
-		await expect(service.rename(["datasources", "missing"], ["datasources", "x"])).rejects.toThrow(/not found/);
+		await expect(service.rename(["datasources", "missing"], ["datasources", "x"])).rejects.toMatchObject({ code: "rename-missing" });
 	});
 
 	it("rejects a bad appIndexing block", async () => {
@@ -382,10 +382,10 @@ describe("createAutoRagConfigService", () => {
 		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 		const before = await readFile(fixture.configPath, "utf8");
 
-		await expect(service.rename(["datasources", "old"], ["datasources", "taken"])).rejects.toThrow(/already exists/);
-		await expect(service.rename(["datasources", "old"], ["datasources", "old"])).rejects.toThrow(/same path/);
-		await expect(service.rename(["datasources"], ["datasources", "nested"])).rejects.toThrow(/own descendant/);
-		await expect(service.rename(["datasources", "missing"], ["datasources", "x"])).rejects.toThrow(/not found/);
+		await expect(service.rename(["datasources", "old"], ["datasources", "taken"])).rejects.toMatchObject({ code: "rename-taken" });
+		await expect(service.rename(["datasources", "old"], ["datasources", "old"])).rejects.toMatchObject({ code: "rename-same" });
+		await expect(service.rename(["datasources"], ["datasources", "nested"])).rejects.toMatchObject({ code: "rename-into-itself" });
+		await expect(service.rename(["datasources", "missing"], ["datasources", "x"])).rejects.toMatchObject({ code: "rename-missing" });
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 	});
 
@@ -396,9 +396,9 @@ describe("createAutoRagConfigService", () => {
 		const before = await readFile(fixture.configPath, "utf8");
 
 		const polluted: JsonValue = JSON.parse('{"__proto__": {"polluted": true}}');
-		await expect(service.set(["customUnknown"], polluted)).rejects.toThrow(/must be JSON/);
-		await expect(service.patch([{ path: ["nested", "ok"], value: 1 }, { path: ["nested", "bad"], value: { constructor: {} } }])).rejects.toThrow(
-			/must be JSON/,
+		await expect(service.set(["customUnknown"], polluted)).rejects.toMatchObject({ code: "value-not-json" });
+		await expect(service.patch([{ path: ["nested", "ok"], value: 1 }, { path: ["nested", "bad"], value: { constructor: {} } }])).rejects.toMatchObject(
+			{ code: "value-not-json" },
 		);
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 	});

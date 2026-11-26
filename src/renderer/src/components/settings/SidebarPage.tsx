@@ -23,7 +23,6 @@ import {
 	Sparkles,
 	Trash2,
 	X,
-	Zap,
 	type LucideIcon,
 } from "lucide-react";
 import { RECENTS_PATH, type FsBridge, type FsLocation, type FsLocationIcon, type FsTag } from "../../../../shared/fs-contract";
@@ -401,7 +400,6 @@ export function SidebarPage({
 									<div className="sidebar-card" {...reorder.zone("favorite", moveFavoriteTo)}>
 										{([
 											["app:aiSearch", t("places.aiSearch"), Sparkles],
-											["app:automations", t("places.automations"), Zap],
 										] as const).map(([id, name, AppIcon]) => (
 											<div key={id} className="sidebar-row is-locked" title={t("settingsCore.sidebar.lockedHint")}>
 												<span className="sidebar-grip-space" aria-hidden="true">

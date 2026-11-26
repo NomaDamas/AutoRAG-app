@@ -36,7 +36,7 @@ const emptyErrorFixKit: ErrorFixToolkit = {
 };
 
 /** Builds one profile's system prompt for a given interface language; the toolkit itself never reaches the prompt. */
-const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (language: Language) => string }[] = [
+const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (language: Language) => string; /** Nobody types to this helper, so the interface language decides. */ readonly interfaceLanguage?: true }[] = [
 	{ name: "ai-customizer (ai page)", prompt: (language) => aiCustomizerProfile({ language, surface: "ai", toolkit: emptyKit }).systemPrompt },
 	{ name: "ai-customizer (web page)", prompt: (language) => aiCustomizerProfile({ language, surface: "web", toolkit: emptyKit }).systemPrompt },
 	{
@@ -95,6 +95,7 @@ const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (langu
 	},
 	{
 		name: "error-fix",
+		interfaceLanguage: true,
 		prompt: (language) => errorFixProfile({ message: "boom", surface: "ai-search", language, toolkit: emptyErrorFixKit }).systemPrompt,
 	},
 	{
@@ -115,6 +116,11 @@ describe("every profile's system prompt is written in English and defers to the 
 
 				// (a) no Hangul, Hiragana, Katakana or CJK ideograph anywhere in the prompt.
 				expect(prompt, `non-English text in ${builder.name}`).not.toMatch(NOT_ENGLISH);
+
+				if (builder.interfaceLanguage === true) {
+					expect(prompt).toContain(`in ${LANGUAGE_NAME[language]}, the language the app is shown in`);
+					return;
+				}
 
 				// (b) the reply-language rule sends the model to the language the person writes in.
 				expect(prompt).toMatch(/language the person writes in/iu);

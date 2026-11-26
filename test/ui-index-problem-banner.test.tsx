@@ -72,7 +72,7 @@ describe("IndexProblemBanner", () => {
 		const onFixEmbedding = await render(failed("embedder-config"));
 		expect(banner()?.getAttribute("data-tone")).toBe("warning");
 		expect(banner()?.textContent).toContain("의미 검색을 사용할 수 없습니다");
-		expect(banner()?.textContent).toContain("문서 이해 모델 설정을 확인해 주세요. 키워드 검색은 계속 사용할 수 있습니다.");
+		expect(banner()?.textContent).toContain("문서 이해 모델 설정을 확인하세요. 키워드 검색은 계속 사용할 수 있습니다.");
 		expect(buttons().map((button) => button.textContent)).toEqual(["", "다시 시도", "설정 열기"]);
 		act(() => primary()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(onFixEmbedding).toHaveBeenCalledTimes(1);

@@ -72,6 +72,20 @@ let host: HTMLDivElement;
 let root: Root;
 let currentSettings: AppSettings;
 
+/** Type a request into the open assistant's box and send it: only 우클릭 메뉴's assistant offers example prompts. */
+async function askAssistant(text: string): Promise<void> {
+	const panel = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+	const input = panel?.querySelector<HTMLTextAreaElement>('[data-testid="app-customizer-input"]');
+	await act(async () => {
+		const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+		setter?.call(input, text);
+		input?.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+	await act(async () => {
+		panel?.querySelector<HTMLButtonElement>('[data-action="send-customizer-message"]')?.click();
+	});
+}
+
 function settle(): Promise<void> {
 	return act(async () => {
 		const { promise, resolve } = Promise.withResolvers<void>();
@@ -132,36 +146,24 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 			expect(panel?.getAttribute("aria-label")).toMatch(/^AI .+Assistant$/u);
 			expect(panel?.textContent).not.toContain("settingsCore.");
 
-			const suggestions = panel?.querySelectorAll<HTMLButtonElement>('[data-action="customizer-suggestion"]') ?? [];
-			expect(suggestions.length).toBe(3);
-			await act(async () => {
-				suggestions[0]?.click();
-			});
+			// One greeting and no example prompts: the person asks for whatever they want.
+			expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]')).toHaveLength(0);
+			expect(panel?.querySelector(".customizer-panel__empty-title")?.textContent).toBe("How can I help?");
+			await askAssistant("Turn on dark mode");
 			await settle();
 
 			expect(bridge.appCustomizer.send).toHaveBeenCalledTimes(1);
 			const [, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
-			expect(request).toMatchObject({ surface: page, message: suggestions[0]?.textContent?.trim() });
+			expect(request).toMatchObject({ surface: page, message: "Turn on dark mode" });
 		});
 
-		it(`invites to the ${page} assistant from the page head once the right sidebar is hidden`, async () => {
+		it(`shows no AI banner on the ${page} page, even with the right sidebar hidden (only 우클릭 메뉴 has one)`, async () => {
 			await open(page);
-			expect(host.querySelector(`[data-assistant-hero="${page}"]`)).toBeNull();
-
 			await act(async () => {
 				host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 			});
 			await settle();
-			const hero = host.querySelector<HTMLElement>(`[data-assistant-hero="${page}"]`);
-			expect(hero).not.toBeNull();
-			expect(hero?.textContent).not.toContain("settingsCore.");
-
-			await act(async () => {
-				hero?.querySelector<HTMLButtonElement>('[data-action="open-app-customizer"]')?.click();
-			});
-			await settle();
-			expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')?.getAttribute("data-surface")).toBe(page);
-			expect(host.querySelector(`[data-assistant-hero="${page}"]`)).toBeNull();
+			expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 		});
 	}
 
@@ -169,9 +171,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 		await open("web");
 		const input = host.querySelector<HTMLTextAreaElement>('[data-testid="app-customizer-input"]');
 		expect(input).not.toBeNull();
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-		});
+		await askAssistant("Change a setting");
 		await settle();
 		const webTurns = host.querySelectorAll('[data-surface="web"] .customizer-turn').length;
 		expect(webTurns).toBe(1);
@@ -187,9 +187,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 
 	it("shows what the agent changed and refreshes the page's own settings snapshot when it is done", async () => {
 		await open("general");
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-		});
+		await askAssistant("Change a setting");
 		await settle();
 		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
 		currentSettings = { ...currentSettings, appearance: "dark" };
@@ -214,9 +212,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 		await open("web");
 		const switchOf = (): HTMLElement | null => host.querySelector('[role="switch"][aria-label]');
 		expect(switchOf()?.getAttribute("aria-checked")).toBe("true");
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-		});
+		await askAssistant("Change a setting");
 		await settle();
 		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
 		bridge.settings.configGet.mockResolvedValue({ ...CONFIG, config: { ...CONFIG.config, webSearch: { enabled: false, provider: "duckduckgo" } } });
@@ -230,9 +226,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 	it("reloads a page that loads its own data (MCP servers) after a turn that changed something", async () => {
 		await open("mcp");
 		const callsBefore = bridge.settings.mcpGet.mock.calls.length;
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-		});
+		await askAssistant("Change a setting");
 		await settle();
 		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
 		bridge.settings.mcpGet.mockResolvedValue({ path: "/x/mcp.json", exists: true, error: null, servers: [{ name: "docs", config: { url: "https://example.com/mcp" }, transport: "http", enabled: true, exposure: "codemode", problem: null }] });
@@ -246,9 +240,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 
 	it("does not reload anything for a turn that changed nothing", async () => {
 		await open("web");
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-		});
+		await askAssistant("Change a setting");
 		await settle();
 		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
 		const before = bridge.settings.configGet.mock.calls.length;
@@ -280,9 +272,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 	it("re-reads the connected providers on the AI page after a turn that brought one in, so the model it chose is not shown as broken", async () => {
 		await open("ai");
 		const before = bridge.settings.providersList.mock.calls.length;
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-		});
+		await askAssistant("Change a setting");
 		await settle();
 		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
 		bridge.settings.providersList.mockResolvedValue([
@@ -316,9 +306,7 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 	describe("prompt cards: what the assistant asks outside the chat", () => {
 		async function startRun(): Promise<{ runId: string; sessionId: string }> {
 			await open("ai");
-			await act(async () => {
-				host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
-			});
+			await askAssistant("Change a setting");
 			await settle();
 			const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
 			return { runId, sessionId: request.sessionId };

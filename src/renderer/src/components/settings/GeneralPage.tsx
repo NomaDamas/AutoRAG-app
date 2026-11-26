@@ -13,6 +13,7 @@ import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
+import { ComponentVersionsRow } from "./ToolVersions";
 import { QuickSearchSettingsSection } from "./QuickSearchSettings";
 import { PlainDivider, PlainRow, PlainSection, SettingsPageHead } from "./SettingsKit";
 import { SelectField } from "./SelectField";
@@ -133,6 +134,8 @@ export function GeneralPage({
 						<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel={t("settingsCore.general.autoUpdates")} />
 					</PlainRow>
 					<AppUpdateRow />
+					{/* Once Settings → 정보: the librarian's and the tools' versions, folded under Dazzi's own. */}
+					<ComponentVersionsRow />
 				</PlainSection>
 				<PlainDivider />
 				<PlainSection title={t("settingsCore.general.privacyTitle")}>

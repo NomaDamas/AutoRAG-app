@@ -139,7 +139,7 @@ const sample = () =>
 	page.evaluate(() => {
 		const summary = document.querySelector(".index-map-summary");
 		const panel = document.querySelector(".index-map-panel");
-		const card = document.querySelector(".settings-activity");
+		const card = document.querySelector('[data-testid="index-status"]');
 		const ringedPaths = [...document.querySelectorAll('.index-map-chart path[data-progress="true"]')];
 		const ringed = ringedPaths.map((path) => path.getAttribute("data-path"));
 		const swatch = (state) => getComputedStyle(document.querySelector(`.index-map-legend li[data-state="${state}"] .index-map-legend-swatch`) ?? document.body).backgroundColor;
@@ -159,7 +159,7 @@ const sample = () =>
 			legend: [...document.querySelectorAll(".index-map-legend li")].map((li) => li.getAttribute("data-state")),
 			rowMarks: [...document.querySelectorAll(".index-map-folders > button[data-progress]")].map((row) => row.querySelector("span")?.textContent ?? ""),
 			cardTone: card?.getAttribute("data-tone") ?? null,
-			stage: document.querySelector('.settings-activity [aria-current="step"]')?.textContent ?? null,
+			stage: document.querySelector(".index-status-title")?.textContent ?? null,
 			cardAbovePanel: card !== null && panel !== null && (card.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
 			percent: document.querySelector(".index-map-center strong")?.textContent ?? "",
 		};

@@ -393,7 +393,7 @@ function ServerModal({
 								const message = errorText(cause);
 								setError(message);
 								// A refused key reads as an auth failure; anything else is about the address.
-								setRefusedField(/\b(401|403)\b|unauthori[sz]ed|forbidden|api[ _-]?key/iu.test(message) ? "key" : "url");
+								setRefusedField(message === t("main.errors.provider.serverKeyRefused") || /\b(401|403)\b|unauthori[sz]ed|forbidden/iu.test(message) ? "key" : "url");
 								setBusy(false);
 							});
 					}}

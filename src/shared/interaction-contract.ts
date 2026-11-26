@@ -2,7 +2,7 @@
  * What the AI Search agent asks the person, and how the person answers, shared by the
  * Electron main process and the renderer.
  *
- * Two things reach the person or constrain a run (librarian v2.15):
+ * Three things reach the person or constrain a run (the permission mode and questions from librarian v2.15):
  *
  * - The **permission mode** ({@link ApprovalMode}): `readonly` (default) enforces
  *   OS-level read-only filesystem sandboxing on `bash`/`powershell` and blocks
@@ -10,13 +10,17 @@
  * - A **question** from the `ask_user` tool: the agent needs a decision or a fact
  *   it cannot find out itself. It is multiple choice, free text, or 2-4 independent
  *   questions together.
+ * - An **automation** the agent is about to save with `manage_automations`: the person sees the rule filled in
+ *   (Figma 672:3740), may change it, and adds it or not. Nothing is written before that answer.
  *
- * Requests are tied to one running search (`searchId`). The panel of that search
+ * The question and the automation are requests tied to one running search (`searchId`). The panel of that search
  * shows the open request in place of its message box and sends the answer back with
  * {@link InteractionBridge.answer}; the run waits for it. Stop, or the run ending,
  * closes the request. All payloads are plain serializable shapes, never pi or
  * librarian class instances.
  */
+
+import type { AutomationDraft } from "./automation-contract";
 
 export type ApprovalMode = "readonly" | "full";
 
@@ -107,7 +111,15 @@ export interface ApprovalRequest extends RequestBase {
 	readonly sessionScope: "categories" | "unclassified" | "all";
 }
 
-export type InteractionRequest = QuestionRequest | ApprovalRequest;
+/** `manage_automations` save: the rule the agent wrote, held until the person adds it (as it is or changed) or not. */
+export interface AutomationRequest extends RequestBase {
+	readonly kind: "automation";
+	/** The id the agent gave the rule. */
+	readonly ruleId: string;
+	readonly rule: AutomationDraft;
+}
+
+export type InteractionRequest = QuestionRequest | ApprovalRequest | AutomationRequest;
 
 export type ApprovalChoice = "allow-once" | "allow-session" | "deny" | "deny-with-note";
 
@@ -121,6 +133,8 @@ export type InteractionAnswer =
 	| { readonly kind: "approval"; readonly choice: ApprovalChoice; readonly note?: string }
 	/** One entry per question of the request, in order; `null` skips that question. */
 	| { readonly kind: "question"; readonly answers: readonly (QuestionAnswer | null)[] }
+	/** 추가하기 on an automation request: the rule to save, as the person left it. */
+	| { readonly kind: "automation"; readonly rule: AutomationDraft }
 	/** The person dismissed the request (Esc, Skip). The model is told nothing was answered. */
 	| { readonly kind: "cancel" };
 

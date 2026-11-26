@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { ErrorFixBridge, ErrorFixEvent } from "../../../shared/error-fix-contract";
+import type { ErrorFixBridge, ErrorFixEvent, ErrorFixSurface } from "../../../shared/error-fix-contract";
 import {
 	activeErrorFixSession,
 	dismissErrorFixStore,
@@ -65,6 +65,8 @@ function subscribe(listener: () => void): () => void {
  * surface that offered the fix, by the error message it fixed. A repair started without one only closes.
  */
 const retryTasks = new Map<string, () => void>();
+/** Where each error message was shown, so a retry from the dialog asks the agent about the same place. */
+const surfaces = new Map<string, ErrorFixSurface>();
 
 /** Whether a fixed repair of this error can send the person back to the task. */
 export function hasRetryTask(message: string): boolean {
@@ -78,9 +80,10 @@ export function retryErrorTask(message: string): void {
 	retry?.();
 }
 
-export function startErrorFix(message: string, retryTask?: () => void): void {
+export function startErrorFix(message: string, retryTask?: () => void, surface: ErrorFixSurface = "ai-search"): void {
 	ensureSubscribed();
 	if (retryTask !== undefined) retryTasks.set(message, retryTask);
+	surfaces.set(message, surface);
 	const existing = current.sessions.find((entry) => entry.run.status === "running" && entry.message === message);
 	if (existing !== undefined) {
 		publish(openErrorFixStoreById(current, existing.id));
@@ -90,7 +93,7 @@ export function startErrorFix(message: string, retryTask?: () => void): void {
 	publish(enqueueErrorFixStore(current, runId, message));
 	const bridge = getBridge();
 	if (bridge === undefined) return;
-	bridge.start(runId, { message, surface: "ai-search" }).catch((error: unknown) => {
+	bridge.start(runId, { message, surface }).catch((error: unknown) => {
 		const reason = error instanceof Error ? error.message : String(error);
 		publish(reduceErrorFixStore(current, { type: "error", runId, message: reason, changes: [], backupPath: null }));
 	});
@@ -101,7 +104,7 @@ export function retryErrorFix(): void {
 	const active = current.activeId === null ? undefined : current.sessions.find((entry) => entry.id === current.activeId);
 	if (active === undefined) return;
 	publish(removeErrorFixSessionFromStore(current, active.id));
-	startErrorFix(active.message);
+	startErrorFix(active.message, undefined, surfaces.get(active.message));
 }
 
 /** Explicitly stops the currently open running repair (only the Stop button calls this). */

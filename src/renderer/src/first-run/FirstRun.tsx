@@ -23,7 +23,7 @@ import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
 import { Reveal, cancelPrewarm, prewarmReveal } from "./reveal";
-import { CursorGlyph } from "./cursor";
+import { CoachCard, CoachMarker } from "./coach";
 import { ACTION_REQUIRED_STEPS, AI_HOST, canStartEarly, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
 /** What the layer needs from the Finder window it sits on. */
@@ -763,14 +763,6 @@ function Tour({
 					: noCite
 						? t("firstRun.tour.cite.noCiteBody")
 						: t(`firstRun.tour.${step}.body`);
-	const hintLabel =
-		step === "ask"
-			? askReady
-				? t("firstRun.tour.sendHint")
-				: t("firstRun.tour.typingHint")
-			: waiting
-				? null
-				: t("firstRun.tour.clickHint");
 	const last = step !== null && nextStep(steps, step, { cited }) === null;
 	const clickReady = step === "ask" ? askReady : step === "cite" ? citeReady : step === "duplicates";
 
@@ -791,8 +783,7 @@ function Tour({
 					step={step}
 					selector={anchorFor(step, family ?? null, citeReady)}
 					clickSelector={clickTargetFor(step, family ?? null, clickReady)}
-					hintLabel={hintLabel}
-					showEnterKey={askReady}
+					last={last}
 					index={index}
 					count={steps.length}
 					title={title}
@@ -814,13 +805,12 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
 	return Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5;
 }
 
-/** A spotlight on the anchor, an animated click/drag cursor, and a bubble beside it. */
+/** A spotlight on the anchor, the sunflower (with a ring on a small click target), and the card beside it (Figma 156:591). */
 function Coach({
 	step,
 	selector,
 	clickSelector,
-	hintLabel,
-	showEnterKey,
+	last,
 	index,
 	count,
 	title,
@@ -835,8 +825,8 @@ function Coach({
 	readonly step: TourStepId;
 	readonly selector: string | null;
 	readonly clickSelector: string | null;
-	readonly hintLabel: string | null;
-	readonly showEnterKey: boolean;
+	/** The last step: 완료 alone, no 건너뛰기. */
+	readonly last: boolean;
 	readonly index: number;
 	readonly count: number;
 	readonly title: string;
@@ -889,48 +879,23 @@ function Coach({
 		rect === null
 			? { left: viewport.width / 2, top: viewport.height / 2, width: 0, height: 0, opacity: 0.55 }
 			: { left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
-	// For wide rows (stacked duplicate row), aim at the file title/badge zone on the left rather than blank columns on the right.
-	const cursorPos =
-		clickRect === null
-			? null
-			: {
-					left: clickRect.width > 180 ? clickRect.left + Math.min(116, clickRect.width * 0.34) : clickRect.left + clickRect.width * 0.52,
-					top: clickRect.top + clickRect.height * 0.58,
-				};
 	return (
 		<div className="fr-tour">
 			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			{cursorPos === null ? null : (
-				<div className="fr-cursor" data-target-step={step} style={{ left: cursorPos.left, top: cursorPos.top }} aria-hidden="true">
-					<span className="fr-cursor-ring" />
-					<CursorGlyph />
-				</div>
-			)}
+			<CoachMarker target={clickRect} spot={clickRect === null ? rect : null} data={{ "data-target-step": step }} />
 			<div ref={bubbleRef} className="fr-coach" data-step={step} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={title}>
-				<div className="fr-coach-card" key={step}>
-					<p className="fr-coach-count">{t("firstRun.tour.progress", { index: index + 1, count })}</p>
-					<h2 className="fr-coach-title">
-						{waiting ? <span className="fr-coach-spinner" aria-hidden="true" /> : null}
-						{title}
-					</h2>
-					<p className="fr-coach-body">{body}</p>
-					<div className="fr-coach-actions">
-						<button type="button" className="fr-link" data-action="tour-skip" onClick={onSkip}>
+				<CoachCard key={step} title={title} body={body} index={index} count={count} waiting={waiting}>
+					{last && showNext ? null : (
+						<button type="button" className="fr-coach-link" data-action="tour-skip" onClick={onSkip}>
 							{t("firstRun.tour.skip")}
 						</button>
-						{showNext ? (
-							<button type="button" className="fr-btn fr-btn--primary fr-btn--sm" data-action="tour-next" disabled={nextDisabled} onClick={onNext}>
-								{nextLabel}
-							</button>
-						) : hintLabel === null ? null : (
-							<span className="fr-coach-hint">
-								<span className="fr-coach-hint-dot" aria-hidden="true" />
-								{hintLabel}
-								{showEnterKey ? <kbd className="fr-kbd">↵</kbd> : null}
-							</span>
-						)}
-					</div>
-				</div>
+					)}
+					{showNext ? (
+						<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tour-next" disabled={nextDisabled} onClick={onNext}>
+							{nextLabel}
+						</button>
+					) : null}
+				</CoachCard>
 			</div>
 		</div>
 	);

@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	cliFailureReason,
+	readableCliText,
 	createAutomationService,
 	librarianCommand,
 	LibrarianCliMissingError,
@@ -467,11 +468,34 @@ describe("createAutomationService snapshot", () => {
 		const cli = fakeCli(dir, { status: () => ({ code: 0, stdout: "not json at all", stderr: "" }) });
 		const automations = service(dir, cli);
 		const [first, second, third] = await Promise.all([automations.snapshot(), automations.snapshot(), automations.snapshot()]);
-		expect(cli.statusCalls()).toBe(1);
+		// One read answers all three callers; a failed read is asked once more before the failure is shown.
+		expect(cli.statusCalls()).toBe(2);
 		expect(first.rules).toEqual([]);
 		expect(first.error).toBe(t("main.automations.errors.cliFailed", { reason: cliFailureReason({ code: 0, stdout: "not json at all", stderr: "" }) }));
 		expect(second).toEqual(first);
 		expect(third).toEqual(first);
+	});
+});
+
+describe("readableCliText", () => {
+	it("shows the error of a --json answer alone", () => {
+		expect(readableCliText('{"ok":false,"error":"no such rule"}')).toBe("no such rule");
+	});
+
+	it("drops the words a Windows console wrote in another code page (U+FFFD) instead of showing noise", () => {
+		const raw = JSON.stringify({ ok: false, error: "schtasks /Create /TN AutoRAG-Automate /F failed (exit 1): \uFFFD\uFFFD\uFFFD\uFFFD: \uFFFD\u00BF\uFFFD\uFFFD\uFFFD\uFFFD." });
+		const text = readableCliText(raw);
+		expect(text).toBe("schtasks /Create /TN AutoRAG-Automate /F failed (exit 1):");
+		expect(text).not.toContain("\uFFFD");
+	});
+
+	it("reads the error of a pretty-printed multi-line --json answer", () => {
+		const raw = JSON.stringify({ ok: false, error: "schtasks /Create failed (exit 1)" }, null, 2);
+		expect(readableCliText(raw)).toBe("schtasks /Create failed (exit 1)");
+	});
+
+	it("leaves plain text as it is", () => {
+		expect(readableCliText("exit 2: bad flag")).toBe("exit 2: bad flag");
 	});
 });
 
@@ -552,6 +576,73 @@ describe("createAutomationService remove", () => {
 	});
 });
 
+describe("createAutomationService create", () => {
+	it("adds a rule from the 새 자동화 card after the ones already there, with a fresh id", async () => {
+		const dir = await home();
+		const keep = rule("keep");
+		const file = await writeRules(dir, [keep]);
+
+		const result = await service(dir, fakeCli(dir)).create({ paths: ["/Users/me/Downloads"], events: ["create"], include: ["**/*.pdf"], agent: { profile: "file-triage", task: "요약해 줘" } });
+
+		const written = (JSON.parse(await readFile(file, "utf8")) as { automations: Record<string, unknown>[] }).automations;
+		expect(written[0]).toEqual(keep);
+		expect(written[1]).toEqual({ id: result.id, paths: ["/Users/me/Downloads"], events: ["create"], include: ["**/*.pdf"], agent: { profile: "file-triage", task: "요약해 줘" } });
+		expect(result.id).toMatch(/^rule-[a-z0-9]+$/u);
+		expect(result.snapshot.rules.map((item) => item.id)).toEqual(["keep", result.id]);
+	});
+
+	it("starts the rules file when there is none, and writes a command rule without an include", async () => {
+		const dir = await home();
+		const result = await service(dir, fakeCli(dir)).create({ paths: ["/Users/me/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
+		const written = (JSON.parse(await readFile(rulesPath(dir), "utf8")) as { automations: unknown[] }).automations;
+		expect(written).toEqual([{ id: result.id, paths: ["/Users/me/Documents"], events: ["create", "update"], run: ["autorag", "refresh"] }]);
+	});
+
+	it("takes the rule back out when the librarian refuses the file it leaves", async () => {
+		const dir = await home();
+		const keep = rule("keep");
+		const file = await writeRules(dir, [keep]);
+		const before = await readFile(file, "utf8");
+		const cli = fakeCli(dir);
+		let refuse = true;
+		const automations = service(dir, {
+			...cli,
+			run: async (args) => {
+				if (refuse && readEntries(dir).length === 2) {
+					refuse = false;
+					return ok(statusOf({ dir, automations: [], installed: false, running: false, configError: "bad rule" }));
+				}
+				return cli.run(args);
+			},
+		});
+		await expect(automations.create({ paths: ["/x"], events: ["create"], include: [], agent: { profile: "file-triage", task: "t" } })).rejects.toThrow("bad rule");
+		expect(await readFile(file, "utf8")).toBe(before);
+	});
+});
+
+describe("createAutomationService update", () => {
+	it("rewrites what the card manages and keeps the rest of the entry as written", async () => {
+		const dir = await home();
+		const other = rule("other");
+		const target = rule("target", { futureOption: { keep: true }, exclude: ["**/tmp/**"] });
+		const file = await writeRules(dir, [other, target]);
+
+		await service(dir, fakeCli(dir)).update("target", { paths: ["/Users/me/Desktop"], events: ["update"], include: [], agent: { profile: "file-organizer", task: "정리해 줘" } });
+
+		const written = (JSON.parse(await readFile(file, "utf8")) as { automations: Record<string, unknown>[] }).automations;
+		expect(written[0]).toEqual(other);
+		expect(written[1]).toMatchObject({ id: "target", futureOption: { keep: true }, exclude: ["**/tmp/**"], paths: ["/Users/me/Desktop"], events: ["update"], agent: { profile: "file-organizer", task: "정리해 줘" } });
+		expect(written[1]).not.toHaveProperty("include");
+		expect(written[1]).not.toHaveProperty("run");
+	});
+
+	it("refuses an unknown id", async () => {
+		const dir = await home();
+		await writeRules(dir, [rule("a")]);
+		await expect(service(dir, fakeCli(dir)).update("gone", { paths: ["/x"], events: ["create"], include: [], run: ["x"] })).rejects.toThrow();
+	});
+});
+
 describe("createAutomationService restore", () => {
 	it("puts the entry back where it was", async () => {
 		const dir = await home();
@@ -625,19 +716,15 @@ describe("createAutomationService setDaemon", () => {
 		expect(removed.daemon).toEqual({ platform: "darwin", installed: false, running: false });
 	});
 
-	it("translates a failing install, keeping the beginning of what the CLI said", async () => {
+	it("tells a failing install in one plain sentence, without what the CLI said", async () => {
 		const dir = await home();
-		const stderr = `${"x".repeat(400)}\n`;
 		const cli = service(dir, {
 			...fakeCli(dir),
-			run: async () => ({ code: 3, stdout: "", stderr }),
+			run: async () => ({ code: 3, stdout: "", stderr: '{ "ok": false, "error": "boom /XML C:\\x" }' }),
 		});
-
-		const message = t("main.automations.errors.cliFailed", { reason: cliFailureReason({ code: 3, stdout: "", stderr }) });
-		await expect(cli.setDaemon(true)).rejects.toThrow(message);
-		// The window gets the start of what the CLI said, not all 400 characters of it.
-		expect(message).toContain("x".repeat(300));
-		expect(message).not.toContain("x".repeat(301));
+		const error = await cli.setDaemon(true).catch((e: unknown) => e as Error);
+		expect((error as Error).message).toBe(t("main.automations.errors.daemonOnFailed"));
+		expect((error as Error).message).not.toContain("boom");
 	});
 });
 
@@ -742,4 +829,28 @@ describe("createAutomationService start", () => {
 		stop();
 		expect(seen[1]?.daemon?.running).toBe(false);
 	}, START_TEST_TIMEOUT_MS);
+});
+
+describe("run history", () => {
+	it("reads a rule's runs from its log, newest first, and skips a line it cannot parse", async () => {
+		const dir = await home();
+		await mkdir(join(dir, "automations", "logs"), { recursive: true });
+		const lines = [
+			JSON.stringify(runRecord("pdf", { startedAt: "2026-10-23T10:00:00.000Z" })),
+			"not json",
+			JSON.stringify(runRecord("pdf", { startedAt: "2026-10-23T11:00:00.000Z", exitCode: null, timedOut: true })),
+			"",
+		];
+		await writeFile(logPath(dir, "pdf"), lines.join("\n"));
+		const runs = await service(dir, fakeCli(dir)).history("pdf");
+		expect(runs.map((one) => one.startedAt)).toEqual([Date.parse("2026-10-23T11:00:00.000Z"), Date.parse("2026-10-23T10:00:00.000Z")]);
+		expect(runs[0]?.timedOut).toBe(true);
+	});
+
+	it("answers no runs for a rule that never ran, and for an id that names no file in the logs folder", async () => {
+		const dir = await home();
+		const automations = service(dir, fakeCli(dir));
+		expect(await automations.history("never")).toEqual([]);
+		expect(await automations.history("../automations")).toEqual([]);
+	});
 });

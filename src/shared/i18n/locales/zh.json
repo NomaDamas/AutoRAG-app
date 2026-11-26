@@ -113,6 +113,7 @@
     "new": "新建标签页 ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "在原文件夹中找不到“{{name}}”。它可能已被移动或删除。",
     "emptyFolder": "空文件夹",
     "emptyRecents": "最近没有打开的文件",
     "emptyTag": "没有带有“{{name}}”标签的项目",
@@ -154,20 +155,20 @@
       "levelLabel": "压缩强度",
       "recommended": "推荐",
       "levels": {
-        "light": "轻度（高画质）",
+        "light": "轻度",
         "balanced": "均衡",
-        "max": "强力（最小体积）"
+        "max": "强力"
       },
       "specs": {
         "pdf": {
-          "light": "高画质·最大 1600px（约减少 30–65%）",
-          "balanced": "标准压缩·最大 1280px（约减少 55–80%）",
-          "max": "极限压缩·最大 960px（约减少 75–90%）"
+          "light": "高画质（约减少 30–65%）",
+          "balanced": "标准压缩（约减少 55–80%）",
+          "max": "极限压缩（约减少 75–90%）"
         },
         "image": {
-          "light": "高画质·256色/2560px（约减少 35–60%）",
-          "balanced": "均衡压缩·最大 1920px（约减少 55–75%）",
-          "max": "极限压缩·最大 1280px（约减少 70–85%）"
+          "light": "高画质（约减少 35–60%）",
+          "balanced": "均衡压缩（约减少 55–75%）",
+          "max": "极限压缩（约减少 70–85%）"
         },
         "video": {
           "light": "原始分辨率·码率减少约 35%+",
@@ -185,7 +186,8 @@
       "copyMode": "另存为副本",
       "replaceHint": "原文件将移至废纸篓，并原地替换“{{name}}”。",
       "copyHint": "保留原文件，并另存为“{{copyName}}”。",
-      "workingHint": "完成前原文件不会被修改。"
+      "workingHint": "完成前原文件不会被修改。",
+      "working": "正在压缩…"
     }
   },
   "contextMenu": {
@@ -299,7 +301,8 @@
       "evidenceFolder": "来源文件夹",
       "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的来源文件",
       "openPreview": "在预览中查看引用段落",
-      "newSource": "新来源 {{number}}"
+      "newSource": "新来源 {{number}}",
+      "emptyHint": "回答的依据会显示在这里"
     },
     "chat": {
       "title": "AI 智能体",
@@ -342,7 +345,21 @@
     "searchHistory": "搜索对话记录",
     "emptyHistory": "没有保存的对话。",
     "emptyHistorySearch": "没有与“{{query}}”匹配的对话",
+    "scrollToBottom": "滚动到底部",
+    "startHeading": "有什么可以帮你的？",
+    "askPlaceholder": "向 Dazzi 随便问点什么",
     "emptyPromptTitle": "想查找什么内容？",
+    "capability": {
+      "hints": "可以做的事",
+      "find": "查找",
+      "findPlaceholder": "说说你要找的文件",
+      "summarize": "总结",
+      "summarizePlaceholder": "说说要总结的文档",
+      "organize": "整理",
+      "organizePlaceholder": "说说你想怎么整理",
+      "automate": "自动化",
+      "automatePlaceholder": "说说发生什么时要做什么"
+    },
     "emptyPromptDesc": "在文件、邮件和消息中全局搜索，同时提供快速回答与深度回答。",
     "generatingDeep": "正在撰写深度回答…",
     "askDazzi": "询问 AI",
@@ -359,8 +376,7 @@
     "workedFor": "思考耗时 {{time}}",
     "reviewing": "正在核对提问…",
     "stopped": "已停止生成回答。",
-    "dropAttach": "松开即可添加到对话",
-    "dropPrompt": "拖动到此处以提问 AI",
+    "dropHere": "将文件拖放到此处",
     "steerPlaceholder": "搜索方向不对？随时纠正（例如：只看上周的消息）",
     "steerSend": "纠正搜索",
     "voiceStart": "语音输入",
@@ -372,7 +388,7 @@
     "voiceUnavailable": "此设备没有可用的麦克风。",
     "voiceFailed": "无法转写语音：{{message}}",
     "micPermission": {
-      "title": "需要麦克风权限。",
+      "title": "需要麦克风权限",
       "body": "要用语音提问，Dazzi 需要麦克风权限。只有在你按下麦克风按钮时才会录音。",
       "stepsMac": "请在“系统设置 › 隐私与安全性 › 麦克风”中打开 Dazzi。",
       "stepsWindows": "请在“设置 › 隐私和安全性 › 麦克风”中打开“麦克风访问权限”和“允许桌面应用访问你的麦克风”。",
@@ -402,6 +418,11 @@
       "compacted": "已总结之前的对话。",
       "compactedHint": "之前的对话以摘要形式记住。如有遗漏的内容，请再告诉一次。",
       "trimmed": "搜索结果较长，只读取了其中一部分。"
+    },
+    "segment": {
+      "label": "AI 助手视图",
+      "chat": "聊天",
+      "automations": "自动化"
     }
   },
   "appError": {
@@ -479,11 +500,13 @@
       "triggerAria": "文件权限模式",
       "readonly": {
         "label": "只读",
-        "desc": "仅读取和搜索。系统沙箱会阻止创建、编辑或删除文件。"
+        "desc": "仅读取和搜索。系统沙箱会阻止创建、编辑或删除文件。",
+        "option": "只读"
       },
       "full": {
         "label": "全部允许",
-        "desc": "允许创建、编辑和删除文件。"
+        "desc": "允许创建、编辑和删除文件。",
+        "option": "全部允许"
       }
     },
     "stop": "停止",
@@ -542,6 +565,11 @@
     },
     "errors": {
       "config": "无法读取规则文件",
+      "statusTitle": "无法检查自动化状态",
+      "fixing": "AI 正在查找并修复原因…",
+      "fixingView": "查看进度",
+      "statusHint": "可以稍后重新检查，也可以让 AI 代理查找原因并修复。",
+      "retry": "重新检查",
       "configHint": "请在 AI 智能体中修正规则，或直接编辑该文件。"
     },
     "daemon": {
@@ -555,7 +583,7 @@
     },
     "menu": {
       "preview": "快速查看",
-      "edit": "在 AI 智能体中编辑",
+      "edit": "编辑",
       "reveal": "在自动化标签页中显示",
       "add": "在 AI 智能体中添加新规则…",
       "openFolder": "打开监视文件夹",
@@ -585,13 +613,24 @@
       "agentProfile": "AI 配置",
       "more": "更多",
       "menuEdit": "编辑",
-      "menuDelete": "删除"
+      "menuDelete": "删除",
+      "runDone": "完成",
+      "serviceOff": "已关闭",
+      "failedRules": "失败的自动化 {{count}} 个 — {{name}}",
+      "recentRuns": "最近运行",
+      "noRuns": "还没有运行记录",
+      "draftRule": "自动化规则",
+      "agentDoes": "AI：“{{task}}”",
+      "matches": "符合条件的文件 {{count}} 个",
+      "noMatches": "目前没有符合条件的文件",
+      "notRun": "尚未运行",
+      "runFiles": "文件 {{count}} 个"
     },
     "quickLook": {
       "when": "何时",
       "what": "执行",
       "folders": "目标文件夹",
-      "edit": "在 AI 智能体中编辑",
+      "edit": "编辑",
       "close": "关闭",
       "ranFail": "{{time}}运行 · {{reason}}"
     },
@@ -602,6 +641,11 @@
     },
     "toast": {
       "deleted": "已删除规则“{{title}}”。",
+      "creating": "正在创建自动化…",
+      "created": "已创建自动化。",
+      "saving": "正在保存更改…",
+      "saved": "已保存更改。",
+      "deleting": "正在删除规则“{{title}}”…",
       "undo": "撤销",
       "restored": "已恢复规则“{{title}}”。"
     },
@@ -664,7 +708,122 @@
     "agent": {
       "reads": "仅读取",
       "writes": "可以修改文件"
-    }
+    },
+    "mine": "我的自动化",
+    "create": {
+      "new": "+ 新建自动化",
+      "headButton": "新建自动化",
+      "title": "新建自动化",
+      "when": "何时",
+      "task": "Dazzi 要做的事",
+      "taskPlaceholder": "例如：用三行总结要点并保存为备注",
+      "submit": "创建",
+      "sentence": "当{{folder}}中{{event}}{{kind}}时",
+      "kindLabel": "文件类型",
+      "eventLabel": "变化",
+      "modeLabel": "权限",
+      "pickFolder": "选择文件夹",
+      "kind": {
+        "all": "文件",
+        "pdf": "PDF 文件",
+        "image": "图片",
+        "document": "文档"
+      },
+      "event": {
+        "create": "新增",
+        "update": "修改",
+        "createUpdate": "新增或修改",
+        "delete": "删除",
+        "other": "发生其他变化"
+      },
+      "mode": {
+        "read": "仅读取",
+        "write": "允许修改文件"
+      },
+      "submitEdit": "保存修改",
+      "editTitle": "编辑自动化",
+      "open": "新建自动化"
+    },
+    "templates": {
+      "title": "推荐的自动化",
+      "screenshot": {
+        "title": "整理截图名称",
+        "desc": "桌面上出现截图时，改成一看就懂的名称",
+        "task": "改成一看就懂的名称"
+      },
+      "pdf": {
+        "title": "总结新 PDF",
+        "desc": "下载中出现 PDF 时，用三行总结要点并保存为备注",
+        "task": "用三行总结要点并保存为备注"
+      },
+      "refresh": {
+        "title": "搜索即时更新",
+        "desc": "文稿文件夹中的文件新增或修改时，立即反映到搜索中",
+        "task": "立即反映到搜索中"
+      },
+      "add": "添加"
+    },
+    "row": {
+      "rename": "重命名",
+      "edit": "编辑",
+      "delete": "删除"
+    },
+    "detail": {
+      "delete": "删除自动化",
+      "runOn": "已开启运行",
+      "ok": "成功",
+      "failed": "失败",
+      "settings": "设置",
+      "history": "运行记录"
+    },
+    "tabs": {
+      "rules": "自动化",
+      "all": "全部记录"
+    },
+    "all": {
+      "count": "运行 {{count}} 次",
+      "failOnly": "仅显示失败",
+      "noFails": "没有失败的运行记录",
+      "title": "全部记录",
+      "open": "查看全部记录",
+      "today": "今天",
+      "yesterday": "昨天"
+    },
+    "assistant": {
+      "caption": "创建或修改自动化时，可以询问 AI"
+    },
+    "recs": {
+      "section": "还可以试试",
+      "add": "添加",
+      "more": "没有想要的？",
+      "talk": "在聊天中创建",
+      "reason": {
+        "pdf": "下载文件夹里有 {{count}} 个 PDF",
+        "screenshot": "桌面上有 {{count}} 张未命名的截图",
+        "refreshAgo": "文稿文件夹上次更新索引是在{{time}}",
+        "refreshChanged": "文稿中最近一周有 {{count}} 个文件发生了变化"
+      },
+      "hero": "文件新增或变化时，Dazzi 会自动处理",
+      "heroCaption": "从我们在你的文件中找到的推荐自动化开始吧。"
+    },
+    "nudge": {
+      "pdf": "可以创建一个自动化，每当有新 PDF 时自动总结。",
+      "screenshot": "可以创建一个自动化，每当有新截图时改成易于辨认的名称。",
+      "refresh": "可以创建一个自动化，每当文档变化时立即更新搜索。",
+      "make": "创建",
+      "later": "以后再说",
+      "lead": "要这样创建吗？可以点击各项修改，确认后请点击“添加”。",
+      "created": "已创建自动化。可以在“自动化”中开启或关闭。",
+      "view": "查看"
+    },
+    "request": {
+      "command": "要运行的命令"
+    },
+    "starter": {
+      "ask": "新建自动化",
+      "reply": "可以在表单中选择，或在聊天中描述来添加自动化。"
+    },
+    "back": "返回"
   },
   "osMenu": {
     "ask": "向 Dazzi 提问",
@@ -704,6 +863,19 @@
       "everything": "正在为文件名建立索引",
       "fsearch": "正在为文件名建立索引",
       "finalizing": "即将完成"
+    }
+  },
+  "indexStatus": {
+    "eta": "预计还需 {{duration}}",
+    "etaCalculating": "正在估算剩余时间",
+    "stopped": "索引已暂停",
+    "waiting": "正在等待下次更新",
+    "justNow": "刚刚",
+    "count": "{{done}}/{{total}} 个",
+    "paused": {
+      "battery": "接通电源后将继续进行。",
+      "window": "到了允许的时间段后将继续进行。",
+      "day": "到了允许的日期后将继续进行。"
     }
   },
   "indexProgress": {
@@ -813,14 +985,14 @@
   },
   "confirm": {
     "compressStopTitle": "要停止压缩吗？",
-    "compressStopMessage": "将停止压缩 {{name}}，并删除未完成的压缩文件。",
+    "compressStopMessage": "未完成的压缩文件将被删除。",
     "compressStopAction": "停止",
     "compressKeep": "继续压缩",
-    "emptyTrashTitle": "清倒废纸篓",
+    "emptyTrashTitle": "要清倒废纸篓吗？",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
-    "closeEvidenceFolderTitle": "关闭来源文件夹",
-    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时来源文件夹，原始文件不会受到影响。确定要关闭吗？",
+    "closeEvidenceFolderTitle": "要关闭来源文件夹吗？",
+    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时来源文件夹，原始文件不会受到影响。",
     "closeEvidenceFolderAction": "关闭"
   },
   "settings": {
@@ -949,6 +1121,7 @@
     "openWithDefault": "{{name}}（默认）",
     "openWithOther": "其他…",
     "source": {
+      "nameTaken": "名为“{{name}}”的文件或文件夹已存在",
       "actionsUnavailable": "无法在此环境中执行文件操作",
       "shareUnavailable": "无法在此环境中共享",
       "nothingToUndo": "没有可撤销的项目",
@@ -1042,6 +1215,49 @@
     }
   },
   "main": {
+    "errors": {
+      "config": {
+        "pathEmpty": "未指定要更改的设置项。",
+        "pathInvalid": "此名称不能用作设置项：“{{path}}”",
+        "pathManaged": "此项由 Dazzi 自行管理，无法在此更改：“{{field}}”",
+        "valueNotJson": "此值的格式无法保存到设置中。",
+        "plaintextSecret": "密钥、令牌等机密值不会保存在设置文件中。请在密钥输入框中输入：“{{field}}”",
+        "urlInvalid": "地址格式不正确。请输入以 http:// 或 https:// 开头的地址：“{{field}}”",
+        "urlNotLoopback": "为确保文档内容不离开此设备，此地址必须指向此设备 (localhost)：“{{field}}”",
+        "remoteNeedsKey": "使用此设备以外的嵌入服务器需要 API 密钥。请同时输入该服务器的 API 密钥：“{{field}}”",
+        "urlNeedsHttps": "使用令牌的远程服务器地址必须以 https:// 开头：“{{field}}”",
+        "renameSame": "新名称与当前名称相同。",
+        "renameIntoItself": "无法将“{{name}}”移动到其自身内部。",
+        "renameTaken": "名称“{{name}}”已被使用。请输入其他名称。",
+        "renameMissing": "找不到“{{name}}”。它可能已被删除。"
+      },
+      "account": {
+        "authFileUnreadable": "无法读取登录信息文件“{{name}}”，因此未作任何更改。请检查文件内容。"
+      },
+      "provider": {
+        "nameEmpty": "请输入名称。",
+        "addressEmpty": "请输入服务器地址。",
+        "addressInvalid": "服务器地址格式不正确。请输入以 http:// 或 https:// 开头的地址。",
+        "localOnly": "本地服务器必须在此设备上运行。请输入 localhost 或 127.0.0.1 地址。",
+        "serverUnreachable": "无法连接到服务器。请检查服务器是否正在运行，以及地址是否正确。",
+        "serverKeyRefused": "服务器拒绝了 API 密钥。请检查密钥。",
+        "modelsFileUnreadable": "无法读取模型设置文件“{{name}}”，因此未作任何更改。请检查文件内容。",
+        "noBrowserLogin": "“{{name}}”不支持通过浏览器登录。",
+        "loginNotWaiting": "登录当前不需要输入。请重新开始登录。"
+      },
+      "credentials": {
+        "storeUnreadable": "无法读取已存储的 API 密钥文件。为保护现有密钥，未作任何更改。",
+        "envNameInvalid": "“{{name}}”不能用作环境变量名称。请只使用字母、数字和下划线(_)，且不要以数字开头。",
+        "keyEmpty": "请输入 API 密钥。",
+        "encryptionUnavailable": "此设备没有可用的安全密钥环，因此未保存 API 密钥。请设置系统密钥环后重试。"
+      },
+      "errorFix": {
+        "noResult": "AI 结束了工作，但未报告结果。"
+      },
+      "ltr": {
+        "statusUnreadable": "此版本的应用无法读取该格式。请将应用更新到最新版本。"
+      }
+    },
     "interaction": {
       "yes": "是",
       "no": "否"
@@ -1273,6 +1489,9 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "无法关闭自动化。请稍后再试。",
+        "daemonOnScheduler": "无法开启自动化。未能注册到 Windows 任务计划程序，可能是此电脑的权限或安全策略阻止了它。",
+        "daemonOnFailed": "无法开启自动化。请稍后再试。",
         "unreadable": "无法读取自动化规则文件：{{reason}}",
         "unknownRule": "找不到规则“{{id}}”。",
         "cliFailed": "无法检查自动化状态：{{reason}}",
@@ -1719,7 +1938,6 @@
       "contextMenu": "右键菜单",
       "shortcuts": "快捷键",
       "remote": "远程访问",
-      "about": "关于",
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
@@ -1737,15 +1955,14 @@
       "keywords": {
         "account": "账户 登录 邮箱 名称 个人资料",
         "plan": "套餐 付款 额度 用量 订阅 billing",
-        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言 文档语言 读取 解析器 OCR",
+        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言 文档语言 读取 解析器 OCR 关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "sidebar": "侧边栏 个人收藏 云盘 位置 标签 文件夹 隐藏 显示 顺序 自定义 AI",
         "contextMenu": "右键 上下文菜单 魔法动作 脚本 自动化 智能体 扩展名 标签 自定义 AI",
         "shortcuts": "快捷键 键盘 热键 按键 录制 自定义 AI shortcut hotkey",
         "remote": "远程访问 手机 移动 浏览器 配对码 二维码 QR Cloudflare 隧道 域名 设备 remote",
-        "about": "关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
-        "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径",
+        "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径 关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "duplicates": "重复文件 版本 整理 dupey",
         "ltr": "排序学习 ltr 排名 模型 训练 重排 xgboost 日志 搜索记录 训练数据 reranker",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
@@ -1775,7 +1992,7 @@
       "removeCustom": "移除 {{name}}",
       "addCustomFolder": "添加文件夹",
       "addCustomModalTitle": "添加文件夹到个人收藏",
-      "addCustomModalDesc": "输入要固定到侧边栏个人收藏的文件夹路径。",
+      "addCustomModalDesc": "请输入要固定到侧边栏个人收藏的文件夹路径。",
       "addCustomPathLabel": "文件夹路径",
       "addCustomPathPlaceholder": "~/Projects 或 /Users/me/Work",
       "addCustomConfirm": "添加",
@@ -1819,6 +2036,8 @@
       "addMagicAction": "添加魔法动作",
       "editMagicAction": "编辑 {{name}}",
       "removeMagicAction": "删除 {{name}}",
+      "removeMagicConfirmTitle": "要删除魔法操作“{{name}}”吗？",
+      "removeMagicConfirmBody": "此魔法操作将从右键菜单中删除。此操作无法撤销。",
       "condSingle": "单个项目",
       "condMultiple": "多项批量",
       "condAnySelection": "单选或多选",
@@ -2065,7 +2284,6 @@
       "quickSearchTaken": "{{shortcut}} 已被其他应用或系统占用，请选择其他组合键。"
     },
     "about": {
-      "description": "查看 Dazzi、核心库、固定版本工具以及共享本地嵌入守护进程的解析版本。",
       "daemonTitle": "嵌入守护进程",
       "daemonName": "本地嵌入服务",
       "daemonRunning": "{{owner}} ({{engine}} {{version}}，端口 {{port}})",
@@ -2081,9 +2299,7 @@
       "restartFailed": "无法重启嵌入守护进程：{{message}}",
       "refresh": "刷新",
       "versionsTitle": "组件版本",
-      "pinnedHint": "固定 {{version}}",
       "bundledAndPinnedHint": "内置 {{bundled}} (固定 {{pinned}})",
-      "notBundled": "未内置 (固定 {{pinned}})",
       "pathMismatch": "PATH 中的版本为 {{pathVersion}} ({{path}}) — 与 {{expected}} 不一致",
       "manifestMismatch": "内置清单 {{bundled}} 与固定版本 {{pinned}} 不一致",
       "manifestDriftTitle": "内置工具与固定版本不一致",
@@ -2091,7 +2307,11 @@
       "bannerTitle": "嵌入守护进程有可用更新",
       "bannerOwnedDetail": "当前运行的嵌入守护进程 ({{version}}，端口 {{port}}) 低于固定版本 {{pinned}}。重启即可生效，不会重建索引。",
       "bannerExternalDetail": "检测到由 Dazzi 外部启动的旧版嵌入守护进程 ({{version}}，端口 {{port}}，固定版本 {{pinned}})。请在方便时手动重启。",
-      "openAbout": "打开关于"
+      "versionsHint": "与 Dazzi 一起运行的 librarian 和工具的版本。",
+      "versionsOff": "有 {{count}} 项与 Dazzi 固定的版本不同。",
+      "versionsShow": "显示",
+      "versionsHide": "收起",
+      "openSettings": "打开索引设置"
     },
     "remote": {
       "description": "可在其他电脑或手机的浏览器中使用这台电脑上的 Dazzi。",
@@ -2273,8 +2493,7 @@
       "testOk": "连接成功",
       "testFail": "连接失败",
       "discoverFound": "{{name}}：发现 {{count}} 个模型 ({{protocol}})",
-      "discoverFailed": "{{name}}：{{error}}",
-      "discoverFailWord": "发现失败",
+      "discoverFailed": "在“{{name}}”上未找到模型。请检查服务器是否正在运行，以及地址是否正确。",
       "menu": {
         "dazziPlan": "Dazzi 套餐",
         "apiKeys": "API 密钥",
@@ -2413,7 +2632,7 @@
         "save": "保存",
         "advanced": "此条目包含应用无法编辑的设置，会原样保留。",
         "badLine": "无法读取这一行：\"{{line}}\"。",
-        "removeTitle": "删除 \"{{name}}\"？",
+        "removeTitle": "要删除“{{name}}”吗？",
         "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。",
         "argsHint": "每行输入一个。",
         "envFormatHint": "每行输入一个，格式为 名称=值。\n值中可以用 ${NAME} 引用其他环境变量。",
@@ -2544,6 +2763,11 @@
       "no": "不允许",
       "save": "保存",
       "secretPlaceholder": "在此粘贴"
+    },
+    "assistantGreeting": {
+      "title": "需要什么帮助？",
+      "desc": "可以用自然语言更改此页面的设置，或询问任何相关问题。",
+      "placeholder": "有什么都可以问"
     }
   },
   "settingsLtr": {
@@ -2900,7 +3124,7 @@
       "connectApps": "连接应用",
       "connect": "连接",
       "promptTitle": "连接 {{name}}",
-      "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
+      "promptDesc": "请输入连接 id。留空则使用模板名称。",
       "promptLabel": "连接 id",
       "promptConfirm": "添加连接",
       "macOnlyCalendar": "仅在 macOS 上可用（EventKit）。",
@@ -2936,7 +3160,7 @@
       "removeSection": "断开连接",
       "removeHint": "仅从 Dazzi 搜索中移除，源应用的数据不会被删除。",
       "confirmTitle": "要断开此连接吗？",
-      "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
+      "confirmBody": "将把“{{alias}}”连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
       "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。",
       "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。",
       "whatsappOnlyNote": "WhatsApp 通过只能找到 Mac 应用数据库的 wacrawl 读取，因此此连接在这台电脑上无效。如果你有复制出来的数据文件夹，请将其设为源路径。",
@@ -3020,7 +3244,7 @@
     },
     "reading": {
       "title": "文档语言",
-      "langHint": "可以选择多个。"
+      "langHint": "读取扫描文档和图片中的文字时使用的语言。"
     },
     "duplicates": {
       "title": "重复文件整理",
@@ -3095,9 +3319,9 @@
   "magicAction": {
     "running": "正在运行魔法动作…",
     "completed": "运行完成",
-    "failedTitle": "魔法动作运行失败",
+    "failedTitle": "未能运行魔法动作",
     "stoppedTitle": "已停止运行",
-    "minimize": "在后台继续运行",
+    "minimize": "在后台运行",
     "stop": "停止",
     "close": "关闭",
     "copyOutput": "复制结果",
@@ -3437,16 +3661,14 @@
       "skip": "跳过",
       "finish": "完成",
       "clickHint": "直接点击试试",
-      "sendHint": "直接发送试试",
-      "typingHint": "正在输入…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "像这样提问就可以",
-        "body": "先用刚读取的文件试一下。点击发送按钮,或改成你想问的内容再发送。"
+        "title": "向你的文件提问",
+        "body": "已根据你的文档准备好要问的内容。\n点击发送试试。"
       },
       "cite": {
-        "title": "答案来了 — 点击依据编号试试",
-        "body": "答案只以你的文件为依据。点击蓝色编号即可打开对应的原文件。",
+        "title": "答案会标出依据",
+        "body": "点击编号,即可在右侧信息面板中看到这句话来自哪个文件。",
         "waitingTitle": "正在寻找答案",
         "waitingBody": "正在阅读文件里的内容。",
         "noCiteTitle": "答案来了",
@@ -3455,16 +3677,16 @@
         "failedBody": "可以换个说法再问一次。"
       },
       "evidence": {
-        "title": "依据都汇集在这里",
-        "body": "原文中对应的段落原样呈现。点击标题即可前往文件所在位置。"
+        "title": "直接打开原文件",
+        "body": "点击依据标题,该文件所在的文件夹会在新标签页中打开。"
       },
       "duplicates": {
-        "title": "点击归在一起的文档试试",
-        "body": "副本和旧版本合并为一行了。点击即可展开全部版本。"
+        "title": "相似的文件会归在一起",
+        "body": "相似的文件已合并为一行。\n点击展开,即可看到哪个是最新版。"
       },
       "versions": {
         "title": "在这里确认最新版",
-        "body": "相同和几乎相同的文档并排显示。点击即可跳转到该文件。"
+        "body": "在信息面板中可以查看最新版和相似版本。\n其他副本不会删除,会原样保留。"
       }
     },
     "signin": {
@@ -3583,7 +3805,7 @@
     "dragHint": "把照片拖过去"
   },
   "fullDiskAccess": {
-    "title": "请允许完全磁盘访问权限",
+    "title": "需要完全磁盘访问权限",
     "titleGranted": "已允许完全磁盘访问权限",
     "leadTagColors": "访达标签颜色保存在受 macOS 保护的位置。请在系统设置中打开 Dazzi,出现提示时选择“退出并重新打开”。",
     "leadSource": "此数据源需要读取其他应用的数据。请在系统设置中开启 Dazzi 的完全磁盘访问权限,出现提示时选择“退出并重新打开”。",

@@ -160,8 +160,7 @@ async function english() {
 		check("several folders collapse to the first and a count", rowB.includes("Notes and 1 more") && rowB.includes("Refresh search index"), rowB);
 		const tones = await page.$$eval('[role="row"][data-rule-id] [data-run-tone]', (dots) => dots.map((dot) => dot.getAttribute("data-run-tone")));
 		check("status dots: ok, ok, fail", JSON.stringify(tones) === '["ok","ok","fail"]', JSON.stringify(tones));
-		const service = await text(page, "[data-daemon]");
-		check("the service line says rules are not running and counts them", service.includes("Off · rules are not running") && service.includes("Rules: 3") && service.includes("Turn on"), service);
+		check("no banner or line about the background service (the window turns it on by itself)", (await page.locator("[data-daemon]").count()) === 0);
 		await page.screenshot({ path: join(EVIDENCE, "01-list-en.png") });
 
 		// 3. Selection, inspector, keys, Quick Look.
@@ -308,7 +307,7 @@ async function english() {
 		writeRules([ruleA, ruleB, ruleC, ruleD]);
 		await page.waitForSelector(ROW(ruleD.id), { timeout: 20_000 });
 		check("a rule added outside the app appears without a click", (await text(page, ROW(ruleD.id))).includes("New Word → Refresh search index"), await text(page, ROW(ruleD.id)));
-		check("the count follows", (await text(page, "[data-daemon]")).includes("Rules: 4"));
+		check("the list follows", (await rowIds(page)).length === 4, JSON.stringify(await rowIds(page)));
 
 		// 8b. A rule that runs an AI agent (librarian af6e5de): the real CLI parses it, the app names it as the AI's work.
 		const ruleE = { id: "agent-triage", paths: [NOTES], events: ["create"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "Move each new PDF into a folder named for its year" } };

@@ -22,7 +22,7 @@ import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contr
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
-import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
+import { AUTOMATION_CHANNELS, type AutomationDraft, type AutomationEventType, type AutomationRemoval } from "../shared/automation-contract";
 import { DEMO_CHANNELS, type DemoBridge } from "../shared/demo-contract";
 import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
@@ -501,11 +501,45 @@ function requireAutomationRemoval(value: unknown): AutomationRemoval {
 	return { entry: removal.entry as Readonly<Record<string, unknown>>, index: removal.index };
 }
 
+const AUTOMATION_EVENTS: readonly AutomationEventType[] = ["create", "update", "delete"];
+
+function requireStrings(value: unknown, label: string): string[] {
+	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new TypeError(`${label} must be an array of strings`);
+	return value as string[];
+}
+
+/** Validate a new rule from the 새 자동화 card: folders, events, globs, and exactly one of an agent or a command. */
+function requireAutomationDraft(value: unknown): AutomationDraft {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError("automation draft must be an object");
+	const draft = value as Record<string, unknown>;
+	const paths = requireStrings(draft.paths, "automation paths");
+	if (paths.length === 0 || paths.some((path) => path.trim().length === 0)) throw new TypeError("automation paths must name at least one folder");
+	const events = requireStrings(draft.events, "automation events");
+	if (events.length === 0 || events.some((event) => !AUTOMATION_EVENTS.includes(event as AutomationEventType))) throw new TypeError("automation events must be create, update or delete");
+	const include = requireStrings(draft.include, "automation include");
+	if (draft.agent !== undefined) {
+		const agent = draft.agent as Record<string, unknown> | null;
+		if (agent === null || typeof agent !== "object") throw new TypeError("automation agent must be an object");
+		return {
+			paths,
+			events: events as AutomationEventType[],
+			include,
+			agent: { profile: requireNonEmptyString(agent.profile, "automation agent profile"), task: requireNonEmptyString(agent.task, "automation agent task") },
+		};
+	}
+	const run = requireStrings(draft.run, "automation run");
+	if (run.length === 0) throw new TypeError("automation needs an agent or a command");
+	return { paths, events: events as AutomationEventType[], include, run };
+}
+
 /** File automations: read the rules, delete one, undo that, and start or stop the daemon; changes are pushed by the main process. */
 export function registerAutomationIpcHandlers(service: AutomationService): void {
 	ipcMain.handle(AUTOMATION_CHANNELS.get, () => service.snapshot());
 	ipcMain.handle(AUTOMATION_CHANNELS.remove, (_event, id: unknown) => service.remove(requireNonEmptyString(id, "automation id")));
 	ipcMain.handle(AUTOMATION_CHANNELS.restore, (_event, removal: unknown) => service.restore(requireAutomationRemoval(removal)));
+	ipcMain.handle(AUTOMATION_CHANNELS.create, (_event, draft: unknown) => service.create(requireAutomationDraft(draft)));
+	ipcMain.handle(AUTOMATION_CHANNELS.update, (_event, id: unknown, draft: unknown) => service.update(requireNonEmptyString(id, "automation id"), requireAutomationDraft(draft)));
+	ipcMain.handle(AUTOMATION_CHANNELS.history, (_event, id: unknown) => service.history(requireNonEmptyString(id, "automation id")));
 	ipcMain.handle(AUTOMATION_CHANNELS.setDaemon, (_event, enabled: unknown) => {
 		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
 		return service.setDaemon(enabled);

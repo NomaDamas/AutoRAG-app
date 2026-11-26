@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import {
 	type ApprovalRequest,
+	type AutomationRequest,
 	type InteractionAnswer,
 	type InteractionClosed,
 	type InteractionRequest,
@@ -19,7 +20,7 @@ import {
  * knows nothing of Electron: the window is reached through the two `emit` callbacks.
  */
 
-export type RequestBody = Omit<QuestionRequest, "id" | "searchId"> | Omit<ApprovalRequest, "id" | "searchId">;
+export type RequestBody = Omit<QuestionRequest, "id" | "searchId"> | Omit<ApprovalRequest, "id" | "searchId"> | Omit<AutomationRequest, "id" | "searchId">;
 
 export interface InteractionHubDeps {
 	readonly emitRequest: (request: InteractionRequest) => void;
@@ -62,6 +63,16 @@ const answerSchema = Type.Union([
 		note: Type.Optional(Type.String()),
 	}),
 	Type.Object({ kind: Type.Literal("question"), answers: Type.Array(Type.Union([questionAnswerSchema, Type.Null()])) }),
+	Type.Object({
+		kind: Type.Literal("automation"),
+		rule: Type.Object({
+			paths: Type.Array(Type.String(), { minItems: 1 }),
+			events: Type.Array(Type.Union([Type.Literal("create"), Type.Literal("update"), Type.Literal("delete")]), { minItems: 1 }),
+			include: Type.Array(Type.String()),
+			agent: Type.Optional(Type.Object({ profile: Type.String(), task: Type.String({ minLength: 1 }) })),
+			run: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
+		}),
+	}),
 ]);
 
 function fitsSelection(question: Question, answer: Extract<QuestionAnswer, { kind: "selection" }>): boolean {
@@ -81,6 +92,8 @@ function fitsQuestion(question: Question, answer: QuestionAnswer | null): boolea
 function fits(request: InteractionRequest, answer: InteractionAnswer): boolean {
 	if (answer.kind === "cancel") return true;
 	if (request.kind === "approval") return answer.kind === "approval";
+	// A rule runs an agent or a program, never both and never neither.
+	if (request.kind === "automation") return answer.kind === "automation" && (answer.rule.agent === undefined) !== (answer.rule.run === undefined);
 	if (answer.kind !== "question" || answer.answers.length !== request.questions.length) return false;
 	return request.questions.every((question, index) => fitsQuestion(question, answer.answers[index] ?? null));
 }

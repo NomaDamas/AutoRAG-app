@@ -434,6 +434,18 @@
 	border-color: var(--danger-dot);
 }
 
+.linear-btn.is-danger.is-danger-solid {
+	color: #fff;
+	border-color: transparent;
+	background: var(--danger-dot);
+}
+
+.linear-btn.is-danger.is-danger-solid:hover {
+	opacity: 0.8;
+	background: var(--danger-dot);
+	border-color: transparent;
+}
+
 .linear-textarea {
 	width: 100%;
 	padding: 10px var(--space-12);
@@ -457,7 +469,7 @@
 
 .settings-source {
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -1271,11 +1283,12 @@
 .settings-view .settings-modal {
 	position: relative;
 	width: min(440px, calc(100% - 32px));
+	min-width: var(--modal-min-width);
 	max-height: calc(100vh - 48px);
 	overflow-y: auto;
 	padding: 22px 22px 18px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-12);
+	border-radius: var(--radius-modal-md);
 	background: var(--bg-window);
 	box-shadow: var(--shadow-menu);
 }
@@ -1426,7 +1439,7 @@
 	gap: var(--space-12);
 	width: min(416px, calc(100% - 32px));
 	padding: var(--space-14) var(--space-16);
-	border-radius: 14px;
+	border-radius: var(--radius-modal-md);
 	box-shadow: var(--shadow-notice);
 }
 
@@ -1467,7 +1480,7 @@
 	width: min(468px, calc(100% - 32px));
 	padding: 22px 20px 18px;
 	border: 0;
-	border-radius: 16px;
+	border-radius: var(--radius-modal-md);
 	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -1540,7 +1553,7 @@
 	display: flex;
 	gap: 2px;
 	padding: 3px;
-	border-radius: 10px;
+	border-radius: var(--radius-9);
 	background: var(--bg-input);
 }
 
@@ -1553,7 +1566,7 @@
 	min-width: 0;
 	padding: var(--space-6) var(--space-12);
 	border: 0.5px solid transparent;
-	border-radius: var(--radius-8);
+	border-radius: var(--radius-7);
 	background: transparent;
 	color: var(--text-muted);
 	font: inherit;
@@ -2438,87 +2451,54 @@
 	}
 }
 
-/* Indexing > 진행 상황: the live run, same snapshot as the sidebar block. */
-.settings-view .settings-activity {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-8);
-	padding: var(--space-8) 0;
-}
-
-.settings-view .settings-activity-head {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: var(--space-12);
-}
-
-.settings-view .settings-activity-items {
+/* Indexing > 진행 상황 (Figma 596:18346, 601:4495, 601:4870): what indexing is doing, then the files read so far. */
+.settings-view .index-status {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
-.settings-view .settings-activity-item {
-	display: flex;
-	align-items: center;
-	gap: var(--space-8);
+	padding: var(--space-12) var(--space-14);
+	border-radius: var(--radius-12);
+	background: var(--bg-subtle-alt);
 	min-width: 0;
 }
 
-.settings-view .settings-activity-item .settings-list-meta {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-align: right;
-}
-
-/* The running index in stages: which one, how many files, how long, and whether anything is still finishing (seungwonme/AutoRAG-app#5). */
-.settings-view .settings-activity-detail {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-4);
-}
-
-.settings-view .settings-activity-detail .settings-list-meta {
-	margin: 0;
-	font-variant-numeric: tabular-nums;
-	white-space: normal;
-}
-
-.settings-view .settings-activity-stages {
+.settings-view .index-status-line {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--space-12);
-	margin: 0;
-	padding: 0;
-	list-style: none;
+	align-items: baseline;
+	column-gap: var(--space-12);
+	row-gap: var(--space-2);
+	min-width: 0;
 }
 
-.settings-view .settings-activity-stages > [data-state="running"] {
+.settings-view .index-status-title,
+.settings-view .index-status-count {
+	font-size: 13px;
+	font-weight: var(--weight-medium);
 	color: var(--text-primary);
-	font-weight: 600;
+	font-variant-numeric: tabular-nums;
 }
 
-.settings-view .settings-activity-stages > [data-state="pending"] {
-	opacity: 0.55;
+.settings-view .index-status[data-tone="stop"] .index-status-title {
+	color: var(--danger-text);
 }
 
-.settings-view .settings-activity-warning {
-	color: var(--error-orange-text);
+.settings-view .index-status-note {
+	min-width: 0;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
 }
 
-/* The ways out of a problem the last run left behind (issue #283). */
-.settings-view .settings-problem-actions {
+.settings-view .index-status-note > p {
+	margin: 0;
+}
+
+.settings-view .index-status-actions {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-8);
+	margin-top: var(--space-4);
 }
 
 /* The on-device embedding model's download, shared by onboarding and Settings: app tokens only, so both themes and both surfaces match. */
@@ -2790,7 +2770,7 @@
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -2949,7 +2929,7 @@
 
 .settings-view .sidebar-section-card {
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -3709,7 +3689,7 @@
 	margin-top: var(--space-10);
 	padding: var(--space-16) 20px;
 	border: 1px solid var(--border);
-	border-radius: 16px;
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	min-width: 0;
 }
@@ -4220,8 +4200,15 @@
 	flex-direction: column;
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
+}
+
+/* 제외한 항목: five rows (5 × 56px + 4 dividers + the 2px border) show at once, the rest scrolls inside the list. */
+.settings-view .scope-list.is-scroll {
+	max-height: 286px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .settings-view .scope-row {
@@ -4593,7 +4580,7 @@
 	flex-direction: column;
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 
@@ -4642,7 +4629,7 @@
 	display: flex;
 	flex-direction: column;
 	padding: 8px 28px;
-	border-radius: 16px;
+	border-radius: var(--radius-12);
 	background: var(--bg-subtle-alt);
 }
 
@@ -5651,19 +5638,11 @@
 
 .settings-view .scope-row-bar {
 	flex: none;
-	width: 80px;
+	width: 120px;
 	height: 5px;
 	overflow: hidden;
 	border-radius: 3px;
 	background: var(--bg-input);
-}
-
-.settings-view .scope-row-bar i {
-	display: block;
-	height: 100%;
-	border-radius: inherit;
-	background: var(--accent);
-	transition: width var(--dur-color) var(--ease-out);
 }
 
 .settings-view .scope-row-percent {
@@ -5675,13 +5654,12 @@
 	text-align: right;
 }
 
-.settings-view .scope-row-count {
-	flex: none;
-	width: 92px;
-	color: var(--text-faint);
-	font-size: var(--font-size-meta);
-	font-variant-numeric: tabular-nums;
-	text-align: right;
+.settings-view .scope-row-bar i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--accent);
+	transition: width var(--dur-color) var(--ease-out);
 }
 
 .settings-view .scope-row-remove-space {
@@ -5961,16 +5939,53 @@
 	gap: 2px;
 }
 
+/* 최신화 follows 제외한 항목 (.scope-list / .scope-row): the same frame, 56px rows, a bare 16px glyph 12px from the text,
+   the 12px path type, and the faint 24px icon button that turns ink on hover. */
 .settings-view [data-index-scope="refresh"] .settings-list {
 	overflow: hidden;
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-divider);
 	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 
 .settings-view [data-index-scope="refresh"] .settings-list-row {
-	min-height: 60px;
-	padding: 12px 16px;
+	min-height: 56px;
+	padding: 8px 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-sync-name .settings-app-icon.is-sm {
+	width: 16px;
+	height: 16px;
+	margin-right: 12px;
+	border-radius: 0;
+	background: none;
+	color: var(--text-body);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-sync-name .settings-app-icon.is-sm > svg {
+	width: 16px;
+	height: 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list-title {
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-icon-btn {
+	width: 24px;
+	height: 24px;
+	color: var(--text-faint);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-icon-btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-icon-btn > svg {
+	width: 14px;
+	height: 14px;
 }
 
 .settings-view [data-index-scope="refresh"] .settings-list-row:last-child {

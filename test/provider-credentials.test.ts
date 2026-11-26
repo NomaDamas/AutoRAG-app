@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProviderCredentialService, type SafeStorageLike } from "../src/main/provider-credentials";
+import { t } from "../src/shared/i18n/core";
 
 const directories: string[] = [];
 
@@ -89,7 +90,7 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture(true, "basic_text");
 		const service = createProviderCredentialService(fixture);
 
-		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(/secure keyring/);
+		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(t("main.errors.credentials.encryptionUnavailable"));
 	});
 
 	it("refuses to touch a malformed credential store", async () => {
@@ -97,8 +98,8 @@ describe("createProviderCredentialService", () => {
 		await writeFile(fixture.filePath, "{not json");
 		const service = createProviderCredentialService(fixture);
 
-		await expect(service.list()).rejects.toThrow(/refusing to overwrite/);
-		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(/refusing to overwrite/);
+		await expect(service.list()).rejects.toThrow(t("main.errors.credentials.storeUnreadable"));
+		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(t("main.errors.credentials.storeUnreadable"));
 		expect(await readFile(fixture.filePath, "utf8")).toBe("{not json");
 		expect(fixture.env.OPENROUTER_API_KEY).toBeUndefined();
 	});
@@ -107,7 +108,7 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture(false);
 		const service = createProviderCredentialService(fixture);
 
-		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(/encryption is unavailable/);
+		await expect(service.set("OPENROUTER_API_KEY", "top-secret")).rejects.toThrow(t("main.errors.credentials.encryptionUnavailable"));
 		expect(fixture.env.OPENROUTER_API_KEY).toBeUndefined();
 	});
 
@@ -115,8 +116,8 @@ describe("createProviderCredentialService", () => {
 		const fixture = await createFixture();
 		const service = createProviderCredentialService(fixture);
 
-		await expect(service.set("not a name", "x")).rejects.toThrow(/Invalid environment variable name/);
-		await expect(service.set("OPENROUTER_API_KEY", "")).rejects.toThrow(/must not be empty/);
+		await expect(service.set("not a name", "x")).rejects.toThrow(t("main.errors.credentials.envNameInvalid", { name: "not a name" }));
+		await expect(service.set("OPENROUTER_API_KEY", "")).rejects.toThrow(t("main.errors.credentials.keyEmpty"));
 	});
 
 	it("reports the ambient env source when a stored value is never applied", async () => {
@@ -155,7 +156,7 @@ describe("createProviderCredentialService", () => {
 		await writeFile(fixture.filePath, `${JSON.stringify({ version: 2, entries: {} }, null, 2)}\n`);
 		const service = createProviderCredentialService(fixture);
 
-		await expect(service.list()).rejects.toThrow(/version is not supported/);
+		await expect(service.list()).rejects.toThrow(t("main.errors.credentials.storeUnreadable"));
 		expect(await readFile(fixture.filePath, "utf8")).toContain('"version": 2');
 	});
 });

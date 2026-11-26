@@ -97,6 +97,7 @@ import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
+import { createChatTitler } from "./chat-title";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { createOsClipboard } from "./os-clipboard";
@@ -675,6 +676,13 @@ app.whenReady().then(async () => {
 	});
 	const searchService = createSearchService({
 		afterAnsweredSearch: () => ltr.autoTrainIfDue(),
+		// The tab's head names the chat once it has answered, with the model that answered it.
+		titleChat: createChatTitler({
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			// Through Pi's runtime, which authenticates the plan's OAuth credential; a bare `completeSimple` has no key for it.
+			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
+			language: () => currentLanguage,
+		}),
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
