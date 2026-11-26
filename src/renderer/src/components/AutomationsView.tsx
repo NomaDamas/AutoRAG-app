@@ -1122,7 +1122,8 @@ function AllRunsPage({ entries, onOpen, crumbs }: { readonly entries: readonly R
 	return (
 		<section className="flex flex-col gap-6" data-automation-all-runs>
 			<Breadcrumb crumbs={crumbs} current={t("automations.all.title")} />
-			<h1 className="m-0 text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
+			{/* The same 28px row as an automation's renamable title, so the breadcrumb and title line up page to page. */}
+			<h1 className="m-0 flex h-28 items-center text-[17px] font-medium leading-[22px] text-ink">{t("automations.all.title")}</h1>
 			{all.length === 0 ? (
 				<p className="m-0 mt-18 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 			) : (
@@ -1663,7 +1664,8 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 			<div
 				ref={scrollRef}
 				data-rules-body
-				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+				// The scrollbar's room is kept whether or not the page scrolls, so a long page's column sits where a short one's does.
+				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]"
 				onContextMenu={(event) => {
 					event.preventDefault();
 					onContextMenu(null, { x: event.clientX, y: event.clientY });
