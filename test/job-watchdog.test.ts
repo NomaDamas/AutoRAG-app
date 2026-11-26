@@ -115,7 +115,7 @@ describe("terminateMinSyncChildren", () => {
 	it("signals every minsync child and counts them", async () => {
 		const killed: number[] = [];
 
-		const stopped = await terminateMinSyncChildren(async () => [{ pid: 7, cpuMs: 1 }, { pid: 8, cpuMs: 1 }], (pid) => void killed.push(pid), "darwin");
+		const stopped = await terminateMinSyncChildren(async () => [{ pid: 7 }, { pid: 8 }], (pid) => void killed.push(pid), "darwin");
 
 		expect(killed).toEqual([7, 8]);
 		expect(stopped).toBe(2);
@@ -123,7 +123,7 @@ describe("terminateMinSyncChildren", () => {
 
 	it("skips a child that is already gone", async () => {
 		const stopped = await terminateMinSyncChildren(
-			async () => [{ pid: 7, cpuMs: 1 }, { pid: 8, cpuMs: 1 }],
+			async () => [{ pid: 7 }, { pid: 8 }],
 			(pid) => {
 				if (pid === 7) throw new Error("ESRCH");
 			},
@@ -136,7 +136,7 @@ describe("terminateMinSyncChildren", () => {
 	it("never kills on Windows, where a minsync cannot be told from the user's own", async () => {
 		const killed: number[] = [];
 
-		expect(await terminateMinSyncChildren(async () => [{ pid: 7, cpuMs: 1 }], (pid) => void killed.push(pid), "win32")).toBe(0);
+		expect(await terminateMinSyncChildren(async () => [{ pid: 7 }], (pid) => void killed.push(pid), "win32")).toBe(0);
 		expect(killed).toEqual([]);
 	});
 });

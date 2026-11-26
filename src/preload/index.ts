@@ -7,6 +7,7 @@ import { createAutomationBridge } from "./automation-bridge";
 import { createDemoBridge } from "./demo-bridge";
 import { createLtrBridge } from "./ltr-bridge";
 import { createConversionBridge } from "./conversion-bridge";
+import { createDefaultFileManagerBridge } from "./default-file-manager-bridge";
 import { contextBridge, ipcRenderer, webUtils, type IpcRenderer, type IpcRendererEvent } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
@@ -61,6 +62,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	ltr: createLtrBridge(ipcRenderer),
 	voice: createVoiceBridge(ipcRenderer),
 	conversion: createConversionBridge(ipcRenderer),
+	defaultFileManager: createDefaultFileManagerBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
 	interaction: createInteractionBridge(ipcRenderer),
 	indexProblem: createIndexProblemBridge(ipcRenderer),

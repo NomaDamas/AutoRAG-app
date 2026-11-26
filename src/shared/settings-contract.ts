@@ -55,6 +55,7 @@ export const SETTINGS_CHANNELS = {
 	sourcesSync: "sources:sync",
 	refreshScheduleGet: "refreshSchedule:get",
 	refreshScheduleApply: "refreshSchedule:apply",
+	refreshScheduleChanged: "refreshSchedule:changed",
 } as const;
 
 export type Permission = "ask" | "allow" | "deny";
@@ -90,6 +91,10 @@ export interface AppSettings {
 	readonly dupeyScanIntervalMinutes: number;
 	/** The OS file-menu entries ("Ask AutoRAG", "Show in AutoRAG") are installed: macOS Quick Actions, Windows Explorer verbs. */
 	readonly osMenuIntegration: boolean;
+	/** Dazzi is registered as the OS default file manager (macOS NSFileViewer + public.folder; Windows Folder/Directory/Win+E). */
+	readonly defaultFileManager: boolean;
+	/** Windows only: run the lightweight Explorer window watcher to intercept `SHOpenFolderAndSelectItems` ("Show in folder") calls. */
+	readonly defaultFileManagerInterceptReveal: boolean;
 	/**
 	 * Disk permission mode for the AI Search agent (librarian v2.15):
 	 * `readonly` (default) enforces OS-level read-only filesystem sandboxing on shell commands and blocks
@@ -128,6 +133,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	defaultFileManager: true,
+	defaultFileManagerInterceptReveal: true,
 	approvalMode: DEFAULT_APPROVAL_MODE,
 	remoteAccess: false,
 	remotePort: 47833,
@@ -564,6 +571,10 @@ export interface RefreshScheduleStatus {
 	readonly installed: boolean;
 	/** The config asks for at least one automatic refresh. */
 	readonly wanted: boolean;
+	/** Whether local folders currently have a periodic cadence (`appIndexing.refreshIntervalMs > 0`). */
+	readonly localScheduled?: boolean;
+	/** Datasource ids that currently have a periodic cadence (`pollingIntervalMs > 0` and enabled). */
+	readonly scheduledSourceIds?: readonly string[];
 	readonly intervalMs: number | null;
 	readonly lastTickAt: string | null;
 	readonly local: ScheduledRunRecord | null;
@@ -641,6 +652,8 @@ export interface SettingsBridge {
 	refreshScheduleGet(): Promise<RefreshScheduleStatus>;
 	/** Make the OS job match the config (install, re-time, or remove) and return the fresh status. */
 	refreshScheduleApply(): Promise<RefreshScheduleStatus>;
+	/** Pushed whenever the main process detects a change in background refresh schedule status (periodic health check or reconcile). */
+	onRefreshScheduleChanged?: (listener: (status: RefreshScheduleStatus) => void) => () => void;
 
 	/** The MCP servers in the agent's `mcp.json`, or why the file cannot be read. */
 	mcpGet(): Promise<McpSnapshot>;

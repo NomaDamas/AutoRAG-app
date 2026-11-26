@@ -38,6 +38,12 @@ import type { ToolVersionsService } from "./tool-versions";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
+import {
+	DEFAULT_FILE_MANAGER_CHANNELS,
+	isDefaultFileManagerApplyRequest,
+	type DefaultFileManagerApplyRequest,
+	type DefaultFileManagerStatus,
+} from "../shared/default-file-manager-contract";
 import { VOICE_CHANNELS, isVoiceClip } from "../shared/voice-contract";
 import type { VoiceService } from "./voice-service";
 import type { Analytics } from "./analytics-core";
@@ -471,6 +477,18 @@ export function registerOnboardingIpcHandlers(service: FirstRunService, setRevea
 /** The renderer drains requests that came from the OS file menu. */
 export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
+}
+
+/** Default file manager registration (macOS NSFileViewer/public.folder; Windows HKCU + Explorer watcher). */
+export function registerDefaultFileManagerIpcHandlers(service: {
+	status(): Promise<DefaultFileManagerStatus>;
+	apply(request: DefaultFileManagerApplyRequest): Promise<DefaultFileManagerStatus>;
+}): void {
+	ipcMain.handle(DEFAULT_FILE_MANAGER_CHANNELS.status, () => service.status());
+	ipcMain.handle(DEFAULT_FILE_MANAGER_CHANNELS.apply, (_event, request: unknown) => {
+		if (!isDefaultFileManagerApplyRequest(request)) throw new TypeError("defaultFileManager:apply expects { enabled: boolean, interceptReveal?: boolean }");
+		return service.apply(request);
+	});
 }
 
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */

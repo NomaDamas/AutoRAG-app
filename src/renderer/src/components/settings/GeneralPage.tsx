@@ -46,17 +46,50 @@ export function GeneralPage({
 		try {
 			onAppSettingsChanged(await autorag.settings.set(patch));
 		} catch (cause) {
-			// A rejected change (the right-click menu could not be written) leaves the stored setting as it was.
-			onSettingsError(t("settingsCore.general.osMenuError", { error: cause instanceof Error ? cause.message : String(cause) }));
+			// A rejected change (OS menu or default file manager registration failed) leaves the stored setting as it was.
+			const message = cause instanceof Error ? cause.message : String(cause);
+			const key = patch.defaultFileManager !== undefined || patch.defaultFileManagerInterceptReveal !== undefined
+				? "settingsCore.general.defaultFileManagerError"
+				: "settingsCore.general.osMenuError";
+			onSettingsError(t(key, { error: message }));
 		}
 	}
 	const quickSearch = typeof autorag.quickSearch?.status === "function";
-	const osMenu = hostPlatform() === "darwin" || hostPlatform() === "win32";
+	const platform = hostPlatform();
+	const osMenu = platform === "darwin" || platform === "win32";
+	const defaultFileManagerHint =
+		platform === "win32" ? t("settingsCore.general.defaultFileManagerHintWin") : t("settingsCore.general.defaultFileManagerHintMac");
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.general")} />
-			{/* Figma 416:12228: 화면, 파일, 빠른 검색, 시작 및 업데이트, 개인정보; each a titled group of plain rows, ruled apart. */}
+			{/* Figma 416:12228: 기본 파일 관리자, 화면, 파일, 빠른 검색, 시작 및 업데이트, 개인정보; each a titled group of plain rows, ruled apart. */}
 			<div className="plain-sections">
+				{osMenu ? (
+					<>
+						<PlainSection title={t("settingsCore.general.defaultFileManagerSection")}>
+							<PlainRow name={t("settingsCore.general.defaultFileManager")} hint={defaultFileManagerHint} anchor="default-file-manager">
+								<Switch
+									checked={appSettings.defaultFileManager}
+									onChange={() => void setApp({ defaultFileManager: !appSettings.defaultFileManager })}
+									ariaLabel={t("settingsCore.general.defaultFileManager")}
+								/>
+							</PlainRow>
+							{platform === "win32" && appSettings.defaultFileManager ? (
+								<PlainRow
+									name={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+									hint={t("settingsCore.general.defaultFileManagerInterceptRevealHint")}
+								>
+									<Switch
+										checked={appSettings.defaultFileManagerInterceptReveal}
+										onChange={() => void setApp({ defaultFileManagerInterceptReveal: !appSettings.defaultFileManagerInterceptReveal })}
+										ariaLabel={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+									/>
+								</PlainRow>
+							) : null}
+						</PlainSection>
+						<PlainDivider />
+					</>
+				) : null}
 				<PlainSection title={t("settingsCore.general.screenTitle")} alignTop>
 					<PlainRow name={t("settingsCore.general.appearanceName")} hint={t("settingsCore.general.appearanceHint")}>
 						<SelectField className="linear-select settings-plain-select" aria-label={t("settingsCore.general.appearanceName")} value={appSettings.appearance} options={[{ value: "light", label: t("settingsCore.general.appearanceLight") }, { value: "dark", label: t("settingsCore.general.appearanceDark") }]} onValueChange={(appearance) => {
