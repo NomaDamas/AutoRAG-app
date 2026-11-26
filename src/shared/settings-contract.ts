@@ -55,6 +55,7 @@ export const SETTINGS_CHANNELS = {
 	sourcesSync: "sources:sync",
 	refreshScheduleGet: "refreshSchedule:get",
 	refreshScheduleApply: "refreshSchedule:apply",
+	refreshScheduleChanged: "refreshSchedule:changed",
 } as const;
 
 export type Permission = "ask" | "allow" | "deny";
@@ -570,6 +571,10 @@ export interface RefreshScheduleStatus {
 	readonly installed: boolean;
 	/** The config asks for at least one automatic refresh. */
 	readonly wanted: boolean;
+	/** Whether local folders currently have a periodic cadence (`appIndexing.refreshIntervalMs > 0`). */
+	readonly localScheduled?: boolean;
+	/** Datasource ids that currently have a periodic cadence (`pollingIntervalMs > 0` and enabled). */
+	readonly scheduledSourceIds?: readonly string[];
 	readonly intervalMs: number | null;
 	readonly lastTickAt: string | null;
 	readonly local: ScheduledRunRecord | null;
@@ -647,6 +652,8 @@ export interface SettingsBridge {
 	refreshScheduleGet(): Promise<RefreshScheduleStatus>;
 	/** Make the OS job match the config (install, re-time, or remove) and return the fresh status. */
 	refreshScheduleApply(): Promise<RefreshScheduleStatus>;
+	/** Pushed whenever the main process detects a change in background refresh schedule status (periodic health check or reconcile). */
+	onRefreshScheduleChanged?: (listener: (status: RefreshScheduleStatus) => void) => () => void;
 
 	/** The MCP servers in the agent's `mcp.json`, or why the file cannot be read. */
 	mcpGet(): Promise<McpSnapshot>;

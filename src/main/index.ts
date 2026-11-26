@@ -73,6 +73,7 @@ import { createIndexReadiness } from "./index-readiness";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import type { RefreshLockHolder } from "./refresh-lock";
 import { schedulePaths } from "./refresh-schedule";
+import { createRefreshScheduleMonitor } from "./refresh-schedule-monitor";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
@@ -883,6 +884,15 @@ app.whenReady().then(async () => {
 		jobPath: join(import.meta.dirname, "refresh-job.js"),
 		configPath: autoragConfigPath,
 	});
+	const refreshScheduleMonitor = createRefreshScheduleMonitor({
+		scheduler: refreshScheduler,
+		onStatus: (status) => sendToAllWindows(SETTINGS_CHANNELS.refreshScheduleChanged, status),
+	});
+	const monitoredRefreshScheduler = {
+		status: () => refreshScheduleMonitor.status(),
+		reconcile: () => refreshScheduleMonitor.apply(),
+		remove: () => refreshScheduler.remove(),
+	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		// A first run (no stored choice) follows the OS language; onboarding shows it before the user could set one.
@@ -897,7 +907,7 @@ app.whenReady().then(async () => {
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: autoRagConfig,
 		refreshConfig: (methods) => runLocalIndex("manual-refresh", methods, busyResult(methods), recordLocalRun),
-		refreshScheduler,
+		refreshScheduler: monitoredRefreshScheduler,
 		credentials,
 		providers: providerAuth,
 		embedding: embeddingService,
@@ -1526,13 +1536,10 @@ app.whenReady().then(async () => {
 	}
 	app.once("will-quit", () => defaultFileManager.dispose());
 	app.once("will-quit", () => void providerAuthService?.dispose());
-	// Re-time or remove an OS refresh job the user already enabled. Installing one is only ever the result of the user choosing a cadence.
-	void refreshScheduler
-		.status()
-		.then((status) => (status.installed ? refreshScheduler.reconcile() : status))
-		.then((status) => {
-			if (status.error !== null) console.error("AutoRAG background refresh scheduling failed", status.error);
-		});
+	// Audit the OS refresh job on startup and periodically: self-heal a missing/outdated job when the config wants one,
+	// and broadcast schedule status changes so the Notification Center surfaces stalled/failing/conflicting routines.
+	const stopRefreshScheduleMonitor = refreshScheduleMonitor.start();
+	app.once("will-quit", stopRefreshScheduleMonitor);
 	app.once("will-quit", () => void listener?.close());
 	// The worker's native watcher must finish unsubscribing before its Node
 	// environment is torn down (an unsubscribe completing inside
