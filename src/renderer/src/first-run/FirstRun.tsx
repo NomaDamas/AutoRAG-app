@@ -20,25 +20,21 @@ import dazziMark from "../assets/dazzi-mark.png";
 import { CheckIcon, CloudFolderIcon, DesktopFolderIcon, DocumentsFolderIcon, DownloadsFolderIcon, DriveFolderIcon } from "../components/icons";
 import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
-import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
 import { Reveal, cancelPrewarm, prewarmReveal } from "./reveal";
 import { CoachCard, CoachMarker } from "./coach";
-import { ACTION_REQUIRED_STEPS, AI_HOST, canStartEarly, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
+import { ACTION_REQUIRED_STEPS, AI_HOST, canStartEarly, initialScreen, nextStep, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
 /** What the layer needs from the Finder window it sits on. */
 export interface FirstRunHost {
-	/** Split the window: the current folder on the left, AI Search on the right, inspector and sidebar shown. */
+	/** Show the AI 에이전트 tab alone (no split), with the inspector and sidebar shown. */
 	arrange(): void;
 	/** Ensure the AI Search tab is the active tab in view. */
 	focusAi(): void;
 	/** Put `text` in the AI Search composer (`focus = false` avoids stealing focus mid-typing). */
 	typeDraft(text: string, focus?: boolean): void;
-	/** Open the family's folder without pre-selecting the row, so the user clicks the stacked row themselves. */
-	showFamily(family: VersionFamilyData): void;
-	versionFamilies(): Promise<readonly VersionFamilyData[]>;
-	/** The folder the focused pane shows, or null. */
-	folderPath(): string | null;
+	/** Clear the AI 에이전트 tab's chat, as its 새 대화 button does. */
+	resetAi(): void;
 	/** True while the layer covers the Finder completely (the Finder is inert meanwhile). */
 	setCovered(covered: boolean): void;
 }
@@ -52,8 +48,6 @@ const CINEMA_OUT_MS = 3700;
 const INTRO_FADE_MS = 340;
 /** How often the reading screen re-reads the run's status in case a progress event was missed. */
 const SETUP_POLL_MS = 3000;
-/** How long the duplicates step waits for its family's row to appear before the tour ends without it. */
-const DUPLICATE_ROW_WAIT_MS = 6_000;
 
 type DeskMode = "cover" | "rise" | null;
 
@@ -540,7 +534,7 @@ function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null;
 type AnswerState = "idle" | "running" | "done" | "failed";
 
 /** Where each step's spotlight frames. */
-function anchorFor(step: TourStepId, family: VersionFamilyData | null, citeReady: boolean): string | null {
+function anchorFor(step: TourStepId, citeReady: boolean): string | null {
 	switch (step) {
 		case "ask":
 			return `${AI_HOST} form.composer`;
@@ -548,22 +542,16 @@ function anchorFor(step: TourStepId, family: VersionFamilyData | null, citeReady
 			return citeReady ? `${AI_HOST} .assistant-msg` : `${AI_HOST} .ai-body`;
 		case "evidence":
 			return ".inspector-column";
-		case "duplicates":
-			return family === null ? null : `.workspace-pane [data-path="${CSS.escape(family.head)}"]`;
-		case "versions":
-			return '[data-section="versions"]';
 	}
 }
 
 /** Exact clickable target the animated cursor taps on during click-required steps. */
-function clickTargetFor(step: TourStepId, family: VersionFamilyData | null, ready: boolean): string | null {
+function clickTargetFor(step: TourStepId, ready: boolean): string | null {
 	switch (step) {
 		case "ask":
 			return ready ? `${AI_HOST} form.composer button.send[type="submit"]` : null;
 		case "cite":
 			return ready ? `${AI_HOST} .cite` : null;
-		case "duplicates":
-			return family === null ? null : `.workspace-pane [data-path="${CSS.escape(family.head)}"]`;
 		default:
 			return null;
 	}
@@ -586,7 +574,6 @@ function Tour({
 	const { t } = useTranslation();
 	const skipCinemaRef = useRef(skipCinema);
 	const [cinema, setCinema] = useState<"off" | "on" | "out">("off");
-	const [family, setFamily] = useState<VersionFamilyData | null | undefined>(undefined);
 	const [step, setStep] = useState<TourStepId | null>(null);
 	const [typed, setTyped] = useState(0);
 	const [answer, setAnswer] = useState<AnswerState>("idle");
@@ -596,21 +583,7 @@ function Tour({
 	const question = demo?.question ?? "";
 
 	useEffect(() => {
-		let live = true;
-		hostRef.current
-			.versionFamilies()
-			.then((families) => {
-				if (live) setFamily(pickTourFamily(families, hostRef.current.folderPath()));
-			})
-			.catch(() => {
-				if (live) setFamily(null);
-			});
-		if (skipCinemaRef.current) {
-			// No title card to wait through: the first step opens from the effect below once the data decides it.
-			return () => {
-				live = false;
-			};
-		}
+		if (skipCinemaRef.current) return; // No title card to wait through: the first step opens from the effect below.
 		const on = window.setTimeout(() => setCinema("on"), CINEMA_IN_MS);
 		const out = window.setTimeout(() => setCinema("out"), CINEMA_OUT_MS - 600);
 		const off = window.setTimeout(() => {
@@ -618,26 +591,24 @@ function Tour({
 			setStep(stepsRef.current[0] ?? null);
 		}, CINEMA_OUT_MS);
 		return () => {
-			live = false;
 			window.clearTimeout(on);
 			window.clearTimeout(out);
 			window.clearTimeout(off);
 		};
 	}, []);
 
-	const steps = tourSteps({ demo: question.length > 0, family: family !== null && family !== undefined });
+	const steps = tourSteps({ demo: question.length > 0 });
 	const stepsRef = useRef(steps);
 	stepsRef.current = steps;
 	const stepRef = useRef(step);
 	stepRef.current = step;
 
-	// After the reveal there is no cinema timer to wait on, so the first step opens as soon as the data supports one: `ask` from the demo question
-	// at once, otherwise the first version-family step once that lookup has answered. A tour with nothing to show ends rather than sit empty.
+	// After the reveal there is no cinema timer to wait on, so the first step opens at once. A tour with nothing to show ends rather than sit empty.
 	useEffect(() => {
 		if (!skipCinemaRef.current || stepRef.current !== null) return;
 		if (steps.length > 0) setStep(steps[0] ?? null);
-		else if (family !== undefined) onEnd();
-	}, [steps, family, onEnd]);
+		else onEnd();
+	}, [steps, onEnd]);
 
 	const advance = useCallback(() => {
 		const current = stepRef.current;
@@ -686,32 +657,22 @@ function Tour({
 		return () => window.clearTimeout(timer);
 	}, [step, question]);
 
+	// A first answer that fails is never shown: the chat is cleared and the tour ends, so the person meets the app, not an error.
 	useEffect(() => {
-		if (step === "duplicates" && family !== null && family !== undefined) hostRef.current.showFamily(family);
-	}, [step, family]);
-
-	// The duplicate steps are the tour's last: when the family's row is not on screen a few seconds after the folder opened (the scan
-	// found copies the Finder cannot list, or the list did not scroll to it), there is nothing to point at, so the tour ends instead of waiting.
-	useEffect(() => {
-		if (step !== "duplicates" || family === null || family === undefined) return;
-		const target = clickTargetFor("duplicates", family, true);
-		if (target === null) return;
-		const timer = window.setTimeout(() => {
-			if (stepRef.current === "duplicates" && document.querySelector(target) === null) onEnd();
-		}, DUPLICATE_ROW_WAIT_MS);
-		return () => window.clearTimeout(timer);
-	}, [step, family, onEnd]);
+		if (answer !== "failed") return;
+		hostRef.current.resetAi();
+		onEnd();
+	}, [answer, onEnd]);
 
 	const askReady = step === "ask" && typed >= question.length;
 	const citeReady = step === "cite" && answer === "done" && cited;
-	const citeFallbackNext = step === "cite" && ((answer === "done" && !cited) || answer === "failed");
+	const citeFallbackNext = step === "cite" && answer === "done" && !cited;
 
-	// Click-required steps (`cite` with a chip, `duplicates`) advance only when the user clicks the real control.
+	// `cite` with a chip advances only when the user clicks the real control.
 	useEffect(() => {
-		if (step !== "cite" && step !== "duplicates") return;
-		if (step === "cite" && !citeReady) return;
+		if (step !== "cite" || !citeReady) return;
 		const expectedStep = step;
-		const targetSelector = clickTargetFor(step, family ?? null, true);
+		const targetSelector = clickTargetFor(step, true);
 		if (targetSelector === null) return;
 		const onClick = (event: MouseEvent): void => {
 			if (!event.isTrusted || !(event.target instanceof Element) || event.target.closest(targetSelector) === null) return;
@@ -721,12 +682,12 @@ function Tour({
 		};
 		document.addEventListener("click", onClick);
 		return () => document.removeEventListener("click", onClick);
-	}, [step, family, citeReady, advance]);
+	}, [step, citeReady, advance]);
 
 	const showNext = step !== null && (ACTION_REQUIRED_STEPS[step] !== true || citeFallbackNext);
 	const nextBlocked = !showNext;
 
-	// Enter moves on at readout steps (`evidence`, `versions`, or an uncited answer fallback), never bypassing action steps.
+	// Enter moves on at readout steps (`evidence`, or an uncited answer fallback), never bypassing action steps.
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.key !== "Enter" || event.isComposing || isTextTarget(event.target) || nextBlocked || stepRef.current === null) return;
@@ -741,16 +702,13 @@ function Tour({
 	const subtitle = platform === "win32" ? t("firstRun.cinema.subtitleWindows") : t("firstRun.cinema.subtitleMac");
 	const index = step === null ? 0 : steps.indexOf(step);
 	const waiting = step === "cite" && (answer === "idle" || answer === "running");
-	const failed = step === "cite" && answer === "failed";
 	const noCite = step === "cite" && answer === "done" && !cited;
 	const title =
 		step === null
 			? ""
 			: waiting
 				? t("firstRun.tour.cite.waitingTitle")
-				: failed
-					? t("firstRun.tour.cite.failedTitle")
-					: noCite
+				: noCite
 						? t("firstRun.tour.cite.noCiteTitle")
 						: t(`firstRun.tour.${step}.title`);
 	const body =
@@ -758,13 +716,11 @@ function Tour({
 			? ""
 			: waiting
 				? t("firstRun.tour.cite.waitingBody")
-				: failed
-					? t("firstRun.tour.cite.failedBody")
-					: noCite
+				: noCite
 						? t("firstRun.tour.cite.noCiteBody")
 						: t(`firstRun.tour.${step}.body`);
 	const last = step !== null && nextStep(steps, step, { cited }) === null;
-	const clickReady = step === "ask" ? askReady : step === "cite" ? citeReady : step === "duplicates";
+	const clickReady = step === "ask" ? askReady : step === "cite" ? citeReady : false;
 
 	return (
 		<>
@@ -781,8 +737,8 @@ function Tour({
 			{step === null ? null : (
 				<Coach
 					step={step}
-					selector={anchorFor(step, family ?? null, citeReady)}
-					clickSelector={clickTargetFor(step, family ?? null, clickReady)}
+					selector={anchorFor(step, citeReady)}
+					clickSelector={clickTargetFor(step, clickReady)}
 					last={last}
 					index={index}
 					count={steps.length}

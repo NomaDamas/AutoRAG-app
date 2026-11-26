@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SetupStatus } from "../src/shared/onboarding-contract";
-import { canStartEarly, initialScreen, splitTwoFolders } from "../src/renderer/src/first-run/tour";
+import { canStartEarly, initialScreen, nextStep, showAiSearchAlone, splitTwoFolders, tourSteps } from "../src/renderer/src/first-run/tour";
+import { AI_SEARCH_PATH } from "../src/renderer/src/state/tabs";
 import { grayCopy } from "../src/renderer/src/first-run/tutorial-steps";
 import { allTabs, createWorkspace, paneOf, type Workspace } from "../src/renderer/src/state/workspace";
 
@@ -52,6 +53,31 @@ describe("canStartEarly", () => {
 
 	it("does not offer it before reading starts, or once the reading is over", () => {
 		for (const stage of ["idle", "scanning", "planning", "duplicates", "preparing", "ready", "failed"] as const) expect(canStartEarly({ ...base, stage })).toBe(false);
+	});
+});
+
+describe("tourSteps", () => {
+	it("shows one thing: ask, the answer, and its evidence", () => {
+		expect(tourSteps({ demo: true })).toEqual(["ask", "cite", "evidence"]);
+		expect(tourSteps({ demo: false })).toEqual([]);
+	});
+
+	it("ends after the answer when it carries no citation", () => {
+		expect(nextStep(tourSteps({ demo: true }), "cite", { cited: false })).toBeNull();
+		expect(nextStep(tourSteps({ demo: true }), "cite", { cited: true })).toBe("evidence");
+	});
+});
+
+describe("showAiSearchAlone", () => {
+	it("turns the folder tab into the AI 에이전트 tab without splitting the window", () => {
+		const ws = showAiSearchAlone(createWorkspace("/home"));
+		expect(ws.panes).toHaveLength(1);
+		expect(paths(ws)).toEqual([[AI_SEARCH_PATH]]);
+	});
+
+	it("leaves a window that already shows it as it is", () => {
+		const once = showAiSearchAlone(createWorkspace("/home"));
+		expect(showAiSearchAlone(once)).toEqual(once);
 	});
 });
 

@@ -3652,21 +3652,11 @@
         "waitingTitle": "正在寻找答案",
         "waitingBody": "正在阅读文件里的内容。",
         "noCiteTitle": "答案来了",
-        "noCiteBody": "答案只以你的文件为依据。",
-        "failedTitle": "这次没有找到答案",
-        "failedBody": "可以换个说法再问一次。"
+        "noCiteBody": "答案只以你的文件为依据。"
       },
       "evidence": {
         "title": "直接打开原文件",
         "body": "点击依据标题,该文件所在的文件夹会在新标签页中打开。"
-      },
-      "duplicates": {
-        "title": "相似的文件会归在一起",
-        "body": "相似的文件已合并为一行。\n点击展开,即可看到哪个是最新版。"
-      },
-      "versions": {
-        "title": "在这里确认最新版",
-        "body": "在信息面板中可以查看最新版和相似版本。\n其他副本不会删除,会原样保留。"
       }
     },
     "signin": {

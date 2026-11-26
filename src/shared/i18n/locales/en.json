@@ -3652,21 +3652,11 @@
         "waitingTitle": "Finding the answer",
         "waitingBody": "Reading what's inside your files.",
         "noCiteTitle": "Here's your answer",
-        "noCiteBody": "Every answer is grounded in your files only.",
-        "failedTitle": "No answer this time",
-        "failedBody": "You can rephrase the question and ask again."
+        "noCiteBody": "Every answer is grounded in your files only."
       },
       "evidence": {
         "title": "Jump to the original file",
         "body": "Click the source title. The folder holding that file opens in a new tab."
-      },
-      "duplicates": {
-        "title": "Similar files stay together",
-        "body": "Similar files are stacked into one row.\nClick it to open them and see which is the latest."
-      },
-      "versions": {
-        "title": "Check the latest version here",
-        "body": "The info pane shows the latest version and its near-copies.\nThe other copies are kept as they are."
       }
     },
     "signin": {
