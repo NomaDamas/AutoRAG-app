@@ -8,9 +8,9 @@ import {
 	type SearchDocumentsStreamEvent,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { type AssistantMessage, type ImageContent, isContextOverflow } from "@earendil-works/pi-ai";
-import { isJsonObject } from "../shared/settings-contract";
+import { isJsonObject, type SettingsBridge } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
 import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-images";
 import type { PastedImageStore } from "./pasted-images";
@@ -21,6 +21,10 @@ import {
 	createTestAutomationInSandboxTool,
 	testAutomationInSandbox,
 } from "./automation-sandbox";
+import type { ReplyLanguage } from "./agents/profile-progress";
+import { verifyMagicActionInSandbox } from "./magic-action-sandbox";
+import { createMagicActionTools } from "./magic-action-tools";
+import { buildUnifiedWorkflowsPrompt, isMagicActionManagementQuery } from "./workflow-sandbox";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
@@ -947,7 +951,27 @@ async function resolveDecomposition(
  * `sessionDir` is where pi keeps each chat's conversation file: an app-owned folder, so the files move with the
  * app's data and "clear history" can delete exactly them.
  */
-export function createDefaultAgentFactory(options: { readonly sessionDir: string }): () => Promise<SearchAgent> {
+export interface DefaultAgentFactoryOptions {
+	readonly sessionDir: string;
+	/** When provided, the main AI Agent can also list, create, verify, customize, and delete right-click Magic Actions directly. */
+	readonly settings?: Pick<SettingsBridge, "get" | "set">;
+	readonly language?: () => ReplyLanguage;
+}
+
+type LibrarianAgentTool = NonNullable<AutoRAGAgentOptions["tools"]>[number];
+
+function toLibrarianAgentTools(tools: readonly ToolDefinition[]): LibrarianAgentTool[] {
+	return tools.map((tool) => ({
+		name: tool.name,
+		label: tool.label,
+		description: tool.description,
+		parameters: tool.parameters,
+		execute: (toolCallId, params, signal, onUpdate) =>
+			tool.execute(toolCallId, params, signal, onUpdate, undefined as never),
+	}));
+}
+
+export function createDefaultAgentFactory(options: DefaultAgentFactoryOptions): () => Promise<SearchAgent> {
 	return async () => {
 		const input = { flags: {}, env: process.env, cwd: process.cwd() };
 		const config = resolveConfigReadOnly(input);
@@ -986,9 +1010,29 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 			...automationSandboxDeps,
 			tracker: automationVerificationTracker,
 		});
+		const language = options.language ?? (() => "ko" as const);
+		const magicActionTools: LibrarianAgentTool[] =
+			options.settings === undefined
+				? []
+				: toLibrarianAgentTools(
+						createMagicActionTools({
+							settings: options.settings,
+							includeListTool: true,
+							platform: process.platform,
+							language,
+							testMagicAction: (verifyInput) =>
+								verifyMagicActionInSandbox(verifyInput, {
+									resolveModel: async () => resolved,
+									agentDir,
+									env: process.env,
+									platform: process.platform,
+									language,
+								}),
+						}).tools,
+					);
 		const agentOptions: AutoRAGAgentOptions = {
 			...baseOptions,
-			tools: [...(baseOptions.tools ?? []), sandboxAutomationTool],
+			tools: [...(baseOptions.tools ?? []), sandboxAutomationTool, ...magicActionTools],
 			...(sllm !== undefined ? { jev: { ...baseOptions.jev, sllm } } : {}),
 			model: resolved.model,
 			piAgentDir: agentDir,
@@ -1000,7 +1044,16 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
 		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
+		const agent = new InteractiveSearchAgent(
+			agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic),
+			createAgentInteraction(),
+			{
+				systemPromptAddendum: buildUnifiedWorkflowsPrompt(process.platform, {
+					includeMagicActions: magicActionTools.length > 0,
+				}),
+				...(magicActionTools.length > 0 ? { routeToDirectAction: isMagicActionManagementQuery } : {}),
+			},
+		);
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		// Also enforces temporary-sandbox verification when saving new or edited automation rules.

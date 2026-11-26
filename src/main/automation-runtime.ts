@@ -2,11 +2,17 @@ import { accessSync, constants, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { t } from "../shared/i18n/core";
 import { pathKey } from "./bundled-tools";
-import type {
-	AutomationSandboxRuleInput,
-	AutomationSandboxTestResult,
-	AutomationVerificationTracker,
+import {
+	TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME,
+	type AutomationSandboxRuleInput,
+	type AutomationSandboxTestResult,
+	type AutomationVerificationTracker,
 } from "./automation-sandbox";
+import {
+	formatVerificationFailureMessage,
+	formatVerificationPassSummary,
+	verifyBeforeSave,
+} from "./workflow-sandbox";
 
 /**
  * The librarian agent's `manage_automations` tool, kept off the app's own binary.
@@ -193,27 +199,11 @@ function appendTextNote(result: unknown, note: string): unknown {
 }
 
 function formatSandboxPassNote(verification: AutomationSandboxTestResult, autoVerified: boolean): string {
-	const created = verification.diff.created.map((f) => f.path);
-	const modified = verification.diff.modified.map((f) => f.path);
-	const deleted = verification.diff.deleted;
-	const lines = [
-		autoVerified
-			? `[Verified in temporary sandbox automatically] exit=${verification.exitCode ?? 0}, duration=${verification.durationMs}ms`
-			: `[Verified in temporary sandbox] exit=${verification.exitCode ?? 0}, duration=${verification.durationMs}ms`,
-		...(verification.stdout.length > 0 ? [`sandbox stdout:\n${verification.stdout}`] : []),
-		...(created.length > 0 ? [`sandbox created: ${created.join(", ")}`] : []),
-		...(modified.length > 0 ? [`sandbox modified: ${modified.join(", ")}`] : []),
-		...(deleted.length > 0 ? [`sandbox deleted: ${deleted.join(", ")}`] : []),
-		...(verification.retriggerWarnings.length > 0
-			? [`retrigger warnings:\n- ${verification.retriggerWarnings.join("\n- ")}`]
-			: []),
-		...(autoVerified
-			? [
-					"Inspect the sandbox stdout and file changes above to confirm the rule achieved the user's exact goal. If not, fix the rule, test with `test_automation_in_sandbox`, and save the corrected version.",
-				]
-			: []),
-	];
-	return lines.join("\n");
+	return formatVerificationPassSummary({
+		result: verification,
+		autoVerified,
+		testToolName: TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME,
+	});
 }
 
 /**
@@ -231,7 +221,7 @@ export function runAutomationToolOnNode(
 	const tools = (agent as { readonly tools?: readonly PatchableTool[] }).tools;
 	const tool = Array.isArray(tools) ? tools.find((candidate) => candidate.name === "manage_automations") : undefined;
 	if (tool === undefined) throw new Error("The librarian agent has no manage_automations tool to run on Node.");
-	if (typeof tool.description === "string" && !tool.description.includes("test_automation_in_sandbox")) {
+	if (typeof tool.description === "string" && !tool.description.includes(TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME)) {
 		tool.description = `${tool.description}${SANDBOX_VERIFY_GUIDANCE}`;
 	}
 	const onNode = runOnNode(tool.execute.bind(tool), findNode);
@@ -240,32 +230,25 @@ export function runAutomationToolOnNode(
 			const rawAutomation = recordOf(params.automation);
 			const candidate = rawAutomation === undefined ? null : extractSandboxCandidate(params.id, rawAutomation);
 			if (candidate !== null) {
-				const prior = verification.tracker.getVerified(candidate.rule);
-				if (prior !== undefined) {
-					const savedRes = await onNode(toolCallId, params, ...rest);
-					return appendTextNote(savedRes, formatSandboxPassNote(prior, false));
-				}
-				const result = await verification.verifyRule(candidate.rule, candidate.originalPaths);
-				if (!result.ok) {
-					const failureLines = [
-						`Automation "${params.id ?? ""}" was NOT saved because automatic verification in a temporary sandbox folder failed.`,
-						`Error: ${result.error ?? `exit ${result.exitCode ?? "unknown"}`}`,
-						...(result.stdout.length > 0 ? [`stdout:\n${result.stdout}`] : []),
-						...(result.stderr.length > 0 ? [`stderr:\n${result.stderr}`] : []),
-						`diff: ${JSON.stringify(result.diff)}`,
-						...(result.retriggerWarnings.length > 0
-							? [`retriggerWarnings:\n- ${result.retriggerWarnings.join("\n- ")}`]
-							: []),
-						"Fix the automation rule (command/script/agent task/globs/events), test it in a temp folder with `test_automation_in_sandbox`, and save once it works as intended.",
-					];
+				const gate = await verifyBeforeSave({
+					candidate: candidate.rule,
+					tracker: verification.tracker,
+					verify: (rule) => verification.verifyRule(rule, candidate.originalPaths),
+				});
+				if (!gate.ok) {
+					const failureText = formatVerificationFailureMessage({
+						kind: "automation",
+						label: params.id ?? "",
+						result: gate.verification,
+						testToolName: TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME,
+					});
 					return {
-						content: [{ type: "text", text: failureLines.join("\n") }],
-						details: { action: "save", id: params.id, saved: false, verified: false, verification: result },
+						content: [{ type: "text", text: failureText }],
+						details: { action: "save", id: params.id, saved: false, verified: false, verification: gate.verification },
 					};
 				}
-				verification.tracker.markVerified(candidate.rule, result);
 				const savedRes = await onNode(toolCallId, params, ...rest);
-				return appendTextNote(savedRes, formatSandboxPassNote(result, true));
+				return appendTextNote(savedRes, formatSandboxPassNote(gate.verification, gate.autoVerified));
 			}
 		}
 
@@ -273,7 +256,7 @@ export function runAutomationToolOnNode(
 		if (params.action === "save") {
 			return appendTextNote(
 				res,
-				"[Verification required] If you have not yet verified this exact rule in a temporary sandbox, call `test_automation_in_sandbox` with realistic sample fixtures now. If it fails or does not produce the intended result, fix and re-save the rule, then re-test until it passes.",
+				`[Verification required] If you have not yet verified this exact rule in a temporary sandbox, call \`${TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME}\` with realistic sample fixtures now. If it fails or does not produce the intended result, fix and re-save the rule, then re-test until it passes.`,
 			);
 		}
 		return res;

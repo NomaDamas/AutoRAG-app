@@ -610,7 +610,15 @@ app.whenReady().then(async () => {
 	});
 	const searchService = createSearchService({
 		afterAnsweredSearch: () => ltr.autoTrainIfDue(),
-		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
+		agentFactory: createDefaultAgentFactory({
+			sessionDir: chatSessionsDirectory,
+			// The settings service is built further down; an agent is only built long after startup.
+			settings: {
+				get: () => settingsService.get(),
+				set: (patch) => settingsService.set(patch),
+			},
+			language: () => currentLanguage,
+		}),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		pastedImages: createPastedImageStore({ directory: join(app.getPath("userData"), "pasted-images") }),

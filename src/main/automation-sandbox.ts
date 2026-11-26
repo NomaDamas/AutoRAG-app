@@ -1,21 +1,26 @@
-import { spawn } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import type { AutoRAGAgentOptions } from "@autorag/librarian";
 import { Type } from "typebox";
 import {
-	diffSnapshots,
 	resolveSandboxPath,
 	sampleFilenameForGlob,
 	seedSandboxFixtures,
-	snapshotDirectory,
 	type SandboxDiff,
 	type SandboxFixtureInput,
 } from "./sandbox-fixtures";
 import { librarianCommand } from "./automation-service";
 import { t } from "../shared/i18n/core";
+import {
+	buildWorkflowVerificationGuidance,
+	createVerificationTracker,
+	runInTempSandbox,
+	runSubprocess,
+	type VerificationTracker,
+	type WorkflowVerificationResult,
+} from "./workflow-sandbox";
 
 export const TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME = "test_automation_in_sandbox";
 
@@ -64,17 +69,12 @@ export interface AutomationSandboxTestInput {
 	readonly timeoutMs?: number;
 }
 
-export interface AutomationSandboxTestResult {
-	readonly ok: boolean;
+export interface AutomationSandboxTestResult extends WorkflowVerificationResult {
 	readonly matchedEvents: readonly { readonly type: AutomationEventType; readonly path: string }[];
 	readonly unmatchedEvents: readonly { readonly type: AutomationEventType; readonly path: string }[];
 	readonly exitCode: number | null;
-	readonly timedOut: boolean;
-	readonly durationMs: number;
 	readonly stdout: string;
 	readonly stderr: string;
-	readonly error?: string;
-	readonly diff: SandboxDiff;
 	readonly retriggerWarnings: readonly string[];
 }
 
@@ -97,11 +97,7 @@ export interface AutomationSandboxDeps {
 	}>;
 }
 
-export interface AutomationVerificationTracker {
-	markVerified(rule: AutomationSandboxRuleInput, result: AutomationSandboxTestResult): void;
-	getVerified(rule: AutomationSandboxRuleInput): AutomationSandboxTestResult | undefined;
-	clear(rule: AutomationSandboxRuleInput): void;
-}
+export type AutomationVerificationTracker = VerificationTracker<AutomationSandboxRuleInput, AutomationSandboxTestResult>;
 
 /** Stable signature for deduplicating temp-folder sandbox verification of the same automation rule logic. */
 export function automationVerificationKey(rule: AutomationSandboxRuleInput): string {
@@ -116,41 +112,7 @@ export function automationVerificationKey(rule: AutomationSandboxRuleInput): str
 }
 
 export function createAutomationVerificationTracker(): AutomationVerificationTracker {
-	const verified = new Map<string, AutomationSandboxTestResult>();
-	return {
-		markVerified: (rule, result) => {
-			verified.set(automationVerificationKey(rule), result);
-		},
-		getVerified: (rule) => verified.get(automationVerificationKey(rule)),
-		clear: (rule) => {
-			verified.delete(automationVerificationKey(rule));
-		},
-	};
-}
-
-function bounded(text: string): string {
-	return text.length <= MAX_CAPTURE_CHARS ? text : text.slice(text.length - MAX_CAPTURE_CHARS);
-}
-
-function killProcessTree(pid: number | undefined, platform: NodeJS.Platform): void {
-	if (pid === undefined || pid <= 0) return;
-	if (platform === "win32") {
-		try {
-			spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-		} catch {
-			// Best effort
-		}
-		return;
-	}
-	try {
-		process.kill(-pid, "SIGTERM");
-	} catch {
-		try {
-			process.kill(pid, "SIGTERM");
-		} catch {
-			// Already exited
-		}
-	}
+	return createVerificationTracker<AutomationSandboxRuleInput, AutomationSandboxTestResult>(automationVerificationKey);
 }
 
 function expandTilde(rawPath: string, env: NodeJS.ProcessEnv): string {
@@ -328,55 +290,22 @@ function defaultRunLibrarianCli(
 				error: t("main.automations.errors.nodeMissing"),
 			};
 		}
-		const spawnArgs = [...cli.args, ...args];
-		const { promise, resolve: settle } = Promise.withResolvers<{
-			readonly exitCode: number | null;
-			readonly stdout: string;
-			readonly stderr: string;
-			readonly timedOut: boolean;
-			readonly error?: string;
-		}>();
-		let stdout = "";
-		let stderr = "";
-		let timedOut = false;
-		let done = false;
-
-		const child = spawn(command, spawnArgs, {
+		const ran = await runSubprocess({
+			bin: command,
+			args: [...cli.args, ...args],
 			env,
-			stdio: ["ignore", "pipe", "pipe"],
-			detached: platform !== "win32",
-			windowsHide: true,
+			timeoutMs,
+			maxCaptureChars: MAX_CAPTURE_CHARS,
+			platform,
+			trim: false,
 		});
-
-		const timer = setTimeout(() => {
-			if (done) return;
-			timedOut = true;
-			killProcessTree(child.pid, platform);
-		}, timeoutMs);
-		timer.unref?.();
-
-		child.stdout?.on("data", (chunk: Buffer) => {
-			stdout = bounded(stdout + chunk.toString("utf8"));
-		});
-		child.stderr?.on("data", (chunk: Buffer) => {
-			stderr = bounded(stderr + chunk.toString("utf8"));
-		});
-
-		const finish = (exitCode: number | null, err?: Error): void => {
-			if (done) return;
-			done = true;
-			clearTimeout(timer);
-			settle({
-				exitCode: timedOut ? null : exitCode,
-				stdout,
-				stderr,
-				timedOut,
-				...(err !== undefined ? { error: err.message } : {}),
-			});
+		return {
+			exitCode: ran.exitCode,
+			stdout: ran.stdout,
+			stderr: ran.stderr,
+			timedOut: ran.timedOut,
+			...(ran.spawnError !== undefined ? { error: ran.spawnError } : {}),
 		};
-		child.on("error", (err) => finish(null, err));
-		child.on("close", (code) => finish(code));
-		return promise;
 	};
 }
 
@@ -422,157 +351,156 @@ export async function testAutomationInSandbox(
 	input: AutomationSandboxTestInput,
 	deps: AutomationSandboxDeps,
 ): Promise<AutomationSandboxTestResult> {
-	const rawRoot = await mkdtemp(join(tmpdir(), "dazzi-automation-verify-"));
-	const root = realpathSync(rawRoot);
-	const watchedDir = join(root, "watched");
-	const sandboxHome = join(root, "autorag-home");
-	const startedAtMs = Date.now();
 	const timeoutMs = input.timeoutMs ?? input.rule.timeoutMs ?? DEFAULT_SANDBOX_TIMEOUT_MS;
 	const events: readonly AutomationEventType[] =
 		input.rule.events && input.rule.events.length > 0 ? [...input.rule.events] : ["create", "update", "delete"];
 	const include = input.rule.include && input.rule.include.length > 0 ? [...input.rule.include] : ["**/*"];
 	const exclude = input.rule.exclude && input.rule.exclude.length > 0 ? [...input.rule.exclude] : [];
 	const originalPaths = input.originalPaths ?? [];
+	const fixtures =
+		input.fixtures !== undefined && input.fixtures.length > 0
+			? input.fixtures
+			: defaultFixturesForRule(input.rule);
 
-	try {
-		const fixtures =
-			input.fixtures !== undefined && input.fixtures.length > 0
-				? input.fixtures
-				: defaultFixturesForRule(input.rule);
-		await seedSandboxFixtures(watchedDir, fixtures);
+	const { result: execOutcome, diff, durationMs } = await runInTempSandbox(
+		{ prefix: "dazzi-automation-verify-", workSubdir: "watched", fixtures },
+		async ({ root, workDir: watchedDir }) => {
+			const sandboxHome = join(root, "autorag-home");
+			const ruleId =
+				(input.rule.id?.trim() || "sandbox-verify").replace(/[^A-Za-z0-9._-]/gu, "-").slice(0, 64) ||
+				"sandbox-verify";
+			const rewrittenRun =
+				input.rule.run === undefined
+					? undefined
+					: input.rule.run.map((token) =>
+							originalPaths.length > 0 ? rewriteWatchedPaths(token, originalPaths, watchedDir, deps.env) : token,
+						);
+			const rewrittenAgent =
+				input.rule.agent === undefined
+					? undefined
+					: {
+							...input.rule.agent,
+							task:
+								originalPaths.length > 0
+									? rewriteWatchedPaths(input.rule.agent.task, originalPaths, watchedDir, deps.env)
+									: input.rule.agent.task,
+						};
 
-		const ruleId =
-			(input.rule.id?.trim() || "sandbox-verify").replace(/[^A-Za-z0-9._-]/gu, "-").slice(0, 64) ||
-			"sandbox-verify";
-		const rewrittenRun =
-			input.rule.run === undefined
-				? undefined
-				: input.rule.run.map((token) =>
-						originalPaths.length > 0 ? rewriteWatchedPaths(token, originalPaths, watchedDir, deps.env) : token,
-					);
-		const rewrittenAgent =
-			input.rule.agent === undefined
-				? undefined
-				: {
-						...input.rule.agent,
-						task:
-							originalPaths.length > 0
-								? rewriteWatchedPaths(input.rule.agent.task, originalPaths, watchedDir, deps.env)
-								: input.rule.agent.task,
-					};
-
-		const ruleEntry: Record<string, unknown> = {
-			id: ruleId,
-			paths: [watchedDir],
-			events,
-			include,
-			...(exclude.length > 0 ? { exclude } : {}),
-			...(rewrittenRun !== undefined ? { run: rewrittenRun } : {}),
-			...(rewrittenAgent !== undefined ? { agent: rewrittenAgent } : {}),
-			...(input.rule.appendFiles !== undefined ? { appendFiles: input.rule.appendFiles } : {}),
-			timeoutMs,
-		};
-
-		await seedSandboxFixtures(sandboxHome, [
-			{
-				path: "automations.json",
-				kind: "file",
-				content: `${JSON.stringify({ automations: [ruleEntry] }, null, 2)}\n`,
-			},
-		]);
-
-		const sandboxConfigPath = await prepareSandboxConfig(root, watchedDir, sandboxHome, deps.env);
-
-		const rawEvents =
-			input.events !== undefined && input.events.length > 0
-				? input.events
-				: defaultEventsForRule(input.rule, fixtures);
-		const resolvedEvents = rawEvents.map((ev) => ({
-			type: ev.type,
-			rel: ev.path,
-			path: resolveSandboxPath(watchedDir, ev.path),
-		}));
-
-		const before = await snapshotDirectory(watchedDir);
-
-		const eventArgs: string[] = [];
-		for (const ev of resolvedEvents) {
-			eventArgs.push("--event", `${ev.type}:${ev.path}`);
-		}
-
-		const sandboxEnv: NodeJS.ProcessEnv = {
-			...deps.env,
-			AUTORAG_HOME: sandboxHome,
-			...(sandboxConfigPath !== undefined ? { AUTORAG_CONFIG: sandboxConfigPath } : {}),
-		};
-
-		const runCli = deps.runCli ?? defaultRunLibrarianCli(deps);
-		const cliResult = await runCli(["automate", "run", ruleId, "--json", ...eventArgs], sandboxEnv, timeoutMs + 5_000);
-		const after = await snapshotDirectory(watchedDir);
-		const diff = diffSnapshots(before, after);
-		const retriggerWarnings = detectRetriggerWarnings(diff, events, include, exclude);
-
-		const parsed = parseAutomateRunOutput(cliResult.stdout);
-		if (parsed === null) {
-			const errDetail =
-				cliResult.error ??
-				(cliResult.timedOut
-					? `Timed out after ${timeoutMs}ms`
-					: cliResult.stderr.trim() || cliResult.stdout.trim() || `CLI exited with code ${cliResult.exitCode ?? "unknown"}`);
-			return {
-				ok: false,
-				matchedEvents: [],
-				unmatchedEvents: resolvedEvents.map((e) => ({ type: e.type, path: e.rel })),
-				exitCode: cliResult.exitCode,
-				timedOut: cliResult.timedOut,
-				durationMs: Math.max(0, Date.now() - startedAtMs),
-				stdout: cliResult.stdout.trim(),
-				stderr: cliResult.stderr.trim(),
-				error: errDetail,
-				diff,
-				retriggerWarnings,
+			const ruleEntry: Record<string, unknown> = {
+				id: ruleId,
+				paths: [watchedDir],
+				events,
+				include,
+				...(exclude.length > 0 ? { exclude } : {}),
+				...(rewrittenRun !== undefined ? { run: rewrittenRun } : {}),
+				...(rewrittenAgent !== undefined ? { agent: rewrittenAgent } : {}),
+				...(input.rule.appendFiles !== undefined ? { appendFiles: input.rule.appendFiles } : {}),
+				timeoutMs,
 			};
-		}
 
-		const exitCode = parsed.exitCode ?? cliResult.exitCode;
-		const timedOut = parsed.timedOut === true || cliResult.timedOut;
-		const matchedCount =
-			typeof parsed.matchedEvents === "number"
-				? parsed.matchedEvents
-				: typeof parsed.eventCount === "number"
-					? parsed.eventCount
-					: resolvedEvents.length;
-		const stdout = (parsed.stdout ?? "").trim();
-		const stderr = (parsed.stderr ?? "").trim();
-		const error =
-			parsed.error ??
-			(timedOut
+			await seedSandboxFixtures(sandboxHome, [
+				{
+					path: "automations.json",
+					kind: "file",
+					content: `${JSON.stringify({ automations: [ruleEntry] }, null, 2)}\n`,
+				},
+			]);
+
+			const sandboxConfigPath = await prepareSandboxConfig(root, watchedDir, sandboxHome, deps.env);
+
+			const rawEvents =
+				input.events !== undefined && input.events.length > 0
+					? input.events
+					: defaultEventsForRule(input.rule, fixtures);
+			const resolvedEvents = rawEvents.map((ev) => ({
+				type: ev.type,
+				rel: ev.path,
+				path: resolveSandboxPath(watchedDir, ev.path),
+			}));
+
+			const eventArgs: string[] = [];
+			for (const ev of resolvedEvents) {
+				eventArgs.push("--event", `${ev.type}:${ev.path}`);
+			}
+
+			const sandboxEnv: NodeJS.ProcessEnv = {
+				...deps.env,
+				AUTORAG_HOME: sandboxHome,
+				...(sandboxConfigPath !== undefined ? { AUTORAG_CONFIG: sandboxConfigPath } : {}),
+			};
+
+			const runCli = deps.runCli ?? defaultRunLibrarianCli(deps);
+			const cliResult = await runCli(["automate", "run", ruleId, "--json", ...eventArgs], sandboxEnv, timeoutMs + 5_000);
+			return { cliResult, resolvedEvents };
+		},
+	);
+
+	const { cliResult, resolvedEvents } = execOutcome;
+	const retriggerWarnings = detectRetriggerWarnings(diff, events, include, exclude);
+	const parsed = parseAutomateRunOutput(cliResult.stdout);
+
+	if (parsed === null) {
+		const errDetail =
+			cliResult.error ??
+			(cliResult.timedOut
 				? `Timed out after ${timeoutMs}ms`
-				: exitCode !== 0
-					? stderr || stdout || `Exited with code ${exitCode ?? "unknown"}`
-					: undefined);
-		const ok = !timedOut && error === undefined && exitCode === 0 && matchedCount > 0;
-
+				: cliResult.stderr.trim() || cliResult.stdout.trim() || `CLI exited with code ${cliResult.exitCode ?? "unknown"}`);
+		const stdout = cliResult.stdout.trim();
 		return {
-			ok,
-			matchedEvents: resolvedEvents.slice(0, matchedCount).map((e) => ({ type: e.type, path: e.rel })),
-			unmatchedEvents: resolvedEvents.slice(matchedCount).map((e) => ({ type: e.type, path: e.rel })),
-			exitCode,
-			timedOut,
-			durationMs: Math.max(0, Date.now() - startedAtMs),
+			ok: false,
+			matchedEvents: [],
+			unmatchedEvents: resolvedEvents.map((e) => ({ type: e.type, path: e.rel })),
+			exitCode: cliResult.exitCode,
+			timedOut: cliResult.timedOut,
+			durationMs,
+			output: stdout,
 			stdout,
-			stderr,
-			...(error !== undefined
-				? { error }
-				: matchedCount === 0
-					? { error: "None of the test events matched the rule's include/exclude/events filters." }
-					: {}),
+			stderr: cliResult.stderr.trim(),
+			error: errDetail,
 			diff,
+			warnings: retriggerWarnings,
 			retriggerWarnings,
 		};
-	} finally {
-		await rm(root, { recursive: true, force: true }).catch(() => undefined);
 	}
+
+	const exitCode = parsed.exitCode ?? cliResult.exitCode;
+	const timedOut = parsed.timedOut === true || cliResult.timedOut;
+	const matchedCount =
+		typeof parsed.matchedEvents === "number"
+			? parsed.matchedEvents
+			: typeof parsed.eventCount === "number"
+				? parsed.eventCount
+				: resolvedEvents.length;
+	const stdout = (parsed.stdout ?? "").trim();
+	const stderr = (parsed.stderr ?? "").trim();
+	const error =
+		parsed.error ??
+		(timedOut
+			? `Timed out after ${timeoutMs}ms`
+			: exitCode !== 0
+				? stderr || stdout || `Exited with code ${exitCode ?? "unknown"}`
+				: undefined);
+	const ok = !timedOut && error === undefined && exitCode === 0 && matchedCount > 0;
+
+	return {
+		ok,
+		matchedEvents: resolvedEvents.slice(0, matchedCount).map((e) => ({ type: e.type, path: e.rel })),
+		unmatchedEvents: resolvedEvents.slice(matchedCount).map((e) => ({ type: e.type, path: e.rel })),
+		exitCode,
+		timedOut,
+		durationMs,
+		output: stdout,
+		stdout,
+		stderr,
+		...(error !== undefined
+			? { error }
+			: matchedCount === 0
+				? { error: "None of the test events matched the rule's include/exclude/events filters." }
+				: {}),
+		diff,
+		warnings: retriggerWarnings,
+		retriggerWarnings,
+	};
 }
 
 const eventTypeSchema = Type.Union([Type.Literal("create"), Type.Literal("update"), Type.Literal("delete")]);
@@ -694,11 +622,13 @@ export function createTestAutomationInSandboxTool(
 			if (result.ok) deps.tracker?.markVerified(rule, result);
 			else deps.tracker?.clear(rule);
 
-			const guidance = !result.ok
-				? "Temp-folder sandbox verification FAILED. Do NOT save this broken rule yet — diagnose `error`/`stderr`/`stdout`/`diff`, fix the rule, and re-run `test_automation_in_sandbox`."
-				: result.retriggerWarnings.length > 0
-					? "Temp-folder sandbox verification exited cleanly, but potential self-retrigger loop warnings were detected. Add exclude globs or adjust the output path/name and re-test before saving."
-					: "Temp-folder sandbox verification passed. Inspect `stdout` and `diff` carefully against the user's goal: if the result does not achieve the goal, fix the rule and re-test; otherwise save it with `manage_automations`.";
+			const guidance = buildWorkflowVerificationGuidance({
+				kind: "automation",
+				ok: result.ok,
+				testToolName: TEST_AUTOMATION_IN_SANDBOX_TOOL_NAME,
+				saveToolName: "manage_automations",
+				warnings: result.retriggerWarnings,
+			});
 
 			const text = JSON.stringify({ ...result, verificationGuidance: guidance }, null, 2);
 			return {

@@ -11,6 +11,7 @@ import { documentEditProfile } from "../src/main/agents/profiles/document-edit";
 import { errorFixProfile, type ErrorFixToolkit } from "../src/main/agents/profiles/error-fix";
 import { createProposalCollector, smartIndexingProfile } from "../src/main/agents/profiles/smart-indexing";
 import { createFolderSurvey } from "../src/main/agents/profiles/folder-stats";
+import { buildUnifiedWorkflowsPrompt } from "../src/main/workflow-sandbox";
 
 type Language = "ko" | "en" | "ja" | "zh";
 
@@ -131,4 +132,13 @@ describe("every profile's system prompt is written in English and defers to the 
 			});
 		}
 	}
+
+	it("unified main-agent workflows addendum is written in English on all platforms", () => {
+		for (const platform of ["darwin", "linux", "win32"] as const) {
+			const prompt = buildUnifiedWorkflowsPrompt(platform, { includeMagicActions: true });
+			expect(prompt).not.toMatch(NOT_ENGLISH);
+			expect(prompt).toContain("test_automation_in_sandbox");
+			expect(prompt).toContain("test_magic_action");
+		}
+	});
 });
