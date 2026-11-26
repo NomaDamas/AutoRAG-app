@@ -402,7 +402,7 @@
     "followUp": {
       "postpone": "다음 질문으로 미루기",
       "cancel": "취소",
-      "now": "지금 반영하기",
+      "now": "지금 보내기",
       "edit": "수정",
       "remove": "삭제",
       "copy": "복사",

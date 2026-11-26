@@ -402,7 +402,7 @@
     "followUp": {
       "postpone": "次の質問に回す",
       "cancel": "キャンセル",
-      "now": "今すぐ反映",
+      "now": "今すぐ送信",
       "edit": "編集",
       "remove": "削除",
       "copy": "コピー",
