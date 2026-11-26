@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { AutomationDraftCard } from "../src/renderer/src/components/AutomationsView";
+import { AutomationDraftCard, AutomationsView } from "../src/renderer/src/components/AutomationsView";
 import type { MagicAction } from "../src/shared/context-menu-contract";
 import type { FsLocation } from "../src/shared/fs-contract";
 import { setAppLanguage } from "../src/shared/i18n";
@@ -52,7 +52,7 @@ describe("the 새 자동화 card's 우클릭하면 trigger", () => {
 			root.render(<AutomationDraftCard initial={null} onCreate={async () => true} onCancel={() => undefined} />);
 		});
 		await click('[data-testid="automation-request-event"]');
-		expect(host.querySelector('[data-testid="automation-request-event-rightClick"]')).toBeNull();
+		expect(document.querySelector('[data-testid="automation-request-event-rightClick"]')).toBeNull();
 	});
 
 	it("drops the folder for how many items, and 추가하기 makes a right-click action, not a rule", async () => {
@@ -62,7 +62,7 @@ describe("the 새 자동화 card's 우클릭하면 trigger", () => {
 			root.render(<AutomationDraftCard initial={null} onCreate={onCreate} onCreateMagicAction={onCreateMagicAction} onCancel={() => undefined} />);
 		});
 		await click('[data-testid="automation-request-event"]');
-		await click('[data-testid="automation-request-event-rightClick"]');
+		await act(async () => document.querySelector<HTMLElement>('[data-testid="automation-request-event-rightClick"]')?.click());
 
 		expect(host.querySelector('[data-testid="automation-request-folder"]')).toBeNull();
 		expect(host.querySelector('[data-testid="automation-request-rc-count"]')?.textContent).toBe(t("rightClickWhen.count.single"));
@@ -71,7 +71,7 @@ describe("the 새 자동화 card's 우클릭하면 trigger", () => {
 		expect(host.querySelector('[data-testid="automation-new-mode"]')).toBeNull();
 
 		await click('[data-testid="automation-request-rc-kind"]');
-		await click('[data-testid="automation-request-rc-kind-folder"]');
+		await act(async () => document.querySelector<HTMLElement>('[data-testid="automation-request-rc-kind-folder"]')?.click());
 		await act(async () => {
 			type(host.querySelector<HTMLTextAreaElement>('[data-testid="automation-request-task"]')!, "폴더 안 파일 개수를 세어 줘");
 		});
@@ -86,6 +86,52 @@ describe("the 새 자동화 card's 우클릭하면 trigger", () => {
 			extensions: [],
 			execution: { kind: "agent", mode: "read", prompt: "폴더 안 파일 개수를 세어 줘" },
 		});
+	});
+});
+
+describe("the 자동화 tab's right-click rows", () => {
+	const action: MagicAction = {
+		id: "pdf-summary",
+		label: "세 줄 요약",
+		enabled: true,
+		selection: "single",
+		targetKind: "file",
+		extensions: ["pdf"],
+		execution: { kind: "agent", mode: "read", prompt: "세 줄로 요약해 줘" },
+	};
+
+	it("lists the actions under 내 자동화 even with no rules; › opens one and the switch toggles it", async () => {
+		const onOpenMagicAction = vi.fn();
+		const onToggleMagicAction = vi.fn();
+		await act(async () => {
+			root.render(
+				<AutomationsView
+					state={{ ready: true, rules: [], daemon: null, configPath: "", configError: null, error: null }}
+					daemonBusy={false}
+					selectedId={null}
+					onSelect={vi.fn()}
+					onEdit={vi.fn()}
+					onAdd={vi.fn()}
+					onCreate={vi.fn(async () => true)}
+					onPreview={vi.fn()}
+					onAskDelete={vi.fn()}
+					onSetDaemon={vi.fn()}
+					onContextMenu={vi.fn()}
+					onOpenFolder={vi.fn()}
+					magicActions={[action]}
+					onOpenMagicAction={onOpenMagicAction}
+					onToggleMagicAction={onToggleMagicAction}
+				/>,
+			);
+		});
+		const row = host.querySelector<HTMLElement>('[data-magic-action-row="pdf-summary"]');
+		expect(row?.textContent).toContain("세 줄 요약");
+		expect(row?.textContent).toContain("PDF 파일 하나를 우클릭하면");
+		expect(host.querySelector("[data-automation-recommendations] [data-automation-hero]")).toBeNull();
+		await act(async () => row?.click());
+		expect(onOpenMagicAction).toHaveBeenCalledWith("pdf-summary");
+		await act(async () => host.querySelector<HTMLElement>('[data-sidebar-switch="magic-action-on:pdf-summary"]')?.click());
+		expect(onToggleMagicAction).toHaveBeenCalledWith("pdf-summary");
 	});
 });
 

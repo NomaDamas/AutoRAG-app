@@ -571,13 +571,13 @@ describe("AutomationsView a rule's 설정 card", () => {
 		render(props({ editing, onUpdate }));
 		await settle();
 		click(host.querySelector('[data-testid="automation-new-folder"]'));
-		click(host.querySelector('[data-testid="automation-new-folder-/Users/jeffrey/Desktop"]'));
+		click(document.querySelector('[data-testid="automation-new-folder-/Users/jeffrey/Desktop"]'));
 		click(host.querySelector('[data-testid="automation-new-kind"]'));
-		click(host.querySelector('[data-testid="automation-new-kind-image"]'));
+		click(document.querySelector('[data-testid="automation-new-kind-image"]'));
 		click(host.querySelector('[data-testid="automation-new-event"]'));
-		click(host.querySelector('[data-testid="automation-new-event-createUpdate"]'));
+		click(document.querySelector('[data-testid="automation-new-event-createUpdate"]'));
 		click(host.querySelector('[data-testid="automation-new-mode"]'));
-		click(host.querySelector('[data-testid="automation-new-mode-write"]'));
+		click(document.querySelector('[data-testid="automation-new-mode-write"]'));
 		expect(sentence()).toBe("데스크탑 에 이미지 파일 이 생기거나 바뀌면");
 		expect(save()?.disabled).toBe(false);
 		await act(async () => {

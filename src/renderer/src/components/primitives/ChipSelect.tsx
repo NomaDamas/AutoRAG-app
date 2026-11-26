@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../lib/cn";
 import { CheckIcon, ChevronDownIcon } from "../icons";
 
@@ -10,6 +11,29 @@ export interface ChipOption<T extends string> {
 	readonly divided?: boolean;
 	/** A second, smaller line under the label. */
 	readonly hint?: string;
+}
+
+/** Room kept between the menu and the window's edge. */
+const EDGE = 12;
+/** Below this much room under the chip the menu opens above it instead, if there is more room there. */
+const MIN_BELOW = 160;
+
+/**
+ * Where the open menu sits: under the chip (or above it when the window has no room below), never past the window's
+ * edge. The menu is drawn in a layer of its own, so a modal or a scrolling column it opens from does not grow or
+ * scroll to make room for it; a long list scrolls inside the menu instead.
+ */
+function menuPlacement(anchor: DOMRect): CSSProperties {
+	const below = window.innerHeight - anchor.bottom - EDGE;
+	const above = anchor.top - EDGE;
+	const up = below < MIN_BELOW && above > below;
+	return {
+		position: "fixed",
+		left: Math.max(EDGE, Math.min(anchor.left, window.innerWidth - EDGE - 180)),
+		...(up ? { bottom: window.innerHeight - anchor.top + 4 } : { top: anchor.bottom + 4 }),
+		maxHeight: Math.max(120, (up ? above : below) - 4),
+		minWidth: anchor.width,
+	};
 }
 
 /**
@@ -40,11 +64,33 @@ export function ChipSelect<T extends string>({
 	readonly onChange: (value: T) => void;
 }): ReactElement {
 	const [open, setOpen] = useState(false);
+	const [place, setPlace] = useState<CSSProperties | null>(null);
 	const ref = useRef<HTMLSpanElement>(null);
+	const buttonRef = useRef<HTMLButtonElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+
+	// The menu follows its chip while anything around it scrolls or the window changes size.
+	useLayoutEffect(() => {
+		if (!open) return;
+		const update = (): void => {
+			const anchor = buttonRef.current?.getBoundingClientRect();
+			if (anchor !== undefined) setPlace(menuPlacement(anchor));
+		};
+		update();
+		window.addEventListener("resize", update);
+		window.addEventListener("scroll", update, true);
+		return () => {
+			window.removeEventListener("resize", update);
+			window.removeEventListener("scroll", update, true);
+		};
+	}, [open]);
+
 	useEffect(() => {
 		if (!open) return;
 		const onDown = (event: MouseEvent): void => {
-			if (ref.current !== null && !ref.current.contains(event.target as Node)) setOpen(false);
+			const target = event.target as Node;
+			if (ref.current?.contains(target) === true || menuRef.current?.contains(target) === true) return;
+			setOpen(false);
 		};
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.key === "Escape") {
@@ -59,10 +105,47 @@ export function ChipSelect<T extends string>({
 			document.removeEventListener("keydown", onKey, true);
 		};
 	}, [open]);
+
 	const current = options.find((option) => option.value === value);
+	const menu =
+		open && place !== null ? (
+			<div
+				ref={menuRef}
+				style={place}
+				className="z-[1000] w-max overflow-y-auto overscroll-contain rounded-8 border border-border bg-window p-4 shadow-menu"
+				data-chip-menu={testId}
+			>
+				<ul role="listbox" aria-label={label} className="m-0 list-none p-0">
+					{options.map((option) => (
+						<li key={option.value} className={cn(option.divided === true && "mt-4 border-t-[0.5px] border-divider pt-4")}>
+							<button
+								type="button"
+								role="option"
+								aria-selected={option.value === value}
+								data-testid={`${testId}-${option.value}`}
+								className="flex w-full items-center gap-6 rounded-6 border-0 bg-transparent px-8 py-5 text-left text-meta text-ink whitespace-nowrap cursor-pointer hover:bg-hover"
+								onClick={() => {
+									onChange(option.value);
+									setOpen(false);
+								}}
+							>
+								{option.icon}
+								<span className="flex flex-1 flex-col whitespace-nowrap">
+									<span>{option.label}</span>
+									{option.hint === undefined ? null : <span className="text-badge leading-[14px] text-ink-muted">{option.hint}</span>}
+								</span>
+								{option.value === value ? <CheckIcon size={12} className="text-accent-text" /> : <span className="w-12" />}
+							</button>
+						</li>
+					))}
+				</ul>
+				{footer === undefined ? null : <div className="mt-4 border-t-[0.5px] border-divider pt-4">{footer(() => setOpen(false))}</div>}
+			</div>
+		) : null;
 	return (
 		<span ref={ref} className="relative inline-flex">
 			<button
+				ref={buttonRef}
 				type="button"
 				data-testid={testId}
 				aria-haspopup="listbox"
@@ -80,35 +163,7 @@ export function ChipSelect<T extends string>({
 				<span>{current?.label ?? label}</span>
 				<ChevronDownIcon size={12} className="text-ink-muted" />
 			</button>
-			{open ? (
-				<div className="absolute left-0 top-[calc(100%+4px)] z-30 w-max min-w-full rounded-8 border border-border bg-window p-4 shadow-menu">
-					<ul role="listbox" aria-label={label} className="m-0 list-none p-0">
-						{options.map((option) => (
-							<li key={option.value} className={cn(option.divided === true && "mt-4 border-t-[0.5px] border-divider pt-4")}>
-								<button
-									type="button"
-									role="option"
-									aria-selected={option.value === value}
-									data-testid={`${testId}-${option.value}`}
-									className="flex w-full items-center gap-6 rounded-6 border-0 bg-transparent px-8 py-5 text-left text-meta text-ink whitespace-nowrap cursor-pointer hover:bg-hover"
-									onClick={() => {
-										onChange(option.value);
-										setOpen(false);
-									}}
-								>
-									{option.icon}
-									<span className="flex flex-1 flex-col whitespace-nowrap">
-										<span>{option.label}</span>
-										{option.hint === undefined ? null : <span className="text-badge leading-[14px] text-ink-muted">{option.hint}</span>}
-									</span>
-									{option.value === value ? <CheckIcon size={12} className="text-accent-text" /> : <span className="w-12" />}
-								</button>
-							</li>
-						))}
-					</ul>
-					{footer === undefined ? null : <div className="mt-4 border-t-[0.5px] border-divider pt-4">{footer(() => setOpen(false))}</div>}
-				</div>
-			) : null}
+			{menu === null ? null : createPortal(menu, document.body)}
 		</span>
 	);
 }

@@ -825,7 +825,12 @@
       "ask": "Create a new automation",
       "reply": "Fill in the form, or describe the automation in chat to add it."
     },
-    "back": "Back"
+    "back": "Back",
+    "magic": {
+      "title": "Right-click menu",
+      "open": "Open in Settings",
+      "on": "Show in the right-click menu"
+    }
   },
   "osMenu": {
     "ask": "Ask Dazzi",

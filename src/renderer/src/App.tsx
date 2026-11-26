@@ -65,6 +65,7 @@ import { ruleNamesNow, ruleTitle, setRuleNames } from "./state/automations";
 import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
+import { requestMagicActionEdit } from "./state/magic-action-edit-request";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
@@ -915,6 +916,11 @@ export function App(): ReactElement {
 		names: automationNames,
 		autoStartService: true,
 		showChat: () => finder?.showAiSearch(),
+		openMagicAction: (id) => {
+			requestMagicActionEdit(id);
+			requestSettingsCategory("contextMenu");
+			finder?.openSettings();
+		},
 		// The column opens (or stays open) and starts a rule: 새 자동화 만들기, the reply, and an empty card, each press anew.
 		talk: () => {
 			setInspectorVisible(true);

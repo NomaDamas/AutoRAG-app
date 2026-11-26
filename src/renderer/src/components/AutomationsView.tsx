@@ -23,7 +23,7 @@ import { normalizeMagicAction, type MagicAction, type MagicActionSelectionRule }
 import { hostPlatform } from "../lib/shortcuts";
 import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickTarget, type RightClickKind } from "../state/right-click-trigger";
 import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
-import { RightClickWhen, RunKindSegment, type RunKind } from "./RightClickWhen";
+import { RightClickWhen, RunKindSegment, rightClickSentence, type RunKind } from "./RightClickWhen";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -44,6 +44,12 @@ export interface AutomationsViewProps {
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
 	/** A 새 자동화 card set to 우클릭하면: add the action to the right-click menu; resolves true once settings have it. */
 	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
+	/** The right-click actions (Settings → 우클릭 메뉴), listed under 내 자동화 beside the rules. */
+	readonly magicActions?: readonly MagicAction[];
+	/** A right-click row's ›: its editor in Settings → 우클릭 메뉴. */
+	readonly onOpenMagicAction?: ((id: string) => void) | undefined;
+	/** A right-click row's switch: show or hide the action in the right-click menu. */
+	readonly onToggleMagicAction?: ((id: string) => void) | undefined;
 	/** The names people gave their rules; the list redraws when one changes. */
 	readonly names?: Readonly<Record<string, string>>;
 	/** ⋯ → 이름 바꾸기: store a rule's name; an empty one goes back to the derived title. */
@@ -496,6 +502,33 @@ function RuleRow({
 			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
 			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
 				<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-rule-on" />
+			</span>
+			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
+		</div>
+	);
+}
+
+/**
+ * A right-click action in 내 자동화: the same row as a rule's, with the magic mark where the status dot is (it has no
+ * run log), when it shows ("PDF 파일 하나를 우클릭하면"), its on/off switch, and ›, which opens it in Settings.
+ */
+function MagicActionRow({ action, onOpen, onToggle }: { readonly action: MagicAction; readonly onOpen?: ((id: string) => void) | undefined; readonly onToggle?: ((id: string) => void) | undefined }): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<div
+			role="row"
+			data-magic-action-row={action.id}
+			title={t("automations.magic.open")}
+			className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row"
+			onClick={() => onOpen?.(action.id)}
+		>
+			<SparklesIcon size={12} className="flex-none text-accent" />
+			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
+				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
+				<span className="truncate text-meta leading-[17px] text-ink-muted">{rightClickSentence(t, action)}</span>
+			</div>
+			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
+				<Switch checked={action.enabled} onChange={() => onToggle?.(action.id)} ariaLabel={t("automations.magic.on")} dataSwitchId={`magic-action-on:${action.id}`} />
 			</span>
 			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
 		</div>
@@ -1074,12 +1107,14 @@ export function AutomationSuggestionCard({
  * The change chip also offers 우클릭하면 when the card is handed `onCreateMagicAction`: the sentence then drops the
  * folder for how many items are picked ("PDF 파일 하나를 우클릭하면"), 할 일 can be a command instead (AI | 스크립트),
  * and 추가하기 puts the action in the right-click menu instead of the automation list. One form for both triggers.
+ * `rightClickOnly` (Settings → 우클릭 메뉴's 매직 액션 만들기) starts it there and reads the trigger as plain text.
  */
 export function AutomationDraftCard({
 	initial,
 	onCreate,
 	onCreateMagicAction,
 	onCancel,
+	rightClickOnly = false,
 }: {
 	/** The rule to show filled in; null for an empty card (새 자동화) where every chip still asks. */
 	readonly initial: AutomationDraft | null;
@@ -1087,6 +1122,8 @@ export function AutomationDraftCard({
 	/** Where a right-click action can be made from here; without it the change chip has no 우클릭하면. */
 	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	readonly onCancel: () => void;
+	/** Only a right-click action can be made here: the card opens on 우클릭하면 and the trigger cannot change. */
+	readonly rightClickOnly?: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
 	const locations = useLocations();
@@ -1095,7 +1132,7 @@ export function AutomationDraftCard({
 	const first = rule.paths[0] ?? null;
 	const [folder, setFolder] = useState<string | null>(first);
 	const [kind, setKind] = useState<KindId | null>(blank ? null : kindOf(rule.include));
-	const [event, setEvent] = useState<EventId | "rightClick" | null>(blank ? null : eventOf(rule.events));
+	const [event, setEvent] = useState<EventId | "rightClick" | null>(rightClickOnly ? "rightClick" : blank ? null : eventOf(rule.events));
 	const [task, setTask] = useState(rule.agent?.task ?? "");
 	const [busy, setBusy] = useState(false);
 	// 우클릭하면: its own file kinds (folders too), how many items, a typed extension list, and AI or a command.
@@ -1147,7 +1184,8 @@ export function AutomationDraftCard({
 					kind={clickKind}
 					custom={customExtensions}
 					selection={selection}
-					event={chips.event}
+					event={rightClickOnly ? undefined : chips.event}
+					className="flex flex-wrap items-center gap-6"
 					testId="automation-request-rc"
 					onKind={(next) => {
 						setClickKind(next);
@@ -1163,7 +1201,8 @@ export function AutomationDraftCard({
 					)}
 				</div>
 			)}
-			<div className="flex items-center justify-between">
+			{/* One height with or without the AI | 스크립트 toggle, so the card keeps its shape whichever trigger is picked. */}
+			<div className="flex h-22 items-center justify-between">
 				<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
 				{rightClick ? <RunKindSegment value={runKind} testId="automation-request-run" onChange={setRunKind} /> : null}
 			</div>
@@ -1218,7 +1257,7 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, magicActions = [], onOpenMagicAction, onToggleMagicAction }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [page, setPage] = useState<"list" | "all">("list");
 	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
@@ -1337,7 +1376,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							}}
 							crumbs={[mainCrumb]}
 						/>
-					) : state.rules.length === 0 ? (
+					) : state.rules.length === 0 && magicActions.length === 0 ? (
 						// With no rules the recommendations are the page: a line on what automations do, what the person's files
 						// suggest (glowing: the AI offers them), and a way to ask in words.
 						<section className="flex flex-col gap-10" data-automation-recommendations>
@@ -1373,10 +1412,16 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 									{state.rules.map((rule) => (
 										<RuleRow key={rule.id} rule={rule} deleting={rule.id === deletingId} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
 									))}
+									{/* The right-click actions are automations too, with another trigger: they sit in the same list. */}
+									{magicActions.map((action) => (
+										<MagicActionRow key={action.id} action={action} onOpen={onOpenMagicAction} onToggle={onToggleMagicAction} />
+									))}
 								</div>
-								<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 pl-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
-									{t("automations.all.open")}
-								</button>
+								{state.rules.length === 0 ? null : (
+									<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 pl-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
+										{t("automations.all.open")}
+									</button>
+								)}
 							</section>
 							{recommendations.length === 0 ? null : (
 								// Under the person's own rules the recommendations are one quiet grouped list: no glow, no stroke.
