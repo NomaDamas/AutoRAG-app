@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
 import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
@@ -489,19 +489,21 @@ export function AppCustomizerPanel({
 				{turns.length === 0 && starters.length === 0 ? (
 					<div className="customizer-panel__empty">
 						{/* The faded monochrome mark (Figma 367:8865); dark mode has its own, with the fade in the image. */}
-						<div className="customizer-panel__empty-orb" aria-hidden="true">
+						{/* On 우클릭 메뉴 the welcome rises in like chat messages: the mark, title, line and first suggestion together, then each next suggestion in turn (settings.css .customizer-rise). */}
+						<div className="customizer-panel__empty-orb customizer-rise" style={{ "--rise-i": 0 } as CSSProperties} aria-hidden="true">
 							<img src={dazziMarkMono} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--light" draggable={false} />
 							<img src={dazziMarkMonoDark} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--dark" draggable={false} />
 						</div>
-						<h3 className="customizer-panel__empty-title">{t(copy.emptyTitle)}</h3>
-						<p className="customizer-panel__empty-desc">{t(copy.emptyDesc)}</p>
+						<h3 className="customizer-panel__empty-title customizer-rise" style={{ "--rise-i": 0 } as CSSProperties}>{t(copy.emptyTitle)}</h3>
+						<p className="customizer-panel__empty-desc customizer-rise" style={{ "--rise-i": 0 } as CSSProperties}>{t(copy.emptyDesc)}</p>
 						{copy.suggestions.length === 0 ? null : (
 						<div className="customizer-panel__suggestions">
-							{copy.suggestions.map((key) => (
+							{copy.suggestions.map((key, index) => (
 								<button
 									key={key}
 									type="button"
-									className="customizer-suggestion-chip"
+									className="customizer-suggestion-chip customizer-rise"
+									style={{ "--rise-i": index } as CSSProperties}
 									data-action="customizer-suggestion"
 									onClick={() => sendMessage(t(key))}
 								>

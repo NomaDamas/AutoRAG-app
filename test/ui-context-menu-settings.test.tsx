@@ -310,6 +310,12 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		expect(panel).not.toBeNull();
 		expect(panel?.getAttribute("data-surface")).toBe("contextMenu");
 		expect(panel?.textContent).toContain("세 줄로 요약");
+		// The welcome rises in like chat messages: the mark, title, line and first suggestion together (step 0), then each next suggestion one step later.
+		const step = (element: Element | null | undefined): string | undefined => (element as HTMLElement | null | undefined)?.style.getPropertyValue("--rise-i");
+		expect(["orb", "title", "desc"].map((part) => step(panel?.querySelector(`.customizer-panel__empty-${part}.customizer-rise`)))).toEqual(["0", "0", "0"]);
+		const chips = [...(panel?.querySelectorAll('[data-action="customizer-suggestion"]') ?? [])];
+		expect(chips.length).toBeGreaterThan(1);
+		expect(chips.map(step)).toEqual(chips.map((_, index) => String(index)));
 
 		const suggestion = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		await act(async () => {
