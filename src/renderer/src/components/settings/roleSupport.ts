@@ -5,7 +5,7 @@
  */
 
 import type { TFunction } from "i18next";
-import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, rerankModelsFor, visualGateBackendFor, visualGateModelsFor } from "../../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { asRecord, getAt, stringOf } from "./configSupport";
 import type { RolePickerSelection } from "./ModelPicker";
@@ -35,20 +35,12 @@ export function providerRoleCleanup(config: AutoRagConfigSnapshot["config"], pro
 	const visualParse = asRecord(getAt(config, ["visualParse"]));
 	const visualExtractor = asRecord(visualParse?.extractor);
 	const visualModel = asRecord(visualExtractor?.model);
-	const visualGate = asRecord(visualParse?.gate);
 	const ops: AutoRagConfigUpdate[] = [];
 	if (stringOf(model?.provider) === providerId) ops.push({ path: ["model"], remove: true });
 	if (stringOf(decomposition?.provider) === providerId) ops.push({ path: ["queryDecomposition"], remove: true });
 	if (stringOf(rerank?.provider) === providerId) ops.push({ path: ["rerank"], value: false });
 	if (stringOf(jev?.backend) === jevBackendFor(providerId)) ops.push({ path: ["jev"], remove: true });
-	if (stringOf(visualModel?.provider) === providerId) {
-		ops.push({ path: ["visualParse"], value: false });
-	} else if (
-		visualGateBackendFor(providerId) !== undefined &&
-		stringOf(visualGate?.backend) === visualGateBackendFor(providerId)
-	) {
-		ops.push({ path: ["visualParse", "gate"], remove: true });
-	}
+	if (stringOf(visualModel?.provider) === providerId) ops.push({ path: ["visualParse"], value: false });
 	return ops;
 }
 
@@ -58,10 +50,6 @@ export function jevOptionsFor(connected: readonly ProviderSummary[]): RoleOption
 
 export function rerankOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
 	return connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) })));
-}
-
-export function visualGateOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
-	return connected.flatMap((provider) => visualGateModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) })));
 }
 
 export function visualParseOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
@@ -87,12 +75,6 @@ export function visualParseLabel(config: AutoRagConfigSnapshot["config"], t: TFu
 	if (kind === "" || kind === "ocr") return t("settingsCore.ai.visualParseOcr");
 	const model = asRecord(extractor?.model);
 	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.visualParseOcr");
-}
-
-export function visualParseGateLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
-	const record = asRecord(getAt(config, ["visualParse"]));
-	const gate = asRecord(record?.gate);
-	return stringOf(gate?.model) || t("settingsCore.ai.visualParseGateAuto");
 }
 
 export function jevLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
@@ -159,15 +141,6 @@ export function roleSelectionFor(
 		const provider = stringOf(model?.provider);
 		const modelId = stringOf(model?.id);
 		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : null;
-	}
-	if (role === "visualParseGate") {
-		const record = asRecord(getAt(config, ["visualParse"]));
-		const gate = asRecord(record?.gate);
-		const backend = stringOf(gate?.backend);
-		const modelId = stringOf(gate?.model);
-		if (backend.length === 0 || modelId.length === 0) return { kind: "special", value: "auto" };
-		const matched = connected.find((provider) => visualGateBackendFor(provider.id) === backend);
-		return matched === undefined ? null : { kind: "model", provider: matched.id, modelId };
 	}
 	return null;
 }

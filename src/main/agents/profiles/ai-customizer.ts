@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { defineTool, type AgentToolResult, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { JEV_SLLM_BACKEND, jevModelsFor, rerankModelsFor, visualGateModelsFor } from "../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevModelsFor, rerankModelsFor } from "../../../shared/ai-roles";
 import { maskSecret } from "../../../shared/secret-guard";
 import {
 	catalogModelEntry,
@@ -35,8 +35,6 @@ import {
 	jevSllmConfigUpdates,
 	modelConfigUpdates,
 	rerankConfigUpdates,
-	visualParseGateAutoConfigUpdates,
-	visualParseGateConfigUpdates,
 	visualParseOcrConfigUpdates,
 	visualParseOffConfigUpdates,
 	visualParseVlmConfigUpdates,
@@ -108,9 +106,6 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 			);
 			const jevChoices = connected.flatMap((provider) => jevModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
 			const rerankChoices = connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
-			const visualGateChoices = connected.flatMap((provider) =>
-				visualGateModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`),
-			);
 			return textResult({
 				ok: true,
 				providers: connected.map((provider) => ({
@@ -124,7 +119,6 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					jev: { current: roleSelectionFromConfig("jev", snapshot.config, connected), choices: jevChoices, specials: [JEV_SLLM_BACKEND] },
 					rerank: { current: roleSelectionFromConfig("rerank", snapshot.config, connected), choices: rerankChoices, specials: ["off"] },
 					visualParse: { current: roleSelectionFromConfig("visualParse", snapshot.config, connected), choices: visualModelChoices, specials: ["off", "ocr"] },
-					visualParseGate: { current: roleSelectionFromConfig("visualParseGate", snapshot.config, connected), choices: visualGateChoices, specials: ["auto"] },
 				},
 				thinking: { current: thinkingLevelOf(snapshot.config), levels: THINKING_LEVELS.map((level) => level.value) },
 				webSearch: { ...webSearchStateOf(snapshot.config), providers: WEBSEARCH_PROVIDERS.map((provider) => provider.id) },
@@ -145,16 +139,15 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					Type.Literal("jev"),
 					Type.Literal("rerank"),
 					Type.Literal("visualParse"),
-					Type.Literal("visualParseGate"),
 				],
 				{
 					description: "Which role to change.",
 				},
 			),
 			provider: Type.Optional(
-				Type.String({ description: "A connected provider id from `get_ai_settings`; the provider must actually serve the role for jev/rerank/visualParseGate." }),
+				Type.String({ description: "A connected provider id from `get_ai_settings`; the provider must actually serve the role for jev/rerank." }),
 			),
-			modelId: Type.Optional(Type.String({ description: "The exact model id from that provider's catalog (or its jev/rerank/visualParseGate list)." })),
+			modelId: Type.Optional(Type.String({ description: "The exact model id from that provider's catalog (or its jev/rerank list)." })),
 			special: Type.Optional(
 				Type.Union(
 					[
@@ -163,11 +156,10 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						Type.Literal("sllm"),
 						Type.Literal("off"),
 						Type.Literal("ocr"),
-						Type.Literal("auto"),
 					],
 					{
 						description:
-							"A non-model choice: decomposition `same`/`default`, jev `sllm`, rerank `off`, visualParse `off`/`ocr`, visualParseGate `auto`.",
+							"A non-model choice: decomposition `same`/`default`, jev `sllm`, rerank `off`, visualParse `off`/`ocr`.",
 					},
 				),
 			),
@@ -229,14 +221,6 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						warnings,
 					);
 				}
-				if (role === "visualParseGate" && special === "auto") {
-					return apply(
-						visualParseGateAutoConfigUpdates(),
-						localized("시각 페이지 판별 모델을 자동으로 설정", "Reset visual page gate to automatic", "視覚ページ判定モデルを自動に設定", "已将视觉页面判定模型重置为自动"),
-						["visualParse.gate"],
-						warnings,
-					);
-				}
 				warnings.push(`'${special}' is not a valid option for the '${role}' role.`);
 				if (params.provider === undefined || params.modelId === undefined) {
 					return textResult({ ok: false, error: `'${special}' is not a valid option for the '${role}' role.`, warnings });
@@ -267,13 +251,8 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 			let entry: ModelCatalogEntry;
 			let updates: readonly AutoRagConfigUpdate[];
 			let summary: Localized;
-			if (role === "jev" || role === "rerank" || role === "visualParseGate") {
-				const models =
-					role === "jev"
-						? jevModelsFor(providerId)
-						: role === "rerank"
-							? rerankModelsFor(providerId)
-							: visualGateModelsFor(providerId);
+			if (role === "jev" || role === "rerank") {
+				const models = role === "jev" ? jevModelsFor(providerId) : rerankModelsFor(providerId);
 				const match = models.find((model) => model.id === modelId);
 				if (match === undefined) {
 					return textResult({
@@ -284,18 +263,11 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					});
 				}
 				entry = staticCatalogEntry(provider, match.id, match.label);
-				updates =
-					role === "jev"
-						? jevConfigUpdates(entry)
-						: role === "rerank"
-							? rerankConfigUpdates(entry)
-							: visualParseGateConfigUpdates(entry, snapshot.config);
+				updates = role === "jev" ? jevConfigUpdates(entry) : rerankConfigUpdates(entry);
 				summary =
 					role === "jev"
 						? localized(`Jev 모델을 ${match.label}로 변경`, `Changed the Jev model to ${match.label}`, `Jev モデルを ${match.label} に変更`, `已将 Jev 模型更改为 ${match.label}`)
-						: role === "rerank"
-							? localized(`리랭커를 ${match.label}로 설정`, `Set the reranker to ${match.label}`, `リランカーを ${match.label} に設定`, `已将重排器设为 ${match.label}`)
-							: localized(`시각 페이지 판별 모델을 ${match.label}로 변경`, `Changed the visual page gate to ${match.label}`, `視覚ページ判定モデルを ${match.label} に変更`, `已将视觉页面判定模型更改为 ${match.label}`);
+						: localized(`리랭커를 ${match.label}로 설정`, `Set the reranker to ${match.label}`, `リランカーを ${match.label} に設定`, `已将重排器设为 ${match.label}`);
 			} else {
 				const match = catalogModelEntry(provider, modelId);
 				if (match === null) {

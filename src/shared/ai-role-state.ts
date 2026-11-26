@@ -6,11 +6,11 @@
  * keeps its own copy.
  */
 
-import { jevBackendFor, JEV_SLLM_BACKEND, visualGateBackendFor } from "./ai-roles";
+import { jevBackendFor, JEV_SLLM_BACKEND } from "./ai-roles";
 import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type JsonValue, type ModelCatalogEntry, type ProviderSummary } from "./settings-contract";
 
 /** The model roles Settings → AI 모델 edits. */
-export type RoleId = "answer" | "decomposition" | "jev" | "rerank" | "visualParse" | "visualParseGate";
+export type RoleId = "answer" | "decomposition" | "jev" | "rerank" | "visualParse";
 
 /**
  * Default API-key env-var name for a provider id (`foo-bar` → `FOO_BAR_API_KEY`).
@@ -107,15 +107,6 @@ export function roleSelectionFromConfig(role: RoleId, config: JsonObject, connec
 		const provider = stringOf(model?.provider);
 		const modelId = stringOf(model?.id);
 		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : null;
-	}
-	if (role === "visualParseGate") {
-		const record = asRecord(getAt(config, ["visualParse"]));
-		const gate = asRecord(record?.gate);
-		const backend = stringOf(gate?.backend);
-		const modelId = stringOf(gate?.model);
-		if (backend.length === 0 || modelId.length === 0) return { kind: "special", value: "auto" };
-		const matched = connected.find((provider) => visualGateBackendFor(provider.id) === backend);
-		return matched === undefined ? null : { kind: "model", provider: matched.id, modelId };
 	}
 	const raw = getAt(config, ["jev"]);
 	if (raw === false) return null;

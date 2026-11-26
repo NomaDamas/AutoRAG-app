@@ -1,4 +1,4 @@
-import { JEV_SLLM_BACKEND, jevBackendFor, visualGateBackendFor } from "./ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
 import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type ModelCatalogEntry } from "./settings-contract";
 
 /**
@@ -117,26 +117,4 @@ export function visualParseOcrConfigUpdates(currentConfig?: JsonObject): AutoRag
 /** Turn visual-rich page parsing off. */
 export function visualParseOffConfigUpdates(): AutoRagConfigUpdate[] {
 	return [{ path: ["visualParse"], value: false }];
-}
-
-/** Pin a vision-capable decision model as the visual-rich page gate, keeping existing extractor settings intact. */
-export function visualParseGateConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
-	const base = existingVisualParseObject(currentConfig);
-	const backend = visualGateBackendFor(entry.provider);
-	const gate: Record<string, string> = { model: entry.id, ...(backend === undefined ? {} : { backend }) };
-	return [
-		{
-			path: ["visualParse"],
-			value: {
-				...base,
-				enabled: true,
-				gate,
-			} as JsonObject,
-		},
-	];
-}
-
-/** Return the visual-rich page gate to automatic selection (inherits Jev when vision-capable). */
-export function visualParseGateAutoConfigUpdates(): AutoRagConfigUpdate[] {
-	return [{ path: ["visualParse", "gate"], remove: true }];
 }

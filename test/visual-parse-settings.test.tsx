@@ -27,10 +27,8 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 const { AiPage } = await import("../src/renderer/src/components/settings/AiPage");
 const { providerRoleCleanup, roleSelectionFor } = await import("../src/renderer/src/components/settings/roleSupport");
-const { visualGateBackendFor, visualGateModelsFor } = await import("../src/shared/ai-roles");
+const { jevBackendFor, jevModelsFor } = await import("../src/shared/ai-roles");
 const {
-	visualParseGateAutoConfigUpdates,
-	visualParseGateConfigUpdates,
 	visualParseOcrConfigUpdates,
 	visualParseOffConfigUpdates,
 	visualParseVlmConfigUpdates,
@@ -96,27 +94,28 @@ afterEach(() => {
 	host.remove();
 });
 
-describe("visual parse settings integration", () => {
-	it("exposes vision-capable decision models for Bivia, OpenRouter, Dazzi, OpenAI, TypeSafe, and Cloudflare", () => {
-		expect(visualGateBackendFor("bivia")).toBe("bivia");
-		expect(visualGateModelsFor("bivia").map((m) => m.id)).toEqual(["dec-1"]);
-		expect(visualGateModelsFor("openrouter").map((m) => m.id)).toContain("typesafe/jev-1.14");
-		expect(visualGateModelsFor("dazzi").map((m) => m.id)).toContain("typesafe/jev-1.14");
-		expect(visualGateModelsFor("openai").map((m) => m.id)).toContain("gpt-6-luna");
+describe("visual parse settings integration (unified Jev decision model)", () => {
+	it("exposes vision-capable decision models inside the single Jev role with Jev first as default", () => {
+		expect(jevBackendFor("bivia")).toBe("bivia");
+		expect(jevModelsFor("bivia").map((m) => m.id)).toEqual(["dec-1"]);
+		expect(jevModelsFor("dazzi")[0]?.id).toBe("jev-1.13");
+		expect(jevModelsFor("openrouter")[0]?.id).toBe("typesafe/jev-1.13");
+		expect(jevModelsFor("openrouter").map((m) => m.id)).toContain("typesafe/jev-1.14");
+		expect(jevModelsFor("openai").map((m) => m.id)).toContain("gpt-6-luna");
 	});
 
-	it("builds clean leaf updates for VLM, OCR, Off, and visual gate while preserving sibling settings", () => {
+	it("builds clean leaf updates for VLM, OCR, and Off while preserving sibling visualParse fields", () => {
 		const vlmEntry = model("openrouter", "google/gemini-3.5-flash-lite", {
 			name: "Gemini 3.5 Flash Lite",
 			api: "openai-completions",
 		});
-		const existing = { visualParse: { enabled: true, gate: { backend: "bivia", model: "dec-1" } } };
+		const existing = { visualParse: { enabled: true, threshold: 0.65 } };
 		expect(visualParseVlmConfigUpdates(vlmEntry, existing)).toEqual([
 			{
 				path: ["visualParse"],
 				value: {
 					enabled: true,
-					gate: { backend: "bivia", model: "dec-1" },
+					threshold: 0.65,
 					extractor: {
 						kind: "vlm",
 						model: {
@@ -135,49 +134,30 @@ describe("visual parse settings integration", () => {
 				path: ["visualParse"],
 				value: {
 					enabled: true,
-					gate: { backend: "bivia", model: "dec-1" },
+					threshold: 0.65,
 					extractor: { kind: "ocr" },
 				},
 			},
 		]);
 
 		expect(visualParseOffConfigUpdates()).toEqual([{ path: ["visualParse"], value: false }]);
-
-		const gateEntry = model("bivia", "dec-1", { name: "Bivia (dec-1)", api: "" });
-		expect(visualParseGateConfigUpdates(gateEntry, { visualParse: { enabled: true, extractor: { kind: "ocr" } } })).toEqual([
-			{
-				path: ["visualParse"],
-				value: {
-					enabled: true,
-					extractor: { kind: "ocr" },
-					gate: { backend: "bivia", model: "dec-1" },
-				},
-			},
-		]);
-		expect(visualParseGateAutoConfigUpdates()).toEqual([{ path: ["visualParse", "gate"], remove: true }]);
 	});
 
-	it("cleans up visualParse VLM and gate selections when disconnecting a provider", () => {
+	it("cleans up visualParse VLM selection when disconnecting its provider", () => {
 		const config = {
+			jev: { backend: "openrouter", model: "typesafe/jev-1.13" },
 			visualParse: {
 				enabled: true,
-				gate: { backend: "openrouter", model: "typesafe/jev-1.14" },
 				extractor: { kind: "vlm", model: { provider: "openrouter", id: "google/gemini-3.5-flash-lite" } },
 			},
 		};
-		expect(providerRoleCleanup(config, "openrouter")).toEqual([{ path: ["visualParse"], value: false }]);
-
-		const gateOnlyConfig = {
-			visualParse: {
-				enabled: true,
-				gate: { backend: "bivia", model: "dec-1" },
-				extractor: { kind: "ocr" },
-			},
-		};
-		expect(providerRoleCleanup(gateOnlyConfig, "bivia")).toEqual([{ path: ["visualParse", "gate"], remove: true }]);
+		expect(providerRoleCleanup(config, "openrouter")).toEqual([
+			{ path: ["jev"], remove: true },
+			{ path: ["visualParse"], value: false },
+		]);
 	});
 
-	it("renders visualParse role in AiPage and reveals visualParseGate when enabled", async () => {
+	it("renders a single unified Decision model (Jev) row and one Visual page parsing row without a duplicate gate row", async () => {
 		const openrouter = provider("openrouter", "OpenRouter", {
 			models: [
 				model("openrouter", "google/gemini-3.5-flash-lite", { supportsImage: true }),
@@ -185,19 +165,15 @@ describe("visual parse settings integration", () => {
 			],
 		});
 
-		await render([openrouter], {});
-		expect(host.textContent).toContain("Visual page parsing");
-		expect(host.textContent).not.toContain("Visual page gate");
-		expect(roleSelectionFor("visualParse", {}, [openrouter])).toEqual({ kind: "special", value: "off" });
-
 		await render([openrouter], {
 			visualParse: {
 				enabled: true,
 				extractor: { kind: "vlm", model: { provider: "openrouter", id: "google/gemini-3.5-flash-lite" } },
 			},
 		});
+		expect(host.textContent).toContain("Decision model (Jev)");
 		expect(host.textContent).toContain("Visual page parsing");
-		expect(host.textContent).toContain("Visual page gate");
+		expect(host.textContent).not.toContain("Visual page gate");
 		expect(
 			roleSelectionFor(
 				"visualParse",
