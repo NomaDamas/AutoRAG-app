@@ -89,6 +89,7 @@ export function Sidebar({
 	aiSearchDrop,
 	tagColorsDenied = false,
 	onGrantTagColors,
+	onboardingPending = false,
 	favorites,
 }: {
 	readonly groups: readonly NavGroup[];
@@ -125,6 +126,8 @@ export function Sidebar({
 	/** macOS refused the app Finder's tag registry: the Tags group offers the Full Disk Access grant. */
 	readonly tagColorsDenied?: boolean;
 	readonly onGrantTagColors?: (() => void) | undefined;
+	/** True while first-run onboarding is active; defers post-onboarding prompts in the notification center. */
+	readonly onboardingPending?: boolean;
 	/** Pin (drop a folder between rows), reorder (drag a row), and unpin (right-click) in Favorites; absent turns them off. */
 	readonly favorites?: FavoritesDropTarget | undefined;
 }): ReactElement {
@@ -291,7 +294,7 @@ export function Sidebar({
 						<UsageIcon />
 					</button>
 					{/* Figma 553:6673: the bell sits after the usage chart and opens the notification center above it. */}
-					<NotificationCenter onOpenAiSettings={onOpenAiSettings} onOpenSettingsPage={onOpenSettingsPage} />
+					<NotificationCenter onOpenAiSettings={onOpenAiSettings} onOpenSettingsPage={onOpenSettingsPage} onboardingPending={onboardingPending} />
 					<div className="flex-1" aria-hidden="true" />
 					<SidebarUpdateButton />
 				</div>

@@ -2027,6 +2027,13 @@
       "launchAtLoginHint": "Dazzi runs in the background when you log in to your computer.",
       "osMenu": "Add to File Right-Click Menu",
       "osMenuHint": "Right-click a file in Finder (macOS) or File Explorer (Windows) to see ‘Ask Dazzi’ and ‘Show in Dazzi’.",
+      "defaultFileManagerSection": "Default File Manager",
+      "defaultFileManager": "Use as Default File Manager",
+      "defaultFileManagerHintMac": "Open folders and ‘Reveal in Finder’ requests from other apps in Dazzi instead of Finder. Turning this off restores Finder.",
+      "defaultFileManagerHintWin": "Open folders and Win+E in Dazzi instead of File Explorer. System virtual folders like Control Panel safely fall back to Explorer.",
+      "defaultFileManagerInterceptReveal": "Also intercept ‘Show in folder’ from other apps",
+      "defaultFileManagerInterceptRevealHint": "Detect File Explorer windows opened by apps like Chrome or VS Code and reveal the selected file in Dazzi instead.",
+      "defaultFileManagerError": "Could not update the default file manager setting: {{error}}",
       "autoUpdates": "Install Updates Automatically",
       "autoUpdatesHint": "Download new versions in the background and install them when you quit the app.",
       "appUpdate": "App version",
@@ -3356,7 +3363,12 @@
     "scheduleConflictsBody": "Another scheduled job is running alongside Dazzi.",
     "scheduleConflictsPrompt": "There is a duplicate auto-update job ({{list}}). Please check what overlaps and help keep only Dazzi's schedule.",
     "settings": "Notification settings",
-    "viewInCenter": "View in notifications"
+    "viewInCenter": "View in notifications",
+    "defaultFileManagerTitle": "Set Dazzi as your default file manager?",
+    "defaultFileManagerBodyMac": "Open folders and ‘Reveal in Finder’ actions from other apps in Dazzi instead of Finder. You can revert to Finder anytime in Settings.",
+    "defaultFileManagerBodyWin": "Open folders, Win+E, and ‘Show in folder’ actions from other apps in Dazzi instead of File Explorer. You can revert anytime in Settings.",
+    "defaultFileManagerEnable": "Set as Default",
+    "defaultFileManagerOpenSettings": "Open Settings"
   },
   "firstRun": {
     "folders": {
