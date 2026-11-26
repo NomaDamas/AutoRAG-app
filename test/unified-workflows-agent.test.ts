@@ -165,13 +165,13 @@ async function buildUnifiedAgent(responses: FauxResponseStep[]) {
 			}),
 	});
 
-	const magicAgentTools = magicKit.tools.map((tool) => ({
+	const magicAgentTools: NonNullable<ConstructorParameters<typeof InteractiveSearchAgent>[0]["tools"]> = magicKit.tools.map((tool) => ({
 		name: tool.name,
 		label: tool.label,
 		description: tool.description,
 		parameters: tool.parameters,
-		execute: (id: string, params: never, signal?: AbortSignal, onUpdate?: never) =>
-			tool.execute(id, params, signal, onUpdate, undefined as never),
+		execute: (id, params, signal, onUpdate) =>
+			tool.execute(id, params as never, signal, onUpdate, undefined as never),
 	}));
 
 	const prevHome = process.env.AUTORAG_HOME;
@@ -305,7 +305,7 @@ describe("main AI Agent unified workflows (Magic Actions + File Automations + tr
 			// 1. Unified system prompt addendum and all shared workflow tools were delivered to the LLM
 			const prompts = ctx.getSystemPrompts();
 			expect(prompts.length).toBeGreaterThanOrEqual(2);
-			expect(prompts.some((sysPrompt) => sysPrompt.includes("## Custom Workflows: File Automations & Right-Click Magic Actions"))).toBe(true);
+			expect(prompts.some((sysPrompt) => sysPrompt.includes("## Automations: Folder Automations & Right-Click Automations"))).toBe(true);
 			expect(prompts.some((sysPrompt) => sysPrompt.includes("test_magic_action"))).toBe(true);
 			expect(prompts.some((sysPrompt) => sysPrompt.includes("test_automation_in_sandbox"))).toBe(true);
 			const declaredTools = ctx.getDeclaredToolNames();

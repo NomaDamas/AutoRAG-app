@@ -239,25 +239,25 @@ function summarizeContextMenuChange(
 	if (opts.upsertedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 저장: ${opts.upsertedLabel}`;
+				return `자동화 저장: ${opts.upsertedLabel}`;
 			case "ja":
-				return `マジックアクションを保存: ${opts.upsertedLabel}`;
+				return `自動化を保存: ${opts.upsertedLabel}`;
 			case "zh":
-				return `已保存魔法动作: ${opts.upsertedLabel}`;
+				return `已保存自动化: ${opts.upsertedLabel}`;
 			default:
-				return `Saved Magic Action: ${opts.upsertedLabel}`;
+				return `Saved automation: ${opts.upsertedLabel}`;
 		}
 	}
 	if (opts.deletedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 삭제: ${opts.deletedLabel}`;
+				return `자동화 삭제: ${opts.deletedLabel}`;
 			case "ja":
-				return `マジックアクションを削除: ${opts.deletedLabel}`;
+				return `自動化を削除: ${opts.deletedLabel}`;
 			case "zh":
-				return `已删除魔法动作: ${opts.deletedLabel}`;
+				return `已删除自动化: ${opts.deletedLabel}`;
 			default:
-				return `Deleted Magic Action: ${opts.deletedLabel}`;
+				return `Deleted automation: ${opts.deletedLabel}`;
 		}
 	}
 	const parts: string[] = [];
@@ -992,7 +992,7 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 		"- **Finder Sidebar (`update_sidebar`)**: show or hide items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reorder Favorites or sections, pin or remove custom folders, or reset the sidebar to default.",
 		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `test_magic_action`, `delete_magic_action`)**:",
 		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:pinToSidebar`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
-		`  - Create, update, verify, or remove custom **Magic Actions** (\`upsert_magic_action\` / \`test_magic_action\` / \`delete_magic_action\`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (${scriptDetail}) OR run a pi AI agent loop (\`executionKind: 'agent'\`, \`agentMode: 'read'\` for analysis/summary or \`'organize'\` for file creation/editing/conversion/shell actions, with \`useSkills\` and \`useMcp\` both enabled \`true\` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn \`useSkills: false\` or \`useMcp: false\` off) with conditions (\`selection: 'single' | 'multiple' | 'any'\`, \`targetKind: 'file' | 'folder' | 'any'\`, \`extensions: ['pdf', ...]\`).`,
+		`  - Create, update, verify, or remove custom **right-click automations** (\`upsert_magic_action\` / \`test_magic_action\` / \`delete_magic_action\`) that appear when right-clicking files or folders! A right-click automation can run ANY shell command/script (${scriptDetail}) OR run a pi AI agent loop (\`executionKind: 'agent'\`, \`agentMode: 'read'\` for analysis/summary or \`'organize'\` for file creation/editing/conversion/shell actions, with \`useSkills\` and \`useMcp\` both enabled \`true\` by default so the automation shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn \`useSkills: false\` or \`useMcp: false\` off) with conditions (\`selection: 'single' | 'multiple' | 'any'\`, \`targetKind: 'file' | 'folder' | 'any'\`, \`extensions: ['pdf', ...]\`).`,
 		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
 		"",
 		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",
@@ -1000,17 +1000,19 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 		"- Right-Click Context Menu: `Tags` (`builtin:tags`, and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
 		"- If the person asks to hide any locked item (or asks to 'hide everything'), keep the locked items visible, apply the rest of their request, and explain politely which core items always remain shown.",
 		"",
-		"## Mandatory Sandbox Verification for Magic Actions",
-		"- Whenever you create or modify a Magic Action (whether `script` or `agent`), you MUST verify that it actually works in a temporary sandbox folder using `test_magic_action` with realistic sample `fixtures` matching the user's goal.",
-		"- Inspect the returned `ok`, `exitCode`, `output`, `stderr`, `error`, and `diff` (`created`, `modified`, `deleted` files and their `contentPreview`) to judge whether the action genuinely achieved the user's goal.",
+		"The app calls custom right-click actions **automations** (right-click automations), in every language: always say automation / right-click automation to the person in their language, never \"Magic Action\"; only the internal tool names keep the legacy `*_magic_action` name.",
+		"",
+		"## Mandatory Sandbox Verification for Right-Click Automations",
+		"- Whenever you create or modify a right-click automation (whether `script` or `agent`), you MUST verify that it actually works in a temporary sandbox folder using `test_magic_action` with realistic sample `fixtures` matching the user's goal.",
+		"- Inspect the returned `ok`, `exitCode`, `output`, `stderr`, `error`, and `diff` (`created`, `modified`, `deleted` files and their `contentPreview`) to judge whether the automation genuinely achieved the user's goal.",
 		"- If `test_magic_action` fails (non-zero exit, error, timeout) OR its output / filesystem diff does not meet the goal, diagnose why, redesign or fix the command/prompt/settings, and re-run `test_magic_action` until it passes (retry up to 3 times).",
-		"- Only save (or keep) the Magic Action via `upsert_magic_action` once verification succeeds. If you already saved an earlier version that failed verification, update it with the fixed version (or delete it and explain clearly if the task cannot work in this environment).",
+		"- Only save (or keep) the right-click automation via `upsert_magic_action` once verification succeeds. If you already saved an earlier version that failed verification, update it with the fixed version (or delete it and explain clearly if the task cannot work in this environment).",
 		"",
 		"## Workflow",
-		"1. Call `get_app_settings` when you need to inspect the current sidebar, right-click context menu, Magic Actions, or app preferences.",
-		"2. For Magic Actions: design the action, test it in a temporary sandbox with `test_magic_action`, fix and re-test if it does not work as intended, and save the verified action with `upsert_magic_action`.",
+		"1. Call `get_app_settings` when you need to inspect the current sidebar, right-click context menu, right-click automations, or app preferences.",
+		"2. For right-click automations: design the automation, test it in a temporary sandbox with `test_magic_action`, fix and re-test if it does not work as intended, and save the verified automation with `upsert_magic_action`.",
 		"3. For sidebar, built-in menu, or general preferences: call `update_sidebar`, `update_context_menu`, `delete_magic_action`, and/or `update_general_settings`.",
-		"4. After tool calls finish, summarize clearly in 1-3 short sentences what you changed (and mention that the Magic Action was verified in a temporary sandbox).",
+		"4. After tool calls finish, summarize clearly in 1-3 short sentences what you changed (and mention that the automation was verified in a temporary sandbox).",
 		intentPromptLine(language),
 	].join("\n");
 }

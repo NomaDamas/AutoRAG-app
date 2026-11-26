@@ -357,7 +357,7 @@ export function buildWorkflowVerificationGuidance(input: {
 	readonly saveToolName: string;
 	readonly warnings?: readonly string[];
 }): string {
-	const subject = input.kind === "magic-action" ? "Magic Action" : "automation rule";
+	const subject = input.kind === "magic-action" ? "right-click automation" : "automation rule";
 	if (!input.ok) {
 		return `Temp-folder sandbox verification FAILED. Do NOT save this broken ${subject} yet — diagnose \`error\`/\`stderr\`/\`output\`/\`stdout\`/\`diff\`, fix the ${subject}, and re-run \`${input.testToolName}\`.`;
 	}
@@ -373,7 +373,7 @@ export function formatVerificationFailureMessage(input: {
 	readonly result: WorkflowVerificationResult;
 	readonly testToolName: string;
 }): string {
-	const subject = input.kind === "magic-action" ? "Magic Action" : "Automation";
+	const subject = input.kind === "magic-action" ? "Right-click automation" : "Automation";
 	const lines = [
 		`${subject} "${input.label}" was NOT saved because automatic verification in a temporary sandbox folder failed.`,
 		`Error: ${input.result.error ?? `exit ${input.result.exitCode ?? "unknown"}`}`,
@@ -418,14 +418,14 @@ export function formatVerificationPassSummary(input: {
 }
 
 const MAGIC_ACTION_TOPIC_RE =
-	/(?:매직\s*액션|magic[\s_-]?actions?|우클릭\s*(?:메뉴|버튼|액션)|컨텍스트\s*메뉴|context[\s_-]?menu|right[\s-]?click\s*(?:menu|button|action)|マジックアクション|魔法动作|右键菜单|list_magic_actions|test_magic_action|upsert_magic_action|delete_magic_action)/iu;
+	/(?:매직\s*액션|magic[\s_-]?actions?|우클릭\s*(?:메뉴|버튼|액션|자동화)|컨텍스트\s*메뉴|context[\s_-]?menu|right[\s-]?click\s*(?:menu|button|action|automation)|右クリック\s*(?:メニュー|アクション|自動化)|マジックアクション|魔法动作|右键\s*(?:菜单|自动化)|list_magic_actions|test_magic_action|upsert_magic_action|delete_magic_action)/iu;
 
 const WORKFLOW_MANAGE_VERB_RE =
 	/(?:만들|생성|추가|수정|편집|커스텀|변경|바꿔|바꾸|업데이트|삭제|제거|지워|테스트|검증|목록|조회|확인|보여|create|add|make|build|edit|update|customiz|modif|chang|delete|remov|test|verif|list|show|作成|追加|編集|変更|削除|テスト|検証|创建|添加|修改|更新|删除|测试|验证|list_magic_actions|test_magic_action|upsert_magic_action|delete_magic_action)/iu;
 
 /**
  * Returns true when a user query in the main AI Agent directly asks to create, inspect,
- * test, customize, or delete a right-click Magic Action. Used to route Turn 1 straight to
+ * test, customize, or delete a right-click automation. Used to route Turn 1 straight to
  * the librarian's single-turn action (`extra`) route instead of the 2-phase search/fast-answer
  * flow (which otherwise emits a premature unverified fast answer and has to strike it out via
  * `revise_answer`), while keeping every search and workflow tool available.
@@ -438,7 +438,7 @@ export function isMagicActionManagementQuery(query: string): boolean {
 
 /**
  * Shared English system-prompt addendum for Dazzi's main AI Agent describing
- * File Automations and Right-Click Magic Actions as one unified workflow architecture
+ * Folder Automations and Right-Click Automations as one unified automation architecture
  * that differs only in trigger and shares the exact same script/agent execution and
  * mandatory temporary-sandbox verification loop.
  */
@@ -449,31 +449,32 @@ export function buildUnifiedWorkflowsPrompt(
 	const includeMagic = options.includeMagicActions !== false;
 	const scriptHint =
 		platform === "win32"
-			? "On Windows, script Magic Actions run in `powershell.exe` receiving selected paths in `$args` and `$env:DAZZI_FILES_JSON` / `$env:DAZZI_FILE` / `$env:DAZZI_FILE_COUNT` (write valid PowerShell, never POSIX `\"$@\"`)."
-			: "On macOS/Linux, script Magic Actions run in `/bin/sh` receiving selected paths in `\"$@\"` and env vars `DAZZI_FILES_JSON` / `DAZZI_FILE` / `DAZZI_FILE_COUNT`.";
+			? "On Windows, script right-click automations run in `powershell.exe` receiving selected paths in `$args` and `$env:DAZZI_FILES_JSON` / `$env:DAZZI_FILE` / `$env:DAZZI_FILE_COUNT` (write valid PowerShell, never POSIX `\"$@\"`)."
+			: "On macOS/Linux, script right-click automations run in `/bin/sh` receiving selected paths in `\"$@\"` and env vars `DAZZI_FILES_JSON` / `DAZZI_FILE` / `DAZZI_FILE_COUNT`.";
 
 	const lines = [
-		"## Custom Workflows: File Automations & Right-Click Magic Actions",
-		"Dazzi supports two custom workflow triggers that share the same execution backends (shell script/command OR AI agent) and the same mandatory temporary-sandbox verification pipeline:",
-		"1. **File Automations** (triggered automatically when files in watched folders are created, updated, or deleted): managed with `test_automation_in_sandbox` and `manage_automations`.",
+		"## Automations: Folder Automations & Right-Click Automations",
+		"Dazzi has one unified automation architecture with two triggers that share the same execution backends (shell script/command OR AI agent) and the same mandatory temporary-sandbox verification pipeline:",
+		"1. **Folder Automations** (triggered automatically when files in watched folders are created, updated, or deleted): managed with `test_automation_in_sandbox` and `manage_automations`.",
 	];
 
 	if (includeMagic) {
 		lines.push(
-			"2. **Right-Click Magic Actions** (triggered on demand when the user right-clicks selected file(s) or folder(s) in Dazzi Finder and clicks a custom button): managed with `list_magic_actions`, `test_magic_action`, `upsert_magic_action`, and `delete_magic_action`.",
+			"2. **Right-Click Automations** (triggered on demand when the user right-clicks selected file(s) or folder(s) in Dazzi Finder and clicks a custom menu item): managed with `list_magic_actions`, `test_magic_action`, `upsert_magic_action`, and `delete_magic_action`.",
 			`- ${scriptHint}`,
-			"- Agent Magic Actions (`executionKind: 'agent'`) run either `agentMode: 'read'` (analysis/summary) or `agentMode: 'organize'` (creating/editing/converting/organizing files), sharing installed Skills (`useSkills: true`) and connected MCP servers (`useMcp: true`) by default.",
-			"- You can directly create, inspect, customize/update, test, and delete Magic Actions from this main AI Agent chat — even if a turn was routed as a configuration request. Magic Actions are stored in Dazzi's app settings via those dedicated tools (never edit `config.json` for Magic Actions).",
+			"- Agent right-click automations (`executionKind: 'agent'`) run either `agentMode: 'read'` (analysis/summary) or `agentMode: 'organize'` (creating/editing/converting/organizing files), sharing installed Skills (`useSkills: true`) and connected MCP servers (`useMcp: true`) by default.",
+			"- You can directly create, inspect, customize/update, test, and delete right-click automations from this main AI Agent chat — even if a turn was routed as a configuration request. Right-click automations are stored in Dazzi's app settings via those dedicated tools (never edit `config.json` for them).",
+			"- **User-facing terminology**: Always refer to these as **automations** or **right-click automations** in the user's language (never call them \"Magic Actions\" in replies — only the internal tool names keep the legacy `*_magic_action` identifier).",
 		);
 	}
 
 	lines.push(
 		"",
-		"### Shared Mandatory Verification Loop (Applies to Both Automations and Magic Actions)",
-		"- Before finalizing ANY new or modified automation or Magic Action, ALWAYS verify it in an isolated temporary sandbox folder (`test_automation_in_sandbox` for automations, `test_magic_action` for Magic Actions) with realistic sample fixtures matching the user's goal.",
-		"- Inspect `ok`, `exitCode`, `output`/`stdout`, `stderr`, `error`, any loop/retrigger warnings, and `diff` (`created`, `modified`, `deleted` files and `contentPreview`) to verify the workflow truly achieved the user's goal.",
+		"### Shared Mandatory Verification Loop (Applies to Both Folder and Right-Click Automations)",
+		"- Before finalizing ANY new or modified automation (folder or right-click), ALWAYS verify it in an isolated temporary sandbox folder (`test_automation_in_sandbox` for folder automations, `test_magic_action` for right-click automations) with realistic sample fixtures matching the user's goal.",
+		"- Inspect `ok`, `exitCode`, `output`/`stdout`, `stderr`, `error`, any loop/retrigger warnings, and `diff` (`created`, `modified`, `deleted` files and `contentPreview`) to verify the automation truly achieved the user's goal.",
 		"- If verification fails OR the output/files do not match the user's goal, diagnose the issue, fix the command/script/prompt/filters, and re-test in the temporary sandbox until it passes (up to 3 retries).",
-		"- Only finalize/save (`manage_automations` save / `upsert_magic_action`) once sandbox verification succeeds. When customizing an existing workflow, inspect it first (`manage_automations` list / `list_magic_actions`), apply the changes, re-verify in the temp sandbox, and save the verified update.",
+		"- Only finalize/save (`manage_automations` save / `upsert_magic_action`) once sandbox verification succeeds. When customizing an existing automation, inspect it first (`manage_automations` list / `list_magic_actions`), apply the changes, re-verify in the temp sandbox, and save the verified update.",
 	);
 
 	return lines.join("\n");

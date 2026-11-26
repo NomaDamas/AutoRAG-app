@@ -69,7 +69,7 @@ function summarizeChange(
 	// The settings customizer localizes its own summaries through its change summarizer; the tools only need a stable
 	// English fallback that every caller can show or adapt.
 	const action = kind === "saved" ? "added" : kind === "updated" ? "updated" : "removed";
-	return `Magic Action ${label} was ${action} (interface language: ${language}).`;
+	return `Right-click automation ${label} was ${action} (interface language: ${language}).`;
 }
 
 function defaultSandboxRunner(
@@ -77,7 +77,7 @@ function defaultSandboxRunner(
 	language: () => ReplyLanguage,
 ): (input: VerifyMagicActionInput) => Promise<MagicActionVerificationResult> {
 	return deps.testMagicAction ?? ((verifyInput) => verifyMagicActionInSandbox(verifyInput, {
-		resolveModel: () => Promise.reject(new Error("Agent Magic Action sandbox runner is not configured.")),
+		resolveModel: () => Promise.reject(new Error("Agent right-click automation sandbox runner is not configured.")),
 		agentDir: "",
 		env: process.env,
 		platform: deps.platform ?? process.platform,
@@ -108,9 +108,9 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 
 	const listMagicActions = defineTool({
 		name: "list_magic_actions",
-		label: "List Magic Actions",
+		label: "List Right-Click Automations",
 		description:
-			"List all custom right-click Magic Actions currently saved in Dazzi (id, label, enabled, selection/target/extension filters, and execution kind: script command or AI agent prompt). Read-only; use it to inspect existing Magic Actions before customizing, updating, or deleting them.",
+			"List all custom right-click automations currently saved in Dazzi (id, label, enabled, selection/target/extension filters, and execution kind: script command or AI agent prompt). Read-only; use it to inspect existing right-click automations before customizing, updating, or deleting them.",
 		parameters: Type.Object({}),
 		execute: async () => {
 			const currentApp = await deps.settings.get();
@@ -142,13 +142,13 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 
 	const testMagicAction = defineTool({
 		name: "test_magic_action",
-		label: "Test Magic Action in Sandbox",
+		label: "Test Right-Click Automation in Sandbox",
 		description:
-			"Test a Magic Action (by saved `actionId` or an inline candidate definition) inside an isolated temporary sandbox folder with sample files. Runs the real shell command or AI agent loop against sample files in the temp folder, returns exit status, stdout/stderr or agent reply, and the exact created/modified/deleted file diff with content previews, then deletes the temp folder. Always run this to verify a Magic Action works as intended before finalizing it, and if it fails or does not achieve the goal, fix and re-test until it succeeds.",
+			"Test a right-click automation (by saved `actionId` or an inline candidate definition) inside an isolated temporary sandbox folder with sample files. Runs the real shell command or AI agent loop against sample files in the temp folder, returns exit status, stdout/stderr or agent reply, and the exact created/modified/deleted file diff with content previews, then deletes the temp folder. Always run this to verify a right-click automation works as intended before finalizing it, and if it fails or does not achieve the goal, fix and re-test until it succeeds.",
 		parameters: Type.Object({
 			actionId: Type.Optional(
 				Type.String({
-					description: "ID of an already saved Magic Action to test. Omit when testing an inline candidate definition before saving.",
+					description: "ID of an already saved right-click automation to test. Omit when testing an inline candidate definition before saving.",
 				}),
 			),
 			label: Type.Optional(Type.String({ description: "Candidate label (required when actionId is omitted)." })),
@@ -198,7 +198,7 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 				if (candidate === null) {
 					return textResult({
 						ok: false,
-						error: `No saved Magic Action found matching '${params.actionId}'.`,
+						error: `No saved right-click automation found matching '${params.actionId}'.`,
 					});
 				}
 			} else {
@@ -225,7 +225,7 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 				if (candidate === null) {
 					return textResult({
 						ok: false,
-						error: "Invalid candidate Magic Action: ensure label and command (for script) or prompt (for agent) are non-empty.",
+						error: "Invalid candidate right-click automation: ensure label and command (for script) or prompt (for agent) are non-empty.",
 					});
 				}
 			}
@@ -258,16 +258,16 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 
 	const upsertMagicAction = defineTool({
 		name: "upsert_magic_action",
-		label: "Upsert Magic Action",
+		label: "Upsert Right-Click Automation",
 		description:
 			platform === "win32"
-				? "Create or update a custom right-click Magic Action button on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
-				: "Create or update a custom right-click Magic Action button on files/folders. A Magic Action can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
+				? "Create or update a custom right-click automation on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
+				: "Create or update a custom right-click automation on files/folders. A right-click automation can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
 		parameters: Type.Object({
 			id: Type.Optional(Type.String({ description: "Stable slug ID (optional on create; derived from label if omitted; pass existing id to update)." })),
 			label: Type.String({ description: "Menu button label shown on right-click (e.g. 'PDF 3줄 요약', '이미지 용량 정리', 'SHA-256 해시 복사')." }),
 			description: Type.Optional(Type.String({ description: "Short description shown in Settings." })),
-			enabled: Type.Optional(Type.Boolean({ description: "Whether this Magic Action is enabled (default true)." })),
+			enabled: Type.Optional(Type.Boolean({ description: "Whether this right-click automation is enabled (default true)." })),
 			selection: Type.Optional(
 				stringEnum(["any", "single", "multiple"], "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items)."),
 			),
@@ -332,11 +332,11 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 			if (normalized === null) {
 				return textResult({
 					ok: false,
-					error: "Invalid Magic Action: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
+					error: "Invalid right-click automation: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
 				});
 			}
 
-			// Shared save gate: whenever a sandbox runner is wired, refuse to save until the exact Magic Action logic passed in a temp folder.
+			// Shared save gate: whenever a sandbox runner is wired, refuse to save until the exact automation logic passed in a temp folder.
 			let verification: MagicActionVerificationResult | undefined = verifiedActions.getVerified(normalized);
 			let autoVerified = false;
 			if (deps.testMagicAction !== undefined) {
@@ -406,10 +406,10 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 
 	const deleteMagicAction = defineTool({
 		name: "delete_magic_action",
-		label: "Delete Magic Action",
-		description: "Remove a custom right-click Magic Action by its ID or display label.",
+		label: "Delete Right-Click Automation",
+		description: "Remove a custom right-click automation by its ID or display label.",
 		parameters: Type.Object({
-			idOrLabel: Type.String({ description: "The ID or exact label of the Magic Action to delete." }),
+			idOrLabel: Type.String({ description: "The ID or exact label of the right-click automation to delete." }),
 		}),
 		execute: (_callId, params) => serialized(async () => {
 			ensureLive();
@@ -422,7 +422,7 @@ export function createMagicActionTools(deps: MagicActionToolsDeps): MagicActionT
 			if (target === undefined) {
 				return textResult({
 					ok: false,
-					error: `No Magic Action found matching '${params.idOrLabel}'.`,
+					error: `No right-click automation found matching '${params.idOrLabel}'.`,
 				});
 			}
 			const nextContextMenu = normalizeContextMenuSettings({

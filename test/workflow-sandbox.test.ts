@@ -218,18 +218,24 @@ describe("workflow-sandbox shared core", () => {
 		expect(prompt).toContain("upsert_magic_action");
 		expect(prompt).toContain("delete_magic_action");
 		expect(prompt).toContain("temporary sandbox");
+		expect(prompt).toContain("Right-Click Automations");
+		expect(prompt).toContain('never call them "Magic Actions"');
 
 		const winPrompt = buildUnifiedWorkflowsPrompt("win32", { includeMagicActions: true });
 		expect(winPrompt).toContain("powershell.exe");
 		expect(NOT_ENGLISH.test(winPrompt)).toBe(false);
 	});
 
-	it("detects Magic Action management requests across languages without matching ordinary document questions", () => {
+	it("detects right-click automation management requests across languages without matching ordinary document questions", () => {
 		expect(isMagicActionManagementQuery("단일 .txt 파일을 우클릭했을 때 실행되는 매직 액션 만들어줘")).toBe(true);
+		expect(isMagicActionManagementQuery("PDF 우클릭 자동화 만들어줘")).toBe(true);
+		expect(isMagicActionManagementQuery("Create a right-click automation to summarize PDFs")).toBe(true);
 		expect(isMagicActionManagementQuery("Create a right-click Magic Action to summarize PDFs")).toBe(true);
 		expect(isMagicActionManagementQuery("기존 매직 액션 목록 보여줘")).toBe(true);
 		expect(isMagicActionManagementQuery("Edit my context menu button for images")).toBe(true);
+		expect(isMagicActionManagementQuery("右クリック自動化を作成して")).toBe(true);
 		expect(isMagicActionManagementQuery("マジックアクションを作成して")).toBe(true);
+		expect(isMagicActionManagementQuery("创建一个右键自动化")).toBe(true);
 		expect(isMagicActionManagementQuery("创建一个右键菜单魔法动作")).toBe(true);
 		expect(isMagicActionManagementQuery("2026년 1분기 매출 보고서 요약해줘")).toBe(false);
 		expect(isMagicActionManagementQuery("What is in quarterly-report.pdf?")).toBe(false);
