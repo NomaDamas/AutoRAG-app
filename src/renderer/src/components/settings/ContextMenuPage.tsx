@@ -686,14 +686,14 @@ export function ContextMenuPage({
 			</div>
 
 			{removing === null ? null : (
-				<ModalShell onClose={() => setRemoving(null)}>
+				<ModalShell className="settings-alert" onClose={() => setRemoving(null)}>
 					<h2>{t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: removing.label })}</h2>
 					<p>{t("settingsCore.contextMenu.removeMagicConfirmBody")}</p>
 					<ModalActions>
 						<button type="button" className="linear-btn" autoFocus onClick={() => setRemoving(null)}>
 							{t("common.cancel")}
 						</button>
-						<button type="button" className="linear-btn is-danger" data-action="confirm-remove-magic" onClick={() => removeMagicAction(removing.id)}>
+						<button type="button" className="linear-btn is-danger is-danger-solid" data-action="confirm-remove-magic" onClick={() => removeMagicAction(removing.id)}>
 							{t("common.delete")}
 						</button>
 					</ModalActions>

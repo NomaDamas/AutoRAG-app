@@ -611,12 +611,12 @@ export function AppsPage({
 			</Section>
 			</div>
 			{disconnecting !== null ? (
-				<ModalShell onClose={() => setDisconnecting(null)}>
+				<ModalShell className="settings-alert" onClose={() => setDisconnecting(null)}>
 					<h2>{t("settingsSources.sourceDetail.confirmTitle")}</h2>
 					<p>{t("settingsSources.sourceDetail.confirmBody", { alias: disconnecting })}</p>
 					<ModalActions>
 						<button type="button" className="linear-btn" onClick={() => setDisconnecting(null)}>{t("common.cancel")}</button>
-						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void disconnect(disconnecting)}>{t("settingsSources.apps.disconnect")}</button>
+						<button type="button" className="linear-btn is-danger is-danger-solid" disabled={busy} onClick={() => void disconnect(disconnecting)}>{t("settingsSources.apps.disconnect")}</button>
 					</ModalActions>
 				</ModalShell>
 			) : null}
@@ -875,12 +875,12 @@ export function SourceDetailPage({
 				</Row>
 			</Section>
 			{confirmDelete ? (
-				<ModalShell onClose={() => setConfirmDelete(false)}>
+				<ModalShell className="settings-alert" onClose={() => setConfirmDelete(false)}>
 					<h2>{t("settingsSources.sourceDetail.confirmTitle")}</h2>
 					<p>{t("settingsSources.sourceDetail.confirmBody", { alias })}</p>
 					<ModalActions>
 						<button type="button" className="linear-btn" onClick={() => setConfirmDelete(false)}>{t("common.cancel")}</button>
-						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>{t("settingsSources.sourceDetail.removeSection")}</button>
+						<button type="button" className="linear-btn is-danger is-danger-solid" disabled={busy} onClick={() => void removeConnection()}>{t("settingsSources.sourceDetail.removeSection")}</button>
 					</ModalActions>
 				</ModalShell>
 			) : null}

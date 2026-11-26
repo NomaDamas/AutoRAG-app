@@ -302,12 +302,12 @@ export function AiPage({
 			) : null}
 			{connect.modals}
 			{disconnect !== null ? (
-				<ModalShell onClose={() => setDisconnect(null)}>
+				<ModalShell className="settings-alert" onClose={() => setDisconnect(null)}>
 					<h2>{t("settingsCore.ai.disconnect.title", { name: disconnect.name })}</h2>
 					<p>{t("settingsCore.ai.disconnect.body")}</p>
 					<ModalActions>
 						<button type="button" className="linear-btn" onClick={() => setDisconnect(null)}>{t("common.cancel")}</button>
-						<button type="button" className="linear-btn is-danger" onClick={() => { const target = disconnect; setDisconnect(null); void disconnectProvider(target); }}>{t("settingsCore.ai.disconnect.action")}</button>
+						<button type="button" className="linear-btn is-danger is-danger-solid" onClick={() => { const target = disconnect; setDisconnect(null); void disconnectProvider(target); }}>{t("settingsCore.ai.disconnect.action")}</button>
 					</ModalActions>
 				</ModalShell>
 			) : null}

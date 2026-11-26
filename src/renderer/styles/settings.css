@@ -1432,13 +1432,15 @@
 
 /* -------------------------------------------- 중요 알림 (Figma 580:15140) -- */
 
-/* A short yes/no question: a small card, title and close on one line, the actions at 32px. */
+/* A short yes/no question (delete, disconnect): a small card, title and close on one line, the actions at 32px.
+   Spaced as the app's other confirms (ConfirmDialog, e.g. deleting an automation): 16 all round, 6 under the title,
+   16 above the actions. */
 .settings-view .settings-modal.settings-alert {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-12);
+	gap: var(--space-6);
 	width: min(416px, calc(100% - 32px));
-	padding: var(--space-14) var(--space-16);
+	padding: var(--space-16);
 	border-radius: var(--radius-modal-md);
 	box-shadow: var(--shadow-notice);
 }
@@ -1457,7 +1459,7 @@
 }
 
 .settings-view .settings-alert .settings-modal-close {
-	top: var(--space-14);
+	top: var(--space-16);
 }
 
 .settings-view .magic-editor-modal .settings-modal-close {
@@ -1466,7 +1468,7 @@
 }
 
 .settings-view .settings-alert .settings-modal-actions {
-	margin-top: 0;
+	margin-top: var(--space-10);
 }
 
 .settings-view .settings-alert .settings-modal-actions .linear-btn {

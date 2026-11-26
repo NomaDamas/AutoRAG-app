@@ -88,7 +88,7 @@ function ModelRow({
 				{asking ? (
 					<>
 						<span className="ltr-ask">{t("settingsLtr.model.deleteAsk")}</span>
-						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => { setAsking(false); onDelete(); }}>{t("settingsLtr.model.deleteConfirm")}</button>
+						<button type="button" className="linear-btn is-danger is-danger-solid" disabled={busy} onClick={() => { setAsking(false); onDelete(); }}>{t("settingsLtr.model.deleteConfirm")}</button>
 						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => setAsking(false)}>{t("settingsLtr.model.cancel")}</button>
 					</>
 				) : (
