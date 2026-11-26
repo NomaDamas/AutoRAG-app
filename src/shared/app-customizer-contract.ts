@@ -61,27 +61,35 @@ export function isAppCustomizerPromptAnswer(value: unknown): value is AppCustomi
 }
 
 /**
- * Every Settings section with an AI assistant in the window's right sidebar. `sidebar`, `contextMenu` and `shortcuts`
- * edit Dazzi's own look; the rest are one section each of the shared AutoRAG config and the app preferences:
- * `general` (app preferences and the document languages), `ai` and `web` (models and web search), `indexing` and `duplicates` (what
- * is searched and how), `mcp` and `apps` (connected tools and apps).
+ * Every Settings section with an AI assistant in the window's right sidebar. Every Settings tab now
+ * docks an assistant: `apps` and `source` route to the dedicated Datasource Connections profile
+ * (`datasource-connections-customizer`), `mcp` routes to `connections-customizer`, and all other
+ * tabs route to the unified `settings-customizer` profile (or their specialized profile when
+ * invoked directly) so users can edit any setting from any tab.
  */
 export const APP_CUSTOMIZER_SURFACES = [
+	"account",
+	"plan",
 	"sidebar",
 	"contextMenu",
 	"shortcuts",
+	"remote",
+	"about",
 	"general",
 	"ai",
 	"web",
+	"ltr",
 	"indexing",
 	"duplicates",
 	"mcp",
 	"apps",
+	"source",
+	"all",
 ] as const;
 
 export type AppCustomizerSurface = (typeof APP_CUSTOMIZER_SURFACES)[number];
 
-/** The surfaces that edit the shared AutoRAG config or the app preferences (every one but Dazzi's own sidebar, menu and shortcuts). */
+/** The surfaces whose copy lives under `settingsCore.assistants.<surface>.*` (every surface except sidebar, contextMenu and shortcuts which have their own copy namespaces). */
 export type ConfigAssistantSurface = Exclude<AppCustomizerSurface, "sidebar" | "contextMenu" | "shortcuts">;
 
 export function isAppCustomizerSurface(value: unknown): value is AppCustomizerSurface {
@@ -93,14 +101,20 @@ export interface AppCustomizerRequest {
 	readonly message: string;
 	/** Which customization profile handles the session; defaults to `"sidebar"`. */
 	readonly surface?: AppCustomizerSurface;
+	/** Active datasource alias when the user is on a `source:<alias>` detail page. */
+	readonly sourceAlias?: string;
 }
 
 export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRequest {
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Record<string, unknown>;
 	const validSurface = candidate.surface === undefined || isAppCustomizerSurface(candidate.surface);
+	const validSourceAlias =
+		candidate.sourceAlias === undefined ||
+		(typeof candidate.sourceAlias === "string" && candidate.sourceAlias.trim().length > 0);
 	return (
 		validSurface &&
+		validSourceAlias &&
 		typeof candidate.sessionId === "string" &&
 		candidate.sessionId.trim().length > 0 &&
 		typeof candidate.message === "string" &&

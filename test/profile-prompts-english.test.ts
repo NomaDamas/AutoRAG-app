@@ -4,6 +4,8 @@ import { aiCustomizerProfile } from "../src/main/agents/profiles/ai-customizer";
 import { generalCustomizerProfile } from "../src/main/agents/profiles/general-customizer";
 import { searchCustomizerProfile } from "../src/main/agents/profiles/search-customizer";
 import { connectionsCustomizerProfile } from "../src/main/agents/profiles/connections-customizer";
+import { datasourceConnectionsProfile } from "../src/main/agents/profiles/datasource-connections-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import { appCustomizerProfile } from "../src/main/agents/profiles/app-customizer";
 import { shortcutCustomizerProfile } from "../src/main/agents/profiles/shortcut-customizer";
 import { magicActionProfile } from "../src/main/agents/profiles/magic-action";
@@ -59,6 +61,32 @@ const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (langu
 	{
 		name: "connections-customizer",
 		prompt: (language) => connectionsCustomizerProfile({ language, surface: "mcp", toolkit: emptyKit }).systemPrompt,
+	},
+	{
+		name: "datasource-connections-customizer",
+		prompt: (language) => datasourceConnectionsProfile({ language, surface: "apps", toolkit: emptyKit }).systemPrompt,
+	},
+	{
+		name: "datasource-connections-customizer (with a shell)",
+		prompt: (language) =>
+			datasourceConnectionsProfile({
+				language,
+				surface: "apps",
+				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
+			}).systemPrompt,
+	},
+	{
+		name: "settings-customizer (unified)",
+		prompt: (language) => settingsCustomizerProfile({ language, surface: "ltr", toolkit: emptyKit }).systemPrompt,
+	},
+	{
+		name: "settings-customizer (unified with a shell)",
+		prompt: (language) =>
+			settingsCustomizerProfile({
+				language,
+				surface: "all",
+				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
+			}).systemPrompt,
 	},
 	{
 		name: "app-customizer",

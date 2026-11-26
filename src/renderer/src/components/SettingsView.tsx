@@ -145,15 +145,17 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Settings pages whose AI assistant fills the window's right sidebar; each page is its own surface. 사이드바 and
- * 단축키 are surfaces of the main-process profiles but have no assistant in the UI, so their right sidebar stays the Inspector's.
+ * Every Settings page docks an AI assistant in the window's right sidebar so settings can be edited
+ * immediately from any tab. Individual datasource detail pages (`source:<alias>`) dock the dedicated
+ * `source` surface.
  */
-function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
-	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
+function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface {
+	if (sourceAliasOf(page) !== null) return "source";
+	return isAppCustomizerSurface(page) ? page : "all";
 }
 
 /** The pages that draw their own invitation to the assistant; every other assistant page gets it from its head. */
-const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["sidebar", "contextMenu", "shortcuts"];
+const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["contextMenu"];
 
 /**
  * What every settings page reads and writes: the app settings, the config
@@ -320,7 +322,7 @@ export function SettingsPageContent({
 		case "ai":
 			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
 		case "ltr":
-			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} />;
+			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} assistantRevision={data.assistantRevision} />;
 		case "web":
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":
@@ -426,7 +428,7 @@ export function SettingsView({
 	useEffect(() => {
 		if (sourceAlias !== null && snapshot !== null && entries.every((entry) => entry.alias !== sourceAlias)) setCategory("apps");
 	}, [sourceAlias, snapshot, entries]);
-	const activeSurface = sourceAlias === null && assistant !== null ? customizerSurfaceOf(normalizeCategory(category)) : null;
+	const activeSurface = assistant !== null ? customizerSurfaceOf(normalizeCategory(category)) : null;
 	/** Without a right sidebar to host it (no window shell) there is no assistant, so the page hero never offers it. */
 	const customizerShown = assistant === null || assistant.shown;
 	useEffect(() => {
@@ -594,6 +596,7 @@ export function SettingsView({
 					<AppCustomizerPanel
 						key={surface}
 						surface={surface}
+						sourceAlias={surface === "source" ? sourceAlias : null}
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
 						onSettingsUpdated={changeAppSettings}

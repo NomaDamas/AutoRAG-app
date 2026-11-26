@@ -233,21 +233,22 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		expect(currentSettings.sidebar.hiddenItems).toEqual(["place:applications", "place:music", "place:movies", "place:pictures"]);
 	});
 
-	it("offers no AI banner or assistant on 사이드바: the right sidebar stays the Inspector's, shown or hidden", async () => {
+	it("docks the sidebar AI assistant in the right sidebar and shows the head hero when hidden", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
-		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
-		expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')).toBeNull();
+		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')?.getAttribute("data-surface")).toBe("sidebar");
 		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
-		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
-		expect(host.querySelector('[data-action="open-app-customizer"]')).toBeNull();
+		await settle();
+		expect(host.querySelector('[data-assistant-hero="sidebar"]')).not.toBeNull();
+		expect(host.querySelector('[data-action="open-app-customizer"]')).not.toBeNull();
 	});
 
 	it("keeps each intermediate assistant message visible and unfolds the shimmer below it while the agent keeps thinking", async () => {
@@ -450,14 +451,18 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		const nav = (label: string): HTMLButtonElement | undefined =>
 			[...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((btn) => btn.textContent?.trim() === label);
 
-		// Sections without an assistant leave the right sidebar to the Inspector, with no banner offering one
-		for (const label of ["원격 접속", "단축키", "사이드바"]) {
+		// Switching to other Settings tabs docks each tab's assistant while keeping the contextMenu conversation alive
+		for (const [label, expectedSurface] of [
+			["원격 접속", "remote"],
+			["단축키", "shortcuts"],
+			["사이드바", "sidebar"],
+		] as const) {
 			await act(async () => {
 				nav(label)?.click();
 			});
 			await settle();
-			expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
-			expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
+			expect(host.querySelector('[data-testid="settings-assistant-slot"]')).not.toBeNull();
+			expect(panelOf()?.getAttribute("data-surface")).toBe(expectedSurface);
 		}
 
 		await act(async () => {

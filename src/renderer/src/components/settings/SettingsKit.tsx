@@ -27,8 +27,13 @@ export interface SettingsAssistantHero {
 
 export const SettingsAssistantHeroContext = createContext<SettingsAssistantHero | null>(null);
 
+function heroCopySurface(surface: AppCustomizerSurface): ConfigAssistantSurface {
+	return surface === "sidebar" || surface === "contextMenu" || surface === "shortcuts" ? "all" : surface;
+}
+
 function AssistantHero({ surface, onOpen }: SettingsAssistantHero): ReactElement {
 	const { t } = useTranslation();
+	const copySurface = heroCopySurface(surface);
 	return (
 		<div className="sidebar-ai-hero" data-assistant-hero={surface}>
 			<div className="sidebar-ai-hero__body">
@@ -36,12 +41,12 @@ function AssistantHero({ surface, onOpen }: SettingsAssistantHero): ReactElement
 					<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
 				</span>
 				<div className="sidebar-ai-hero__copy">
-					<div className="sidebar-ai-hero__title">{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroTitle`)}</div>
-					<p className="sidebar-ai-hero__desc">{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroDesc`)}</p>
+					<div className="sidebar-ai-hero__title">{t(`settingsCore.assistants.${copySurface}.heroTitle`)}</div>
+					<p className="sidebar-ai-hero__desc">{t(`settingsCore.assistants.${copySurface}.heroDesc`)}</p>
 				</div>
 			</div>
 			<button type="button" className="linear-btn settings-btn-primary sidebar-ai-hero__btn" data-action="open-app-customizer" onClick={onOpen}>
-				<span>{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroButton`)}</span>
+				<span>{t(`settingsCore.assistants.${copySurface}.heroButton`)}</span>
 			</button>
 		</div>
 	);

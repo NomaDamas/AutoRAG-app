@@ -253,6 +253,7 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
  */
 export function AppCustomizerPanel({
 	surface,
+	sourceAlias = null,
 	hidden,
 	focusRequest,
 	onSettingsUpdated,
@@ -260,6 +261,8 @@ export function AppCustomizerPanel({
 	onOpenAiSettings,
 }: {
 	readonly surface: AppCustomizerSurface;
+	/** Active datasource alias when docked beside a `source:<alias>` detail page. */
+	readonly sourceAlias?: string | null;
 	readonly hidden: boolean;
 	/** Bumped when the user explicitly opens the panel; the composer takes focus then, never on a plain page visit. */
 	readonly focusRequest: number;
@@ -416,18 +419,20 @@ export function AppCustomizerPanel({
 				setTurns((prev) => prev.map((turn) => (turn.id === runId ? { ...turn, status: "error", error: t(copy.unavailable) } : turn)));
 				return;
 			}
-			void bridge.send(runId, { sessionId, message: trimmed, surface }).catch((cause: unknown) => {
-				setActiveRunId((current) => (current === runId ? null : current));
-				setTurns((prev) =>
-					prev.map((turn) =>
-						turn.id === runId
-							? { ...turn, status: "error", error: cause instanceof Error ? cause.message : String(cause) }
-							: turn,
-					),
-				);
-			});
+			void bridge
+				.send(runId, { sessionId, message: trimmed, surface, ...(sourceAlias !== null && sourceAlias.length > 0 ? { sourceAlias } : {}) })
+				.catch((cause: unknown) => {
+					setActiveRunId((current) => (current === runId ? null : current));
+					setTurns((prev) =>
+						prev.map((turn) =>
+							turn.id === runId
+								? { ...turn, status: "error", error: cause instanceof Error ? cause.message : String(cause) }
+								: turn,
+						),
+					);
+				});
 		},
-		[sessionId, surface, copy, t],
+		[sessionId, surface, sourceAlias, copy, t],
 	);
 
 	const resetChat = useCallback((): void => {

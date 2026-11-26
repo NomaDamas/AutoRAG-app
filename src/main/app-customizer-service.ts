@@ -11,33 +11,21 @@ import { collectKnownSecretValues } from "./coding-agent-credentials";
 import { resolveDecisionBackendsForConfig } from "./decision-model";
 import type { FsLocation, FsTag } from "../shared/fs-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
-import {
-	aiCustomizerProfile,
-	createAiCustomizerToolkit,
-	type AiCustomizerToolkitDeps,
-} from "./agents/profiles/ai-customizer";
+import type { AiCustomizerToolkitDeps } from "./agents/profiles/ai-customizer";
 import {
 	connectionsCustomizerProfile,
 	createConnectionsCustomizerToolkit,
 } from "./agents/profiles/connections-customizer";
 import {
-	createGeneralCustomizerToolkit,
-	generalCustomizerProfile,
-} from "./agents/profiles/general-customizer";
+	createDatasourceConnectionsToolkit,
+	datasourceConnectionsProfile,
+} from "./agents/profiles/datasource-connections-customizer";
 import {
-	createSearchCustomizerToolkit,
-	searchCustomizerProfile,
-} from "./agents/profiles/search-customizer";
+	createSettingsCustomizerToolkit,
+	settingsCustomizerProfile,
+} from "./agents/profiles/settings-customizer";
 import type { ConfigCustomizerProfileInput, CustomizerToolkit } from "./agents/profiles/customizer-kit";
-import {
-	appCustomizerProfile,
-	createAppCustomizerToolkit,
-	type ReplyLanguage,
-} from "./agents/profiles/app-customizer";
-import {
-	createShortcutCustomizerToolkit,
-	shortcutCustomizerProfile,
-} from "./agents/profiles/shortcut-customizer";
+import type { ReplyLanguage } from "./agents/profiles/app-customizer";
 import { subscribeProfileProgress } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
 
@@ -100,8 +88,11 @@ interface ActiveRun {
 	cancelled: boolean;
 }
 
-/** The assistants that research something outside the app: a server's docs, a provider's key page. The others never need the web. */
-const WEB_SURFACES: readonly AppCustomizerSurface[] = ["mcp", "apps", "ai"];
+/** The assistants that research something outside the app: a server's docs, a datasource setup, a provider's key page. */
+const WEB_SURFACES: readonly AppCustomizerSurface[] = ["mcp", "apps", "source", "ai", "all"];
+
+/** Surfaces where the guarded shell tool is attached so the assistant can inspect local coding-agent configs or CLIs. */
+const SHELL_SURFACES: readonly AppCustomizerSurface[] = ["ai", "web", "apps", "source", "all"];
 
 export function configProfileInput(
 	language: ReplyLanguage,
@@ -198,7 +189,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		const knownSecrets = new Set<string>();
 		// Reading another agent's credential file is allowed, so the values in those files are known to the redaction nets from the
 		// start: whatever a command prints, no tool result or reply can repeat one.
-		if (shellHome !== undefined && surface === "ai") {
+		if (shellHome !== undefined && SHELL_SURFACES.includes(surface)) {
 			for (const value of collectKnownSecretValues({ homeDir: shellHome, agentDir: deps.agentDir, env: deps.env })) knownSecrets.add(value);
 		}
 		const secrets = {
@@ -207,18 +198,36 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		};
 		const language = (): ReplyLanguage => deps.language();
 		const platformDep = deps.platform === undefined ? {} : { platform: deps.platform };
+		const shellOption =
+			shellHome !== undefined && SHELL_SURFACES.includes(surface)
+				? {
+						shell: {
+							homeDir: shellHome,
+							cwd: deps.cwd,
+							env: deps.env,
+							managedPaths: [resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath],
+							judge: deps.writeJudge ?? defaultJudge,
+						},
+					}
+				: {};
 		let toolkit: SessionChangesTracker;
 		let profile: AgentProfile;
 		switch (surface) {
-			case "shortcuts": {
-				const kit = createShortcutCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+			case "apps":
+			case "source": {
+				const kit = createDatasourceConnectionsToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets, ...shellOption });
 				toolkit = kit;
-				profile = shortcutCustomizerProfile({ language: currentLang, toolkit: kit });
+				profile = datasourceConnectionsProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
 				break;
 			}
-			case "sidebar":
-			case "contextMenu": {
-				const kit = createAppCustomizerToolkit({
+			case "mcp": {
+				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
+				toolkit = kit;
+				profile = connectionsCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				break;
+			}
+			default: {
+				const kit = createSettingsCustomizerToolkit({
 					settings: deps.settings,
 					listLocations: deps.listLocations,
 					listTags: deps.listTags,
@@ -226,56 +235,12 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					...platformDep,
 					language,
 					cancelled,
-				});
-				toolkit = kit;
-				profile = appCustomizerProfile({ language: currentLang, toolkit: kit, ...platformDep });
-				break;
-			}
-			case "general": {
-				const kit = createGeneralCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
-				toolkit = kit;
-				profile = generalCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
-				break;
-			}
-			case "ai":
-			case "web": {
-				const kit = createAiCustomizerToolkit({
-					settings: deps.settings,
-					...platformDep,
-					language,
-					cancelled,
 					secrets,
 					...(deps.importCustomProvider === undefined ? {} : { importCustomProvider: deps.importCustomProvider }),
-					// Other coding agents keep their config under `$HOME` (`%USERPROFILE%` on Windows), which is what a person or a test
-					// sets; Electron's own home path is only the fallback.
-					...(shellHome === undefined
-						? {}
-						: {
-								shell: {
-									homeDir: shellHome,
-									cwd: deps.cwd,
-									env: deps.env,
-									managedPaths: [resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath],
-									judge: deps.writeJudge ?? defaultJudge,
-								},
-							}),
+					...shellOption,
 				});
 				toolkit = kit;
-				profile = aiCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
-				break;
-			}
-			case "indexing":
-			case "duplicates": {
-				const kit = createSearchCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
-				toolkit = kit;
-				profile = searchCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
-				break;
-			}
-			case "mcp":
-			case "apps": {
-				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
-				toolkit = kit;
-				profile = connectionsCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				profile = settingsCustomizerProfile({ ...configProfileInput(currentLang, surface, kit, knownSecrets, web), ...platformDep });
 				break;
 			}
 		}
@@ -393,9 +358,14 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				// A key pasted into the chat box goes to the remote model with the message, so it is taken out first and the
 				// person is pointed at the masked field; the model is told that a secret was removed, never what it was.
 				const pasted = findSecrets(request.message) > 0;
-				const message = pasted
+				const body = pasted
 					? `${redactSecrets(request.message)}\n\n[The message contained a credential. It was removed before reaching you. Never ask the person to paste a secret in the chat: use the tool that opens the masked key field.]`
 					: request.message;
+				const activeSource = request.sourceAlias?.trim();
+				const message =
+					activeSource !== undefined && activeSource.length > 0
+						? `[Active Settings datasource page: "${activeSource}"]\n\n${body}`
+						: body;
 				await entry.session.prompt(message);
 
 				if (run.cancelled) {
