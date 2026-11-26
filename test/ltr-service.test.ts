@@ -15,8 +15,9 @@ function librarianModel(id: string, extra: Record<string, unknown> = {}): Record
 		holdout: {
 			queries: 142,
 			baseline: { ndcg10: 0.798, mrr: 0.765 },
-			model: { ndcg10: 0.798, mrr: 0.779 },
+			model: { ndcg10: 0.812, mrr: 0.779 },
 			deltaMrrCi95: [0.0001, 0.029],
+			deltaNdcg10Ci95: [0.002, 0.026],
 		},
 		passedGate: true,
 		trainer: { xgboost: "3.3.0" },
@@ -72,10 +73,11 @@ describe("createLtrService.get", () => {
 		expect(snapshot.serving).toEqual({ status: "active", modelId: "xgb-1" });
 		expect(snapshot.loggedRuns).toBe(944);
 		expect(snapshot.selection).toBe("latest");
-		expect(snapshot.minTrainingRuns).toBe(100);
+		expect(snapshot.minTrainingRuns).toBe(300);
 		expect(snapshot.models).toHaveLength(1);
 		expect(snapshot.models[0]).toMatchObject({ id: "xgb-1", passedGate: true, trainedOnRuns: 568, seeds: 5 });
 		expect(snapshot.models[0]?.holdout.deltaMrrCi95).toEqual([0.0001, 0.029]);
+		expect(snapshot.models[0]?.holdout.deltaNdcg10Ci95).toEqual([0.002, 0.026]);
 		expect(snapshot.lastAttempt).toEqual({ runs: 944, at: 1_795_079_711_900, result: "trained: holdout 142 queries" });
 		expect(snapshot.autoTrain).toEqual({ enabled: false, minNewRuns: 200, due: false });
 	});
