@@ -83,12 +83,26 @@ describe("parseExternalOpenArgv", () => {
 		).toEqual({ kind: "new-window" });
 	});
 
-	it("ignores unpackaged app entry directory as a target path", () => {
+	it("ignores unpackaged app entry directory (including relative '.') as a target path", () => {
 		expect(
 			parseExternalOpenArgv(["/path/to/Electron", "/Volumes/SSD1/4/AutoRAG-app", "--user-data-dir=/tmp/ud"], {
 				isPackaged: false,
 				platform: "darwin",
 				appPath: "/Volumes/SSD1/4/AutoRAG-app",
+			}),
+		).toBeNull();
+		expect(
+			parseExternalOpenArgv(["C:\\app\\node_modules\\electron\\dist\\electron.exe", ".", "--user-data-dir=C:\\tmp\\ud"], {
+				isPackaged: false,
+				platform: "win32",
+				appPath: "C:\\dev\\dazzi-qa\\app",
+			}),
+		).toBeNull();
+		expect(
+			parseExternalOpenArgv(["C:\\app\\node_modules\\electron\\dist\\electron.exe", "out\\main\\index.js", "--user-data-dir=C:\\tmp\\ud"], {
+				isPackaged: false,
+				platform: "win32",
+				appPath: "C:\\dev\\dazzi-qa\\app",
 			}),
 		).toBeNull();
 	});

@@ -100,19 +100,27 @@ export function parseExternalOpenArgv(
 	}
 
 	// Bare positional path arguments (for example double-clicking/opening a folder directly with the app).
-	const normalizedAppPath = options.appPath?.replace(/[\\/]+$/u, "") ?? null;
+	// Unpackaged Electron launches always pass the app entry (`.` or a folder/script path) as the first
+	// positional argument — never treat it as a folder to open or a Windows virtual shell target.
+	const normalizedAppPath = options.appPath?.replace(/[\\/]+$/u, "").toLowerCase() ?? null;
+	let skippedEntry = options.isPackaged;
 	const paths: string[] = [];
 	for (const arg of args) {
 		if (arg === "" || arg.startsWith("-")) continue;
-		if (!options.isPackaged && normalizedAppPath !== null && arg.replace(/[\\/]+$/u, "") === normalizedAppPath) {
+		if (!skippedEntry) {
+			skippedEntry = true;
+			continue;
+		}
+		if (!options.isPackaged && normalizedAppPath !== null && arg.replace(/[\\/]+$/u, "").toLowerCase() === normalizedAppPath) {
 			continue;
 		}
 		if (options.platform === "win32") {
 			const cleaned = arg.endsWith('"') ? arg.slice(0, -1) : arg;
-			if (isWindowsVirtualShellPath(cleaned)) {
-				return { kind: "fallback-explorer", rawTarget: cleaned };
+			// Only real absolute Windows paths (drive letter or UNC) count as bare positional targets;
+			// virtual shell namespaces (`::{CLSID}`, `shell:`) come through `--autorag-default-open`.
+			if (!isWindowsVirtualShellPath(cleaned)) {
+				paths.push(cleaned);
 			}
-			paths.push(cleaned);
 		} else if (arg.startsWith("/")) {
 			paths.push(arg);
 		}

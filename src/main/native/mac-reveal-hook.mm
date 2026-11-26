@@ -127,6 +127,11 @@ static napi_value Install(napi_env env, napi_callback_info info) {
         setEventHandler:g_handler
             andSelector:@selector(handleRevealEvent:withReplyEvent:)
           forEventClass:kAEMiscStandards
+             andEventID:kAEMakeObjectsVisible];
+    [[NSAppleEventManager sharedAppleEventManager]
+        setEventHandler:g_handler
+            andSelector:@selector(handleRevealEvent:withReplyEvent:)
+          forEventClass:kAEMiscStandards
              andEventID:kAERevealSelection];
 
     napi_value result = nullptr;
@@ -137,6 +142,9 @@ static napi_value Install(napi_env env, napi_callback_info info) {
 static napi_value Uninstall(napi_env env, napi_callback_info info) {
     (void)info;
     if (g_handler != nil) {
+        [[NSAppleEventManager sharedAppleEventManager]
+            removeEventHandlerForEventClass:kAEMiscStandards
+                                 andEventID:kAEMakeObjectsVisible];
         [[NSAppleEventManager sharedAppleEventManager]
             removeEventHandlerForEventClass:kAEMiscStandards
                                  andEventID:kAERevealSelection];
