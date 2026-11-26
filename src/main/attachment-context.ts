@@ -205,9 +205,4 @@ export class AttachmentContextAgent extends AutoRAGAgent {
 		const prompt = super.buildFastAnswerPrompt(query, options, baseline);
 		return this.#attachmentContext === "" ? prompt : `${this.#attachmentContext}\n\n${prompt}`;
 	}
-
-	override buildSearchPrompt(query: string, options: RetrievalOptions, initialRetrievalContext?: string): string {
-		const prompt = super.buildSearchPrompt(query, options, initialRetrievalContext);
-		return this.#attachmentContext === "" ? prompt : `${this.#attachmentContext}\n\n${prompt}`;
-	}
 }

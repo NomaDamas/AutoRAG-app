@@ -7,7 +7,7 @@
  */
 
 import { parentPort, workerData } from "node:worker_threads";
-import { EverythingClient, scanWithDupey } from "@autorag/librarian";
+import { buildVersionHistory, EverythingClient, scanWithDupey } from "@autorag/librarian";
 import { createDefaultContentSearch } from "../main/content-search";
 import { createFileNameSearch } from "../main/file-name-search";
 import { createIndexStatusService } from "../main/index-status";
@@ -34,6 +34,15 @@ serveLibrarian(adaptNodePort(parentPort), {
 			contentSearch: createDefaultContentSearch(process.env, process.cwd(), relevanceGate),
 			sourceSearch: createDefaultSourceSearch(process.env, process.cwd(), relevanceGate),
 			scanDuplicates: (dir) => scanWithDupey(dir),
+			versionHistory: async (members) => {
+				const history = await buildVersionHistory(members);
+				return {
+					versions: history.versions.map((v) => ({
+						...v,
+						relation: v.relation === "different" ? "near" : v.relation,
+					})),
+				};
+			},
 			indexStatus: createIndexStatusService({ env: process.env, cwd: process.cwd(), onRefreshed: host.indexRefreshed }),
 		};
 	},

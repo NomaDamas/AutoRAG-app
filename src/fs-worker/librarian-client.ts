@@ -14,7 +14,7 @@ import type { DupeyScanResult } from "@autorag/librarian";
 import { createWorkerClient, serveWorkerPort, type WorkerClient } from "../shared/fs-worker-protocol";
 import { t } from "../shared/i18n/core";
 import type { AppLanguage } from "../shared/i18n/core";
-import type { FsLocation } from "../shared/fs-contract";
+import type { FsLocation, FsVersionHistoryMemberInput, FsVersionHistoryResult } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
 import type { IndexMap } from "../shared/index-map-contract";
 import type { ErrorReport } from "../main/error-report-core";
@@ -45,6 +45,7 @@ export interface LibrarianClient {
 	readonly contentSearch: ContentSearch;
 	readonly sourceSearch: SourceSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
+	versionHistory(members: readonly FsVersionHistoryMemberInput[]): Promise<FsVersionHistoryResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -144,6 +145,7 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 				call(LIBRARIAN_OP.sourceSearch, limit === undefined ? [datasourceId, query] : [datasourceId, query, limit], signal),
 		},
 		scanDuplicates: (dir) => call(LIBRARIAN_OP.scanDuplicates, [dir]),
+		versionHistory: (members) => call(LIBRARIAN_OP.versionHistory, [members]),
 		indexStatus: {
 			indexStatus: (paths) => call(LIBRARIAN_OP.indexStatus, [paths]),
 			setIndexExcluded: (path, excluded) => call(LIBRARIAN_OP.setIndexExcluded, [path, excluded]),

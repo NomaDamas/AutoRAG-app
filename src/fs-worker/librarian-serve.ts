@@ -11,7 +11,7 @@ import type { DupeyScanResult } from "@autorag/librarian";
 import { createWorkerClient, serveWorkerPort, type WorkerClient, type WorkerHandler, type WorkerPort } from "../shared/fs-worker-protocol";
 import { setAppLanguage } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
-import type { FsLocation } from "../shared/fs-contract";
+import type { FsLocation, FsVersionHistoryMemberInput, FsVersionHistoryResult } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
 import type { IndexMap } from "../shared/index-map-contract";
 import { installErrorReporter } from "../main/error-report-core";
@@ -25,6 +25,7 @@ export interface LibrarianServices {
 	readonly contentSearch: ContentSearch;
 	readonly sourceSearch: SourceSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
+	versionHistory?(members: readonly FsVersionHistoryMemberInput[]): Promise<FsVersionHistoryResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -60,6 +61,26 @@ function stringsArg(args: readonly unknown[], index: number, label: string): rea
 	return value;
 }
 
+function versionHistoryMembersArg(value: unknown): readonly FsVersionHistoryMemberInput[] {
+	if (!Array.isArray(value)) throw new TypeError("members must be an array");
+	return value.map((item) => {
+		if (typeof item !== "object" || item === null || !("path" in item) || typeof item.path !== "string") {
+			throw new TypeError("each member must have a path string");
+		}
+		const relation =
+			"relation" in item &&
+			(item.relation === "latest" || item.relation === "exact" || item.relation === "near" || item.relation === "contains")
+				? item.relation
+				: undefined;
+		const mtimeMs = "mtimeMs" in item && typeof item.mtimeMs === "number" && Number.isFinite(item.mtimeMs) ? item.mtimeMs : undefined;
+		return {
+			path: item.path,
+			...(relation !== undefined ? { relation } : {}),
+			...(mtimeMs !== undefined ? { mtimeMs } : {}),
+		};
+	});
+}
+
 /** Answer the worker on `port`; resolves nothing, it serves until the port closes. */
 export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions): void {
 	const worker: WorkerClient = createWorkerClient();
@@ -82,6 +103,10 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 		[LIBRARIAN_OP.fileNameEnsureDaemon]: () => services.fileNameSearch.ensureDaemon(),
 		[LIBRARIAN_OP.fileNameStop]: () => services.fileNameSearch.stop(),
 		[LIBRARIAN_OP.scanDuplicates]: (args) => services.scanDuplicates(stringArg(args, 0, "dir")),
+		[LIBRARIAN_OP.versionHistory]: (args) =>
+			services.versionHistory === undefined
+				? Promise.resolve({ versions: [] })
+				: services.versionHistory(versionHistoryMembersArg(args[0])),
 		[LIBRARIAN_OP.indexStatus]: (args) => services.indexStatus.indexStatus(stringsArg(args, 0, "paths")),
 		[LIBRARIAN_OP.setIndexExcluded]: (args) => {
 			if (typeof args[1] !== "boolean") throw new TypeError("excluded must be a boolean");

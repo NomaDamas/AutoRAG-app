@@ -292,6 +292,28 @@
       "near": "유사본",
       "contains": "포함본"
     },
+    "versionHistory": {
+      "title": "버전 히스토리",
+      "count": "{{count}}개 버전",
+      "loading": "변경 내용 비교 중…",
+      "identical": "이전 버전과 내용 동일",
+      "baseVersion": "기준 버전",
+      "unsupported": "텍스트 비교 미지원 형식",
+      "error": "변경 내용을 불러오지 못했습니다",
+      "vsPrevious": "직전 버전({{name}}) 대비",
+      "addedLines": "+{{count}}줄",
+      "removedLines": "-{{count}}줄",
+      "viewDetail": "자세히 비교",
+      "openFile": "파일로 이동",
+      "previousLabel": "이전 버전",
+      "currentLabel": "현재 버전",
+      "viewModeUnified": "한 줄로 보기",
+      "viewModeSplit": "나란히 비교",
+      "viewModeGroup": "비교 보기 방식",
+      "summarizing": "AI 요약 중…",
+      "truncatedNotice": "문서가 길어 변경된 핵심 구간만 표시합니다.",
+      "close": "닫기"
+    },
     "evidencePanel": {
       "emptyTitle": "답변의 출처가\n여기에 표시됩니다.",
       "excerpts": "근거 문장",

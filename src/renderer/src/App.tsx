@@ -693,19 +693,24 @@ export function App(): ReactElement {
 	/** The toolbar Share item: shown where the OS has a share sheet, enabled with a focused row. */
 	const shareControl = toolbarShareControl(focused !== null, finder?.actionCapabilities ?? NO_CAPABILITIES);
 	const familyEntries = focused !== null && finder !== undefined ? finder.familyEntriesFor(focused.path) : null;
-	const inspectorFamily: InspectorFamily | null =
-		familyEntries === null
-			? null
-			: {
-					headPath: familyEntries.head.path,
-					headName: familyEntries.head.name,
-					members: familyEntries.members.map((member) => ({
-						path: member.entry.path,
-						name: member.entry.name,
-						relation: member.relation,
-						where: dirname(member.entry.path),
-					})),
-				};
+	const inspectorFamily: InspectorFamily | null = useMemo(
+		() =>
+			familyEntries === null
+				? null
+				: {
+						headPath: familyEntries.head.path,
+						headName: familyEntries.head.name,
+						headMtimeMs: familyEntries.head.mtimeMs,
+						members: familyEntries.members.map((member) => ({
+							path: member.entry.path,
+							name: member.entry.name,
+							relation: member.relation,
+							where: dirname(member.entry.path),
+							mtimeMs: member.entry.mtimeMs,
+						})),
+					},
+		[familyEntries],
+	);
 	const openMemberEntry = useCallback(
 		(path: string) => {
 			const entry =

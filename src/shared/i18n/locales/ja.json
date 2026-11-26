@@ -292,6 +292,28 @@
       "near": "類似",
       "contains": "包含"
     },
+    "versionHistory": {
+      "title": "バージョン履歴",
+      "count": "{{count}}件のバージョン",
+      "loading": "変更点を比較中…",
+      "identical": "前のバージョンと同一内容",
+      "baseVersion": "基準バージョン",
+      "unsupported": "テキスト比較に未対応の形式",
+      "error": "変更点を読み込めませんでした",
+      "vsPrevious": "直前({{name}})との比較",
+      "addedLines": "+{{count}}行",
+      "removedLines": "-{{count}}行",
+      "viewDetail": "詳しく比較",
+      "openFile": "ファイルを表示",
+      "previousLabel": "前のバージョン",
+      "currentLabel": "現在のバージョン",
+      "viewModeUnified": "インライン",
+      "viewModeSplit": "左右で比較",
+      "viewModeGroup": "比較表示形式",
+      "summarizing": "AI 要約中…",
+      "truncatedNotice": "文書が長いため主要な変更箇所のみ表示しています。",
+      "close": "閉じる"
+    },
     "evidencePanel": {
       "emptyTitle": "回答の出典が\nここに表示されます。",
       "excerpts": "根拠の抜粋",

@@ -169,8 +169,10 @@ import {
 	registerSearchIpcHandlers,
 	registerServicesIpcHandlers,
 	registerSettingsIpcHandlers,
+	registerVersionDiffSummaryIpcHandlers,
 	registerVoiceIpcHandlers,
 } from "./ipc";
+import { createVersionDiffSummaryService } from "./version-diff-summary";
 import { createActionService } from "./action-service";
 import { createVoiceService, systemMicrophoneAccess } from "./voice-service";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
@@ -1045,11 +1047,17 @@ app.whenReady().then(async () => {
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());
+	registerVersionDiffSummaryIpcHandlers(
+		createVersionDiffSummaryService({
+			defaultLanguage: () => currentLanguage,
+		}),
+	);
 	// Renaming a file to another format's extension converts it (Filee); the settings are the shared AutoRAG config's `filee` block.
 	registerConversionIpcHandlers(createFileeConversionService(() => readFileeSettings(autoragConfigPath())));
 	// Remote access: the same Finder UI served to a browser when the setting is
 	// on, each session with its own fs-worker client and its own watches.
 	const remoteTargets = {
+		fs: { summarizeVersionDiff: FS_CHANNELS.summarizeVersionDiff },
 		settings: SETTINGS_CHANNELS,
 		search: SEARCH_CHANNELS,
 		interaction: INTERACTION_CHANNELS,

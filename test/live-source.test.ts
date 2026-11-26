@@ -87,6 +87,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		startDrag: () => {},
 		versionFamilies: async () => result,
 		refreshVersionFamilies: async () => result,
+		versionHistory: async () => ({ versions: [] }),
 		indexStatus: async (paths) =>
 			paths.map((path) => ({ path, kind: "included" as const, excluded: false, toggleable: true, detail: "" })),
 		setIndexExcluded: async (path, excluded) => ({
