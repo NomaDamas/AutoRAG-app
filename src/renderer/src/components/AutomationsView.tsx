@@ -1670,9 +1670,10 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 				}}
 			>
 				{/* Narrower than half the workspace with both sidebars open (--pane-min-width), the page is cut on the right instead of squeezed. */}
-				{/* The page's top edge is fixed a little way down the pane (about where the first screen looks balanced), so opening a menu or a card
-				    only grows it downward and nothing jumps. */}
-				<div className="flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40 pt-[clamp(32px,14vh,140px)]">
+				{/* The list's top edge is fixed a little way down the pane (about where the first screen looks balanced), so opening a menu or a card
+				    only grows it downward and nothing jumps. A page one step in (a rule's or a right-click action's, 전체 기록) is read from the
+				    top, as Settings' pages are: it starts 40px down, the same with or without runs. */}
+				<div className={cn("flex min-h-full min-w-(--pane-min-width) flex-col px-40 pb-40", detail !== null || magic !== null || page === "all" ? "pt-40" : "pt-[clamp(32px,14vh,140px)]")}>
 				<div className="mx-auto flex w-full max-w-[640px] flex-none flex-col gap-24">
 					{state.error === null ? null : fixing !== undefined ? (
 						<div role="status" data-automation-fixing className="flex h-40 items-center gap-8 rounded-12 border border-border px-14 text-meta text-ink-muted">
