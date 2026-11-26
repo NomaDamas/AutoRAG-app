@@ -828,9 +828,10 @@
     "back": "Back",
     "magic": {
       "title": "Right-click menu",
-      "open": "Open in Settings",
-      "on": "Show in the right-click menu"
-    }
+      "on": "Show in the right-click menu",
+      "kind": "Right-click menu action"
+    },
+    "kind": "Automation"
   },
   "osMenu": {
     "ask": "Ask Dazzi",

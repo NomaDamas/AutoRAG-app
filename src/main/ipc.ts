@@ -12,6 +12,7 @@ import type { InteractionHub } from "./interaction-hub";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerPromptAnswer, isAppCustomizerRequest } from "../shared/app-customizer-contract";
 import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import type { MagicActionRunLog } from "./magic-action-runs";
 import type { ChatStore } from "./chat-store";
 import { saveMagicActionToHistory } from "./magic-action-history";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
@@ -204,7 +205,8 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	});
 }
 
-export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore): void {
+export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore, runLog?: MagicActionRunLog): void {
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.history, (_event, actionId: unknown) => (typeof actionId === "string" && runLog !== undefined ? runLog.history(actionId) : []));
 	ipcMain.handle(MAGIC_ACTION_CHANNELS.saveToHistory, (_event, request: unknown) => {
 		if (!isMagicActionSaveRequest(request)) throw new TypeError("magicAction:saveToHistory expects { actionLabel, paths, output }");
 		return saveMagicActionToHistory(chatStore, request);

@@ -38,8 +38,6 @@ export interface AutomationsShellDeps {
 	readonly showChat?: () => void;
 	/** 새 자동화 and 말로 만들기: bring the AI chat column up to make a rule in words. */
 	readonly talk?: () => void;
-	/** A right-click row's ›: open Settings → 우클릭 메뉴 with that action's editor. */
-	readonly openMagicAction?: (id: string) => void;
 }
 
 export interface AutomationsShell {
@@ -133,6 +131,20 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			live = false;
 			off?.();
 		};
+	}, []);
+	/** Rewrite the right-click actions from the freshest settings; resolves true once they are saved. */
+	const changeMagicActions = useCallback(async (change: (actions: readonly MagicAction[]) => readonly MagicAction[]): Promise<boolean> => {
+		const settings = window.autorag?.settings;
+		if (settings === undefined) return false;
+		try {
+			const current = normalizeContextMenuSettings((await settings.get()).contextMenu);
+			const saved = await settings.set({ contextMenu: normalizeContextMenuSettings({ ...current, magicActions: change(current.magicActions) }) });
+			setMagicActions(normalizeContextMenuSettings(saved.contextMenu).magicActions);
+			return true;
+		} catch (cause) {
+			latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+			return false;
+		}
 	}, []);
 
 	// No rule runs while the service is off, so the window turns it on once there is something to run: once per
@@ -374,17 +386,18 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			}
 		},
 		magicActions,
-		onOpenMagicAction: (id) => latest.current.openMagicAction?.(id),
 		onToggleMagicAction: (id) => {
-			const settings = window.autorag?.settings;
-			if (settings === undefined) return;
-			void (async () => {
-				const current = normalizeContextMenuSettings((await settings.get()).contextMenu);
-				const saved = await settings.set({
-					contextMenu: { ...current, magicActions: current.magicActions.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)) },
-				});
-				setMagicActions(normalizeContextMenuSettings(saved.contextMenu).magicActions);
-			})().catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
+			void changeMagicActions((actions) => actions.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
+		},
+		onUpdateMagicAction: async (action) => {
+			showProgress(t("automations.toast.saving"), true);
+			const ok = await changeMagicActions((actions) => actions.map((item) => (item.id === action.id ? action : item)));
+			if (ok) showProgress(t("automations.toast.saved"), false);
+			else clearProgress();
+			return ok;
+		},
+		onDeleteMagicAction: async (id) => {
+			await changeMagicActions((actions) => actions.filter((item) => item.id !== id));
 		},
 		editing: byId(editingId),
 		onUpdate: async (id, next) => {

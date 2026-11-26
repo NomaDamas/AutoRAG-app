@@ -17,11 +17,13 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, MousePointerClickIcon, PencilIcon, TabPlusIcon, ZapIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
 import { normalizeMagicAction, type MagicAction, type MagicActionSelectionRule } from "../../../shared/context-menu-contract";
 import { hostPlatform } from "../lib/shortcuts";
-import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickTarget, type RightClickKind } from "../state/right-click-trigger";
+import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickKindOf, rightClickTarget, type RightClickKind } from "../state/right-click-trigger";
+import { onMagicActionDone } from "../hooks/useMagicAction";
+import { ConfirmDialog } from "./primitives/ConfirmDialog";
 import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
 import { RightClickWhen, RunKindSegment, rightClickSentence, type RunKind } from "./RightClickWhen";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
@@ -46,8 +48,10 @@ export interface AutomationsViewProps {
 	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	/** The right-click actions (Settings → 우클릭 메뉴), listed under 내 자동화 beside the rules. */
 	readonly magicActions?: readonly MagicAction[];
-	/** A right-click row's ›: its editor in Settings → 우클릭 메뉴. */
-	readonly onOpenMagicAction?: ((id: string) => void) | undefined;
+	/** A right-click action's page saved a change (its name, 언제, 할 일, permission); resolves true once settings have it. */
+	readonly onUpdateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
+	/** A right-click action's page, 삭제 confirmed: remove it from the right-click menu. */
+	readonly onDeleteMagicAction?: ((id: string) => Promise<void>) | undefined;
 	/** A right-click row's switch: show or hide the action in the right-click menu. */
 	readonly onToggleMagicAction?: ((id: string) => void) | undefined;
 	/** The names people gave their rules; the list redraws when one changes. */
@@ -494,6 +498,8 @@ function RuleRow({
 		>
 			{/* Figma 672:3740: how the last run went, before the name. */}
 			<RunDot tone={runDotTone(rule.lastRun)} />
+			{/* The bolt marks a folder automation; a right-click action has the click glyph in its place. */}
+			<ZapIcon size={14} className="-ml-6 flex-none text-ink-muted" aria-label={t("automations.kind")} />
 			{/* The same title and caption sizes as a recommendation's (Figma 672:3740): 14px over 12px. */}
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
 				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
@@ -509,20 +515,26 @@ function RuleRow({
 }
 
 /**
- * A right-click action in 내 자동화: the same row as a rule's, with the magic mark where the status dot is (it has no
- * run log), when it shows ("PDF 파일 하나를 우클릭하면"), its on/off switch, and ›, which opens it in Settings.
+ * A right-click action in 내 자동화: the same row as a rule's — the status dot from its last run, the click glyph where a
+ * rule has the bolt, its name over when it shows ("PDF 파일 하나를 우클릭하면"), the on/off switch, and ›, which opens its
+ * own page here in the tab.
  */
-function MagicActionRow({ action, onOpen, onToggle }: { readonly action: MagicAction; readonly onOpen?: ((id: string) => void) | undefined; readonly onToggle?: ((id: string) => void) | undefined }): ReactElement {
+function MagicActionRow({
+	action,
+	lastRun,
+	onOpen,
+	onToggle,
+}: {
+	readonly action: MagicAction;
+	readonly lastRun: AutomationRun | null;
+	readonly onOpen: (id: string) => void;
+	readonly onToggle?: ((id: string) => void) | undefined;
+}): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<div
-			role="row"
-			data-magic-action-row={action.id}
-			title={t("automations.magic.open")}
-			className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row"
-			onClick={() => onOpen?.(action.id)}
-		>
-			<SparklesIcon size={12} className="flex-none text-accent" />
+		<div role="row" data-magic-action-row={action.id} className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row" onClick={() => onOpen(action.id)}>
+			<RunDot tone={runDotTone(lastRun)} />
+			<MousePointerClickIcon size={14} className="-ml-6 flex-none text-ink-muted" aria-label={t("automations.magic.kind")} />
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
 				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{rightClickSentence(t, action)}</span>
@@ -531,6 +543,255 @@ function MagicActionRow({ action, onOpen, onToggle }: { readonly action: MagicAc
 				<Switch checked={action.enabled} onChange={() => onToggle?.(action.id)} ariaLabel={t("automations.magic.on")} dataSwitchId={`magic-action-on:${action.id}`} />
 			</span>
 			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
+		</div>
+	);
+}
+
+/** Right-click actions' runs from their log, newest first, read again whenever a run finishes. */
+function useMagicRunHistory(ids: readonly string[]): Readonly<Record<string, readonly AutomationRun[]>> {
+	const [history, setHistory] = useState<Readonly<Record<string, readonly AutomationRun[]>>>({});
+	const [tick, setTick] = useState(0);
+	useEffect(() => onMagicActionDone(() => setTick((count) => count + 1)), []);
+	const key = ids.join("\n");
+	useEffect(() => {
+		const bridge = window.autorag?.magicAction;
+		if (bridge === undefined || typeof bridge.history !== "function") return;
+		let live = true;
+		// The log is written as the run ends; a moment later it has the run that just finished.
+		const read = (): void => {
+			void Promise.all(ids.map(async (id) => [id, await bridge.history(id).catch(() => [] as readonly AutomationRun[])] as const)).then((entries) => {
+				if (live) setHistory(Object.fromEntries(entries));
+			});
+		};
+		read();
+		const later = tick === 0 ? undefined : setTimeout(read, 400);
+		return () => {
+			live = false;
+			clearTimeout(later);
+		};
+	}, [key, tick]);
+	return history;
+}
+
+/** The name on a right-click action's page: the same field as a rule's — a click turns it into a field, Enter or leaving saves, Esc keeps it. */
+function MagicTitle({ action, onRename }: { readonly action: MagicAction; readonly onRename: (label: string) => void }): ReactElement {
+	const { t } = useTranslation();
+	const [editing, setEditing] = useState(false);
+	const [name, setName] = useState("");
+	const finish = (save: boolean): void => {
+		setEditing(false);
+		const next = name.trim();
+		if (save && next.length > 0 && next !== action.label) onRename(next);
+	};
+	if (editing) {
+		return (
+			<input
+				autoFocus
+				data-testid="magic-title-input"
+				value={name}
+				aria-label={t("automations.row.rename")}
+				className="h-28 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[17px] font-medium leading-[22px] text-ink outline-none"
+				onFocus={(event) => event.currentTarget.select()}
+				onChange={(event) => setName(event.target.value)}
+				onKeyDown={(event) => {
+					event.stopPropagation();
+					if (event.key === "Enter") finish(true);
+					if (event.key === "Escape") finish(false);
+				}}
+				onBlur={() => finish(true)}
+			/>
+		);
+	}
+	return (
+		<button
+			type="button"
+			data-action="magic-rename"
+			title={t("automations.row.rename")}
+			className="group inline-flex h-28 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
+			onClick={() => {
+				setName(action.label);
+				setEditing(true);
+			}}
+		>
+			<span className="truncate text-[17px] font-medium leading-[22px] text-ink">{action.label}</span>
+			<PencilIcon size={14} className="flex-none text-ink-faint group-hover:text-ink-muted" />
+		</button>
+	);
+}
+
+/**
+ * A right-click action's 설정 card: the rule page's card in the right-click form — 언제 as the sentence (the trigger
+ * fixed), 할 일 with AI | 스크립트, and the permission chip. 취소 shows once something differs; 저장 waits for it.
+ */
+function MagicActionCard({ action, onSave }: { readonly action: MagicAction; readonly onSave: (next: MagicAction) => Promise<boolean> }): ReactElement {
+	const { t } = useTranslation();
+	const start = (): {
+		kind: RightClickKind;
+		custom: readonly string[] | null;
+		selection: MagicActionSelectionRule;
+		runKind: RunKind;
+		task: string;
+		mode: ModeId;
+	} => {
+		const { kind, custom } = rightClickKindOf(action.targetKind, action.extensions);
+		return {
+			kind,
+			custom,
+			selection: action.selection,
+			runKind: action.execution.kind === "script" ? "script" : "agent",
+			task: action.execution.kind === "script" ? action.execution.command : action.execution.prompt,
+			mode: action.execution.kind === "agent" && action.execution.mode === "organize" ? "write" : "read",
+		};
+	};
+	const [form, setForm] = useState(start);
+	const [changed, setChanged] = useState(false);
+	const [busy, setBusy] = useState(false);
+	useEffect(() => {
+		setForm(start());
+		setChanged(false);
+	}, [action.id, JSON.stringify(action)]);
+	const set = <K extends keyof ReturnType<typeof start>>(key: K) => (value: ReturnType<typeof start>[K]): void => {
+		setForm((current) => ({ ...current, [key]: value }));
+		setChanged(true);
+	};
+	const script = form.runKind === "script";
+	const modes: readonly ChipOption<ModeId>[] = [
+		{ value: "read", label: t("automations.create.mode.read"), icon: <EyeIcon size={13} /> },
+		{ value: "write", label: t("automations.create.mode.write"), icon: <FilePenIcon /> },
+	];
+	const save = async (): Promise<void> => {
+		const next = normalizeMagicAction({
+			...action,
+			selection: form.selection,
+			...rightClickTarget(form.kind, form.custom),
+			execution: script
+				? { kind: "script", command: form.task }
+				: {
+						kind: "agent",
+						mode: form.mode === "write" ? "organize" : "read",
+						prompt: form.task,
+						useSkills: action.execution.kind === "agent" ? action.execution.useSkills !== false : true,
+						useMcp: action.execution.kind === "agent" ? action.execution.useMcp !== false : true,
+					},
+		});
+		if (next === null || busy) return;
+		setBusy(true);
+		const ok = await onSave(next);
+		setBusy(false);
+		if (ok) setChanged(false);
+	};
+	return (
+		<div className="flex flex-col gap-8 rounded-[14px] border border-border bg-window p-14" data-magic-action-card={action.id}>
+			<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.when")}</span>
+			<RightClickWhen
+				kind={form.kind}
+				custom={form.custom}
+				selection={form.selection}
+				testId="magic-detail-rc"
+				onKind={(kind) => {
+					setForm((current) => ({ ...current, kind, custom: null }));
+					setChanged(true);
+				}}
+				onCustom={set("custom")}
+				onSelection={set("selection")}
+			/>
+			<div className="mt-4 flex h-22 items-center justify-between">
+				<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.task")}</span>
+				<RunKindSegment value={form.runKind} testId="magic-detail-run" onChange={set("runKind")} />
+			</div>
+			<textarea
+				data-testid="magic-detail-task"
+				value={form.task}
+				aria-label={t("automations.create.task")}
+				placeholder={
+					script
+						? t(hostPlatform() === "win32" ? "settingsCore.contextMenu.editor.commandPlaceholderWindows" : "settingsCore.contextMenu.editor.commandPlaceholder")
+						: t("automations.create.taskPlaceholder")
+				}
+				className={cn(
+					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] text-ink outline-none placeholder:text-ink-faint focus:border-accent",
+					script && "font-mono text-[12px]",
+				)}
+				onChange={(change) => set("task")(change.target.value)}
+			/>
+			<div className="flex items-center gap-6">
+				{script ? null : <ChipSelect value={form.mode} options={modes} label={t("automations.create.modeLabel")} round testId="magic-detail-mode" onChange={set("mode")} />}
+				<span className="flex-1" />
+				{changed ? (
+					<button
+						type="button"
+						data-action="magic-detail-cancel"
+						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
+						onClick={() => {
+							setForm(start());
+							setChanged(false);
+						}}
+					>
+						{t("common.cancel")}
+					</button>
+				) : null}
+				<button
+					type="button"
+					data-action="magic-detail-save"
+					disabled={!changed || form.task.trim().length === 0}
+					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
+					onClick={() => void save()}
+				>
+					{t("common.save")}
+				</button>
+			</div>
+		</div>
+	);
+}
+
+/** A right-click action's own page, laid out as a rule's: the path back, the name and switch, its 설정 card, its 실행 기록, and 삭제. */
+function MagicActionDetail({
+	action,
+	runs,
+	crumbs,
+	onUpdate,
+	onToggle,
+	onDelete,
+}: {
+	readonly action: MagicAction;
+	readonly runs: readonly AutomationRun[] | undefined;
+	readonly crumbs: readonly Crumb[];
+	readonly onUpdate: (next: MagicAction) => Promise<boolean>;
+	readonly onToggle?: ((id: string) => void) | undefined;
+	readonly onDelete: () => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const list = runs ?? [];
+	return (
+		<div className="flex flex-col gap-24" data-magic-action-detail={action.id}>
+			<div className="flex flex-col gap-6">
+				<Breadcrumb crumbs={crumbs} current={action.label} />
+				<div className="flex min-w-0 items-center gap-8">
+					<MagicTitle key={action.id} action={action} onRename={(label) => void onUpdate({ ...action, label })} />
+					<span className="flex-1" />
+					<span className="flex-none text-badge leading-[16px] text-ink-muted">{t("automations.detail.runOn")}</span>
+					<Switch checked={action.enabled} onChange={() => onToggle?.(action.id)} ariaLabel={t("automations.magic.on")} dataSwitchId={`magic-detail-on:${action.id}`} />
+				</div>
+			</div>
+			<Section muted title={t("automations.detail.settings")}>
+				<MagicActionCard action={action} onSave={onUpdate} />
+			</Section>
+			<Section muted title={list.length === 0 ? t("automations.detail.history") : `${t("automations.detail.history")} (${list.length})`}>
+				{list.length === 0 ? (
+					<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
+				) : (
+					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
+						{list.map((run) => (
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} flat />
+						))}
+					</div>
+				)}
+			</Section>
+			<div className="flex justify-end">
+				<button type="button" data-action="magic-delete" className="border-0 bg-transparent p-0 text-meta font-medium text-danger-text cursor-pointer hover:opacity-80" onClick={onDelete}>
+					{t("automations.detail.delete")}
+				</button>
+			</div>
 		</div>
 	);
 }
@@ -1257,9 +1518,14 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, magicActions = [], onOpenMagicAction, onToggleMagicAction }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, magicActions = [], onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [page, setPage] = useState<"list" | "all">("list");
+	// A right-click action's own page, one step in from the list as a rule's is.
+	const [magicId, setMagicId] = useState<string | null>(null);
+	const magic = magicActions.find((action) => action.id === magicId) ?? null;
+	const magicRuns = useMagicRunHistory(magicActions.map((action) => action.id));
+	const [confirmMagic, setConfirmMagic] = useState<MagicAction | null>(null);
 	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
 	const [fromAll, setFromAll] = useState(false);
 	const locations = useLocations();
@@ -1281,6 +1547,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 	const toMain = (): void => {
 		setPage("list");
 		setFromAll(false);
+		setMagicId(null);
 		onCancelEdit?.();
 	};
 	const mainCrumb: Crumb = { label: t("places.automations"), action: "automation-back", onClick: toMain };
@@ -1291,7 +1558,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 	const scrollRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		scrollRef.current?.scrollTo?.({ top: 0 });
-	}, [detail?.id, page]);
+	}, [detail?.id, page, magicId]);
 	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
 	const reasons = useRecommendationReasons(locations);
 	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} glow={state.rules.length === 0} onAdd={onCreate} />);
@@ -1348,7 +1615,16 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							<p className="m-0 text-meta leading-body text-ink-muted [overflow-wrap:anywhere]">{state.configError}</p>
 							<p className="m-0 text-meta leading-body text-ink-muted">{t("automations.errors.configHint")}</p>
 						</div>
-					) : !state.ready ? null : detail !== null ? (
+					) : !state.ready ? null : magic !== null && detail === null ? (
+						<MagicActionDetail
+							action={magic}
+							runs={magicRuns[magic.id]}
+							crumbs={[mainCrumb]}
+							onUpdate={async (next) => (await onUpdateMagicAction?.(next)) ?? false}
+							onToggle={onToggleMagicAction}
+							onDelete={() => setConfirmMagic(magic)}
+						/>
+					) : detail !== null ? (
 						<AutomationDetail
 							rule={detail}
 							runs={history[detail.id]}
@@ -1414,7 +1690,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 									))}
 									{/* The right-click actions are automations too, with another trigger: they sit in the same list. */}
 									{magicActions.map((action) => (
-										<MagicActionRow key={action.id} action={action} onOpen={onOpenMagicAction} onToggle={onToggleMagicAction} />
+										<MagicActionRow key={action.id} action={action} lastRun={magicRuns[action.id]?.[0] ?? null} onOpen={setMagicId} onToggle={onToggleMagicAction} />
 									))}
 								</div>
 								{state.rules.length === 0 ? null : (
@@ -1439,6 +1715,21 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 				</div>
 				</div>
 			</div>
+			{confirmMagic === null ? null : (
+				<ConfirmDialog
+					title={t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: confirmMagic.label })}
+					message={t("settingsCore.contextMenu.removeMagicConfirmBody")}
+					confirmLabel={t("automations.detail.delete")}
+					cancelLabel={t("common.cancel")}
+					onCancel={() => setConfirmMagic(null)}
+					onConfirm={() => {
+						const id = confirmMagic.id;
+						setConfirmMagic(null);
+						setMagicId(null);
+						void onDeleteMagicAction?.(id);
+					}}
+				/>
+			)}
 		</section>
 	);
 }
