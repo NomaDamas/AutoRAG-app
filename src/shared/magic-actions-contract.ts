@@ -12,11 +12,15 @@
  *   `i` intent progress and assistant markdown drafts.
  */
 
+import type { AutomationRun } from "./automation-contract";
+
 export const MAGIC_ACTION_CHANNELS = {
 	start: "magicAction:start",
 	cancel: "magicAction:cancel",
 	/** Keeps a finished run in AI 에이전트's 대화 기록 as a chat of its own; resolves to that chat's id. */
 	saveToHistory: "magicAction:saveToHistory",
+	/** An action's finished runs, newest first, in an automation rule's run shape (the 자동화 tab's dot and 실행 기록). */
+	history: "magicAction:history",
 	/** main → renderer event carrying one {@link MagicActionEvent}. */
 	event: "magicAction:event",
 } as const;
@@ -109,5 +113,6 @@ export interface MagicActionBridge {
 	start(runId: string, request: MagicActionRunRequest): Promise<void>;
 	cancel(runId: string): Promise<void>;
 	saveToHistory(request: MagicActionSaveRequest): Promise<string>;
+	history(actionId: string): Promise<readonly AutomationRun[]>;
 	onEvent(listener: (event: MagicActionEvent) => void): () => void;
 }

@@ -26,6 +26,7 @@ import {
 	FileText,
 	FileArchive,
 	Maximize,
+	MousePointerClick,
 	ChevronLeft,
 	ChevronRight,
 	ChevronUp,
@@ -224,6 +225,8 @@ export const RotateIcon = glyph(RotateCw, 10, 2.8);
  * `autorag refresh` rule (the zap and the sparkles cover the rest).
  */
 export const ZapIcon = glyph(Zap, 11, 2);
+/** A right-click (magic) action in the automation list: the glyph Settings → 우클릭 메뉴 uses. */
+export const MousePointerClickIcon = glyph(MousePointerClick, 14, 2);
 export const MoreIcon = glyph(Ellipsis, 16, 2);
 
 export const RefreshIcon = glyph(RefreshCw, 20, 1.8);

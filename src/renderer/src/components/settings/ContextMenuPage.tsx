@@ -22,7 +22,6 @@ import type { ShortcutId } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { formatContextMenuKeycap } from "../../state/context-menu";
 import { cn } from "../../lib/cn";
-import { attachMagicActionEdit } from "../../state/magic-action-edit-request";
 import { autoMagicLabel, newMagicActionId, rightClickKindOf, rightClickTarget, type RightClickKind } from "../../state/right-click-trigger";
 import { ChipSelect, type ChipOption } from "../primitives/ChipSelect";
 import { RightClickWhen, RunKindSegment, type RunKind } from "../RightClickWhen";
@@ -272,18 +271,6 @@ export function ContextMenuPage({
 	});
 
 	const contextMenu = useMemo(() => normalizeContextMenuSettings(appSettings.contextMenu), [appSettings.contextMenu]);
-	// The 자동화 tab's right-click rows open their action here, in the edit modal.
-	const actionsRef = useRef(contextMenu.magicActions);
-	actionsRef.current = contextMenu.magicActions;
-	useEffect(() => {
-		const openEditor = (id: string): void => {
-			const action = actionsRef.current.find((item) => item.id === id);
-			if (action !== undefined) setEditorState({ open: true, initial: action });
-		};
-		const { initial, detach } = attachMagicActionEdit(openEditor);
-		if (initial !== null) openEditor(initial);
-		return detach;
-	}, []);
 	const hiddenItems = useMemo(() => new Set<string>(contextMenu.hiddenItems), [contextMenu.hiddenItems]);
 	const hiddenSections = useMemo(() => new Set<string>(contextMenu.hiddenSections), [contextMenu.hiddenSections]);
 

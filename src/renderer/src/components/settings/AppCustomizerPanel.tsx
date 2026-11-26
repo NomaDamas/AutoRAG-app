@@ -566,13 +566,18 @@ export function AppCustomizerPanel({
 							</div>
 						))}
 						{starters.map((starter) => (
+							// As 새 자동화 does in the AI column: the person's 새 매직 액션 만들기, the reply, and the card, rising one after another.
 							<div key={`starter-${starter.key}`} className="customizer-turn" data-magic-starter={starter.key}>
-								<div className="customizer-turn__user-row">
+								<div className="customizer-turn__user-row animate-rise [animation-fill-mode:both]">
 									<div className="customizer-turn__user-bubble">{t("settingsCore.contextMenu.assistant.starterUser")}</div>
 								</div>
 								<div className="customizer-turn__assistant-row">
-									<CustomizerReplyBody text={t("settingsCore.contextMenu.assistant.starterReply")} />
+									<div className="animate-rise [animation-delay:140ms] [animation-fill-mode:both]">
+										<CustomizerReplyBody text={t("settingsCore.contextMenu.assistant.starterReply")} />
+									</div>
 									{starter.added === null ? (
+										// The card takes the column's whole width and follows it as the sidebar is resized.
+										<div className="w-full min-w-0 self-stretch animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
 										<AutomationDraftCard
 											initial={null}
 											rightClickOnly
@@ -580,6 +585,7 @@ export function AppCustomizerPanel({
 											onCreateMagicAction={(action) => addMagicAction(starter.key, action)}
 											onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
 										/>
+										</div>
 									) : (
 										<div className="customizer-turn__changes">
 											<span className="customizer-change-pill">

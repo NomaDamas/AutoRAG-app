@@ -100,9 +100,15 @@ describe("the 자동화 tab's right-click rows", () => {
 		execution: { kind: "agent", mode: "read", prompt: "세 줄로 요약해 줘" },
 	};
 
-	it("lists the actions under 내 자동화 even with no rules; › opens one and the switch toggles it", async () => {
-		const onOpenMagicAction = vi.fn();
+	it("lists the actions under 내 자동화 with their last run's dot and the click glyph, and opens one a step in, as a rule's page", async () => {
 		const onToggleMagicAction = vi.fn();
+		const onUpdateMagicAction = vi.fn(async (_next: MagicAction) => true);
+		const onDeleteMagicAction = vi.fn(async (_id: string) => undefined);
+		const run = { startedAt: Date.now() - 60_000, durationMs: 1200, eventCount: 1, exitCode: 0, signal: null, timedOut: false };
+		Reflect.set(globalThis, "autorag", {
+			...(Reflect.get(globalThis, "autorag") as object),
+			magicAction: { history: async (id: string) => (id === "pdf-summary" ? [run] : []) },
+		});
 		await act(async () => {
 			root.render(
 				<AutomationsView
@@ -119,19 +125,43 @@ describe("the 자동화 tab's right-click rows", () => {
 					onContextMenu={vi.fn()}
 					onOpenFolder={vi.fn()}
 					magicActions={[action]}
-					onOpenMagicAction={onOpenMagicAction}
 					onToggleMagicAction={onToggleMagicAction}
+					onUpdateMagicAction={onUpdateMagicAction}
+					onDeleteMagicAction={onDeleteMagicAction}
 				/>,
 			);
+		});
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
 		});
 		const row = host.querySelector<HTMLElement>('[data-magic-action-row="pdf-summary"]');
 		expect(row?.textContent).toContain("세 줄 요약");
 		expect(row?.textContent).toContain("PDF 파일 하나를 우클릭하면");
-		expect(host.querySelector("[data-automation-recommendations] [data-automation-hero]")).toBeNull();
-		await act(async () => row?.click());
-		expect(onOpenMagicAction).toHaveBeenCalledWith("pdf-summary");
+		expect(row?.querySelector('[data-run-tone="ok"]')).not.toBeNull();
+		expect(host.querySelector("[data-automation-hero]")).toBeNull();
 		await act(async () => host.querySelector<HTMLElement>('[data-sidebar-switch="magic-action-on:pdf-summary"]')?.click());
 		expect(onToggleMagicAction).toHaveBeenCalledWith("pdf-summary");
+
+		// › opens the action's own page here: its name, 설정 card, 실행 기록, and 삭제.
+		await act(async () => row?.click());
+		const detail = host.querySelector('[data-magic-action-detail="pdf-summary"]');
+		expect(detail).not.toBeNull();
+		expect(detail?.textContent).toContain(t("automations.detail.history"));
+		expect(detail?.querySelectorAll("[data-run]")).toHaveLength(1);
+		expect(detail?.querySelector('[data-testid="magic-detail-mode"]')).not.toBeNull();
+		expect(detail?.querySelector<HTMLButtonElement>('[data-action="magic-detail-save"]')?.disabled).toBe(true);
+		await act(async () => {
+			type(detail!.querySelector<HTMLTextAreaElement>('[data-testid="magic-detail-task"]')!, "다섯 줄로 요약해 줘");
+		});
+		await act(async () => detail!.querySelector<HTMLButtonElement>('[data-action="magic-detail-save"]')?.click());
+		expect(onUpdateMagicAction).toHaveBeenCalledTimes(1);
+		expect(onUpdateMagicAction.mock.calls[0]![0]).toMatchObject({ id: "pdf-summary", execution: { kind: "agent", prompt: "다섯 줄로 요약해 줘" } });
+
+		await act(async () => detail!.querySelector<HTMLButtonElement>('[data-action="magic-delete"]')?.click());
+		const confirm = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === t("automations.detail.delete") && button.closest('[data-magic-action-detail]') === null);
+		await act(async () => confirm?.click());
+		expect(onDeleteMagicAction).toHaveBeenCalledWith("pdf-summary");
 	});
 });
 
