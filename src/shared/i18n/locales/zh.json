@@ -307,6 +307,10 @@
       "openFile": "定位文件",
       "previousLabel": "上一版本",
       "currentLabel": "当前版本",
+      "viewModeUnified": "单栏视图",
+      "viewModeSplit": "并排对比",
+      "viewModeGroup": "对比视图模式",
+      "summarizing": "AI 摘要中…",
       "truncatedNotice": "文档较长，仅展示核心变更片段。",
       "close": "关闭"
     },

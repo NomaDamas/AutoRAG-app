@@ -307,6 +307,10 @@
       "openFile": "Reveal file",
       "previousLabel": "Previous",
       "currentLabel": "Current",
+      "viewModeUnified": "Unified",
+      "viewModeSplit": "Side by side",
+      "viewModeGroup": "Diff layout",
+      "summarizing": "Summarizing…",
       "truncatedNotice": "Showing key changed sections for this long document.",
       "close": "Close"
     },

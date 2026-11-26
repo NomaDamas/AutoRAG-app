@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	FsDocumentVersionDiff,
+	FsVersionDiffHunk,
+	FsVersionDiffLine,
+	FsVersionDiffSummaryRequest,
+	FsVersionDiffSummaryResult,
 	FsVersionHistoryEntry,
 	FsVersionHistoryMemberInput,
 	FsVersionHistoryResult,
@@ -11,7 +15,7 @@ import { cn } from "../lib/cn";
 import { formatModified } from "../state/format";
 import { basename, dirname } from "../state/paths";
 import { VERSION_TAG_KEYS, type VersionRelation } from "../state/version-family";
-import { CloseIcon, ExpandIcon, FileIcon, HistoryIcon } from "./icons";
+import { CloseIcon, ExpandIcon, FileIcon, HistoryIcon, SparklesIcon } from "./icons";
 
 export interface InspectorFamilyMember {
 	readonly path: string;
@@ -32,15 +36,58 @@ export type VersionHistoryLoader = (
 	members: readonly FsVersionHistoryMemberInput[],
 ) => Promise<FsVersionHistoryResult>;
 
+export type VersionDiffSummarizer = (
+	request: FsVersionDiffSummaryRequest,
+) => Promise<FsVersionDiffSummaryResult>;
+
+export type VersionDiffViewMode = "unified" | "split";
+
+export interface SplitDiffRow {
+	readonly left: FsVersionDiffLine | null;
+	readonly right: FsVersionDiffLine | null;
+}
+
+/**
+ * Aligns unified hunk lines into paired side-by-side rows: consecutive removed/added
+ * runs pair up row-for-row so replacements sit directly opposite each other.
+ */
+export function buildSplitDiffRows(lines: readonly FsVersionDiffLine[]): readonly SplitDiffRow[] {
+	const rows: SplitDiffRow[] = [];
+	let i = 0;
+	while (i < lines.length) {
+		const line = lines[i]!;
+		if (line.kind === "context") {
+			rows.push({ left: line, right: line });
+			i += 1;
+			continue;
+		}
+		const removed: FsVersionDiffLine[] = [];
+		const added: FsVersionDiffLine[] = [];
+		while (i < lines.length && lines[i]!.kind !== "context") {
+			const cur = lines[i]!;
+			if (cur.kind === "removed") removed.push(cur);
+			else added.push(cur);
+			i += 1;
+		}
+		const maxLen = Math.max(removed.length, added.length);
+		for (let j = 0; j < maxLen; j += 1) {
+			rows.push({ left: removed[j] ?? null, right: added[j] ?? null });
+		}
+	}
+	return rows;
+}
+
 interface VersionHistoryCacheEntry {
 	readonly result: FsVersionHistoryResult;
 }
 
 const historyCache = new Map<string, VersionHistoryCacheEntry>();
+const aiSummaryCache = new Map<string, string | null>();
 
-/** Clears the session-local version history cache (useful for tests). */
+/** Clears the session-local version history & AI summary caches (useful for tests). */
 export function clearVersionHistoryCache(): void {
 	historyCache.clear();
+	aiSummaryCache.clear();
 }
 
 function buildInputMembers(family: InspectorFamily): readonly FsVersionHistoryMemberInput[] {
@@ -59,6 +106,13 @@ function familyCacheKey(members: readonly FsVersionHistoryMemberInput[]): string
 		.map((m) => `${m.path}@${m.mtimeMs ?? "?"}:${m.relation ?? ""}`)
 		.sort()
 		.join("|");
+}
+
+function aiSummaryKey(entry: FsVersionHistoryEntry, language: string): string {
+	const diff = entry.diff;
+	const added = diff?.summary.addedCount ?? 0;
+	const removed = diff?.summary.removedCount ?? 0;
+	return `${language}|${entry.previousPath ?? ""}|${entry.path}|${entry.mtimeMs}|+${added}/-${removed}`;
 }
 
 function formatShortDate(mtimeMs: number): string {
@@ -92,13 +146,16 @@ export function VersionHistorySection({
 	entry,
 	onOpenMember,
 	loadVersionHistory,
+	summarizeVersionDiff,
 }: {
 	readonly family: InspectorFamily;
 	readonly entry: FinderEntry;
 	readonly onOpenMember: (path: string) => void;
 	readonly loadVersionHistory?: VersionHistoryLoader | undefined;
+	readonly summarizeVersionDiff?: VersionDiffSummarizer | undefined;
 }): ReactElement {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
+	const language = i18n.language || "ko";
 	const members = useMemo(() => buildInputMembers(family), [family]);
 	const cacheKey = useMemo(() => familyCacheKey(members), [members]);
 	const cached = historyCache.get(cacheKey)?.result ?? null;
@@ -107,6 +164,8 @@ export function VersionHistorySection({
 	const [loading, setLoading] = useState<boolean>(cached === null);
 	const [failed, setFailed] = useState<boolean>(false);
 	const [detailVersion, setDetailVersion] = useState<FsVersionHistoryEntry | null>(null);
+	const [aiSummaries, setAiSummaries] = useState<Readonly<Record<string, string | null>>>({});
+	const [aiLoadingKeys, setAiLoadingKeys] = useState<Readonly<Record<string, true>>>({});
 
 	useEffect(() => {
 		const hit = historyCache.get(cacheKey);
@@ -144,6 +203,80 @@ export function VersionHistorySection({
 			cancelled = true;
 		};
 	}, [cacheKey, members, loadVersionHistory]);
+
+	// Async sLLM 1–2 sentence diff summarization layered on top of the instant local diff.
+	useEffect(() => {
+		if (history === null || history.versions.length === 0) return;
+		const summarizer = summarizeVersionDiff ?? window.autorag?.fs?.summarizeVersionDiff;
+		if (summarizer === undefined) return;
+
+		const changedEntries = history.versions.filter(
+			(v): v is FsVersionHistoryEntry & { readonly diff: FsDocumentVersionDiff } =>
+				v.diff !== null && v.diff.status === "changed" && v.diff.hunks.length > 0 && v.previousPath !== null,
+		);
+		if (changedEntries.length === 0) return;
+
+		let cancelled = false;
+		const initialHits: Record<string, string | null> = {};
+		const pending: Array<{ readonly key: string; readonly item: FsVersionHistoryEntry & { readonly diff: FsDocumentVersionDiff }; readonly prevName: string }> = [];
+
+		for (const item of changedEntries) {
+			const key = aiSummaryKey(item, language);
+			if (aiSummaryCache.has(key)) {
+				initialHits[key] = aiSummaryCache.get(key) ?? null;
+			} else {
+				const prevEntry = history.versions.find((v) => v.path === item.previousPath);
+				const prevName = prevEntry?.name ?? (item.previousPath ? basename(item.previousPath) : "");
+				pending.push({ key, item, prevName });
+			}
+		}
+
+		if (Object.keys(initialHits).length > 0) {
+			setAiSummaries((prev) => ({ ...prev, ...initialHits }));
+		}
+		if (pending.length === 0) return;
+
+		setAiLoadingKeys((prev) => {
+			const next = { ...prev };
+			for (const p of pending) next[p.key] = true;
+			return next;
+		});
+
+		for (const { key, item, prevName } of pending) {
+			void summarizer({
+				previousName: prevName,
+				currentName: item.name,
+				addedCount: item.diff.summary.addedCount,
+				removedCount: item.diff.summary.removedCount,
+				hunks: item.diff.hunks,
+				language,
+			})
+				.then((res) => {
+					const summary = typeof res?.summary === "string" && res.summary.trim().length > 0 ? res.summary.trim() : null;
+					if (summary !== null) aiSummaryCache.set(key, summary);
+					if (!cancelled) {
+						setAiSummaries((prev) => ({ ...prev, [key]: summary }));
+					}
+				})
+				.catch(() => {
+					if (!cancelled) {
+						setAiSummaries((prev) => ({ ...prev, [key]: null }));
+					}
+				})
+				.finally(() => {
+					if (!cancelled) {
+						setAiLoadingKeys((prev) => {
+							const { [key]: _removed, ...rest } = prev;
+							return rest;
+						});
+					}
+				});
+		}
+
+		return () => {
+			cancelled = true;
+		};
+	}, [history, language, summarizeVersionDiff]);
 
 	// Close detail sheet when switching to a different family.
 	useEffect(() => {
@@ -184,6 +317,9 @@ export function VersionHistorySection({
 					const dateLabel = formatShortDate(item.mtimeMs);
 					const previousEntry = item.previousPath !== null ? versions[idx + 1] : undefined;
 					const canOpenDetail = item.diff !== null && item.diff.status === "changed" && item.diff.hunks.length > 0;
+					const summaryKey = aiSummaryKey(item, language);
+					const aiSummary = aiSummaries[summaryKey] ?? aiSummaryCache.get(summaryKey) ?? null;
+					const aiSummarizing = aiLoadingKeys[summaryKey] === true && aiSummary === null;
 
 					return (
 						<div
@@ -250,6 +386,8 @@ export function VersionHistorySection({
 									previousName={previousEntry?.name ?? (item.previousPath ? basename(item.previousPath) : null)}
 									loading={loading && item.previousPath !== null}
 									failed={failed && item.previousPath !== null}
+									aiSummary={aiSummary}
+									aiSummarizing={aiSummarizing}
 									onOpenDetail={canOpenDetail ? () => setDetailVersion(item) : undefined}
 								/>
 							</div>
@@ -266,6 +404,7 @@ export function VersionHistorySection({
 						(detailVersion.previousPath ? basename(detailVersion.previousPath) : "")
 					}
 					diff={detailVersion.diff}
+					aiSummary={aiSummaries[aiSummaryKey(detailVersion, language)] ?? aiSummaryCache.get(aiSummaryKey(detailVersion, language)) ?? null}
 					onClose={() => setDetailVersion(null)}
 					onOpenMember={(path) => {
 						setDetailVersion(null);
@@ -297,12 +436,16 @@ function VersionDeltaSummary({
 	previousName,
 	loading,
 	failed,
+	aiSummary,
+	aiSummarizing,
 	onOpenDetail,
 }: {
 	readonly entry: FsVersionHistoryEntry;
 	readonly previousName: string | null;
 	readonly loading: boolean;
 	readonly failed: boolean;
+	readonly aiSummary: string | null;
+	readonly aiSummarizing: boolean;
 	readonly onOpenDetail?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -394,44 +537,66 @@ function VersionDeltaSummary({
 				) : null}
 			</div>
 
-			{addedPreview.length > 0 || removedPreview.length > 0 ? (
-				<div className="flex flex-col gap-2">
-					{addedPreview.map((line, i) => (
-						<div key={`a-${i}`} className="flex items-baseline gap-4 text-[11px] leading-[15px]">
-							<span className="flex-none font-mono text-[10px] font-bold text-ok-text" aria-hidden="true">+</span>
-							<span className="min-w-0 truncate text-ink-body" title={line}>{line}</span>
+			{aiSummary !== null ? (
+				<p
+					className="m-0 flex items-start gap-4 text-[11px] leading-[15.5px] text-ink-body"
+					data-diff-ai-summary="ready"
+				>
+					<SparklesIcon size={11} className="mt-2 flex-none text-accent-text" />
+					<span className="min-w-0 [overflow-wrap:anywhere]">{aiSummary}</span>
+				</p>
+			) : (
+				<>
+					{aiSummarizing ? (
+						<div className="flex items-center gap-4 text-[10px] leading-[13px] text-ink-faint" data-diff-ai-summary="loading">
+							<SparklesIcon size={10} className="flex-none animate-pulse text-accent-text/70" />
+							<span>{t("inspector.versionHistory.summarizing")}</span>
 						</div>
-					))}
-					{removedPreview.map((line, i) => (
-						<div key={`r-${i}`} className="flex items-baseline gap-4 text-[11px] leading-[15px]">
-							<span className="flex-none font-mono text-[10px] font-bold text-danger-text" aria-hidden="true">−</span>
-							<span className="min-w-0 truncate text-ink-muted line-through decoration-danger-text/50" title={line}>{line}</span>
+					) : null}
+					{addedPreview.length > 0 || removedPreview.length > 0 ? (
+						<div className="flex flex-col gap-2" data-diff-local-highlights="true">
+							{addedPreview.map((line, i) => (
+								<div key={`a-${i}`} className="flex items-baseline gap-4 text-[11px] leading-[15px]">
+									<span className="flex-none font-mono text-[10px] font-bold text-ok-text" aria-hidden="true">+</span>
+									<span className="min-w-0 truncate text-ink-body" title={line}>{line}</span>
+								</div>
+							))}
+							{removedPreview.map((line, i) => (
+								<div key={`r-${i}`} className="flex items-baseline gap-4 text-[11px] leading-[15px]">
+									<span className="flex-none font-mono text-[10px] font-bold text-danger-text" aria-hidden="true">−</span>
+									<span className="min-w-0 truncate text-ink-muted line-through decoration-danger-text/50" title={line}>{line}</span>
+								</div>
+							))}
 						</div>
-					))}
-				</div>
-			) : null}
+					) : null}
+				</>
+			)}
 		</div>
 	);
 }
 
 /**
  * Clean Bloom-styled diff sheet for inspecting the exact line-level changes between
- * a version and its immediate predecessor without cluttering the narrow right sidebar.
+ * a version and its immediate predecessor, supporting both unified (inline) and
+ * side-by-side (old | new) layouts.
  */
 function VersionDiffModal({
 	version,
 	previousName,
 	diff,
+	aiSummary,
 	onClose,
 	onOpenMember,
 }: {
 	readonly version: FsVersionHistoryEntry;
 	readonly previousName: string;
 	readonly diff: FsDocumentVersionDiff;
+	readonly aiSummary: string | null;
 	readonly onClose: () => void;
 	readonly onOpenMember: (path: string) => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const [viewMode, setViewMode] = useState<VersionDiffViewMode>("unified");
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent): void => {
@@ -453,10 +618,14 @@ function VersionDiffModal({
 			}}
 		>
 			<div
-				className="flex max-h-[82vh] w-full max-w-[720px] flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className={cn(
+					"flex max-h-[84vh] w-full flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)] transition-[max-width] duration-(--dur-color)",
+					viewMode === "split" ? "max-w-[1040px]" : "max-w-[740px]",
+				)}
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("inspector.versionHistory.title")}
+				data-diff-view-mode={viewMode}
 			>
 				{/* Header */}
 				<div className="flex flex-none items-center justify-between gap-12 border-b border-divider bg-subtle px-16 py-12">
@@ -481,6 +650,40 @@ function VersionDiffModal({
 						</div>
 					</div>
 					<div className="flex flex-none items-center gap-6">
+						<div
+							className="inline-flex items-center rounded-8 border border-border bg-window p-2"
+							role="group"
+							aria-label={t("inspector.versionHistory.viewModeGroup")}
+						>
+							<button
+								type="button"
+								data-action="diff-mode-unified"
+								aria-pressed={viewMode === "unified"}
+								className={cn(
+									"h-22 cursor-pointer rounded-6 border-0 px-8 text-[11px] font-medium transition-colors duration-(--dur-color)",
+									viewMode === "unified"
+										? "bg-accent-soft text-accent-text"
+										: "bg-transparent text-ink-muted hover:text-ink",
+								)}
+								onClick={() => setViewMode("unified")}
+							>
+								{t("inspector.versionHistory.viewModeUnified")}
+							</button>
+							<button
+								type="button"
+								data-action="diff-mode-split"
+								aria-pressed={viewMode === "split"}
+								className={cn(
+									"h-22 cursor-pointer rounded-6 border-0 px-8 text-[11px] font-medium transition-colors duration-(--dur-color)",
+									viewMode === "split"
+										? "bg-accent-soft text-accent-text"
+										: "bg-transparent text-ink-muted hover:text-ink",
+								)}
+								onClick={() => setViewMode("split")}
+							>
+								{t("inspector.versionHistory.viewModeSplit")}
+							</button>
+						</div>
 						<button
 							type="button"
 							className="inline-flex h-26 cursor-pointer items-center gap-4 rounded-7 border border-border bg-window px-8 text-badge font-medium text-ink-body transition-colors duration-(--dur-color) hover:bg-hover hover:text-ink"
@@ -500,55 +703,48 @@ function VersionDiffModal({
 					</div>
 				</div>
 
+				{/* Optional concise sLLM summary banner */}
+				{aiSummary !== null ? (
+					<div className="flex flex-none items-start gap-6 border-b border-divider bg-subtle/60 px-16 py-8 text-[12px] leading-[17px] text-ink-body">
+						<SparklesIcon size={13} className="mt-2 flex-none text-accent-text" />
+						<span className="min-w-0 [overflow-wrap:anywhere]">{aiSummary}</span>
+					</div>
+				) : null}
+
+				{/* Split column header */}
+				{viewMode === "split" ? (
+					<div className="grid flex-none grid-cols-2 border-b border-divider bg-subtle/80 text-[11px] font-medium text-ink-muted">
+						<div className="flex items-center gap-6 border-r border-divider px-12 py-6">
+							<span className="rounded-4 bg-danger-bg px-5 py-1 text-[10px] font-semibold text-danger-text">
+								{t("inspector.versionHistory.previousLabel")}
+							</span>
+							<span className="truncate text-ink-body">{previousName}</span>
+						</div>
+						<div className="flex items-center gap-6 px-12 py-6">
+							<span className="rounded-4 bg-ok-bg px-5 py-1 text-[10px] font-semibold text-ok-text">
+								{t("inspector.versionHistory.currentLabel")}
+							</span>
+							<span className="truncate text-ink">{version.name}</span>
+						</div>
+					</div>
+				) : null}
+
 				{/* Diff hunks */}
 				<div className="flex-1 overflow-auto bg-window p-12">
 					<div className="flex flex-col gap-10">
-						{diff.hunks.map((hunk, hunkIdx) => (
-							<div
-								key={`${hunk.previousStart}-${hunk.currentStart}-${hunkIdx}`}
-								className="overflow-hidden rounded-8 border border-divider"
-							>
-								<div className="flex items-center justify-between border-b border-divider bg-subtle px-10 py-4 font-mono text-[10.5px] text-ink-faint">
-									<span>
-										@@ -{hunk.previousStart},{hunk.previousCount} +{hunk.currentStart},{hunk.currentCount} @@
-									</span>
-								</div>
-								<div className="flex flex-col font-mono text-[12px] leading-[19px]">
-									{hunk.lines.map((line, lineIdx) => (
-										<div
-											key={lineIdx}
-											data-diff-line={line.kind}
-											className={cn(
-												"flex items-stretch px-8 py-1",
-												line.kind === "added" && "bg-ok-bg-soft text-ink",
-												line.kind === "removed" && "bg-danger-bg-soft text-ink-body",
-												line.kind === "context" && "bg-window text-ink-muted",
-											)}
-										>
-											<span className="w-32 flex-none select-none pr-6 text-right text-[10.5px] text-ink-faint">
-												{line.previousLine ?? ""}
-											</span>
-											<span className="w-32 flex-none select-none pr-8 text-right text-[10.5px] text-ink-faint">
-												{line.currentLine ?? ""}
-											</span>
-											<span
-												className={cn(
-													"w-14 flex-none select-none font-bold",
-													line.kind === "added" && "text-ok-text",
-													line.kind === "removed" && "text-danger-text",
-													line.kind === "context" && "text-ink-faint",
-												)}
-											>
-												{line.kind === "added" ? "+" : line.kind === "removed" ? "−" : " "}
-											</span>
-											<span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
-												{line.text.length > 0 ? line.text : " "}
-											</span>
-										</div>
-									))}
-								</div>
-							</div>
-						))}
+						{diff.hunks.map((hunk, hunkIdx) =>
+							viewMode === "split" ? (
+								<SplitDiffHunkCard
+									key={`${hunk.previousStart}-${hunk.currentStart}-${hunkIdx}`}
+									hunk={hunk}
+								/>
+							) : (
+								<UnifiedDiffHunkCard
+									key={`${hunk.previousStart}-${hunk.currentStart}-${hunkIdx}`}
+									hunk={hunk}
+								/>
+							),
+						)}
 					</div>
 					{diff.truncated ? (
 						<p className="mt-10 mb-0 text-center text-badge text-ink-faint">
@@ -556,6 +752,124 @@ function VersionDiffModal({
 						</p>
 					) : null}
 				</div>
+			</div>
+		</div>
+	);
+}
+
+function UnifiedDiffHunkCard({ hunk }: { readonly hunk: FsVersionDiffHunk }): ReactElement {
+	return (
+		<div className="overflow-hidden rounded-8 border border-divider">
+			<div className="flex items-center justify-between border-b border-divider bg-subtle px-10 py-4 font-mono text-[10.5px] text-ink-faint">
+				<span>
+					@@ -{hunk.previousStart},{hunk.previousCount} +{hunk.currentStart},{hunk.currentCount} @@
+				</span>
+			</div>
+			<div className="flex flex-col font-mono text-[12px] leading-[19px]">
+				{hunk.lines.map((line, lineIdx) => (
+					<div
+						key={lineIdx}
+						data-diff-line={line.kind}
+						className={cn(
+							"flex items-stretch px-8 py-1",
+							line.kind === "added" && "bg-ok-bg-soft text-ink",
+							line.kind === "removed" && "bg-danger-bg-soft text-ink-body",
+							line.kind === "context" && "bg-window text-ink-muted",
+						)}
+					>
+						<span className="w-32 flex-none select-none pr-6 text-right text-[10.5px] text-ink-faint">
+							{line.previousLine ?? ""}
+						</span>
+						<span className="w-32 flex-none select-none pr-8 text-right text-[10.5px] text-ink-faint">
+							{line.currentLine ?? ""}
+						</span>
+						<span
+							className={cn(
+								"w-14 flex-none select-none font-bold",
+								line.kind === "added" && "text-ok-text",
+								line.kind === "removed" && "text-danger-text",
+								line.kind === "context" && "text-ink-faint",
+							)}
+						>
+							{line.kind === "added" ? "+" : line.kind === "removed" ? "−" : " "}
+						</span>
+						<span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+							{line.text.length > 0 ? line.text : " "}
+						</span>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+function SplitDiffHunkCard({ hunk }: { readonly hunk: FsVersionDiffHunk }): ReactElement {
+	const rows = useMemo(() => buildSplitDiffRows(hunk.lines), [hunk.lines]);
+	return (
+		<div className="overflow-hidden rounded-8 border border-divider" data-diff-split-hunk="true">
+			<div className="flex items-center justify-between border-b border-divider bg-subtle px-10 py-4 font-mono text-[10.5px] text-ink-faint">
+				<span>
+					@@ -{hunk.previousStart},{hunk.previousCount} +{hunk.currentStart},{hunk.currentCount} @@
+				</span>
+			</div>
+			<div className="flex flex-col font-mono text-[12px] leading-[19px]">
+				{rows.map((row, rowIdx) => (
+					<div key={rowIdx} className="grid grid-cols-2" data-diff-split-row="true">
+						{/* Left: previous version */}
+						<div
+							data-diff-side="previous"
+							data-diff-line={row.left?.kind ?? "empty"}
+							className={cn(
+								"flex min-w-0 items-stretch border-r border-divider px-8 py-1",
+								row.left === null && "bg-subtle/40",
+								row.left?.kind === "removed" && "bg-danger-bg-soft text-ink-body",
+								row.left?.kind === "context" && "bg-window text-ink-muted",
+							)}
+						>
+							<span className="w-30 flex-none select-none pr-6 text-right text-[10.5px] text-ink-faint">
+								{row.left?.previousLine ?? ""}
+							</span>
+							<span
+								className={cn(
+									"w-12 flex-none select-none font-bold",
+									row.left?.kind === "removed" ? "text-danger-text" : "text-ink-faint",
+								)}
+							>
+								{row.left?.kind === "removed" ? "−" : " "}
+							</span>
+							<span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+								{row.left !== null && row.left.text.length > 0 ? row.left.text : " "}
+							</span>
+						</div>
+
+						{/* Right: current version */}
+						<div
+							data-diff-side="current"
+							data-diff-line={row.right?.kind ?? "empty"}
+							className={cn(
+								"flex min-w-0 items-stretch px-8 py-1",
+								row.right === null && "bg-subtle/40",
+								row.right?.kind === "added" && "bg-ok-bg-soft text-ink",
+								row.right?.kind === "context" && "bg-window text-ink-muted",
+							)}
+						>
+							<span className="w-30 flex-none select-none pr-6 text-right text-[10.5px] text-ink-faint">
+								{row.right?.currentLine ?? ""}
+							</span>
+							<span
+								className={cn(
+									"w-12 flex-none select-none font-bold",
+									row.right?.kind === "added" ? "text-ok-text" : "text-ink-faint",
+								)}
+							>
+								{row.right?.kind === "added" ? "+" : " "}
+							</span>
+							<span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+								{row.right !== null && row.right.text.length > 0 ? row.right.text : " "}
+							</span>
+						</div>
+					</div>
+				))}
 			</div>
 		</div>
 	);

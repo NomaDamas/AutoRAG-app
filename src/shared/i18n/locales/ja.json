@@ -307,6 +307,10 @@
       "openFile": "ファイルを表示",
       "previousLabel": "前のバージョン",
       "currentLabel": "現在のバージョン",
+      "viewModeUnified": "インライン",
+      "viewModeSplit": "左右で比較",
+      "viewModeGroup": "比較表示形式",
+      "summarizing": "AI 要約中…",
       "truncatedNotice": "文書が長いため主要な変更箇所のみ表示しています。",
       "close": "閉じる"
     },

@@ -66,6 +66,7 @@ import {
 	VersionHistorySection,
 	type InspectorFamily,
 	type InspectorFamilyMember,
+	type VersionDiffSummarizer,
 	type VersionHistoryLoader,
 } from "./VersionHistorySection";
 import {
@@ -119,6 +120,8 @@ export interface InspectorProps {
 	readonly onOpenMember: (path: string) => void;
 	/** Optional override for loading version history diffs (defaults to `window.autorag.fs.versionHistory`). */
 	readonly loadVersionHistory?: VersionHistoryLoader | undefined;
+	/** Optional override for sLLM diff summarization (defaults to `window.autorag.fs.summarizeVersionDiff`). */
+	readonly summarizeVersionDiff?: VersionDiffSummarizer | undefined;
 	/** "evidence" while an AI Search tab is focused: the whole panel is the cited sources. */
 	readonly view: "info" | "evidence";
 	readonly evidence: readonly CitationEvidence[];
@@ -225,6 +228,7 @@ export function Inspector({
 	family,
 	onOpenMember,
 	loadVersionHistory,
+	summarizeVersionDiff,
 	view,
 	evidence,
 	freshEvidence = NO_FRESH_EVIDENCE,
@@ -289,6 +293,7 @@ export function Inspector({
 					family={family}
 					onOpenMember={onOpenMember}
 					loadVersionHistory={loadVersionHistory}
+					summarizeVersionDiff={summarizeVersionDiff}
 					onToggleIndex={onToggleIndex}
 					onTrash={onTrash}
 					onCopyPath={onCopyPath}
@@ -311,6 +316,7 @@ function InfoHalf({
 	family,
 	onOpenMember,
 	loadVersionHistory,
+	summarizeVersionDiff,
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
@@ -327,6 +333,7 @@ function InfoHalf({
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
 	readonly loadVersionHistory?: VersionHistoryLoader | undefined;
+	readonly summarizeVersionDiff?: VersionDiffSummarizer | undefined;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
@@ -434,6 +441,7 @@ function InfoHalf({
 								entry={entry}
 								onOpenMember={onOpenMember}
 								loadVersionHistory={loadVersionHistory}
+								summarizeVersionDiff={summarizeVersionDiff}
 							/>
 						)}
 

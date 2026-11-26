@@ -20,6 +20,8 @@ import type { SearchDatasource, SourceSearchOutcome } from "./source-search-cont
 export const FS_CHANNELS = {
 	/** Renderer → main: hand a row drag to the OS as real files; fire and forget. */
 	startDrag: "fs:startDrag",
+	/** Renderer → main: summarize a version diff in 1–2 short sentences with the query-decomposition sLLM. */
+	summarizeVersionDiff: "fs:summarizeVersionDiff",
 } as const;
 
 /** Finder/Spotlight metadata used by Sort By and Group By. */
@@ -528,6 +530,12 @@ export interface FsVersionFamilyBridge {
 	 * diffs of each version against its immediate predecessor.
 	 */
 	versionHistory(members: readonly FsVersionHistoryMemberInput[]): Promise<FsVersionHistoryResult>;
+	/**
+	 * Summarizes one version diff into 1–2 short natural-language sentences using
+	 * the app's query-decomposition sLLM. Degrades to `{ summary: null }` when no
+	 * model/auth is available.
+	 */
+	summarizeVersionDiff?(request: FsVersionDiffSummaryRequest): Promise<FsVersionDiffSummaryResult>;
 }
 
 export interface FsIndexBridge {
@@ -632,4 +640,18 @@ export interface FsVersionHistoryEntry {
 
 export interface FsVersionHistoryResult {
 	readonly versions: readonly FsVersionHistoryEntry[];
+}
+
+export interface FsVersionDiffSummaryRequest {
+	readonly previousName: string;
+	readonly currentName: string;
+	readonly addedCount: number;
+	readonly removedCount: number;
+	readonly hunks: readonly FsVersionDiffHunk[];
+	readonly language?: string;
+}
+
+export interface FsVersionDiffSummaryResult {
+	readonly summary: string | null;
+	readonly modelId?: string;
 }

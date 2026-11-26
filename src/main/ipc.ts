@@ -57,6 +57,7 @@ import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
 import type { DocumentEditService } from "./document-edit-service";
+import { isVersionDiffSummaryRequest, type VersionDiffSummaryService } from "./version-diff-summary";
 import { openDocumentForEditor, saveDocumentText } from "./document-editor-io";
 import type { PdfEditorIo } from "./pdf-editor-io";
 import { isDocumentEditRequest, type DocumentEditEvent } from "../preview/shared/annotation";
@@ -93,6 +94,14 @@ export function registerDragOutIpcHandlers(): void {
 		const valid = dragOutPaths(paths);
 		if (valid === null) return;
 		void startNativeDrag(event.sender, valid);
+	});
+}
+
+/** Concise sLLM summary for version history diffs (reuses the query-decomposition sLLM). */
+export function registerVersionDiffSummaryIpcHandlers(service: VersionDiffSummaryService): void {
+	ipcMain.handle(FS_CHANNELS.summarizeVersionDiff, (_event, request: unknown) => {
+		if (!isVersionDiffSummaryRequest(request)) return { summary: null };
+		return service.summarize(request);
 	});
 }
 

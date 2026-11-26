@@ -307,6 +307,10 @@
       "openFile": "파일로 이동",
       "previousLabel": "이전 버전",
       "currentLabel": "현재 버전",
+      "viewModeUnified": "한 줄로 보기",
+      "viewModeSplit": "나란히 비교",
+      "viewModeGroup": "비교 보기 방식",
+      "summarizing": "AI 요약 중…",
       "truncatedNotice": "문서가 길어 변경된 핵심 구간만 표시합니다.",
       "close": "닫기"
     },

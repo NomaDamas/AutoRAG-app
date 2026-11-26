@@ -77,8 +77,7 @@ export function createRemoteDispatcher(deps: RemoteDispatcherDeps): (call: Remot
 		const { target, method, args } = call;
 		if (isNativeOnly(target, method)) throw new RemoteUnsupportedError(target, method);
 		const workerOp = target === "fs" ? FS_WORKER_METHODS[method] : target === "live" ? LIVE_WORKER_METHODS[method] : undefined;
-		if (target === "fs" || target === "live") {
-			if (workerOp === undefined) throw new RemoteUnsupportedError(target, method);
+		if (workerOp !== undefined) {
 			return deps.workerFor(sessionId).call(workerOp, [...args]);
 		}
 		const implementation = deps.targets[target]?.[method];

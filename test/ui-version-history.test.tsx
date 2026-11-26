@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FsVersionHistoryResult } from "../src/shared/fs-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 import {
+	buildSplitDiffRows,
 	clearVersionHistoryCache,
 	VersionHistorySection,
 	type InspectorFamily,
@@ -230,5 +231,100 @@ describe("VersionHistorySection", () => {
 		expect(host.textContent).toContain("Version History");
 		expect(host.textContent).toContain("View diff");
 		expect(host.textContent).toContain("Base version");
+	});
+
+	it("layers async sLLM 1-2 sentence summary on top of instant local diff", async () => {
+		const loadVersionHistory = vi.fn(async () => SAMPLE_HISTORY);
+		let resolveSummary: ((value: { readonly summary: string | null }) => void) | undefined;
+		const summarizeVersionDiff = vi.fn(
+			() =>
+				new Promise<{ readonly summary: string | null }>((resolve) => {
+					resolveSummary = resolve;
+				}),
+		);
+
+		await act(async () => {
+			root.render(
+				<VersionHistorySection
+					family={SAMPLE_FAMILY}
+					entry={makeEntry("/docs/plan_final.md", "plan_final.md", Date.parse("2026-10-10T10:00:00Z"))}
+					onOpenMember={() => {}}
+					loadVersionHistory={loadVersionHistory}
+					summarizeVersionDiff={summarizeVersionDiff}
+				/>,
+			);
+		});
+
+		// Instant local diff highlights appear immediately while sLLM summarizes.
+		expect(host.querySelector('[data-diff-local-highlights="true"]')?.textContent).toContain("예산 1.2억 확정");
+		expect(host.querySelector('[data-diff-ai-summary="loading"]')).not.toBeNull();
+
+		await act(async () => {
+			resolveSummary?.({ summary: "예산을 1.2억으로 확정하고 최종 승인을 완료했습니다." });
+		});
+
+		const aiSummaryEl = host.querySelector('[data-diff-ai-summary="ready"]');
+		expect(aiSummaryEl?.textContent).toContain("예산을 1.2억으로 확정하고 최종 승인을 완료했습니다.");
+		expect(host.querySelector('[data-diff-local-highlights="true"]')).toBeNull();
+	});
+
+	it("toggles between unified (inline) and side-by-side (old | new) diff views in the modal", async () => {
+		const loadVersionHistory = vi.fn(async () => SAMPLE_HISTORY);
+
+		await act(async () => {
+			root.render(
+				<VersionHistorySection
+					family={SAMPLE_FAMILY}
+					entry={makeEntry("/docs/plan_final.md", "plan_final.md", Date.parse("2026-10-10T10:00:00Z"))}
+					onOpenMember={() => {}}
+					loadVersionHistory={loadVersionHistory}
+				/>,
+			);
+		});
+
+		const detailBtn = host.querySelector<HTMLButtonElement>('[data-action="version-diff-detail"]');
+		await act(async () => {
+			detailBtn!.click();
+		});
+
+		const dialog = host.querySelector('[role="dialog"]');
+		expect(dialog?.getAttribute("data-diff-view-mode")).toBe("unified");
+
+		const splitBtn = dialog?.querySelector<HTMLButtonElement>('[data-action="diff-mode-split"]');
+		expect(splitBtn).not.toBeNull();
+		await act(async () => {
+			splitBtn!.click();
+		});
+
+		expect(dialog?.getAttribute("data-diff-view-mode")).toBe("split");
+		expect(dialog?.textContent).toContain("이전 버전");
+		expect(dialog?.textContent).toContain("현재 버전");
+		const splitRows = dialog?.querySelectorAll('[data-diff-split-row="true"]');
+		expect(splitRows?.length).toBe(3);
+
+		// Toggle back to unified view
+		const unifiedBtn = dialog?.querySelector<HTMLButtonElement>('[data-action="diff-mode-unified"]');
+		await act(async () => {
+			unifiedBtn!.click();
+		});
+		expect(dialog?.getAttribute("data-diff-view-mode")).toBe("unified");
+	});
+});
+
+describe("buildSplitDiffRows", () => {
+	it("pairs consecutive removed and added lines side-by-side and pads uneven runs", () => {
+		const rows = buildSplitDiffRows([
+			{ kind: "context", text: "header", previousLine: 1, currentLine: 1 },
+			{ kind: "removed", text: "old-a", previousLine: 2, currentLine: null },
+			{ kind: "added", text: "new-a", previousLine: null, currentLine: 2 },
+			{ kind: "added", text: "new-b", previousLine: null, currentLine: 3 },
+		]);
+		expect(rows).toHaveLength(3);
+		expect(rows[0]?.left?.text).toBe("header");
+		expect(rows[0]?.right?.text).toBe("header");
+		expect(rows[1]?.left?.text).toBe("old-a");
+		expect(rows[1]?.right?.text).toBe("new-a");
+		expect(rows[2]?.left).toBeNull();
+		expect(rows[2]?.right?.text).toBe("new-b");
 	});
 });
