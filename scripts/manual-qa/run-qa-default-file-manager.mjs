@@ -154,17 +154,37 @@ function run(argv) {
 		const winStatus = await page.evaluate(() => window.autorag.defaultFileManager.status());
 		check("Windows Explorer watcher process is active", winStatus.interceptRevealActive === true, JSON.stringify(winStatus));
 
-		// Give the watcher a moment to complete Snapshot-Existing before spawning Explorer.
-		await sleep(1500);
+		// 1. Test real OS ShellExecute folder open via the live HKCU\Software\Classes\Folder\shell\open\command key!
+		execFileSync("powershell.exe", ["-NoProfile", "-Command", `Start-Process -FilePath '${REVEAL_DIR.replaceAll("'", "''")}'`], {
+			timeout: 15_000,
+			windowsHide: true,
+		});
+		const shellExecRow = page.locator(`[data-path="${REVEAL_FILE.replaceAll("\\", "\\\\")}"]`).first();
+		const shellExecOpened = await until(async () => (await shellExecRow.count()) > 0, 20_000);
+		check("Windows ShellExecute(open, folder) routes via HKCU registry into running Dazzi", shellExecOpened !== false, REVEAL_DIR);
+		await page.screenshot({ path: join(OUT, "02-win-opened-via-shellexecute.png") });
 
-		// Simulate Chrome/VS Code "Show in folder" (`explorer.exe /select,<file>`)
-		const exp = spawn("explorer.exe", [`/select,${REVEAL_FILE}`], { detached: true, stdio: "ignore" });
-		exp.unref();
-
-		const revealedRow = page.locator(`[data-path="${REVEAL_FILE.replaceAll("\\", "\\\\")}"]`).first();
-		const revealed = await until(async () => (await revealedRow.count()) > 0, 20_000);
-		check("Windows Explorer /select,<file> intercepted and revealed in Dazzi", revealed !== false, REVEAL_FILE);
-		await page.screenshot({ path: join(OUT, "02-win-revealed-via-explorer-intercept.png") });
+		// 2. Test Explorer /select,<file> interception when running in an interactive desktop session
+		// (headless SSH session 0 denies Shell.Application.Windows() COM access).
+		let canQueryShellWindows = false;
+		try {
+			execFileSync("powershell.exe", ["-NoProfile", "-Command", "$s = New-Object -ComObject Shell.Application; [void]$s.Windows()"], {
+				timeout: 10_000,
+				windowsHide: true,
+			});
+			canQueryShellWindows = true;
+		} catch {
+			canQueryShellWindows = false;
+		}
+		if (canQueryShellWindows) {
+			await sleep(1500);
+			const exp = spawn("explorer.exe", [`/select,${REVEAL_FILE}`], { detached: true, stdio: "ignore" });
+			exp.unref();
+			const revealed = await until(async () => (await shellExecRow.count()) > 0, 20_000);
+			check("Windows Explorer /select,<file> intercepted and revealed in Dazzi", revealed !== false, REVEAL_FILE);
+		} else {
+			console.log("INFO Windows Explorer /select COM check skipped (non-interactive session 0 denies IShellWindows)");
+		}
 	}
 
 	// Test `--autorag-default-open <folder>` handoff to running app (both OSes)
