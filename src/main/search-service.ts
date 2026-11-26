@@ -36,7 +36,7 @@ import type {
 	SearchErrorAction,
 	SearchStreamEvent,
 } from "../shared/search-contract";
-import { SEARCH_CHANNELS } from "../shared/search-contract";
+import { SEARCH_CHANNELS, type FollowUpKind } from "../shared/search-contract";
 import { type AnswerRevision, isAnswerChange, remainderAfterRevised, revisedAnswer } from "../shared/answer-revision";
 import { buildAttachmentContext, buildViewingFolderContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
@@ -142,6 +142,8 @@ export interface SearchServiceDeps {
 	 * answered run; the title is kept on the record and sent as a `title` event. Absent: a chat is titled by its first question.
 	 */
 	readonly titleChat?: (question: string, answer: string) => Promise<string | null>;
+	/** Says whether a message sent during a run corrects it or is the next question. Absent: always the next question. */
+	readonly sortFollowUp?: (question: string, followUp: string) => Promise<FollowUpKind>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
 	/**
@@ -186,6 +188,8 @@ function seedTurnsOf(messages: readonly ChatMessage[]): SeedTurn[] {
 interface SearchRun {
 	readonly searchId: string;
 	readonly chatId: string;
+	/** The question the run is answering. */
+	readonly question: string;
 	/** Null while the async agent factory is still building it. */
 	agent: SearchAgent | null;
 	readonly finish: Promise<void>;
@@ -785,6 +789,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			const run: SearchRun = {
 				searchId,
 				chatId,
+				question: query,
 				agent: null,
 				finish,
 				resolveFinish,
@@ -869,6 +874,12 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			run.pendingSteers += 1;
 			await saveSteer(run, trimmed);
 			return true;
+		},
+		classifyFollowUp: async (searchId, text) => {
+			const run = active.get(searchId);
+			const trimmed = text.trim();
+			if (run === undefined || run.cancelled || run.ended || trimmed === "" || deps.sortFollowUp === undefined) return "next";
+			return deps.sortFollowUp(run.question, trimmed).catch(() => "next" as const);
 		},
 		cancel: async (searchId) => {
 			const run = active.get(searchId);

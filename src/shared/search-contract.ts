@@ -36,6 +36,7 @@ import type { AnswerRevision } from "./answer-revision";
 export const SEARCH_CHANNELS = {
 	start: "search:start",
 	steer: "search:steer",
+	classifyFollowUp: "search:classifyFollowUp",
 	cancel: "search:cancel",
 	event: "search:event",
 	historyList: "search:historyList",
@@ -139,6 +140,9 @@ export type SearchStreamEvent =
 	/** Sent after `done`, once the chat has a model-written title (see {@link ChatRecord.summaryTitle}). */
 	| { readonly type: "title"; readonly searchId: string; readonly chatId: string; readonly title: string };
 
+/** What a message sent during a run is: a correction of that run, or the next question. */
+export type FollowUpKind = "steer" | "next";
+
 /** When a steer reached the run: before or after its Quick answer was shown. */
 export type SteerTiming = "before-quick" | "after-quick";
 
@@ -193,6 +197,8 @@ export interface SearchBridge {
 	 * as a new question.
 	 */
 	steer(searchId: string, text: string): Promise<boolean>;
+	/** Sorts a message sent during the run `searchId`; `next` when it cannot tell. Absent: every such message is `next`. */
+	classifyFollowUp?(searchId: string, text: string): Promise<FollowUpKind>;
 	cancel(searchId: string): Promise<void>;
 	/**
 	 * Keep an image pasted from the clipboard (`base64` is the file's bytes) and return the file attachment that stands for

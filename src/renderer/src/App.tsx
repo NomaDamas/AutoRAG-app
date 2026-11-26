@@ -1189,6 +1189,9 @@ export function App(): ReactElement {
 											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
 											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
 											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onPostpone={(id) => inspectorChats.postpone(chatTabId, id)}
+											onCancelSteer={(id) => inspectorChats.cancelSteer(chatTabId, id)}
+											onSendNow={(index) => inspectorChats.sendNow(chatTabId, index)}
 											onStop={inspectorChats.stop}
 											onBack={() => inspectorChats.setMode(chatTabId, "info")}
 											onNewChat={() => inspectorChats.reset(chatTabId)}
@@ -1278,6 +1281,9 @@ export function App(): ReactElement {
 											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
 											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
 											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onPostpone={(id) => inspectorChats.postpone(chatTabId, id)}
+											onCancelSteer={(id) => inspectorChats.cancelSteer(chatTabId, id)}
+											onSendNow={(index) => inspectorChats.sendNow(chatTabId, index)}
 											onStop={inspectorChats.stop}
 											onBack={() => inspectorChats.setMode(chatTabId, "info")}
 											onNewChat={() => inspectorChats.reset(chatTabId)}
