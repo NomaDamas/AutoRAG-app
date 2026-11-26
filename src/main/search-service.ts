@@ -16,6 +16,11 @@ import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-image
 import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
+import {
+	createAutomationVerificationTracker,
+	createTestAutomationInSandboxTool,
+	testAutomationInSandbox,
+} from "./automation-sandbox";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
@@ -968,8 +973,22 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
 		const baseOptions = buildAgentOptions(effective);
+		const findNode = (): string | undefined =>
+			resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform });
+		const automationSandboxDeps = {
+			env: process.env,
+			platform: process.platform,
+			resourcesPath: process.resourcesPath ?? "",
+			findNode,
+		};
+		const automationVerificationTracker = createAutomationVerificationTracker();
+		const sandboxAutomationTool = createTestAutomationInSandboxTool({
+			...automationSandboxDeps,
+			tracker: automationVerificationTracker,
+		});
 		const agentOptions: AutoRAGAgentOptions = {
 			...baseOptions,
+			tools: [...(baseOptions.tools ?? []), sandboxAutomationTool],
 			...(sllm !== undefined ? { jev: { ...baseOptions.jev, sllm } } : {}),
 			model: resolved.model,
 			piAgentDir: agentDir,
@@ -984,7 +1003,12 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
-		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
+		// Also enforces temporary-sandbox verification when saving new or edited automation rules.
+		runAutomationToolOnNode(agent, findNode, {
+			tracker: automationVerificationTracker,
+			verifyRule: (rule, originalPaths) =>
+				testAutomationInSandbox({ rule, originalPaths }, automationSandboxDeps),
+		});
 		return agent as SearchAgent;
 	};
 }

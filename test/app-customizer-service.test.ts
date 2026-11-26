@@ -85,6 +85,7 @@ describe("app-customizer pi agent profile & toolkit", () => {
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual([
 			"delete_magic_action",
 			"get_app_settings",
+			"test_magic_action",
 			"update_context_menu",
 			"update_general_settings",
 			"update_sidebar",

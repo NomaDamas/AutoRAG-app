@@ -1892,6 +1892,67 @@
 	cursor: default;
 }
 
+.settings-view .magic-editor .magic-editor-test-btn {
+	margin-right: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.settings-view .magic-editor-verify-result {
+	margin-top: var(--space-12);
+	padding: var(--space-10) var(--space-12);
+	border-radius: var(--radius-8);
+	border: 1px solid var(--border);
+	background: var(--surface-muted);
+	font-size: var(--font-size-meta);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.settings-view .magic-editor-verify-result.is-ok {
+	border-color: var(--ok-dot);
+}
+
+.settings-view .magic-editor-verify-result.is-fail {
+	border-color: var(--danger-text);
+}
+
+.settings-view .magic-editor-verify-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .magic-editor-verify-result.is-ok .magic-editor-verify-head {
+	color: var(--ok-dot);
+}
+
+.settings-view .magic-editor-verify-result.is-fail .magic-editor-verify-head {
+	color: var(--danger-text);
+}
+
+.settings-view .magic-editor-verify-pre {
+	margin: 0;
+	padding: var(--space-6) var(--space-8);
+	border-radius: var(--radius-6);
+	background: var(--window);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-badge);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 120px;
+	overflow: auto;
+}
+
+.settings-view .magic-editor-verify-diff {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+}
+
 /* MCP 서버 추가/수정 in the same dialog: the card holds labelled monospace lines instead of one prompt. */
 .settings-view .mcp-editor-card {
 	gap: 0;

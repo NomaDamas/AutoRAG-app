@@ -4,8 +4,13 @@ import { homedir } from "node:os";
 import { dirname } from "node:path";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { ProfileModel } from "@autorag/librarian/profiles";
-import { normalizeContextMenuSettings, type MagicAction } from "../shared/context-menu-contract";
-import type { MagicActionEvent, MagicActionRunRequest } from "../shared/magic-actions-contract";
+import { normalizeContextMenuSettings, normalizeMagicAction, type MagicAction } from "../shared/context-menu-contract";
+import type {
+	MagicActionEvent,
+	MagicActionRunRequest,
+	MagicActionVerifyRequest,
+	MagicActionVerifyResult,
+} from "../shared/magic-actions-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
 import { isSecretKey } from "./autorag-config-service";
 import {
@@ -15,6 +20,7 @@ import {
 } from "./agents/profiles/magic-action";
 import { subscribeProfileProgress, type ReplyLanguage } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
+import { verifyMagicActionInSandbox } from "./magic-action-sandbox";
 import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
 
 const MAX_CAPTURE_CHARS = 32 * 1024;
@@ -47,6 +53,7 @@ export interface MagicActionServiceDeps {
 export interface MagicActionService {
 	start(runId: string, request: MagicActionRunRequest): Promise<void>;
 	cancel(runId: string): Promise<void>;
+	verify(request: MagicActionVerifyRequest): Promise<MagicActionVerifyResult>;
 	dispose(): void;
 }
 
@@ -426,6 +433,31 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 			if (run === undefined || run.cancelled) return;
 			run.cancelled = true;
 			run.abort.abort();
+		},
+		verify: async (request) => {
+			const normalized = normalizeMagicAction(request.action);
+			if (normalized === null) {
+				return {
+					ok: false,
+					executionKind: request.action.execution.kind,
+					timedOut: false,
+					durationMs: 0,
+					output: "",
+					error: "Invalid Magic Action.",
+					targetPaths: [],
+					diff: { created: [], modified: [], deleted: [], unchanged: [] },
+				};
+			}
+			return verifyMagicActionInSandbox(
+				{ action: normalized },
+				{
+					resolveModel: deps.resolveModel,
+					agentDir: deps.agentDir,
+					env: deps.env,
+					platform,
+					language: deps.language,
+				},
+			);
 		},
 		dispose: () => {
 			for (const run of runs.values()) {

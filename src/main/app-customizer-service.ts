@@ -40,6 +40,7 @@ import {
 } from "./agents/profiles/shortcut-customizer";
 import { subscribeProfileProgress } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
+import { verifyMagicActionInSandbox } from "./magic-action-sandbox";
 
 const MAX_OPEN_SESSIONS = 8;
 
@@ -226,6 +227,15 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					...platformDep,
 					language,
 					cancelled,
+					testMagicAction: (verifyInput) =>
+						verifyMagicActionInSandbox(verifyInput, {
+							resolveModel: deps.resolveModel,
+							agentDir: deps.agentDir,
+							env: deps.env,
+							...platformDep,
+							language,
+							cancelled,
+						}),
 				});
 				toolkit = kit;
 				profile = appCustomizerProfile({ language: currentLang, toolkit: kit, ...platformDep });

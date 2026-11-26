@@ -42,6 +42,14 @@ import {
 	type HideableContextMenuSectionId,
 	type MagicAction,
 } from "../../../shared/context-menu-contract";
+import {
+	buildMagicActionCandidate,
+	magicActionVerificationKey,
+	verifyMagicActionInSandbox,
+	type MagicActionVerificationResult,
+	type SandboxFixtureInput,
+	type VerifyMagicActionInput,
+} from "../../magic-action-sandbox";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 
 export type { ReplyLanguage };
@@ -61,6 +69,8 @@ export interface AppCustomizerToolkitDeps {
 	readonly platform?: NodeJS.Platform;
 	readonly language?: () => ReplyLanguage;
 	readonly cancelled?: () => boolean;
+	/** Runs a candidate Magic Action inside a temporary sandbox folder and returns its execution result and filesystem diff. */
+	readonly testMagicAction?: (input: VerifyMagicActionInput) => Promise<MagicActionVerificationResult>;
 }
 
 export interface AppCustomizerToolkit {
@@ -287,6 +297,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 	const lang = (): ReplyLanguage => deps.language?.() ?? "ko";
 	const isCancelled = (): boolean => deps.cancelled?.() === true;
 	const changes: AppCustomizerChange[] = [];
+	const verifiedActions = new Map<string, MagicActionVerificationResult>();
 	let mutationQueue: Promise<unknown> = Promise.resolve();
 	function serialized<T>(work: () => Promise<T>): Promise<T> {
 		const next = mutationQueue.then(work, work);
@@ -1027,6 +1038,27 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 					error: "Invalid Magic Action: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
 				});
 			}
+
+			// Enforce real temp-folder sandbox verification before saving whenever a sandbox runner is wired.
+			const verifyKey = magicActionVerificationKey(normalized);
+			let verification = verifiedActions.get(verifyKey);
+			let autoVerified = false;
+			if (verification === undefined && deps.testMagicAction !== undefined) {
+				autoVerified = true;
+				verification = await deps.testMagicAction({ action: normalized });
+				if (!verification.ok) {
+					return textResult({
+						ok: false,
+						saved: false,
+						verified: false,
+						error:
+							"Magic Action was NOT saved because automatic temp-folder sandbox verification failed. Diagnose the error/stderr/output/diff below, fix the script or prompt, and test with `test_magic_action` before saving.",
+						verification,
+					});
+				}
+				verifiedActions.set(verifyKey, verification);
+			}
+
 			const currentApp = await deps.settings.get();
 			const current = normalizeContextMenuSettings(currentApp.contextMenu);
 			const existingIdx = current.magicActions.findIndex((item) => item.id === normalized.id);
@@ -1049,10 +1081,146 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			changes.push(change);
 			return textResult({
 				ok: true,
+				saved: true,
+				...(verification !== undefined
+					? {
+							verified: true,
+							autoVerified,
+							verification,
+							...(autoVerified
+								? {
+										verificationNote:
+											"Automatically ran and passed in a temporary sandbox folder. Inspect verification.output and verification.diff to confirm it achieved the user's exact goal; if not, fix and re-test.",
+									}
+								: {}),
+						}
+					: {}),
 				magicAction: normalized,
 				contextMenu: nextContextMenu,
 			});
 		}),
+	});
+
+	const testMagicAction = defineTool({
+		name: "test_magic_action",
+		label: "Test Magic Action in Sandbox",
+		description:
+			"Test a Magic Action (by saved `actionId` or an inline candidate definition) inside an isolated temporary sandbox folder with sample files. Runs the real shell command or AI agent loop against sample files in the temp folder, returns exit status, stdout/stderr or agent reply, and the exact created/modified/deleted file diff with content previews, then deletes the temp folder. Always run this to verify a Magic Action works as intended before finalizing it, and if it fails or does not achieve the goal, fix and re-test until it succeeds.",
+		parameters: Type.Object({
+			actionId: Type.Optional(
+				Type.String({
+					description: "ID of an already saved Magic Action to test. Omit when testing an inline candidate definition before saving.",
+				}),
+			),
+			label: Type.Optional(Type.String({ description: "Candidate label (required when actionId is omitted)." })),
+			selection: Type.Optional(stringEnum(["any", "single", "multiple"], "Selection rule for inline candidate.")),
+			targetKind: Type.Optional(stringEnum(["any", "file", "folder"], "Target kind for inline candidate.")),
+			extensions: Type.Optional(Type.Array(Type.String(), { description: "Extension filter for inline candidate." })),
+			executionKind: Type.Optional(stringEnum(["script", "agent"], "Execution kind for inline candidate.")),
+			command: Type.Optional(Type.String({ description: "Shell/PowerShell script for inline script candidate." })),
+			agentMode: Type.Optional(stringEnum(["read", "organize"], "Agent mode for inline agent candidate.")),
+			prompt: Type.Optional(Type.String({ description: "Prompt instruction for inline agent candidate." })),
+			useSkills: Type.Optional(Type.Boolean({ description: "Whether the inline agent candidate loads Skills (default true)." })),
+			useMcp: Type.Optional(Type.Boolean({ description: "Whether the inline agent candidate connects MCP servers (default true)." })),
+			fixtures: Type.Optional(
+				Type.Array(
+					Type.Object({
+						path: Type.String({ description: "Relative path inside the temporary sandbox folder (e.g. 'meeting.md' or 'sub/note.txt')." }),
+						content: Type.Optional(Type.String({ description: "UTF-8 text content for a sample file." })),
+						kind: Type.Optional(stringEnum(["file", "folder"], "Fixture kind (default 'file').")),
+					}),
+					{
+						description: "Sample files/folders to create in the temp sandbox before running the action. Defaults to realistic files matching the action's targetKind/selection/extensions.",
+					},
+				),
+			),
+			targets: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Relative paths inside the sandbox to pass as selected target(s). Defaults to the created fixture files/folders.",
+				}),
+			),
+			timeoutMs: Type.Optional(
+				Type.Integer({ minimum: 1000, maximum: 180_000, description: "Sandbox test timeout in milliseconds (default 60000)." }),
+			),
+		}),
+		execute: async (_callId, params) => {
+			ensureLive();
+			let candidate: MagicAction | null = null;
+			if (params.actionId !== undefined && params.actionId.trim().length > 0) {
+				const currentApp = await deps.settings.get();
+				const current = normalizeContextMenuSettings(currentApp.contextMenu);
+				const needle = params.actionId.trim().toLowerCase();
+				candidate =
+					current.magicActions.find(
+						(item) => item.id.toLowerCase() === needle || item.label.toLowerCase() === needle,
+					) ?? null;
+				if (candidate === null) {
+					return textResult({
+						ok: false,
+						error: `No saved Magic Action found matching '${params.actionId}'.`,
+					});
+				}
+			} else {
+				if (params.executionKind === undefined || params.label === undefined) {
+					return textResult({
+						ok: false,
+						error: "Provide either `actionId` or an inline candidate (`label`, `executionKind`, and `command` or `prompt`).",
+					});
+				}
+				candidate = buildMagicActionCandidate({
+					label: params.label,
+					...(params.selection !== undefined ? { selection: params.selection } : {}),
+					...(params.targetKind !== undefined ? { targetKind: params.targetKind } : {}),
+					...(params.extensions !== undefined ? { extensions: params.extensions } : {}),
+					executionKind: params.executionKind,
+					...(params.command !== undefined ? { command: params.command } : {}),
+					...(params.agentMode !== undefined ? { agentMode: params.agentMode } : {}),
+					...(params.prompt !== undefined ? { prompt: params.prompt } : {}),
+					...(params.useSkills !== undefined ? { useSkills: params.useSkills } : {}),
+					...(params.useMcp !== undefined ? { useMcp: params.useMcp } : {}),
+				});
+				if (candidate === null) {
+					return textResult({
+						ok: false,
+						error: "Invalid candidate Magic Action: ensure label and command (for script) or prompt (for agent) are non-empty.",
+					});
+				}
+			}
+
+			const runner =
+				deps.testMagicAction ??
+				((verifyInput: VerifyMagicActionInput) =>
+					verifyMagicActionInSandbox(verifyInput, {
+						resolveModel: () => Promise.reject(new Error("Agent Magic Action sandbox runner is not configured.")),
+						agentDir: "",
+						env: process.env,
+						platform,
+						language: lang,
+						cancelled: isCancelled,
+					}));
+
+			const result = await runner({
+				action: candidate,
+				...(params.fixtures !== undefined ? { fixtures: params.fixtures as readonly SandboxFixtureInput[] } : {}),
+				...(params.targets !== undefined ? { targets: params.targets } : {}),
+				...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
+			});
+			const verifyKey = magicActionVerificationKey(candidate);
+			if (result.ok) verifiedActions.set(verifyKey, result);
+			else verifiedActions.delete(verifyKey);
+
+			return textResult({
+				...result,
+				verificationGuidance: result.ok
+					? "Temp-folder sandbox test exited cleanly. Inspect `output` and `diff` carefully against the user's goal: if the output or file changes do not match the goal, fix the Magic Action and re-run `test_magic_action`; otherwise save it with `upsert_magic_action`."
+					: "Temp-folder sandbox test FAILED. Do NOT save this broken Magic Action yet — diagnose `error`/`stderr`/`output`/`diff`, fix the command/prompt/settings, and re-run `test_magic_action`.",
+				action: {
+					id: candidate.id,
+					label: candidate.label,
+					executionKind: candidate.execution.kind,
+				},
+			});
+		},
 	});
 
 	const deleteMagicAction = defineTool({
@@ -1096,7 +1264,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 	});
 
 	return {
-		tools: [getAppSettings, updateSidebar, updateContextMenu, upsertMagicAction, deleteMagicAction, updateGeneralSettings],
+		tools: [getAppSettings, updateSidebar, updateContextMenu, upsertMagicAction, testMagicAction, deleteMagicAction, updateGeneralSettings],
 		takeChanges: () => changes.splice(0),
 		peekChanges: () => [...changes],
 	};
@@ -1115,9 +1283,9 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 		"## Role & Scope",
 		"- You customize Dazzi's own app settings (stored in `settings-state.json`, completely separate from the AutoRAG index config).",
 		"- **Finder Sidebar (`update_sidebar`)**: show or hide items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reorder Favorites or sections, pin or remove custom folders, or reset the sidebar to default.",
-		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `delete_magic_action`)**:",
+		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `test_magic_action`, `delete_magic_action`)**:",
 		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:pinToSidebar`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
-		`  - Create, update, or remove custom **Magic Actions** (\`upsert_magic_action\` / \`delete_magic_action\`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (${scriptDetail}) OR run a pi AI agent loop (\`executionKind: 'agent'\`, \`agentMode: 'read'\` for analysis/summary or \`'organize'\` for file creation/editing/conversion/shell actions, with \`useSkills\` and \`useMcp\` both enabled \`true\` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn \`useSkills: false\` or \`useMcp: false\` off) with conditions (\`selection: 'single' | 'multiple' | 'any'\`, \`targetKind: 'file' | 'folder' | 'any'\`, \`extensions: ['pdf', ...]\`).`,
+		`  - Create, update, verify, or remove custom **Magic Actions** (\`upsert_magic_action\` / \`test_magic_action\` / \`delete_magic_action\`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (${scriptDetail}) OR run a pi AI agent loop (\`executionKind: 'agent'\`, \`agentMode: 'read'\` for analysis/summary or \`'organize'\` for file creation/editing/conversion/shell actions, with \`useSkills\` and \`useMcp\` both enabled \`true\` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn \`useSkills: false\` or \`useMcp: false\` off) with conditions (\`selection: 'single' | 'multiple' | 'any'\`, \`targetKind: 'file' | 'folder' | 'any'\`, \`extensions: ['pdf', ...]\`).`,
 		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
 		"",
 		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",
@@ -1125,10 +1293,17 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 		"- Right-Click Context Menu: `Tags` (`builtin:tags`, and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
 		"- If the person asks to hide any locked item (or asks to 'hide everything'), keep the locked items visible, apply the rest of their request, and explain politely which core items always remain shown.",
 		"",
+		"## Mandatory Sandbox Verification for Magic Actions",
+		"- Whenever you create or modify a Magic Action (whether `script` or `agent`), you MUST verify that it actually works in a temporary sandbox folder using `test_magic_action` with realistic sample `fixtures` matching the user's goal.",
+		"- Inspect the returned `ok`, `exitCode`, `output`, `stderr`, `error`, and `diff` (`created`, `modified`, `deleted` files and their `contentPreview`) to judge whether the action genuinely achieved the user's goal.",
+		"- If `test_magic_action` fails (non-zero exit, error, timeout) OR its output / filesystem diff does not meet the goal, diagnose why, redesign or fix the command/prompt/settings, and re-run `test_magic_action` until it passes (retry up to 3 times).",
+		"- Only save (or keep) the Magic Action via `upsert_magic_action` once verification succeeds. If you already saved an earlier version that failed verification, update it with the fixed version (or delete it and explain clearly if the task cannot work in this environment).",
+		"",
 		"## Workflow",
 		"1. Call `get_app_settings` when you need to inspect the current sidebar, right-click context menu, Magic Actions, or app preferences.",
-		"2. Call `update_sidebar`, `update_context_menu`, `upsert_magic_action`, `delete_magic_action`, and/or `update_general_settings` to apply the requested changes immediately.",
-		"3. After tool calls finish, summarize clearly in 1-3 short sentences what you changed.",
+		"2. For Magic Actions: design the action, test it in a temporary sandbox with `test_magic_action`, fix and re-test if it does not work as intended, and save the verified action with `upsert_magic_action`.",
+		"3. For sidebar, built-in menu, or general preferences: call `update_sidebar`, `update_context_menu`, `delete_magic_action`, and/or `update_general_settings`.",
+		"4. After tool calls finish, summarize clearly in 1-3 short sentences what you changed (and mention that the Magic Action was verified in a temporary sandbox).",
 		intentPromptLine(language),
 	].join("\n");
 }
