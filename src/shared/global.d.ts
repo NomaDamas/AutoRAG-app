@@ -5,6 +5,7 @@ import type { ActionsBridge } from "./actions-contract";
 import type { AppCustomizerBridge } from "./app-customizer-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { ConversionBridge } from "./conversion-contract";
+import type { DefaultFileManagerBridge } from "./default-file-manager-contract";
 import type { ErrorFixBridge } from "./error-fix-contract";
 import type { DocumentEditorBridge } from "./document-editor-contract";
 import type { MagicActionBridge } from "./magic-actions-contract";
@@ -42,6 +43,7 @@ declare global {
 			readonly demo: DemoBridge;
 			readonly ltr: LtrBridge;
 			readonly conversion: ConversionBridge;
+			readonly defaultFileManager?: DefaultFileManagerBridge;
 			readonly errorFix: ErrorFixBridge;
 			readonly documentEditor: DocumentEditorBridge;
 			readonly magicAction: MagicActionBridge;

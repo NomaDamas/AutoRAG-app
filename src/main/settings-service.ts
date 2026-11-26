@@ -65,6 +65,8 @@ export interface SettingsServiceDeps {
 	readonly systemLanguage?: AppSettings["language"];
 	/** Installs or removes the OS file-menu entries for a settings change; throwing rejects the change. */
 	readonly applyOsMenu?: (next: AppSettings, previous: AppSettings) => Promise<void>;
+	/** Applies OS default file manager registration on settings change; throwing rejects the change. */
+	readonly applyDefaultFileManager?: (next: AppSettings, previous: AppSettings) => Promise<void>;
 }
 
 async function loadState(path: string, defaults: AppSettings): Promise<SettingsState> {
@@ -154,6 +156,9 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 				if (deps.applyOsMenu !== undefined) {
 					// Before the write: a failed install rejects the toggle rather than saving "on" with no menu entries.
 					await deps.applyOsMenu({ ...current.settings, ...patch }, current.settings);
+				}
+				if (deps.applyDefaultFileManager !== undefined) {
+					await deps.applyDefaultFileManager({ ...current.settings, ...patch }, current.settings);
 				}
 				const appearance = patch.appearance === "dark" || patch.appearance === "light" ? patch.appearance : current.settings.appearance;
 				const approvalMode = isApprovalMode(patch.approvalMode) ? patch.approvalMode : current.settings.approvalMode;

@@ -17,9 +17,9 @@ import type { ChatAttachment } from "./search-contract";
  * `dazzi --ask` command, the Raycast extension); `reveal` shows the first path in its folder; `open` is the
  * `dazzi <path>...` command: every folder opens in a tab, every file is shown selected in its folder.
  */
-export type OsRequestAction = "ask" | "reveal" | "open";
+export type OsRequestAction = "ask" | "reveal" | "open" | "focus";
 
-export const OS_REQUEST_ACTIONS: readonly OsRequestAction[] = ["ask", "reveal", "open"];
+export const OS_REQUEST_ACTIONS: readonly OsRequestAction[] = ["ask", "reveal", "open", "focus"];
 
 /** The request as a menu entry or the command line states it: raw, untrusted paths and question. */
 export interface OsLaunchRequest {
@@ -33,7 +33,8 @@ export interface OsLaunchRequest {
 export type OsRendererRequest =
 	| { readonly action: "ask"; readonly attachments: readonly ChatAttachment[]; readonly query: string | null }
 	| { readonly action: "reveal"; readonly path: string }
-	| { readonly action: "open"; readonly targets: readonly OsOpenTarget[] };
+	| { readonly action: "open"; readonly targets: readonly OsOpenTarget[] }
+	| { readonly action: "focus" };
 
 /** One existing path of an `open` request, with what it is on disk. */
 export interface OsOpenTarget {
@@ -119,6 +120,7 @@ export function normalizeOsLaunchRequest(value: unknown): OsLaunchRequest | null
 		if (!absolute) continue;
 		if (!kept.includes(entry)) kept.push(entry);
 	}
+	if (action === "focus") return { action: "focus", paths: [] };
 	if (question !== undefined) return { action: "ask", paths: kept, query: question };
 	return kept.length === 0 ? null : { action, paths: kept };
 }
