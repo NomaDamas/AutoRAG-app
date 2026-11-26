@@ -966,6 +966,12 @@ export function InspectorChatView({
 											if (ok) setStarterAdded(newAutomation);
 											return ok;
 										}}
+										onCreateMagicAction={async (action) => {
+											// A right-click action is not an automation: the card closes, and the toast says where it went.
+											const ok = (await automationsShell.props.onCreateMagicAction?.(action)) ?? false;
+											if (ok) onNewAutomationDone?.();
+											return ok;
+										}}
 									/>
 								)}
 							</div>

@@ -647,7 +647,9 @@
       "saved": "已保存更改。",
       "deleting": "正在删除规则“{{title}}”…",
       "undo": "撤销",
-      "restored": "已恢复规则“{{title}}”。"
+      "restored": "已恢复规则“{{title}}”。",
+      "addingToMenu": "正在添加到右键菜单…",
+      "addedToMenu": "已将“{{title}}”添加到右键菜单。"
     },
     "kinds": {
       "screenshot": "截图",
@@ -3896,6 +3898,38 @@
       "words": "{{count}} 词",
       "chars": "{{count}} 字符",
       "pages": "{{count}} 页"
+    }
+  },
+  "rightClickWhen": {
+    "when": "何时",
+    "task": "Dazzi 要做的事",
+    "kindLabel": "文件类型",
+    "kind": {
+      "all": "文件",
+      "pdf": "PDF 文件",
+      "image": "图片",
+      "document": "文档",
+      "folder": "文件夹",
+      "both": "文件或文件夹"
+    },
+    "custom": "{{exts}} 文件",
+    "extPlaceholder": "输入扩展名后按 Enter",
+    "countLabel": "选择数量",
+    "count": {
+      "single": "一个",
+      "multiple": "多个",
+      "any": "任意数量的"
+    },
+    "event": "右键点击",
+    "sentence": {
+      "single": "当{{event}}{{count}}{{kind}}时",
+      "multiple": "当{{event}}{{count}}{{kind}}时",
+      "any": "当{{event}}{{count}}{{kind}}时"
+    },
+    "runLabel": "执行方式",
+    "run": {
+      "agent": "AI",
+      "script": "脚本"
     }
   }
 }

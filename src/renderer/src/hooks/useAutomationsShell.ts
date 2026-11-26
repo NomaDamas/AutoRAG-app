@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AutomationRule } from "../../../shared/automation-contract";
+import { normalizeContextMenuSettings } from "../../../shared/context-menu-contract";
 import { t } from "../../../shared/i18n/core";
 import type { AutomationsViewProps } from "../components/AutomationsView";
 import { addPrompt, ruleTitle } from "../state/automations";
 import { ruleKeyAction } from "../state/automations-keys";
 import { ruleMenuEntries, stepRuleSelection, type AutomationsStore, type AutomationsView } from "../state/automations-store";
 import type { FinderMenuAction, FinderMenuEntry } from "../state/context-menu";
+import { newMagicActionId } from "../state/right-click-trigger";
 
 /** How long the "삭제했어요 · 실행 취소" toast offers its undo. */
 const UNDO_MS = 5000;
@@ -330,6 +332,30 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 				if (id !== null) showProgress(t("automations.toast.created"), false);
 				else clearProgress();
 				return id !== null;
+			} catch (cause) {
+				clearProgress();
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
+		// 우클릭하면 on a 새 자동화 card: the action joins the right-click menu (Settings → 우클릭 메뉴 lists it), under an id
+		// no other action has, and the menu's magic section is shown again if it was hidden.
+		onCreateMagicAction: async (action) => {
+			const settings = window.autorag?.settings;
+			if (settings === undefined) return false;
+			showProgress(t("automations.toast.addingToMenu"), true);
+			try {
+				const current = normalizeContextMenuSettings((await settings.get()).contextMenu);
+				const id = newMagicActionId(action.label, current.magicActions.map((item) => item.id));
+				await settings.set({
+					contextMenu: normalizeContextMenuSettings({
+						...current,
+						hiddenSections: current.hiddenSections.filter((section) => section !== "magic"),
+						magicActions: [...current.magicActions, { ...action, id }],
+					}),
+				});
+				showProgress(t("automations.toast.addedToMenu", { title: action.label }), false);
+				return true;
 			} catch (cause) {
 				clearProgress();
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));

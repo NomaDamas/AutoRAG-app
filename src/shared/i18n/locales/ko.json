@@ -647,7 +647,9 @@
       "saved": "변경 사항을 저장했습니다.",
       "deleting": "‘{{title}}’ 규칙을 삭제하는 중…",
       "undo": "실행 취소",
-      "restored": "‘{{title}}’ 규칙을 되돌렸습니다."
+      "restored": "‘{{title}}’ 규칙을 되돌렸습니다.",
+      "addingToMenu": "우클릭 메뉴에 추가하는 중…",
+      "addedToMenu": "‘{{title}}’ 항목을 우클릭 메뉴에 추가했습니다."
     },
     "kinds": {
       "screenshot": "스크린샷",
@@ -3896,6 +3898,38 @@
       "words": "{{count}}단어",
       "chars": "{{count}}자",
       "pages": "{{count}}페이지"
+    }
+  },
+  "rightClickWhen": {
+    "when": "언제",
+    "task": "Dazzi가 할 일",
+    "kindLabel": "파일 종류",
+    "kind": {
+      "all": "모든 파일",
+      "pdf": "PDF 파일",
+      "image": "이미지 파일",
+      "document": "문서 파일",
+      "folder": "폴더",
+      "both": "파일이나 폴더"
+    },
+    "custom": "{{exts}} 파일",
+    "extPlaceholder": "확장자 입력 후 Enter",
+    "countLabel": "선택 개수",
+    "count": {
+      "single": "하나",
+      "multiple": "여러 개",
+      "any": "하나 이상"
+    },
+    "event": "우클릭하면",
+    "sentence": {
+      "single": "{{kind}} {{count}}를 {{event}}",
+      "multiple": "{{kind}} {{count}}를 {{event}}",
+      "any": "{{kind}} {{count}}을 {{event}}"
+    },
+    "runLabel": "처리 방식",
+    "run": {
+      "agent": "AI",
+      "script": "스크립트"
     }
   }
 }

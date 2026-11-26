@@ -647,7 +647,9 @@
       "saved": "変更を保存しました。",
       "deleting": "ルール「{{title}}」を削除しています…",
       "undo": "取り消す",
-      "restored": "ルール「{{title}}」を元に戻しました。"
+      "restored": "ルール「{{title}}」を元に戻しました。",
+      "addingToMenu": "右クリックメニューに追加しています…",
+      "addedToMenu": "右クリックメニューに「{{title}}」を追加しました。"
     },
     "kinds": {
       "screenshot": "スクリーンショット",
@@ -3896,6 +3898,38 @@
       "words": "{{count}}語",
       "chars": "{{count}}文字",
       "pages": "{{count}}ページ"
+    }
+  },
+  "rightClickWhen": {
+    "when": "いつ",
+    "task": "Dazziがすること",
+    "kindLabel": "ファイルの種類",
+    "kind": {
+      "all": "ファイル",
+      "pdf": "PDFファイル",
+      "image": "画像",
+      "document": "文書",
+      "folder": "フォルダ",
+      "both": "ファイルかフォルダ"
+    },
+    "custom": "{{exts}}ファイル",
+    "extPlaceholder": "拡張子を入力してEnter",
+    "countLabel": "選択する数",
+    "count": {
+      "single": "1つ",
+      "multiple": "複数",
+      "any": "いくつでも"
+    },
+    "event": "右クリックした",
+    "sentence": {
+      "single": "{{kind}}を{{count}}{{event}}とき",
+      "multiple": "{{kind}}を{{count}}{{event}}とき",
+      "any": "{{kind}}を{{count}}{{event}}とき"
+    },
+    "runLabel": "実行方法",
+    "run": {
+      "agent": "AI",
+      "script": "スクリプト"
     }
   }
 }

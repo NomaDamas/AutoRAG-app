@@ -1050,6 +1050,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									if (ok) setStarters((current) => current.map((item) => (item.key === starter.key ? { ...item, added: true } : item)));
 									return ok;
 								}}
+								onCreateMagicAction={async (action) => {
+									// A right-click action is not an automation: the card closes, and the toast says where it went.
+									const ok = (await automationsShell.props.onCreateMagicAction?.(action)) ?? false;
+									if (ok) setStarters((current) => current.filter((item) => item.key !== starter.key));
+									return ok;
+								}}
 							/>
 						)}
 					</div>

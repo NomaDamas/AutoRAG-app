@@ -17,8 +17,13 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
+import { normalizeMagicAction, type MagicAction, type MagicActionSelectionRule } from "../../../shared/context-menu-contract";
+import { hostPlatform } from "../lib/shortcuts";
+import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickTarget, type RightClickKind } from "../state/right-click-trigger";
+import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
+import { RightClickWhen, RunKindSegment, type RunKind } from "./RightClickWhen";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -37,6 +42,8 @@ export interface AutomationsViewProps {
 	readonly onAdd: () => void;
 	/** 만들기: write the rule; resolves true once it is in the rules file. */
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** A 새 자동화 card set to 우클릭하면: add the action to the right-click menu; resolves true once settings have it. */
+	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	/** The names people gave their rules; the list redraws when one changes. */
 	readonly names?: Readonly<Record<string, string>>;
 	/** ⋯ → 이름 바꾸기: store a rule's name; an empty one goes back to the derived title. */
@@ -91,8 +98,8 @@ type ModeId = "read" | "write";
 const KIND_GLOBS: Readonly<Record<KindId, readonly string[]>> = {
 	all: [],
 	pdf: ["**/*.pdf"],
-	image: ["png", "jpg", "jpeg", "heic", "gif", "webp"].map((ext) => `**/*.${ext}`),
-	document: ["pdf", "doc", "docx", "hwp", "hwpx", "txt", "md", "ppt", "pptx", "xls", "xlsx"].map((ext) => `**/*.${ext}`),
+	image: IMAGE_EXTENSIONS.map((ext) => `**/*.${ext}`),
+	document: DOCUMENT_EXTENSIONS.map((ext) => `**/*.${ext}`),
 };
 const EVENTS: Readonly<Record<EventId, readonly AutomationEventType[]>> = {
 	create: ["create"],
@@ -119,101 +126,6 @@ const TEMPLATES: readonly Template[] = [
 	{ id: "pdf", folder: "downloads", kind: "pdf", event: "create", mode: "write" },
 	{ id: "refresh", folder: "documents", kind: "all", event: "createUpdate", mode: "read", run: ["autorag", "refresh"] },
 ];
-
-interface ChipOption<T extends string> {
-	readonly value: T;
-	readonly label: string;
-	readonly icon?: ReactNode;
-}
-
-/** A word in the 언제 sentence: a small white chip that opens its choices below it. */
-function ChipSelect<T extends string>({
-	value,
-	options,
-	label,
-	icon,
-	round = false,
-	disabled = false,
-	testId,
-	onChange,
-}: {
-	readonly value: T | null;
-	readonly options: readonly ChipOption<T>[];
-	readonly label: string;
-	readonly icon?: ReactNode;
-	readonly round?: boolean;
-	/** Read, not edited: one tone lighter, and it opens nothing. */
-	readonly disabled?: boolean;
-	readonly testId: string;
-	readonly onChange: (value: T) => void;
-}): ReactElement {
-	const [open, setOpen] = useState(false);
-	const ref = useRef<HTMLSpanElement>(null);
-	useEffect(() => {
-		if (!open) return;
-		const onDown = (event: MouseEvent): void => {
-			if (ref.current !== null && !ref.current.contains(event.target as Node)) setOpen(false);
-		};
-		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") {
-				event.stopPropagation();
-				setOpen(false);
-			}
-		};
-		document.addEventListener("mousedown", onDown);
-		document.addEventListener("keydown", onKey, true);
-		return () => {
-			document.removeEventListener("mousedown", onDown);
-			document.removeEventListener("keydown", onKey, true);
-		};
-	}, [open]);
-	const current = options.find((option) => option.value === value);
-	return (
-		<span ref={ref} className="relative inline-flex">
-			<button
-				type="button"
-				data-testid={testId}
-				aria-haspopup="listbox"
-				aria-expanded={open}
-				aria-label={label}
-				disabled={disabled}
-				className={cn(
-					"inline-flex items-center gap-4 px-8 py-4 border-[0.5px] border-divider bg-window text-meta leading-[18px] whitespace-nowrap",
-					disabled ? "text-ink cursor-default" : "text-ink cursor-pointer hover:border-border",
-					round ? "rounded-[13px]" : "rounded-[7px]",
-				)}
-				onClick={() => setOpen((was) => !was)}
-			>
-				{current?.icon ?? icon}
-				<span>{current?.label ?? label}</span>
-				<ChevronDownIcon size={12} className="text-ink-muted" />
-			</button>
-			{open ? (
-				<ul role="listbox" aria-label={label} className="absolute left-0 top-[calc(100%+4px)] z-30 m-0 w-max min-w-full list-none rounded-8 border border-border bg-window p-4 shadow-menu">
-					{options.map((option) => (
-						<li key={option.value}>
-							<button
-								type="button"
-								role="option"
-								aria-selected={option.value === value}
-								data-testid={`${testId}-${option.value}`}
-								className="flex w-full items-center gap-6 rounded-6 border-0 bg-transparent px-8 py-5 text-left text-meta text-ink whitespace-nowrap cursor-pointer hover:bg-hover"
-								onClick={() => {
-									onChange(option.value);
-									setOpen(false);
-								}}
-							>
-								{option.icon}
-								<span className="flex-1 whitespace-nowrap">{option.label}</span>
-								{option.value === value ? <CheckIcon size={12} className="text-accent-text" /> : <span className="w-12" />}
-							</button>
-						</li>
-					))}
-				</ul>
-			) : null}
-		</span>
-	);
-}
 
 /** A standard folder the OS reports, by its sidebar glyph. */
 function standardFolders(locations: readonly FsLocation[]): readonly ChipOption<string>[] {
@@ -1158,15 +1070,22 @@ export function AutomationSuggestionCard({
  * The rule the agent is about to save, filled in (Figma 672:3740): the 언제 sentence of chips over the 할 일 line, or
  * the command a program rule runs, read as it is. A folder, kind or change the chips do not offer stays as written
  * until its chip is changed.
+ *
+ * The change chip also offers 우클릭하면 when the card is handed `onCreateMagicAction`: the sentence then drops the
+ * folder for how many items are picked ("PDF 파일 하나를 우클릭하면"), 할 일 can be a command instead (AI | 스크립트),
+ * and 추가하기 puts the action in the right-click menu instead of the automation list. One form for both triggers.
  */
 export function AutomationDraftCard({
 	initial,
 	onCreate,
+	onCreateMagicAction,
 	onCancel,
 }: {
 	/** The rule to show filled in; null for an empty card (새 자동화) where every chip still asks. */
 	readonly initial: AutomationDraft | null;
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** Where a right-click action can be made from here; without it the change chip has no 우클릭하면. */
+	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	readonly onCancel: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -1176,13 +1095,19 @@ export function AutomationDraftCard({
 	const first = rule.paths[0] ?? null;
 	const [folder, setFolder] = useState<string | null>(first);
 	const [kind, setKind] = useState<KindId | null>(blank ? null : kindOf(rule.include));
-	const [event, setEvent] = useState<EventId | null>(blank ? null : eventOf(rule.events));
+	const [event, setEvent] = useState<EventId | "rightClick" | null>(blank ? null : eventOf(rule.events));
 	const [task, setTask] = useState(rule.agent?.task ?? "");
 	const [busy, setBusy] = useState(false);
+	// 우클릭하면: its own file kinds (folders too), how many items, a typed extension list, and AI or a command.
+	const rightClick = event === "rightClick";
+	const [clickKind, setClickKind] = useState<RightClickKind>("pdf");
+	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(null);
+	const [selection, setSelection] = useState<MagicActionSelectionRule>("single");
+	const [runKind, setRunKind] = useState<RunKind>("agent");
 	const standard = standardFolders(locations);
 	const folders = folder === null || standard.some((option) => option.value === folder) ? standard : [...standard, { value: folder, label: folderLabel(folder), icon: <FolderGlyph size={13} /> }];
 	const draft: AutomationDraft | null =
-		folder === null || (blank && (kind === null || event === null))
+		event === "rightClick" || folder === null || (blank && (kind === null || event === null))
 			? null
 			: {
 					paths: folder === first ? rule.paths : [folder],
@@ -1191,23 +1116,57 @@ export function AutomationDraftCard({
 					...(rule.agent === undefined ? { run: rule.run ?? [] } : { agent: { profile: rule.agent.profile, task: task.trim() } }),
 				};
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
-	const events: readonly ChipOption<EventId>[] = (["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) }));
+	// A program rule the agent wrote stays a folder rule; anything else may become a right-click action.
+	const offersRightClick = onCreateMagicAction !== undefined && rule.agent !== undefined;
+	const events: readonly ChipOption<EventId | "rightClick">[] = [
+		...(["create", "update", "createUpdate", "delete"] as const).map((value) => ({ value, label: t(`automations.create.event.${value}`) })),
+		...(offersRightClick ? [{ value: "rightClick" as const, label: t("rightClickWhen.event"), divided: true }] : []),
+	];
 	const chips: Readonly<Record<string, ReactNode>> = {
 		folder: <ChipSelect value={folder} options={folders} label={folder === null ? t("automations.create.pickFolder") : folderLabel(folder)} icon={<FolderGlyph size={13} />} testId="automation-request-folder" onChange={setFolder} />,
 		kind: <ChipSelect value={kind} options={kinds} label={kind === null && !blank ? t("automations.kinds.noun", { kinds: kindsText(rule.include) }) : t("automations.create.kindLabel")} testId="automation-request-kind" onChange={setKind} />,
 		event: <ChipSelect value={event} options={events} label={event === null && !blank ? t("automations.create.event.other") : t("automations.create.eventLabel")} testId="automation-request-event" onChange={setEvent} />,
 	};
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
-	const canSubmit = draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0) && !busy;
+	const canSubmit = (rightClick ? task.trim().length > 0 : draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0)) && !busy;
+	const script = rightClick && runKind === "script";
+	/** 우클릭하면: the card as the right-click menu action it makes, named from what it does. */
+	const magicAction = (): MagicAction | null =>
+		normalizeMagicAction({
+			label: autoMagicLabel(task),
+			enabled: true,
+			selection,
+			...rightClickTarget(clickKind, customExtensions),
+			execution: script ? { kind: "script", command: task } : { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
+		});
 	return (
 		<div className="flex flex-col gap-8 rounded-12 border border-border bg-window p-12" data-automation-request>
 			<span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span>
-			<div className="flex flex-wrap items-center gap-6">
-				{sentence.map((part, index) =>
-					part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
-				)}
+			{rightClick ? (
+				<RightClickWhen
+					kind={clickKind}
+					custom={customExtensions}
+					selection={selection}
+					event={chips.event}
+					testId="automation-request-rc"
+					onKind={(next) => {
+						setClickKind(next);
+						setCustomExtensions(null);
+					}}
+					onCustom={setCustomExtensions}
+					onSelection={setSelection}
+				/>
+			) : (
+				<div className="flex flex-wrap items-center gap-6">
+					{sentence.map((part, index) =>
+						part in chips ? <Fragment key={index}>{chips[part]}</Fragment> : part.trim().length === 0 ? null : <span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>,
+					)}
+				</div>
+			)}
+			<div className="flex items-center justify-between">
+				<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
+				{rightClick ? <RunKindSegment value={runKind} testId="automation-request-run" onChange={setRunKind} /> : null}
 			</div>
-			<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
 			{rule.agent === undefined ? (
 				<code className="block rounded-6 bg-subtle-alt px-8 py-6 font-mono text-badge leading-[16px] text-ink [overflow-wrap:anywhere]" data-testid="automation-request-command">
 					{(rule.run ?? []).join(" ")}
@@ -1217,9 +1176,16 @@ export function AutomationDraftCard({
 					value={task}
 					rows={2}
 					aria-label={t("automations.create.task")}
-					placeholder={t("automations.create.taskPlaceholder")}
+					placeholder={
+						script
+							? t(hostPlatform() === "win32" ? "settingsCore.contextMenu.editor.commandPlaceholderWindows" : "settingsCore.contextMenu.editor.commandPlaceholder")
+							: t("automations.create.taskPlaceholder")
+					}
 					data-testid="automation-request-task"
-					className="w-full resize-none rounded-6 border-[0.5px] border-divider bg-subtle-alt px-8 py-6 text-meta leading-[18px] text-ink outline-none focus:border-accent"
+					className={cn(
+						"w-full resize-none rounded-6 border-[0.5px] border-divider bg-subtle-alt px-8 py-6 text-meta leading-[18px] text-ink outline-none focus:border-accent",
+						script && "font-mono",
+					)}
 					onChange={(change) => setTask(change.target.value)}
 				/>
 			)}
@@ -1233,6 +1199,13 @@ export function AutomationDraftCard({
 					disabled={!canSubmit}
 					className="inline-flex h-28 items-center rounded-6 border-0 bg-accent px-10 text-meta font-medium text-on-accent cursor-pointer hover:bg-accent-hover disabled:cursor-default disabled:opacity-50"
 					onClick={() => {
+						if (rightClick) {
+							const action = magicAction();
+							if (action === null || onCreateMagicAction === undefined) return;
+							setBusy(true);
+							void onCreateMagicAction(action).finally(() => setBusy(false));
+							return;
+						}
 						if (draft === null) return;
 						setBusy(true);
 						void onCreate(draft).finally(() => setBusy(false));

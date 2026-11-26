@@ -647,7 +647,9 @@
       "saved": "Changes saved.",
       "deleting": "Deleting the rule ‘{{title}}’…",
       "undo": "Undo",
-      "restored": "Restored the rule “{{title}}”."
+      "restored": "Restored the rule “{{title}}”.",
+      "addingToMenu": "Adding to the right-click menu…",
+      "addedToMenu": "Added ‘{{title}}’ to the right-click menu."
     },
     "kinds": {
       "screenshot": "Screenshot",
@@ -3896,6 +3898,38 @@
       "words": "{{count}} words",
       "chars": "{{count}} chars",
       "pages": "{{count}} pages"
+    }
+  },
+  "rightClickWhen": {
+    "when": "When",
+    "task": "What Dazzi does",
+    "kindLabel": "File type",
+    "kind": {
+      "all": "any files",
+      "pdf": "PDF files",
+      "image": "images",
+      "document": "documents",
+      "folder": "folders",
+      "both": "files or folders"
+    },
+    "custom": "{{exts}} files",
+    "extPlaceholder": "Type an extension, then Enter",
+    "countLabel": "How many",
+    "count": {
+      "single": "one at a time",
+      "multiple": "several at once",
+      "any": "in any number"
+    },
+    "event": "are right-clicked",
+    "sentence": {
+      "single": "When {{kind}} {{event}} {{count}}",
+      "multiple": "When {{kind}} {{event}} {{count}}",
+      "any": "When {{kind}} {{event}} {{count}}"
+    },
+    "runLabel": "How it runs",
+    "run": {
+      "agent": "AI",
+      "script": "Script"
     }
   }
 }
