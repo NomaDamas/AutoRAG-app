@@ -14,3 +14,5 @@ node_modules/
 *.pem
 fastembed_cache
 .fastembed_cache
+src/main/vendor/*.node
+

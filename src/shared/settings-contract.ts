@@ -90,6 +90,10 @@ export interface AppSettings {
 	readonly dupeyScanIntervalMinutes: number;
 	/** The OS file-menu entries ("Ask AutoRAG", "Show in AutoRAG") are installed: macOS Quick Actions, Windows Explorer verbs. */
 	readonly osMenuIntegration: boolean;
+	/** Dazzi is registered as the OS default file manager (macOS NSFileViewer + public.folder; Windows Folder/Directory/Win+E). */
+	readonly defaultFileManager: boolean;
+	/** Windows only: run the lightweight Explorer window watcher to intercept `SHOpenFolderAndSelectItems` ("Show in folder") calls. */
+	readonly defaultFileManagerInterceptReveal: boolean;
 	/**
 	 * Disk permission mode for the AI Search agent (librarian v2.15):
 	 * `readonly` (default) enforces OS-level read-only filesystem sandboxing on shell commands and blocks
@@ -128,6 +132,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	defaultFileManager: false,
+	defaultFileManagerInterceptReveal: true,
 	approvalMode: DEFAULT_APPROVAL_MODE,
 	remoteAccess: false,
 	remotePort: 47833,

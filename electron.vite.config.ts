@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "electron-vite";
@@ -76,6 +76,14 @@ const vendoredLibarchiveWasm: Plugin = {
 			fileName: "vendor/libarchive.wasm",
 			source: readFileSync(resolve(import.meta.dirname, "src/main/vendor/libarchive.wasm")),
 		});
+		const macRevealHook = resolve(import.meta.dirname, "src/main/vendor/mac-reveal-hook.node");
+		if (process.platform === "darwin" && existsSync(macRevealHook)) {
+			this.emitFile({
+				type: "asset",
+				fileName: "vendor/mac-reveal-hook.node",
+				source: readFileSync(macRevealHook),
+			});
+		}
 	},
 };
 

@@ -562,7 +562,10 @@ export function App(): ReactElement {
 	useEffect(() => {
 		if (finder === undefined) return;
 		for (const request of osQueueRef.current.splice(0)) {
-			if (request.action === "reveal") {
+			if (request.action === "focus") {
+				// Window was already brought to front by the main process (e.g. Win+E).
+				continue;
+			} else if (request.action === "reveal") {
 				finder.revealEvidence(request.path);
 			} else if (request.action === "open") {
 				// `dazzi <path>...`: a folder gets a tab, a file is shown selected in its folder; the last one ends up in front.
