@@ -165,6 +165,59 @@ describe("the 자동화 tab's right-click rows", () => {
 	});
 });
 
+describe("전체 기록 with right-click runs", () => {
+	it("names each run by its file, with the automation and how it ended under it, and opens the action's page", async () => {
+		const action: MagicAction = {
+			id: "minutes",
+			label: "세 줄 요약",
+			enabled: true,
+			selection: "single",
+			targetKind: "file",
+			extensions: ["txt"],
+			execution: { kind: "agent", mode: "read", prompt: "세 줄로 요약해 줘" },
+		};
+		const run = { startedAt: Date.now() - 60_000, durationMs: 900, eventCount: 3, exitCode: 0, signal: null, timedOut: false, files: ["C:/docs/회의록.txt", "C:/docs/b.txt", "C:/docs/c.txt"] };
+		Reflect.set(globalThis, "autorag", {
+			...(Reflect.get(globalThis, "autorag") as object),
+			magicAction: { history: async () => [run] },
+		});
+		await act(async () => {
+			root.render(
+				<AutomationsView
+					state={{ ready: true, rules: [], daemon: null, configPath: "", configError: null, error: null }}
+					daemonBusy={false}
+					selectedId={null}
+					onSelect={vi.fn()}
+					onEdit={vi.fn()}
+					onAdd={vi.fn()}
+					onCreate={vi.fn(async () => true)}
+					onPreview={vi.fn()}
+					onAskDelete={vi.fn()}
+					onSetDaemon={vi.fn()}
+					onContextMenu={vi.fn()}
+					onOpenFolder={vi.fn()}
+					magicActions={[action]}
+				/>,
+			);
+		});
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		// The list row carries the click glyph on the name's line.
+		expect(host.querySelector('[data-magic-action-row="minutes"] [data-kind="magic"]')).not.toBeNull();
+		await act(async () => host.querySelector<HTMLElement>('[data-action="automation-all-runs"]')?.click());
+		const line = host.querySelector("[data-automation-all-runs] [data-run]");
+		expect(line?.querySelector("[data-run-title]")?.textContent).toBe(t("automations.inspector.runFilesMore", { name: "회의록.txt", count: 2 }));
+		expect(line?.querySelector("[data-run-caption]")?.textContent).toBe(`세 줄 요약 · ${t("automations.inspector.runDone")}`);
+		expect(line?.querySelector('[data-kind="magic"]')).not.toBeNull();
+		await act(async () => (line as HTMLElement | null)?.click());
+		expect(host.querySelector('[data-magic-action-detail="minutes"]')).not.toBeNull();
+		// On the action's page the run reads its time as a clock time and opens its folder.
+		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run]')?.textContent).toContain(t("automations.time.todayAt", { time: "" }).trim());
+	});
+});
+
 describe("right-click trigger helpers", () => {
 	it("maps the chip to a target and back", () => {
 		expect(rightClickTarget("pdf", null)).toEqual({ targetKind: "file", extensions: ["pdf"] });

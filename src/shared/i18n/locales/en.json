@@ -624,7 +624,8 @@
       "matches": "Files that match: {{count}}",
       "noMatches": "No files match right now",
       "notRun": "Not run yet",
-      "runFiles": "Files: {{count}}"
+      "runFiles": "Files: {{count}}",
+      "runFilesMore": "{{name}} and {{count}} more"
     },
     "quickLook": {
       "when": "When",
@@ -689,7 +690,9 @@
       "program": "Handled by {{name}}"
     },
     "time": {
-      "now": "just now"
+      "now": "just now",
+      "todayAt": "Today {{time}}",
+      "yesterdayAt": "Yesterday {{time}}"
     },
     "lastRun": {
       "never": "Not run yet",
@@ -776,7 +779,8 @@
       "ok": "Succeeded",
       "failed": "Failed",
       "settings": "Settings",
-      "history": "Run history"
+      "history": "Run history",
+      "task": "Task"
     },
     "tabs": {
       "rules": "Automations",

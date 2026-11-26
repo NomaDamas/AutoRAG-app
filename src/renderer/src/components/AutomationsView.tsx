@@ -390,7 +390,7 @@ function NewAutomationCard({
 					),
 				)}
 			</div>
-			<span className="mt-4 text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.task")}</span>
+			<span className="mt-4 text-meta font-medium leading-[16px] text-ink-muted">{t(pageMode ? "automations.detail.task" : "automations.create.task")}</span>
 			<textarea
 				ref={taskRef}
 				data-testid="automation-new-task"
@@ -498,11 +498,13 @@ function RuleRow({
 		>
 			{/* Figma 672:3740: how the last run went, before the name. */}
 			<RunDot tone={runDotTone(rule.lastRun)} />
-			{/* The bolt marks a folder automation; a right-click action has the click glyph in its place. */}
-			<ZapIcon size={14} className="-ml-6 flex-none text-ink-muted" aria-label={t("automations.kind")} />
 			{/* The same title and caption sizes as a recommendation's (Figma 672:3740): 14px over 12px. */}
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
-				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
+				{/* Figma 696:2873: the kind's glyph just before the name — the bolt for a folder automation. */}
+				<span className="flex min-w-0 items-center gap-6">
+					<KindIcon kind="rule" />
+					<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
+				</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{whenText(rule)}</span>
 			</div>
 			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
@@ -534,9 +536,11 @@ function MagicActionRow({
 	return (
 		<div role="row" data-magic-action-row={action.id} className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row" onClick={() => onOpen(action.id)}>
 			<RunDot tone={runDotTone(lastRun)} />
-			<MousePointerClickIcon size={14} className="-ml-6 flex-none text-ink-muted" aria-label={t("automations.magic.kind")} />
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
-				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
+				<span className="flex min-w-0 items-center gap-6">
+					<KindIcon kind="magic" />
+					<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
+				</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{rightClickSentence(t, action)}</span>
 			</div>
 			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
@@ -696,7 +700,7 @@ function MagicActionCard({ action, onSave }: { readonly action: MagicAction; rea
 				onSelection={set("selection")}
 			/>
 			<div className="mt-4 flex h-22 items-center justify-between">
-				<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.task")}</span>
+				<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.detail.task")}</span>
 				<RunKindSegment value={form.runKind} testId="magic-detail-run" onChange={set("runKind")} />
 			</div>
 			<textarea
@@ -752,6 +756,7 @@ function MagicActionDetail({
 	onUpdate,
 	onToggle,
 	onDelete,
+	onOpenFolder,
 }: {
 	readonly action: MagicAction;
 	readonly runs: readonly AutomationRun[] | undefined;
@@ -759,6 +764,7 @@ function MagicActionDetail({
 	readonly onUpdate: (next: MagicAction) => Promise<boolean>;
 	readonly onToggle?: ((id: string) => void) | undefined;
 	readonly onDelete: () => void;
+	readonly onOpenFolder?: ((path: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const list = runs ?? [];
@@ -767,6 +773,7 @@ function MagicActionDetail({
 			<div className="flex flex-col gap-6">
 				<Breadcrumb crumbs={crumbs} current={action.label} />
 				<div className="flex min-w-0 items-center gap-8">
+					<KindIcon kind="magic" size={16} />
 					<MagicTitle key={action.id} action={action} onRename={(label) => void onUpdate({ ...action, label })} />
 					<span className="flex-1" />
 					<span className="flex-none text-badge leading-[16px] text-ink-muted">{t("automations.detail.runOn")}</span>
@@ -782,7 +789,7 @@ function MagicActionDetail({
 				) : (
 					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} flat />
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} kind="magic" absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
 						))}
 					</div>
 				)}
@@ -832,41 +839,100 @@ function useRunHistory(ids: readonly string[], changed: string): Readonly<Record
 	return history;
 }
 
-/** What one run did: how many files it took and how it ended, e.g. "파일 2개 · 시간 초과". */
-function runOutcome(run: AutomationRun, t: TFunction): string {
-	const result = runTone(run) === "ok" ? t("automations.inspector.runDone") : failReason(run);
-	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
-	return [files, result].filter((part): part is string => part !== null && part.length > 0).join(" · ");
+/** Which kind of automation a row is: a folder rule or a right-click (magic) action. */
+type AutomationKind = "rule" | "magic";
+
+/** The kind's glyph, before a name: the bolt for a folder automation, the click glyph (Settings → 우클릭 메뉴's) for a right-click action. */
+function KindIcon({ kind, size = 14 }: { readonly kind: AutomationKind; readonly size?: number }): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<span className="flex flex-none text-ink-muted" role="img" aria-label={t(kind === "magic" ? "automations.magic.kind" : "automations.kind")} data-kind={kind}>
+			{kind === "magic" ? <MousePointerClickIcon size={size} /> : <ZapIcon size={size} />}
+		</span>
+	);
+}
+
+const baseName = (path: string): string => path.split(/[\\/]/).filter((part) => part.length > 0).pop() ?? path;
+const parentDir = (path: string): string => {
+	const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+	return cut <= 0 ? path : path.slice(0, cut);
+};
+
+/** What a run is named by: the file it ran on ("회의록.txt", "회의록.txt 외 2개"), or how many when the log has no names. */
+function runFilesTitle(run: AutomationRun, t: TFunction): string | null {
+	const first = run.files?.[0];
+	if (first !== undefined) {
+		const name = baseName(first);
+		const rest = (run.files?.length ?? 1) - 1;
+		return rest === 0 ? name : t("automations.inspector.runFilesMore", { name, count: rest });
+	}
+	return run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
+}
+
+/** How a run ended, as a word: 완료, or why it failed (시간 초과, …). */
+function runResult(run: AutomationRun, t: TFunction): string {
+	return runTone(run) === "ok" ? t("automations.inspector.runDone") : failReason(run);
+}
+
+/** When a run started, on a rule's own page (Figma 676:835): 오늘 14:02, 어제 10:41, or the date. */
+function runAt(at: number, t: TFunction, language: string, now: number = Date.now()): string {
+	const start = (time: number): number => new Date(time).setHours(0, 0, 0, 0);
+	const days = Math.round((start(now) - start(at)) / 86_400_000);
+	const time = new Intl.DateTimeFormat(language, { hour: "2-digit", minute: "2-digit", hour12: false }).format(at);
+	if (days === 0) return t("automations.time.todayAt", { time });
+	if (days === 1) return t("automations.time.yesterdayAt", { time });
+	return new Intl.DateTimeFormat(language, { month: "long", day: "numeric" }).format(at);
 }
 
 /**
- * One line of 실행 기록 (Figma 621:4882): the dot, how many files it took over how it ended (the rule's name over its
- * outcome in 전체 기록), when, and the error a failed run left. The run log counts the files but does not name them.
+ * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, the kind's glyph before the file the run worked on,
+ * and under it, in 전체 기록, the automation's name and how it ended ("핵심 요약 · 시간 초과"), or on the automation's own
+ * page just how it ended. Then when, and › when the line opens something: its automation from 전체 기록, the file's folder
+ * on a page. A failed run on its own page shows the error it left.
  */
-function RunLine({ run, rule, onOpen, flat = false }: { readonly run: AutomationRun; readonly rule?: AutomationRule; readonly onOpen?: () => void; readonly flat?: boolean }): ReactElement {
-	const { t } = useTranslation();
+function RunLine({
+	run,
+	kind,
+	name,
+	onOpen,
+	absoluteTime = false,
+	flat = false,
+}: {
+	readonly run: AutomationRun;
+	readonly kind: AutomationKind;
+	/** The automation's name, in 전체 기록, where runs of every automation are mixed. */
+	readonly name?: string;
+	readonly onOpen?: (() => void) | undefined;
+	/** On an automation's own page the time reads 오늘 14:02, in 전체 기록 3분 전. */
+	readonly absoluteTime?: boolean;
+	readonly flat?: boolean;
+}): ReactElement {
+	const { t, i18n } = useTranslation();
 	const tone = runTone(run);
-	const result = tone === "ok" ? t("automations.inspector.runDone") : failReason(run);
-	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
-	const first = rule !== undefined ? ruleTitle(rule) : (files ?? result);
-	const second = rule !== undefined ? runOutcome(run, t) : files === null ? null : result;
+	const result = runResult(run, t);
+	const files = runFilesTitle(run, t);
+	const first = files ?? (name ?? result);
+	const second = name !== undefined ? `${name} · ${result}` : files === null ? null : result;
 	const body = (
 		<>
 			<div className="flex w-full items-center gap-10">
 				<RunDot tone={runDotTone(run)} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
-					<span className="truncate text-[13px] leading-[20px] text-ink">{first}</span>
-					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted">{second}</span>}
+					<span className="flex min-w-0 items-center gap-6">
+						<KindIcon kind={kind} />
+						<span className="truncate text-[13px] leading-[20px] text-ink" data-run-title>{first}</span>
+					</span>
+					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted" data-run-caption>{second}</span>}
 				</div>
-				<span className="flex-none text-meta leading-[18px] text-ink-muted">{relativeTime(run.startedAt)}</span>
+				<span className="flex-none text-meta leading-[18px] text-ink-muted">{absoluteTime ? runAt(run.startedAt, t, i18n.language) : relativeTime(run.startedAt)}</span>
 				{onOpen === undefined ? null : <ChevronRightIcon size={14} className="flex-none text-ink-faint" />}
 			</div>
-			{tone === "fail" && run.error !== undefined && rule === undefined ? (
+			{tone === "fail" && run.error !== undefined && name === undefined ? (
 				<p className="m-0 w-full rounded-8 bg-subtle-alt px-10 py-7 text-meta leading-[18px] text-ink-body [overflow-wrap:anywhere]">{run.error}</p>
 			) : null}
 		</>
 	);
-	// On a rule's own page the runs are plain lines between hairlines (Figma 641:13600); in 전체 기록 they sit in the rounded list.
+	// On an automation's own page the runs are plain lines between hairlines (Figma 641:13600); in 전체 기록 they sit in the rounded list.
 	const row = cn("flex w-full flex-col items-start gap-6 border-0 py-10 text-left", flat ? "bg-transparent px-4" : "bg-window px-14");
 	return onOpen === undefined ? (
 		<div className={row} data-run={run.startedAt}>
@@ -877,6 +943,12 @@ function RunLine({ run, rule, onOpen, flat = false }: { readonly run: Automation
 			{body}
 		</button>
 	);
+}
+
+/** On an automation's own page a run that names its files opens their folder; one that only counts them opens nothing. */
+function openRunFolder(run: AutomationRun, onOpenFolder: ((path: string) => void) | undefined): (() => void) | undefined {
+	const first = run.files?.[0];
+	return first === undefined || onOpenFolder === undefined ? undefined : () => onOpenFolder(parentDir(first));
 }
 
 /**
@@ -941,6 +1013,7 @@ function AutomationDetail({
 	onUpdate,
 	onDelete,
 	onDraftChange,
+	onOpenFolder,
 }: {
 	readonly rule: AutomationRule;
 	readonly runs: readonly AutomationRun[] | undefined;
@@ -949,6 +1022,7 @@ function AutomationDetail({
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onDelete: () => void;
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
+	readonly onOpenFolder?: ((path: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	// The log is the record; until it has been read (or if it is gone) the rule's last run still shows.
@@ -958,6 +1032,8 @@ function AutomationDetail({
 			<div className="flex flex-col gap-6">
 				<Breadcrumb crumbs={crumbs} current={ruleTitle(rule)} />
 				<div className="flex min-w-0 items-center gap-8">
+					{/* Figma 676:835: the kind's glyph before the name. */}
+					<KindIcon kind="rule" size={16} />
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
 					{/* Figma 641:13600: drawn, not wired yet (the librarian's rule format has no on/off field). */}
@@ -975,7 +1051,7 @@ function AutomationDetail({
 				) : (
 					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} flat />
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} kind="rule" absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
 						))}
 					</div>
 				)}
@@ -1029,13 +1105,23 @@ function dayLabel(at: number, t: TFunction, language: string, now: number = Date
 	return new Intl.DateTimeFormat(language, { month: "long", day: "numeric" }).format(at);
 }
 
-/** 전체 기록 (Figma 676:646): every rule's runs, newest first, under the day they ran; a row opens its rule. */
-function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void; readonly crumbs: readonly Crumb[] }): ReactElement {
+/** One run in 전체 기록, from a rule or a right-click action. */
+interface RunEntry {
+	readonly key: string;
+	readonly kind: AutomationKind;
+	readonly id: string;
+	readonly name: string;
+	readonly run: AutomationRun;
+}
+
+/**
+ * 전체 기록 (Figma 699:3562): every automation's runs — folder rules' and right-click actions' — newest first, under the
+ * day they ran. A row names the file and, under it, the automation and how it ended; › opens that automation's page.
+ */
+function AllRunsPage({ entries, onOpen, crumbs }: { readonly entries: readonly RunEntry[]; readonly onOpen: (entry: RunEntry) => void; readonly crumbs: readonly Crumb[] }): ReactElement {
 	const { t, i18n } = useTranslation();
-	const all = rules
-		.flatMap((rule) => (history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ rule, run })))
-		.sort((a, b) => b.run.startedAt - a.run.startedAt);
-	const days: { label: string; runs: typeof all }[] = [];
+	const all = [...entries].sort((a, b) => b.run.startedAt - a.run.startedAt);
+	const days: { label: string; runs: RunEntry[] }[] = [];
 	for (const item of all) {
 		const label = dayLabel(item.run.startedAt, t, i18n.language);
 		const last = days[days.length - 1];
@@ -1054,8 +1140,8 @@ function AllRunsPage({ rules, history, onOpen, crumbs }: { readonly rules: reado
 						<div key={day.label} className="flex flex-col">
 							<h2 className="m-0 border-b-[0.5px] border-divider pb-6 text-meta font-medium leading-[16px] text-ink-muted">{day.label}</h2>
 							<div role="list" aria-label={day.label} className="flex flex-col border-b-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
-								{day.runs.map(({ rule, run }) => (
-									<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} flat />
+								{day.runs.map((entry) => (
+									<RunLine key={entry.key} run={entry.run} kind={entry.kind} name={entry.name} onOpen={() => onOpen(entry)} flat />
 								))}
 							</div>
 						</div>
@@ -1518,7 +1604,7 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, magicActions = [], onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [page, setPage] = useState<"list" | "all">("list");
 	// A right-click action's own page, one step in from the list as a rule's is.
@@ -1623,6 +1709,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							onUpdate={async (next) => (await onUpdateMagicAction?.(next)) ?? false}
 							onToggle={onToggleMagicAction}
 							onDelete={() => setConfirmMagic(magic)}
+							onOpenFolder={onOpenFolder}
 						/>
 					) : detail !== null ? (
 						<AutomationDetail
@@ -1638,17 +1725,29 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 								onAskDelete(detail.id);
 							}}
 							onDraftChange={onDraftChange}
+							onOpenFolder={onOpenFolder}
 						/>
 					) : page === "all" ? (
 						<AllRunsPage
-							rules={state.rules}
-							history={history}
-							onOpen={(id) => {
+							entries={[
+								...state.rules.flatMap((rule) =>
+									(history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ key: `rule-${rule.id}-${run.startedAt}`, kind: "rule" as const, id: rule.id, name: ruleTitle(rule), run })),
+								),
+								...magicActions.flatMap((action) =>
+									(magicRuns[action.id] ?? []).map((run) => ({ key: `magic-${action.id}-${run.startedAt}`, kind: "magic" as const, id: action.id, name: action.label, run })),
+								),
+							]}
+							onOpen={(entry) => {
+								if (entry.kind === "magic") {
+									setPage("list");
+									setMagicId(entry.id);
+									return;
+								}
 								// A rule being deleted has no page to open.
-								if (id === deletingId) return;
+								if (entry.id === deletingId) return;
 								// The rule's page opens over 전체 기록, which stays where it is behind it.
 								setFromAll(true);
-								onEdit(id);
+								onEdit(entry.id);
 							}}
 							crumbs={[mainCrumb]}
 						/>
@@ -1693,7 +1792,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 										<MagicActionRow key={action.id} action={action} lastRun={magicRuns[action.id]?.[0] ?? null} onOpen={setMagicId} onToggle={onToggleMagicAction} />
 									))}
 								</div>
-								{state.rules.length === 0 ? null : (
+								{state.rules.length === 0 && magicActions.length === 0 ? null : (
 									<button type="button" data-action="automation-all-runs" className="self-start border-0 bg-transparent p-0 pl-6 text-meta leading-[16px] text-accent-text cursor-pointer hover:underline" onClick={() => setPage("all")}>
 										{t("automations.all.open")}
 									</button>

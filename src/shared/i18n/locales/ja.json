@@ -624,7 +624,8 @@
       "matches": "条件に合うファイル {{count}}件",
       "noMatches": "今は条件に合うファイルがありません",
       "notRun": "まだ実行されていません",
-      "runFiles": "ファイル {{count}}件"
+      "runFiles": "ファイル {{count}}件",
+      "runFilesMore": "{{name}} ほか{{count}}件"
     },
     "quickLook": {
       "when": "いつ",
@@ -689,7 +690,9 @@
       "program": "{{name}}で処理"
     },
     "time": {
-      "now": "たった今"
+      "now": "たった今",
+      "todayAt": "今日 {{time}}",
+      "yesterdayAt": "昨日 {{time}}"
     },
     "lastRun": {
       "never": "まだ実行されていません",
@@ -776,7 +779,8 @@
       "ok": "成功",
       "failed": "失敗",
       "settings": "設定",
-      "history": "実行履歴"
+      "history": "実行履歴",
+      "task": "やること"
     },
     "tabs": {
       "rules": "自動化",

@@ -32,6 +32,11 @@ export interface AutomationRun {
 	readonly timedOut: boolean;
 	/** The command could not start (`spawn x ENOENT`) or failed before exiting. */
 	readonly error?: string;
+	/**
+	 * The files the run worked on, when the log knows them: a right-click action's run keeps them, a folder rule's
+	 * log only counts them (`eventCount`). Rows name the run by its first file.
+	 */
+	readonly files?: readonly string[];
 }
 
 /**
