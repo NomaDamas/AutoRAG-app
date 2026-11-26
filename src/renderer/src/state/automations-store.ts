@@ -71,6 +71,8 @@ export interface AutomationsStore {
 	undo(): Promise<void>;
 	clearUndo(): void;
 	setDaemon(enabled: boolean): Promise<void>;
+	/** Enable or pause rule `id`; resolves false when there is no bridge. */
+	setEnabled?(id: string, enabled: boolean): Promise<boolean>;
 	/** Write a new rule; resolves with the id it was given, or null when there is no bridge. */
 	create(draft: AutomationDraft): Promise<string | null>;
 	/** Rewrite rule `id`; resolves false when there is no bridge. */
@@ -163,6 +165,24 @@ export function createAutomationsStore(bridge: AutomationBridge | undefined): Au
 				publish({ state: await bridge.setDaemon(enabled), daemonBusy: false });
 			} catch (cause) {
 				publish({ daemonBusy: false });
+				throw new Error(ipcMessage(cause));
+			}
+		},
+		async setEnabled(id, enabled) {
+			if (bridge === undefined || typeof bridge.setEnabled !== "function") return false;
+			// Optimistically reflect the toggle right away; reconcile with the main process snapshot (or roll back on error).
+			const previous = view.state;
+			publish({
+				state: {
+					...previous,
+					rules: previous.rules.map((rule) => (rule.id === id ? { ...rule, enabled } : rule)),
+				},
+			});
+			try {
+				publish({ state: await bridge.setEnabled(id, enabled) });
+				return true;
+			} catch (cause) {
+				publish({ state: previous });
 				throw new Error(ipcMessage(cause));
 			}
 		},

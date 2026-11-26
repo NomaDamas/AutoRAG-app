@@ -51,6 +51,9 @@ const bridge = vi.hoisted(() => {
 		fs,
 		appCustomizer,
 		magicAction,
+		emitSettingsChanged: (next: AppSettings) => {
+			for (const fn of settingsListeners) fn(next);
+		},
 		emitCustomizerEvent: (event: AppCustomizerEvent) => {
 			for (const fn of customizerListeners) fn(event);
 		},
@@ -207,7 +210,33 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			card.querySelector<HTMLButtonElement>('[data-action="automation-request-add"]')?.click();
 		});
 		await settle();
-		expect(starter?.textContent).toContain(t("settingsCore.contextMenu.assistant.starterAdded", { title: "PDF 3줄 요약" }));
+		// Submitting the starter card hands the request to the Settings assistant so it verifies in a sandbox and saves via tool call.
+		expect(bridge.appCustomizer.send).toHaveBeenCalledTimes(1);
+		expect(bridge.appCustomizer.send.mock.calls[0]?.[1]).toMatchObject({
+			surface: "contextMenu",
+			message: expect.stringContaining("PDF 3줄 요약"),
+		});
+		// Simulate the Settings assistant saving the verified right-click automation, then re-sync settings state.
+		await act(async () => {
+			await bridge.settings.set({
+				contextMenu: {
+					...currentSettings.contextMenu,
+					magicActions: [
+						{
+							id: "pdf-3-summary",
+							label: "PDF 3줄 요약",
+							enabled: true,
+							selection: "single",
+							targetKind: "file",
+							extensions: ["pdf", "md"],
+							execution: { kind: "agent", mode: "read", prompt: "PDF 3줄 요약", useSkills: true, useMcp: true },
+						},
+					],
+				},
+			});
+			bridge.emitSettingsChanged(currentSettings);
+		});
+		await settle();
 
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
 		expect(currentSettings.contextMenu.magicActions[0]).toMatchObject({

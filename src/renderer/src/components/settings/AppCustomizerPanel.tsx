@@ -4,6 +4,7 @@ import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
 import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
 import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
 import { AutomationDraftCard } from "../AutomationsView";
+import { rightClickSentence } from "../RightClickWhen";
 import { VoiceButton } from "../InspectorChat";
 import { SeedLoader } from "../SeedLoader";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerPrompt, AppCustomizerPromptAnswer, AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
@@ -12,8 +13,6 @@ import { appendTranscript } from "../../../../shared/voice-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { findSecrets, redactSecrets } from "../../../../shared/secret-guard";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
-import { appendMagicAction } from "../../state/right-click-trigger";
-import type { MagicAction } from "../../../../shared/context-menu-contract";
 
 type CustomizerWindow = Window & {
 	readonly autorag?: { readonly appCustomizer?: AppCustomizerBridge; readonly settings?: { get(): Promise<AppSettings>; set(patch: Partial<AppSettings>): Promise<AppSettings> } };
@@ -303,18 +302,6 @@ export function AppCustomizerPanel({
 	useEffect(() => {
 		if (starterRequest > 0) setStarters((current) => (current.some((item) => item.key === starterRequest) ? current : [...current, { key: starterRequest, added: null }]));
 	}, [starterRequest]);
-
-	const addMagicAction = useCallback(
-		async (key: number, action: MagicAction): Promise<boolean> => {
-			const settings = (window as CustomizerWindow).autorag?.settings;
-			if (settings === undefined) return false;
-			const saved = await appendMagicAction(settings, action);
-			onSettingsUpdated(saved);
-			setStarters((current) => current.map((item) => (item.key === key ? { ...item, added: action.label } : item)));
-			return true;
-		},
-		[onSettingsUpdated],
-	);
 
 	useEffect(() => {
 		if (prefill === null || prefill === undefined || prefill.nonce === appliedPrefillNonce.current) return;
@@ -612,7 +599,15 @@ export function AppCustomizerPanel({
 											initial={null}
 											rightClickOnly
 											onCreate={async () => false}
-											onCreateMagicAction={(action) => addMagicAction(starter.key, action)}
+											onCreateMagicAction={async (action) => {
+												// Hand the form request to the Settings assistant so it verifies in a temp sandbox and saves directly.
+												const taskText = action.execution.kind === "agent" ? action.execution.prompt : action.execution.command;
+												const target = rightClickSentence(t, action);
+												const prompt = `${t("settingsCore.contextMenu.assistant.starterUser")}: ${target} — ${taskText}`;
+												setStarters((current) => current.filter((item) => item.key !== starter.key));
+												sendMessage(prompt);
+												return true;
+											}}
 											onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
 										/>
 										</div>

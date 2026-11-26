@@ -560,6 +560,10 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
 		return service.setDaemon(enabled);
 	});
+	ipcMain.handle(AUTOMATION_CHANNELS.setEnabled, (_event, id: unknown, enabled: unknown) => {
+		if (typeof enabled !== "boolean") throw new TypeError("automation enabled must be a boolean");
+		return service.setEnabled(requireNonEmptyString(id, "automation id"), enabled);
+	});
 }
 
 /** The tutorials' practice material: the sample photo, the automation daemon and the example Magic Action. */

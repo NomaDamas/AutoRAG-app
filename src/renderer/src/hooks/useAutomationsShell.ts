@@ -66,6 +66,10 @@ export interface AutomationsShell {
 	readonly closeMenu: () => void;
 	/** A rule row's right-click menu from a folder inspector: adds "show in list". */
 	readonly openRuleMenu: (rule: AutomationRule, cursor: { readonly x: number; readonly y: number }) => void;
+	/** True while the 자동화 tab is inside a rule/right-click detail page or 전체 기록 (not the main list). */
+	readonly canGoBack: boolean;
+	/** Step back from a detail page or 전체 기록 toward the 자동화 main list. */
+	readonly goBack: () => void;
 }
 
 interface MenuState {
@@ -391,6 +395,14 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		magicActions,
 		place,
 		onPlaceChange: setPlace,
+		onToggleRule: (id) => {
+			const rule = byId(id);
+			if (rule === null || store.setEnabled === undefined) return;
+			const nextEnabled = rule.enabled === false;
+			void store.setEnabled(id, nextEnabled).catch((cause: unknown) => {
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+			});
+		},
 		onToggleMagicAction: (id) => {
 			void changeMagicActions((actions) => actions.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
 		},
@@ -456,6 +468,19 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		onOpenFolder: (path) => latest.current.openFolder(path),
 	};
 
+	const activeEditing = byId(editingId);
+	const activeMagic = place.magicId !== null && magicActions.some((action) => action.id === place.magicId);
+	const canGoBack = activeEditing !== null || activeMagic || place.page === "all";
+	const goBack = useCallback(() => {
+		if ((activeEditing !== null || activeMagic) && place.fromAll) {
+			setEditingId(null);
+			setPlace({ page: "all", magicId: null, fromAll: false });
+			return;
+		}
+		setEditingId(null);
+		setPlace(INITIAL_AUTOMATIONS_PLACE);
+	}, [activeEditing, activeMagic, place.fromAll]);
+
 	return {
 		props,
 		selectedRule,
@@ -486,5 +511,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		menuSelect,
 		closeMenu,
 		openRuleMenu: (rule, cursor) => setMenuState({ ruleId: rule.id, cursor, fromFolder: true }),
+		canGoBack,
+		goBack,
 	};
 }

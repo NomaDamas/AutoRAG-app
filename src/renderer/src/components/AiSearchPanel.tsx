@@ -75,6 +75,7 @@ import { AgentSegment } from "./AgentSegment";
 import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
 import { AutomationsContext } from "./AutomationsTab";
 import { AutomationDraftCard, templateTaken } from "./AutomationsView";
+import { rightClickSentence } from "./RightClickWhen";
 import { isAutomationRequest } from "../state/automation-intent";
 import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 
@@ -1114,15 +1115,22 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								initial={null}
 								onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
 								onCreate={async (draft) => {
-									const ok = await automationsShell.props.onCreate(draft);
-									if (ok) setStarters((current) => current.map((item) => (item.key === starter.key ? { ...item, added: true } : item)));
-									return ok;
+									const folder = draft.paths[0] ?? "";
+									const kindText = draft.include.length === 0 ? t("automations.kinds.all") : draft.include.join(", ");
+									const eventsText = draft.events.join(", ");
+									const taskText = draft.agent?.task ?? (draft.run ?? []).join(" ");
+									const prompt = `${t("automations.starter.ask")}: ${folder} (${kindText}, ${eventsText}) — ${taskText}`;
+									setStarters((current) => current.filter((item) => item.key !== starter.key));
+									void runSearch(prompt, []);
+									return true;
 								}}
 								onCreateMagicAction={async (action) => {
-									// A right-click action is not an automation: the card closes, and the toast says where it went.
-									const ok = (await automationsShell.props.onCreateMagicAction?.(action)) ?? false;
-									if (ok) setStarters((current) => current.filter((item) => item.key !== starter.key));
-									return ok;
+									const taskText = action.execution.kind === "agent" ? action.execution.prompt : action.execution.command;
+									const target = rightClickSentence(t, action);
+									const prompt = `${t("automations.starter.ask")}: ${target} — ${taskText}`;
+									setStarters((current) => current.filter((item) => item.key !== starter.key));
+									void runSearch(prompt, []);
+									return true;
 								}}
 							/>
 						)}

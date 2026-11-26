@@ -37,6 +37,7 @@ import { InteractionDock } from "./InteractionDock";
 import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
 import { AutomationsContext } from "./AutomationsTab";
 import { AutomationDraftCard, templateTaken } from "./AutomationsView";
+import { rightClickSentence } from "./RightClickWhen";
 import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
@@ -961,8 +962,6 @@ export function InspectorChatView({
 		const id = suggestTemplate(`${last.question} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
 		setSuggestion(id === null ? null : { key: lastKey, id, phase: "nudge" });
 	}, [lastAnswered, lastKey]);
-	// The rule 새 자동화 started here: added (the card gives way to the line that says so) or still being filled in.
-	const [starterAdded, setStarterAdded] = useState<number | null>(null);
 	// 새 자동화 started here: the person's 새 자동화 만들기, the reply, and the card, rising one after another. It keeps
 	// its place in the conversation, so a question asked after it comes below it, as in any chat.
 	const starter =
@@ -974,28 +973,30 @@ export function InspectorChatView({
 							</div>
 							<p className="m-0 text-sm leading-[1.5] text-ink-body animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
 							<div className="animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
-								{starterAdded === newAutomation ? (
-									<AutomationNudge narrow template="pdf" phase="created" onPhase={() => undefined} onLater={() => undefined} onCreate={async () => false} />
-								) : (
-									<AutomationDraftCard
-										initial={null}
-										onCancel={() => onNewAutomationDone?.()}
-										onCreate={async (draft) => {
-											const ok = await automationsShell.props.onCreate(draft);
-											if (ok) setStarterAdded(newAutomation);
-											return ok;
-										}}
-										onCreateMagicAction={async (action) => {
-											// A right-click action is not an automation: the card closes, and the toast says where it went.
-											const ok = (await automationsShell.props.onCreateMagicAction?.(action)) ?? false;
-											if (ok) onNewAutomationDone?.();
-											return ok;
-										}}
-									/>
-								)}
+								<AutomationDraftCard
+									initial={null}
+									onCancel={() => onNewAutomationDone?.()}
+									onCreate={async (draft) => {
+										const folder = draft.paths[0] ?? "";
+										const kindText = draft.include.length === 0 ? t("automations.kinds.all") : draft.include.join(", ");
+										const eventsText = draft.events.join(", ");
+										const taskText = draft.agent?.task ?? (draft.run ?? []).join(" ");
+										const prompt = `${t("automations.starter.ask")}: ${folder} (${kindText}, ${eventsText}) — ${taskText}`;
+										onNewAutomationDone?.();
+										onAsk(prompt, []);
+										return true;
+									}}
+									onCreateMagicAction={async (action) => {
+										const taskText = action.execution.kind === "agent" ? action.execution.prompt : action.execution.command;
+										const target = rightClickSentence(t, action);
+										const prompt = `${t("automations.starter.ask")}: ${target} — ${taskText}`;
+										onNewAutomationDone?.();
+										onAsk(prompt, []);
+										return true;
+									}}
+								/>
 							</div>
 						</div>
-				
 		);
 	const [starterAt, setStarterAt] = useState<{ readonly key: number; readonly at: number } | null>(null);
 	useEffect(() => {

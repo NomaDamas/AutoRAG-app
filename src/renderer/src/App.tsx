@@ -1046,9 +1046,15 @@ export function App(): ReactElement {
 				<div className="flex min-w-0 min-h-0 flex-col" style={settingsOpen ? HIDDEN_STYLE : undefined}>
 					<Toolbar
 						title={toolbarTitle}
-						canGoBack={finder?.canGoBack ?? false}
+						canGoBack={automationsTabActive && automations.canGoBack ? true : (finder?.canGoBack ?? false)}
 						canGoForward={finder?.canGoForward ?? false}
-						onBack={() => finder?.back()}
+						onBack={() => {
+							if (automationsTabActive && automations.canGoBack) {
+								automations.goBack();
+								return;
+							}
+							finder?.back();
+						}}
 						onForward={() => finder?.forward()}
 						viewMode={finder?.viewMode ?? "list"}
 						onViewModeChange={(mode) => finder?.setViewMode(mode)}

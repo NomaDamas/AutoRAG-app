@@ -12,6 +12,7 @@ export const AUTOMATION_CHANNELS = {
 	remove: "automations:remove",
 	restore: "automations:restore",
 	setDaemon: "automations:setDaemon",
+	setEnabled: "automations:setEnabled",
 	create: "automations:create",
 	update: "automations:update",
 	history: "automations:history",
@@ -52,6 +53,8 @@ export interface AutomationAgent {
 /** A rule as the librarian parses it (`~` expanded, defaults filled) plus its last run. */
 export interface AutomationRule {
 	readonly id: string;
+	/** Whether the background daemon runs this rule on matching file changes (defaults to true when omitted). */
+	readonly enabled?: boolean;
 	/** Absolute folders watched recursively. */
 	readonly paths: readonly string[];
 	readonly events: readonly AutomationEventType[];
@@ -131,6 +134,8 @@ export interface AutomationBridge {
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Enable (true) or pause (false) rule `id` in the rules file. */
+	setEnabled?(id: string, enabled: boolean): Promise<AutomationsSnapshot>;
 	/** Add a rule; `id` is the one it was given. Rejected when the librarian would refuse the file it leaves. */
 	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
 	/** Rewrite rule `id` from the card; the fields the card does not manage stay as written. */

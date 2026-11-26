@@ -16,7 +16,6 @@ import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-image
 import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
-import { confirmAutomationSaves } from "./automation-confirm";
 import {
 	createAutomationVerificationTracker,
 	createTestAutomationInSandboxTool,
@@ -1074,12 +1073,6 @@ export function createDefaultAgentFactory(options: DefaultAgentFactoryOptions): 
 									platform: process.platform,
 									language,
 								}),
-							confirmSave: async (action, { isUpdate, signal }) => {
-								const run = interaction.current();
-								if (run === undefined) return action;
-								const answer = await run.open({ kind: "magic-action", action, isUpdate }, signal);
-								return answer.kind === "magic-action" ? answer.action : null;
-							},
 						}).tools,
 					);
 		const agentOptions: AutoRAGAgentOptions = {
@@ -1107,11 +1100,9 @@ export function createDefaultAgentFactory(options: DefaultAgentFactoryOptions): 
 			},
 		);
 		applySemanticPolicyToAgent(agent, semantic);
-		// Order matters: wrap `confirmAutomationSaves` FIRST (inner) and `runAutomationToolOnNode` SECOND (outer)
-		// so temp-folder sandbox verification runs BEFORE popping the confirmation card to the user.
-		confirmAutomationSaves(agent, () => interaction.current());
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		// Also enforces temporary-sandbox verification when saving new or edited automation rules.
+		// Verified saves persist directly without popping a redundant confirmation form card.
 		runAutomationToolOnNode(agent, findNode, {
 			tracker: automationVerificationTracker,
 			verifyRule: (rule, originalPaths) =>

@@ -32,6 +32,8 @@ export interface AutomationService {
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Enable (true) or pause (false) rule `id` in the rules file. */
+	setEnabled(id: string, enabled: boolean): Promise<AutomationsSnapshot>;
 	/** Add a rule with a fresh id; the file is put back as it was if the librarian then refuses it. */
 	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
 	/** Rewrite rule `id`'s folders, changes, files and action; everything else in its entry stays as written. */
@@ -167,10 +169,52 @@ function textArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function runFilesOf(value: unknown): readonly string[] {
+	if (Array.isArray(value)) {
+		const out: string[] = [];
+		for (const item of value) {
+			if (typeof item === "string" && item.trim().length > 0) out.push(item.trim());
+			else if (isJsonObject(item) && typeof item.path === "string" && item.path.trim().length > 0) out.push(item.path.trim());
+		}
+		return out;
+	}
+	return [];
+}
+
+/**
+ * Fallback for legacy folder-automation run logs written before the librarian recorded `files`:
+ * extract absolute file paths printed in stdout (e.g. `moved /Users/.../a.pdf -> /Users/.../b.pdf`).
+ */
+function inferFilesFromStdout(stdout: unknown): readonly string[] {
+	if (typeof stdout !== "string" || stdout.trim().length === 0) return [];
+	const found: string[] = [];
+	const seen = new Set<string>();
+	// Match POSIX (/Users/..., /home/..., /Volumes/..., /tmp/...) or Windows (C:\...) file paths with an extension.
+	const pattern = /(?:\/(?:Users|home|Volumes|tmp|var|private|opt|mnt)\/[^\r\n"'`<>|*?]+?\.[A-Za-z0-9]{1,12}|[A-Za-z]:\\[^\r\n"'`<>|*?]+?\.[A-Za-z0-9]{1,12})/gu;
+	for (const line of stdout.split(/\r?\n/u)) {
+		// On a "moved src -> dst" line, prefer the source path (first path on the line) or the resulting file name.
+		const parts = line.split(/\s*->\s*/u);
+		const candidate = parts[0] ?? line;
+		const match = candidate.match(pattern);
+		if (match !== null) {
+			for (const raw of match) {
+				const cleaned = raw.replace(/[.,;:)\]]+$/u, "").trim();
+				if (cleaned.length > 0 && !seen.has(cleaned)) {
+					seen.add(cleaned);
+					found.push(cleaned);
+				}
+			}
+		}
+	}
+	return found;
+}
+
 function runOf(value: unknown): AutomationRun | null {
 	if (!isJsonObject(value) || typeof value.startedAt !== "string") return null;
 	const startedAt = Date.parse(value.startedAt);
 	if (Number.isNaN(startedAt)) return null;
+	const recorded = runFilesOf(value.files);
+	const files = recorded.length > 0 ? recorded : inferFilesFromStdout(value.stdout);
 	return {
 		startedAt,
 		durationMs: typeof value.durationMs === "number" ? value.durationMs : 0,
@@ -179,6 +223,7 @@ function runOf(value: unknown): AutomationRun | null {
 		signal: typeof value.signal === "string" ? value.signal : null,
 		timedOut: value.timedOut === true,
 		...(typeof value.error === "string" && value.error.length > 0 ? { error: value.error } : {}),
+		...(files.length > 0 ? { files } : {}),
 	};
 }
 
@@ -193,6 +238,7 @@ function ruleOf(value: unknown): AutomationRule | null {
 	const events = textArray(value.events).filter((event): event is AutomationRule["events"][number] => event === "create" || event === "update" || event === "delete");
 	return {
 		id: value.id,
+		enabled: value.enabled !== false,
 		paths: textArray(value.paths),
 		events,
 		include: textArray(value.include),
@@ -430,6 +476,22 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 				await saveEntries(entries.map((existing, at) => (at === index ? entry : existing)));
 				const snapshot = await freshSnapshot();
 				// A file the librarian refuses would stop every rule: put the old entry back.
+				if (snapshot.configError !== null) {
+					await saveEntries(entries);
+					await freshSnapshot();
+					throw new Error(snapshot.configError);
+				}
+				return snapshot;
+			}),
+		setEnabled: (id, enabled) =>
+			serialized(async () => {
+				const entries = await loadEntries({ required: true });
+				const index = entries.findIndex((entry) => entry.id === id);
+				if (index === -1) throw new Error(t("main.automations.errors.unknownRule", { id }));
+				const nextEntry: Record<string, unknown> = { ...(entries[index] as Record<string, unknown>), enabled };
+				if (enabled) delete nextEntry.enabled;
+				await saveEntries(entries.map((existing, at) => (at === index ? nextEntry : existing)));
+				const snapshot = await freshSnapshot();
 				if (snapshot.configError !== null) {
 					await saveEntries(entries);
 					await freshSnapshot();

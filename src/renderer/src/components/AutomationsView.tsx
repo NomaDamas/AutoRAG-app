@@ -67,6 +67,8 @@ export interface AutomationsViewProps {
 	readonly onUpdateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	/** A right-click action's page, 삭제 confirmed: remove it from the right-click menu. */
 	readonly onDeleteMagicAction?: ((id: string) => Promise<void>) | undefined;
+	/** A folder automation row's switch: enable or pause the rule without removing it. */
+	readonly onToggleRule?: ((id: string) => void) | undefined;
 	/** A right-click row's switch: show or hide the action in the right-click menu. */
 	readonly onToggleMagicAction?: ((id: string) => void) | undefined;
 	/** The names people gave their rules; the list redraws when one changes. */
@@ -492,6 +494,7 @@ function RuleRow({
 	selected,
 	onSelect,
 	onOpen,
+	onToggle,
 	onContextMenu,
 	deleting = false,
 }: {
@@ -501,10 +504,12 @@ function RuleRow({
 	readonly deleting?: boolean;
 	readonly onSelect: (id: string) => void;
 	readonly onOpen: (id: string) => void;
+	readonly onToggle?: ((id: string) => void) | undefined;
 	readonly onContextMenu: AutomationsViewProps["onContextMenu"];
 }): ReactElement {
 	const { t } = useTranslation();
 	const ref = useRef<HTMLDivElement>(null);
+	const enabled = rule.enabled !== false;
 	// The arrow keys move the selection in the parent; the row follows it into view.
 	useEffect(() => {
 		if (selected) ref.current?.scrollIntoView?.({ block: "nearest" });
@@ -519,6 +524,7 @@ function RuleRow({
 			// the list, so it draws no fill: the row looks as it did before it was opened.
 			aria-disabled={deleting ? true : undefined}
 			data-deleting={deleting ? "true" : undefined}
+			data-enabled={enabled ? "true" : "false"}
 			className={cn("flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window", deleting ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-hover-row")}
 			onClick={() => {
 				if (deleting) return;
@@ -531,17 +537,14 @@ function RuleRow({
 				onContextMenu(rule.id, { x: event.clientX, y: event.clientY });
 			}}
 		>
-			{/* Figma 672:3740: how the last run went, before the name. */}
-			<RunDot tone={runDotTone(rule.lastRun)} />
 			{/* The same title and caption sizes as a recommendation's (Figma 672:3740): 14px over 12px. */}
-			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
+			<div role="gridcell" className={cn("flex min-w-0 flex-1 flex-col gap-1", !enabled && "opacity-60")}>
 				{/* Every automation looks alike here; what starts it is said by the line under the name. */}
 				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{whenText(rule)}</span>
 			</div>
-			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
 			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
-				<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-rule-on" />
+				<Switch checked={enabled} onChange={() => onToggle?.(rule.id)} ariaLabel={t("automations.detail.runOn")} dataSwitchId={`automation-rule-on:${rule.id}`} />
 			</span>
 			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
 		</div>
@@ -549,26 +552,22 @@ function RuleRow({
 }
 
 /**
- * A right-click action in 내 자동화: the same row as a rule's — the status dot from its last run, the click glyph where a
- * rule has the bolt, its name over when it shows ("PDF 파일 하나를 우클릭하면"), the on/off switch, and ›, which opens its
- * own page here in the tab.
+ * A right-click action in 내 자동화: the same row as a rule's — its name over when it shows ("PDF 파일 하나를 우클릭하면"),
+ * the on/off switch, and ›, which opens its own page here in the tab.
  */
 function MagicActionRow({
 	action,
-	lastRun,
 	onOpen,
 	onToggle,
 }: {
 	readonly action: MagicAction;
-	readonly lastRun: AutomationRun | null;
 	readonly onOpen: (id: string) => void;
 	readonly onToggle?: ((id: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<div role="row" data-magic-action-row={action.id} className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row" onClick={() => onOpen(action.id)}>
-			<RunDot tone={runDotTone(lastRun)} />
-			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
+		<div role="row" data-magic-action-row={action.id} data-enabled={action.enabled ? "true" : "false"} className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row" onClick={() => onOpen(action.id)}>
+			<div role="gridcell" className={cn("flex min-w-0 flex-1 flex-col gap-1", !action.enabled && "opacity-60")}>
 				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{rightClickSentence(t, action)}</span>
 			</div>
@@ -1022,6 +1021,7 @@ function AutomationDetail({
 	crumbs,
 	onRename,
 	onUpdate,
+	onToggle,
 	onDelete,
 	onDraftChange,
 	onOpenFolder,
@@ -1031,11 +1031,13 @@ function AutomationDetail({
 	readonly crumbs: readonly Crumb[];
 	readonly onRename: AutomationsViewProps["onRename"];
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
+	readonly onToggle?: ((id: string) => void) | undefined;
 	readonly onDelete: () => void;
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
 	readonly onOpenFolder?: ((path: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
+	const enabled = rule.enabled !== false;
 	// The log is the record; until it has been read (or if it is gone) the rule's last run still shows.
 	const list = runs !== undefined && runs.length > 0 ? runs : rule.lastRun === null ? [] : [rule.lastRun];
 	return (
@@ -1045,9 +1047,8 @@ function AutomationDetail({
 				<div className="flex min-w-0 items-center gap-8">
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
-					{/* Figma 641:13600: drawn, not wired yet (the librarian's rule format has no on/off field). */}
 					<span className="flex-none text-badge leading-[16px] text-ink-muted">{t("automations.detail.runOn")}</span>
-					<Switch checked onChange={() => undefined} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-detail-on" />
+					<Switch checked={enabled} onChange={() => onToggle?.(rule.id)} ariaLabel={t("automations.detail.runOn")} dataSwitchId="automation-detail-on" />
 				</div>
 			</div>
 			<Section muted title={t("automations.detail.settings")}>
@@ -1643,7 +1644,7 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onCreateMagicAction, onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onCreateMagicAction, onToggleRule, onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	// Which page the tab shows lives with the shell when it is given one, so coming back to the tab finds it again.
 	const [ownPlace, setOwnPlace] = useState<AutomationsPlace>(keptPlace ?? INITIAL_AUTOMATIONS_PLACE);
@@ -1811,6 +1812,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							crumbs={fromAll ? [mainCrumb, allCrumb] : [mainCrumb]}
 							onRename={onRename}
 							onUpdate={onUpdate}
+							onToggle={onToggleRule}
 							onDelete={() => {
 								// A deleted rule leaves for the main page, not for the 전체 기록 it was opened from.
 								setPage("list");
@@ -1879,11 +1881,11 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 								{/* One soft shadow on the whole list, not on each row, so it lifts the group the same however many rules there are. */}
 								<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border border-border shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
 									{state.rules.map((rule) => (
-										<RuleRow key={rule.id} rule={rule} deleting={rule.id === deletingId} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
+										<RuleRow key={rule.id} rule={rule} deleting={rule.id === deletingId} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onToggle={onToggleRule} onContextMenu={onContextMenu} />
 									))}
 									{/* The right-click actions are automations too, with another trigger: they sit in the same list. */}
 									{magicActions.map((action) => (
-										<MagicActionRow key={action.id} action={action} lastRun={magicRuns[action.id]?.[0] ?? null} onOpen={(id) => {
+										<MagicActionRow key={action.id} action={action} onOpen={(id) => {
 											setFromAll(false);
 											setMagicId(id);
 										}} onToggle={onToggleMagicAction} />

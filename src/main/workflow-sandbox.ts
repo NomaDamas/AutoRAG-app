@@ -470,11 +470,12 @@ export function buildUnifiedWorkflowsPrompt(
 
 	lines.push(
 		"",
-		"### Shared Mandatory Verification Loop (Applies to Both Folder and Right-Click Automations)",
+		"### Shared Mandatory Verification Loop & Clarify-Only-If-Ambiguous Flow (Applies to Both Folder and Right-Click Automations)",
+		"- Only ask clarifying questions (via `ask_user`) when something essential is genuinely ambiguous or missing (for example, which folder to watch or what the exact desired outcome is). If the user's request already gives enough detail, do NOT ask redundant confirmation questions or re-confirm the form fields — proceed straight to designing, verifying, and saving.",
 		"- Before finalizing ANY new or modified automation (folder or right-click), ALWAYS verify it in an isolated temporary sandbox folder (`test_automation_in_sandbox` for folder automations, `test_magic_action` for right-click automations) with realistic sample fixtures matching the user's goal.",
 		"- Inspect `ok`, `exitCode`, `output`/`stdout`, `stderr`, `error`, any loop/retrigger warnings, and `diff` (`created`, `modified`, `deleted` files and `contentPreview`) to verify the automation truly achieved the user's goal.",
 		"- If verification fails OR the output/files do not match the user's goal, diagnose the issue, fix the command/script/prompt/filters, and re-test in the temporary sandbox until it passes (up to 3 retries).",
-		"- Only finalize/save (`manage_automations` save / `upsert_magic_action`) once sandbox verification succeeds. Saving presents a confirmation card to the user so they can review and click Add before the automation is persisted; if the user cancels, do not retry saving unless they ask. When customizing an existing automation, inspect it first (`manage_automations` list / `list_magic_actions`), apply the changes, re-verify in the temp sandbox, and save the verified update.",
+		"- Once sandbox verification succeeds, save the automation directly (`manage_automations` save / `upsert_magic_action`) without asking the user to re-confirm a draft card, and then briefly summarize what was created and verified. When customizing an existing automation, inspect it first (`manage_automations` list / `list_magic_actions`), apply the changes, re-verify in the temp sandbox, and save the verified update.",
 	);
 
 	return lines.join("\n");

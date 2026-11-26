@@ -367,7 +367,7 @@ describe("createAutomationService snapshot", () => {
 			daemon: { platform: "darwin", installed: true, running: false },
 			rules: [
 				{
-					...rule("inbox-pdf", { paths: ["/Users/tester/Downloads"], include: ["*.pdf"] }),
+					...rule("inbox-pdf", { enabled: true, paths: ["/Users/tester/Downloads"], include: ["*.pdf"] }),
 					lastRun: {
 						startedAt: Date.parse("2026-10-23T10:00:00.000Z"),
 						durationMs: 12,
@@ -377,7 +377,7 @@ describe("createAutomationService snapshot", () => {
 						timedOut: false,
 					},
 				},
-				{ ...rule("no-run-yet"), lastRun: null },
+				{ ...rule("no-run-yet", { enabled: true }), lastRun: null },
 			],
 		});
 	});
@@ -404,6 +404,40 @@ describe("createAutomationService snapshot", () => {
 			timedOut: true,
 			error: "spawn echo ENOENT",
 		});
+	});
+
+	it("reads recorded file paths from run logs and falls back to stdout paths for legacy logs", async () => {
+		const dir = await home();
+		await writeRules(dir, [rule("receipts")]);
+		const logsDir = join(dir, "automations", "logs");
+		await mkdir(logsDir, { recursive: true });
+		await writeFile(
+			join(logsDir, "receipts.jsonl"),
+			`${[
+				JSON.stringify(runRecord("receipts", { startedAt: "2026-10-23T10:00:00.000Z", stdout: "moved /Users/tester/Downloads/Receipt-1.pdf -> /Users/tester/Downloads/영수증/Receipt-1.pdf\n" })),
+				JSON.stringify(runRecord("receipts", { startedAt: "2026-10-23T10:05:00.000Z", files: [{ type: "create", path: "/Users/tester/Downloads/Invoice-2.pdf" }] })),
+			].join("\n")}\n`,
+		);
+		const cli = fakeCli(dir, { status: () => ok(statusOf({ dir, automations: [rule("receipts")] })) });
+		const runs = await service(dir, cli).history("receipts");
+		expect(runs[0]?.files).toEqual(["/Users/tester/Downloads/Invoice-2.pdf"]);
+		expect(runs[1]?.files).toEqual(["/Users/tester/Downloads/Receipt-1.pdf"]);
+	});
+
+	it("toggles enabled on a single rule via setEnabled", async () => {
+		const dir = await home();
+		await writeRules(dir, [rule("inbox-pdf")]);
+		const cli = fakeCli(dir, {
+			status: () => {
+				const raw = JSON.parse(readFileSync(rulesPath(dir), "utf8")) as { automations: Record<string, unknown>[] };
+				return ok(statusOf({ dir, automations: raw.automations }));
+			},
+		});
+		const svc = service(dir, cli);
+		const off = await svc.setEnabled("inbox-pdf", false);
+		expect(off.rules[0]?.enabled).toBe(false);
+		const on = await svc.setEnabled("inbox-pdf", true);
+		expect(on.rules[0]?.enabled).toBe(true);
 	});
 
 	it("reports a refused rules file: no rules, the librarian's reason, no read error", async () => {

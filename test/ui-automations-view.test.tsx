@@ -134,13 +134,16 @@ describe("AutomationsView list", () => {
 		expect(text(rows()[2])).toContain("데스크탑");
 	});
 
-	it("marks the selected row, and draws the on/off switch and the arrow on every row (Figma 641:13493)", () => {
-		render(props({ selectedId: "hwp-to-pdf" }));
+	it("marks the selected row, and draws the on/off switch and the arrow on every row without a redundant status dot", () => {
+		const onToggleRule = vi.fn();
+		render(props({ selectedId: "hwp-to-pdf", onToggleRule }));
 		expect(rows().map((row) => row.getAttribute("aria-selected"))).toEqual(["false", "true", "false"]);
-		expect(rows().every((row) => row.querySelector('[data-sidebar-switch="automation-rule-on"]') !== null)).toBe(true);
-		// Figma 672:3740: every row leads with how its last run went; the last-run words stay on the rule's page.
-		expect(rows().every((row) => row.querySelector("[data-run-tone]") !== null)).toBe(true);
+		expect(rows().every((row) => row.querySelector('[data-sidebar-switch^="automation-rule-on:"]') !== null)).toBe(true);
+		// No redundant green/grey status dot beside the toggle switch on list rows.
+		expect(rows().every((row) => row.querySelector("[data-run-tone]") === null)).toBe(true);
 		expect(host.querySelector("[data-rule-last-run]")).toBeNull();
+		click(host.querySelector<HTMLElement>('[data-sidebar-switch="automation-rule-on:downloads-pdf-summary"]'));
+		expect(onToggleRule).toHaveBeenCalledWith("downloads-pdf-summary");
 	});
 
 	it("heads the page with only 채팅 | 내 자동화, no name on the left, and 채팅 goes back to the chat", async () => {

@@ -139,7 +139,8 @@ describe("the 자동화 tab's right-click rows", () => {
 		const row = host.querySelector<HTMLElement>('[data-magic-action-row="pdf-summary"]');
 		expect(row?.textContent).toContain("세 줄 요약");
 		expect(row?.textContent).toContain("PDF 파일 하나를 우클릭하면");
-		expect(row?.querySelector('[data-run-tone="ok"]')).not.toBeNull();
+		// Status dot is removed from the list rows; only the on/off switch represents active state.
+		expect(row?.querySelector("[data-run-tone]")).toBeNull();
 		expect(host.querySelector("[data-automation-hero]")).toBeNull();
 		await act(async () => host.querySelector<HTMLElement>('[data-sidebar-switch="magic-action-on:pdf-summary"]')?.click());
 		expect(onToggleMagicAction).toHaveBeenCalledWith("pdf-summary");
