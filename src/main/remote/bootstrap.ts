@@ -55,6 +55,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"search.onEvent": SEARCH_CHANNELS.event,
 	"settings.onChanged": SETTINGS_CHANNELS.changed,
 	"settings.onProviderLoginEvent": SETTINGS_CHANNELS.providerLoginEvent,
+	"settings.onRefreshScheduleChanged": SETTINGS_CHANNELS.refreshScheduleChanged,
 	"osRequests.onAvailable": OS_REQUEST_CHANNELS.available,
 	"onboarding.onProgress": ONBOARDING_CHANNELS.progress,
 	"fs.onLocationsChanged": FS_WORKER_PUSH.locationsChanged,
