@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import { t } from "../../../shared/i18n/core";
-import type { AutomationsViewProps } from "../components/AutomationsView";
+import { INITIAL_AUTOMATIONS_PLACE, type AutomationsPlace, type AutomationsViewProps } from "../components/AutomationsView";
 import { addPrompt, ruleTitle } from "../state/automations";
 import { ruleKeyAction } from "../state/automations-keys";
 import { ruleMenuEntries, stepRuleSelection, type AutomationsStore, type AutomationsView } from "../state/automations-store";
@@ -115,6 +115,9 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const latest = useRef(deps);
 	latest.current = deps;
+
+	// The page the 자동화 tab was left on (전체 기록, a right-click action's page), found again when the tab comes back.
+	const [place, setPlace] = useState<AutomationsPlace>(INITIAL_AUTOMATIONS_PLACE);
 
 	// The right-click actions, listed beside the rules: read once, then kept as Settings (or its assistant) changes them.
 	const [magicActions, setMagicActions] = useState<readonly MagicAction[]>([]);
@@ -386,6 +389,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			}
 		},
 		magicActions,
+		place,
+		onPlaceChange: setPlace,
 		onToggleMagicAction: (id) => {
 			void changeMagicActions((actions) => actions.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
 		},

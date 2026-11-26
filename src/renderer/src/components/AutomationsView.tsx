@@ -32,6 +32,18 @@ import { NoticeCard } from "./primitives/NoticeCard";
 import { StatusDot } from "./primitives/StatusDot";
 import { Switch } from "./primitives/Switch";
 
+/**
+ * Where the 자동화 tab is: the list or 전체 기록, a right-click action's page, and whether a rule's page was opened
+ * from 전체 기록. Kept by the shell, so leaving the tab and coming back finds the page it was left on.
+ */
+export interface AutomationsPlace {
+	readonly page: "list" | "all";
+	readonly magicId: string | null;
+	readonly fromAll: boolean;
+}
+
+export const INITIAL_AUTOMATIONS_PLACE: AutomationsPlace = { page: "list", magicId: null, fromAll: false };
+
 export interface AutomationsViewProps {
 	readonly state: AutomationsSnapshot;
 	/** The rule being deleted: drawn faded and cannot be opened until it is gone. */
@@ -48,6 +60,9 @@ export interface AutomationsViewProps {
 	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	/** The right-click actions (Settings → 우클릭 메뉴), listed under 내 자동화 beside the rules. */
 	readonly magicActions?: readonly MagicAction[];
+	/** Where the tab was left; without it the tab keeps its place only while it is shown. */
+	readonly place?: AutomationsPlace | undefined;
+	readonly onPlaceChange?: ((place: AutomationsPlace) => void) | undefined;
 	/** A right-click action's page saved a change (its name, 언제, 할 일, permission); resolves true once settings have it. */
 	readonly onUpdateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	/** A right-click action's page, 삭제 confirmed: remove it from the right-click menu. */
@@ -398,7 +413,7 @@ function NewAutomationCard({
 				placeholder={t("automations.create.taskPlaceholder")}
 				aria-label={t("automations.create.task")}
 				className={cn(
-					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
+					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-subtle-alt px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
 					"text-ink focus:border-accent",
 				)}
 				onChange={(change) => {
@@ -713,7 +728,7 @@ function MagicActionCard({ action, onSave }: { readonly action: MagicAction; rea
 						: t("automations.create.taskPlaceholder")
 				}
 				className={cn(
-					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] text-ink outline-none placeholder:text-ink-faint focus:border-accent",
+					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-subtle-alt px-10 py-8 text-[13px] leading-[20px] text-ink outline-none placeholder:text-ink-faint focus:border-accent",
 					script && "font-mono text-[12px]",
 				)}
 				onChange={(change) => set("task")(change.target.value)}
@@ -1606,16 +1621,29 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
-	const [page, setPage] = useState<"list" | "all">("list");
+	// Which page the tab shows lives with the shell when it is given one, so coming back to the tab finds it again.
+	const [ownPlace, setOwnPlace] = useState<AutomationsPlace>(keptPlace ?? INITIAL_AUTOMATIONS_PLACE);
+	const place = keptPlace ?? ownPlace;
+	// Several steps can change the place in one handler (leave 전체 기록, then open a page): each builds on the last.
+	const placeRef = useRef(place);
+	placeRef.current = place;
+	const movePlace = (change: Partial<AutomationsPlace>): void => {
+		const next = { ...placeRef.current, ...change };
+		placeRef.current = next;
+		if (onPlaceChange === undefined) setOwnPlace(next);
+		else onPlaceChange(next);
+	};
+	const { page, magicId, fromAll } = place;
+	const setPage = (next: AutomationsPlace["page"]): void => movePlace({ page: next });
 	// A right-click action's own page, one step in from the list as a rule's is.
-	const [magicId, setMagicId] = useState<string | null>(null);
+	const setMagicId = (next: string | null): void => movePlace({ magicId: next });
+	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
+	const setFromAll = (next: boolean): void => movePlace({ fromAll: next });
 	const magic = magicActions.find((action) => action.id === magicId) ?? null;
 	const magicRuns = useMagicRunHistory(magicActions.map((action) => action.id));
 	const [confirmMagic, setConfirmMagic] = useState<MagicAction | null>(null);
-	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
-	const [fromAll, setFromAll] = useState(false);
 	const locations = useLocations();
 	const broken = state.configError !== null;
 	// A repair of this very error is running: the card gives way to one line saying so, and comes back if the repair did not clear the error.

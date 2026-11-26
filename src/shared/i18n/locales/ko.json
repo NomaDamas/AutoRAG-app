@@ -3915,7 +3915,7 @@
   },
   "rightClickWhen": {
     "when": "언제",
-    "task": "Dazzi가 할 일",
+    "task": "할 일",
     "kindLabel": "파일 종류",
     "kind": {
       "all": "모든 파일",

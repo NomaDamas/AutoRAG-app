@@ -3915,7 +3915,7 @@
   },
   "rightClickWhen": {
     "when": "When",
-    "task": "What Dazzi does",
+    "task": "Task",
     "kindLabel": "File type",
     "kind": {
       "all": "any files",

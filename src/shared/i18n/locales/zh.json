@@ -3915,7 +3915,7 @@
   },
   "rightClickWhen": {
     "when": "何时",
-    "task": "Dazzi 要做的事",
+    "task": "任务",
     "kindLabel": "文件类型",
     "kind": {
       "all": "文件",

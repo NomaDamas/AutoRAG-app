@@ -3915,7 +3915,7 @@
   },
   "rightClickWhen": {
     "when": "いつ",
-    "task": "Dazziがすること",
+    "task": "やること",
     "kindLabel": "ファイルの種類",
     "kind": {
       "all": "ファイル",
