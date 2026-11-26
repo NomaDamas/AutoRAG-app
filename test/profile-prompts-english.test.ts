@@ -39,6 +39,15 @@ const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (langu
 		prompt: (language) => connectionsCustomizerProfile({ language, surface: "mcp", toolkit: emptyKit }).systemPrompt,
 	},
 	{
+		name: "connections-customizer (with a shell)",
+		prompt: (language) =>
+			connectionsCustomizerProfile({
+				language,
+				surface: "mcp",
+				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
+			}).systemPrompt,
+	},
+	{
 		name: "datasource-connections-customizer",
 		prompt: (language) => datasourceConnectionsProfile({ language, surface: "apps", toolkit: emptyKit }).systemPrompt,
 	},

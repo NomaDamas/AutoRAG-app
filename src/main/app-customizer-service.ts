@@ -3,12 +3,8 @@ import { createProfileSession, createWebTools, type AgentProfile, type ProfileMo
 import type { AppCustomizerChange, AppCustomizerEvent, AppCustomizerPromptAnswer, AppCustomizerRequest, AppCustomizerSurface } from "../shared/app-customizer-contract";
 import { findSecrets, redactSecrets } from "../shared/secret-guard";
 import { createCustomizerPrompter } from "./agents/customizer-prompter";
-import { resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { guardTools } from "./agents/guard-tools";
-import { createWriteJudge } from "./agents/write-judge";
-import type { WriteJudge } from "./agents/write-gate";
 import { collectKnownSecretValues } from "./coding-agent-credentials";
-import { resolveDecisionBackendsForConfig } from "./decision-model";
 import type { FsLocation, FsTag } from "../shared/fs-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
 import type { AiCustomizerToolkitDeps } from "./agents/profiles/ai-customizer";
@@ -42,11 +38,6 @@ export interface AppCustomizerServiceDeps {
 	readonly language: () => ReplyLanguage;
 	/** The whole settings service: the config assistants write the shared AutoRAG config and MCP file through it, as the pages do. */
 	readonly settings: SettingsBridge;
-	/**
-	 * Jev for the AI-model assistant's shell (it decides whether a command changes anything beyond the files the assistant manages).
-	 * Defaults to the app's decision backends from the shared AutoRAG config; a test passes its own.
-	 */
-	readonly writeJudge?: WriteJudge;
 	/** Adds a provider definition taken from another agent (main-only; `ProviderAuthService.importCustom`). Without it `import_omp_provider` is not offered. */
 	readonly importCustomProvider?: AiCustomizerToolkitDeps["importCustomProvider"];
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
@@ -88,12 +79,6 @@ interface ActiveRun {
 	cancelled: boolean;
 }
 
-/** The assistants that research something outside the app: a server's docs, a datasource setup, a provider's key page. */
-const WEB_SURFACES: readonly AppCustomizerSurface[] = ["mcp", "apps", "source", "ai", "all"];
-
-/** Surfaces where the guarded shell tool is attached so the assistant can inspect local coding-agent configs or CLIs. */
-const SHELL_SURFACES: readonly AppCustomizerSurface[] = ["ai", "web", "apps", "source", "all"];
-
 export function configProfileInput(
 	language: ReplyLanguage,
 	surface: AppCustomizerSurface,
@@ -101,7 +86,7 @@ export function configProfileInput(
 	known: ReadonlySet<string>,
 	web: readonly ToolDefinition[],
 ): ConfigCustomizerProfileInput {
-	return { language, surface, toolkit: { ...toolkit, tools: guardTools([...toolkit.tools, ...(WEB_SURFACES.includes(surface) ? web : [])], known) } };
+	return { language, surface, toolkit: { ...toolkit, tools: guardTools([...toolkit.tools, ...web], known) } };
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -140,10 +125,6 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 	const sessions = new Map<string, SessionEntry>();
 	const runs = new Map<string, ActiveRun>();
 	const prompter = createCustomizerPrompter({ send: (event) => deps.send(event) });
-	/** One judge for the whole service: it resolves the decision backends from the config once and keeps them. */
-	const defaultJudge = createWriteJudge({
-		resolveBackends: () => resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd }), deps.env, deps.cwd),
-	});
 
 	function evictOldestIfNeeded(): void {
 		if (sessions.size < MAX_OPEN_SESSIONS) return;
@@ -182,14 +163,14 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 
 		let entryRef: SessionEntry | null = null;
 		const cancelled = (): boolean => entryRef?.cancelled === true;
-		// The librarian's own web tools, as the AutoRAG agent has them. Fetched pages and search results are data the model reads;
-		// they pass through `guardTools` like every other result, and the prompts say they are never instructions.
-		const web = WEB_SURFACES.includes(surface) ? createWebTools() : [];
+		// Every Settings assistant runs with full read/write capability (web tools + writable shell),
+		// keeping secret redaction (`guardTools` + `collectKnownSecretValues` + `scrubEnv`) always on.
+		const web = createWebTools();
 		const shellHome = (process.platform === "win32" ? deps.env.USERPROFILE : deps.env.HOME)?.trim() || deps.homeDir;
 		const knownSecrets = new Set<string>();
 		// Reading another agent's credential file is allowed, so the values in those files are known to the redaction nets from the
 		// start: whatever a command prints, no tool result or reply can repeat one.
-		if (shellHome !== undefined && SHELL_SURFACES.includes(surface)) {
+		if (shellHome !== undefined) {
 			for (const value of collectKnownSecretValues({ homeDir: shellHome, agentDir: deps.agentDir, env: deps.env })) knownSecrets.add(value);
 		}
 		const secrets = {
@@ -198,18 +179,13 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		};
 		const language = (): ReplyLanguage => deps.language();
 		const platformDep = deps.platform === undefined ? {} : { platform: deps.platform };
-		const shellOption =
-			shellHome !== undefined && SHELL_SURFACES.includes(surface)
-				? {
-						shell: {
-							homeDir: shellHome,
-							cwd: deps.cwd,
-							env: deps.env,
-							managedPaths: [resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath],
-							judge: deps.writeJudge ?? defaultJudge,
-						},
-					}
-				: {};
+		const shellOption = {
+			shell: {
+				...(shellHome === undefined ? {} : { homeDir: shellHome }),
+				cwd: deps.cwd,
+				env: deps.env,
+			},
+		};
 		let toolkit: SessionChangesTracker;
 		let profile: AgentProfile;
 		switch (surface) {
@@ -221,7 +197,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				break;
 			}
 			case "mcp": {
-				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
+				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets, ...shellOption });
 				toolkit = kit;
 				profile = connectionsCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
 				break;

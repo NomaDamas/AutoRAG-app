@@ -10,7 +10,6 @@ import { isSecretKey } from "../../autorag-config-service";
 import type { RunPrompter } from "../customizer-prompter";
 import { createGuardedBashTool } from "../guarded-bash";
 import { intentPromptLine, withIntentTools } from "../profile-progress";
-import type { WriteJudge } from "../write-gate";
 import {
 	createCustomizerKit,
 	REPLY_LANGUAGE_NAME,
@@ -74,13 +73,11 @@ const REFERENCE = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/u;
 
 export interface DatasourceConnectionsToolkitDeps extends ConfigCustomizerDeps {
 	readonly platform?: NodeJS.Platform;
-	/** Guarded read-only/managed shell for discovering local vaults, mail stores, and datasource CLIs. */
+	/** Full read/write shell (with secret env scrubbing) for discovering/installing datasource CLIs and local vaults. */
 	readonly shell?: {
-		readonly homeDir: string;
+		readonly homeDir?: string;
 		readonly cwd: string;
 		readonly env: NodeJS.ProcessEnv;
-		readonly managedPaths?: readonly string[];
-		readonly judge?: WriteJudge;
 	};
 }
 
@@ -698,11 +695,7 @@ export function createDatasourceConnectionsToolkit(deps: DatasourceConnectionsTo
 		tools.push(
 			createGuardedBashTool({
 				cwd: deps.shell.cwd,
-				homeDir: deps.shell.homeDir,
 				env: deps.shell.env,
-				managedPaths: deps.shell.managedPaths ?? [],
-				allowEnvVars: false,
-				judge: deps.shell.judge,
 			}),
 		);
 	}
@@ -714,7 +707,7 @@ function systemPrompt(language: ReplyLanguage, intervalHint: string, hasShell: b
 	const templates = DATASOURCE_TEMPLATE_CATALOG.map((item) => `${item.id} (${item.label})`).join(", ");
 	const shellLines = hasShell
 		? [
-				"- You have a guarded `bash` tool for read-only discovery: find local Obsidian vaults (`.obsidian`), check installed datasource CLIs (`which slacrawl discrawl mailcrawl lazykatok wombat notcrawl telecrawl wacrawl lark-cli clawgallery hister gh`), inspect CLI status/doctor output, or check mail/app directories. Writes outside managed config files are strictly refused.",
+				"- You have a full read/write `bash` tool for datasource setup: find local Obsidian vaults (`.obsidian`), check or install datasource CLIs (`slacrawl`, `discrawl`, `mailcrawl`, `lazykatok`, `wombat`, `notcrawl`, `telecrawl`, `wacrawl`, `lark-cli`, `clawgallery`, `hister`, `gh`), inspect CLI status/doctor output, or configure local directories. Never copy a secret or token into a command, file, or reply — use `set_datasource_credential` instead.",
 			]
 		: [
 				"- No shell tool is available in this session; rely on `get_datasources` and ask the person for local paths when needed.",

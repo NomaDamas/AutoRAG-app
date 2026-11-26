@@ -263,14 +263,10 @@ describe("ai-customizer toolkit & settings-customizer profile", () => {
 		const names = profile.customTools?.map((tool) => tool.name) ?? [];
 		expect(names).toContain("bash");
 		const prompt = profile.systemPrompt;
-		// What the shell may do, stated plainly: read anywhere, write only the managed files, set environment variables,
-		// read other coding agents' config, and never copy a key by hand.
-		expect(prompt).toMatch(/READING is unrestricted/);
-		expect(prompt).toMatch(/WRITING is limited to managed config files/);
-		expect(prompt).toMatch(/new environment variable/i);
-		expect(prompt).toMatch(/Jev before it runs/);
+		expect(prompt).toMatch(/full read\/write shell access/i);
 		expect(prompt).toMatch(/Claude Code, Codex, Gemini CLI, opencode, pi, Aider/);
-		expect(prompt).toMatch(/Never copy a key into a command/);
+		expect(prompt).toMatch(/Never copy a secret or API key into a command/);
+		expect(prompt).not.toMatch(/judged by Jev before it runs/i);
 	});
 
 	it("answers the web surface with the same tools and web-search wording", () => {

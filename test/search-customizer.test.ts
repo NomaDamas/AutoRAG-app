@@ -109,7 +109,7 @@ function warningsOf(parsed: Record<string, unknown>): readonly string[] {
 }
 
 describe("search-customizer toolkit & settings-customizer profile", () => {
-	it("exposes only the four closed search tools, states the no-refresh/no-delete invariants, and never offers an index-run or file tool", () => {
+	it("exposes only the four closed search tools and states the Settings safety boundaries", () => {
 		const { settings } = createStubSettings();
 		const kit = createSearchCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
 		const profile = settingsCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
@@ -122,10 +122,9 @@ describe("search-customizer toolkit & settings-customizer profile", () => {
 		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
 		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		expect(profile.systemPrompt.toLowerCase()).toContain("never");
-		expect(profile.systemPrompt).toContain("refresh");
-		for (const forbidden of ["run", "delete", "move", "trash"]) {
-			expect(profile.systemPrompt.toLowerCase()).toContain(forbidden);
-		}
+		expect(profile.systemPrompt).toContain("update_index_scope");
+		expect(profile.systemPrompt).toContain("update_index_options");
+		expect(profile.systemPrompt).toContain("update_duplicates");
 	});
 
 	it("reports the current scope, cadence, watch, doc-language and duplicate settings", async () => {

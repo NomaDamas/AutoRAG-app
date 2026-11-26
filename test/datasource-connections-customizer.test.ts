@@ -371,7 +371,7 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		expect(synced.chunkCount).toBe(12);
 	});
 
-	it("exposes guarded bash when shell dep is provided so it can inspect local vaults/CLIs while blocking outside writes", async () => {
+	it("exposes the full read/write bash when shell dep is provided so it can inspect and set up local vaults/CLIs", async () => {
 		const harness = createHarness();
 		const vault = join(root, "DetectedVault");
 		await mkdir(join(vault, ".obsidian"), { recursive: true });
@@ -379,10 +379,8 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 			settings: harness.settings,
 			platform: "darwin",
 			shell: {
-				homeDir: root,
 				cwd: root,
 				env: { HOME: root, PATH: process.env.PATH ?? "" },
-				managedPaths: [configPath],
 			},
 		});
 
@@ -395,9 +393,9 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 		expect(text).toContain(".obsidian");
 
-		await expect(
-			bash.execute("call-2", { command: `echo bad > ${join(root, "escape.txt")}` } as never, undefined, undefined, undefined as never),
-		).rejects.toThrow();
+		// Full read/write: a write outside the config file is no longer refused (v2.15 permission simplification).
+		await bash.execute("call-2", { command: `echo ok > ${join(root, "setup-note.txt")}` } as never, undefined, undefined, undefined as never);
+		expect(await readFile(join(root, "setup-note.txt"), "utf8")).toBe("ok\n");
 	});
 
 	it("runs end-to-end through createProfileSession with pi's faux provider", async () => {

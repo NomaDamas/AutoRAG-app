@@ -29,7 +29,6 @@ import { createGuardedBashTool } from "../guarded-bash";
 import { readOmpProviders, resolveOmpProviderKey, type OmpInputs, type OmpProviderDefinition } from "../../omp-config";
 import { isAllowedAgentApi, ALLOWED_AGENT_APIS } from "../../../shared/model-config";
 import type { CustomProviderImport } from "../../provider-auth-service";
-import type { WriteJudge } from "../write-gate";
 import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../shared/model-config";
 import { THINKING_LEVELS, WEBSEARCH_PROVIDERS } from "../../../shared/settings-options";
 import type { AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../shared/settings-contract";
@@ -53,13 +52,9 @@ export interface AiCustomizerToolkitDeps extends ConfigCustomizerDeps {
 	 * when absent the `bash` tool is not offered and the scan falls back to this process.
 	 */
 	readonly shell?: {
-		readonly homeDir: string;
+		readonly homeDir?: string;
 		readonly cwd: string;
 		readonly env: NodeJS.ProcessEnv;
-		/** The files this assistant manages, the only ones a command may change (the shared AutoRAG config, pi's models file). */
-		readonly managedPaths?: readonly string[];
-		/** Jev, for the write gate; undefined when no decision model is configured. */
-		readonly judge?: WriteJudge;
 	};
 }
 
@@ -580,11 +575,7 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 		tools.push(
 			createGuardedBashTool({
 				cwd: deps.shell.cwd,
-				homeDir: deps.shell.homeDir,
 				env: deps.shell.env,
-				managedPaths: deps.shell.managedPaths ?? [],
-				allowEnvVars: true,
-				judge: deps.shell.judge,
 			}),
 		);
 	}

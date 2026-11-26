@@ -124,6 +124,7 @@ describe("settings-customizer unified profile & toolkit", () => {
 			homeDir: root,
 			platform: "darwin",
 			language: () => "ko",
+			shell: { cwd: root, env: { HOME: root, PATH: process.env.PATH ?? "" } },
 		});
 
 		const names = kit.tools.map((t) => t.name);
@@ -161,6 +162,7 @@ describe("settings-customizer unified profile & toolkit", () => {
 			"update_datasource",
 			"update_datasource_connector",
 			"remove_datasource",
+			"bash",
 		]) {
 			expect(names, `missing tool ${expected}`).toContain(expected);
 		}

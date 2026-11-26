@@ -281,6 +281,20 @@ try {
 		check("about tab (unified): Windows Explorer shortcut preset persisted (rename=F2)", state.shortcuts?.overrides?.rename === "F2", JSON.stringify(state.shortcuts?.overrides));
 		check("about tab (unified): LTR rankingLog=false persisted in config.json", cfg.rankingLog === false, String(cfg.rankingLog));
 		check("about tab (unified): change pills shown", res.pills.length >= 2, JSON.stringify(res.pills));
+
+		// 2b. Verify writable bash works directly from a general/about tab with no Jev write-classification gate.
+		const bashMarker = join(HOME_DIR, "Documents", "settings-bash-write.txt");
+		await ask(
+			'[data-settings-nav="about"]',
+			"about",
+			`bash로 ${bashMarker} 파일에 settings-write-ok 라고 써줘.`,
+		);
+		await shot("02b-about-writable-bash");
+		check(
+			"about tab (unified): writable bash creates file with no Jev write-classification refusal",
+			existsSync(bashMarker) && readFileSync(bashMarker, "utf8").includes("settings-write-ok"),
+			existsSync(bashMarker) ? readFileSync(bashMarker, "utf8").trim() : "missing",
+		);
 	}
 
 	// 3. From `ltr` tab, configure LTR autoTrain and verify it updates both config.json and the live LtrPage controls.
