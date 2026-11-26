@@ -377,8 +377,6 @@
     "reviewing": "질문 검토 중…",
     "stopped": "답변 생성을 중단했습니다.",
     "dropHere": "파일을 여기에 놓으세요",
-    "steerPlaceholder": "검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)",
-    "steerSend": "검색 바로잡기",
     "voiceStart": "음성으로 입력",
     "voiceStop": "녹음 끝내고 받아쓰기",
     "voiceCancel": "녹음 취소",
@@ -398,14 +396,19 @@
       "waiting": "설정에서 마이크를 켜고 Dazzi로 돌아오면 바로 녹음을 시작합니다.",
       "stillDenied": "마이크가 아직 꺼져 있습니다. 설정에서 켠 뒤 Dazzi로 돌아오세요."
     },
-    "steerHintLead": "찾는 중에도 입력할 수 있습니다.",
-    "steerHintEnter": "바로잡기",
-    "steerHintAltEnter": "다음 질문",
     "steerPending": "반영 대기 중 · 다음 단계에 전달됩니다",
     "steerDelivered": "검색에 반영됨",
     "steerDropped": "검색이 먼저 끝나 반영되지 않았습니다",
+    "followUp": {
+      "postpone": "다음 질문으로 미루기",
+      "cancel": "취소",
+      "now": "지금 반영하기",
+      "edit": "수정",
+      "remove": "삭제",
+      "copy": "복사",
+      "copied": "복사했습니다"
+    },
     "queuedLabel": "다음 질문",
-    "queuedRemove": "다음 질문 취소",
     "historyGroups": {
       "today": "오늘",
       "yesterday": "어제",

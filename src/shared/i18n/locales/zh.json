@@ -377,8 +377,6 @@
     "reviewing": "正在核对提问…",
     "stopped": "已停止生成回答。",
     "dropHere": "将文件拖放到此处",
-    "steerPlaceholder": "搜索方向不对？随时纠正（例如：只看上周的消息）",
-    "steerSend": "纠正搜索",
     "voiceStart": "语音输入",
     "voiceStop": "结束录音并转写",
     "voiceCancel": "取消录音",
@@ -398,14 +396,19 @@
       "waiting": "在设置中打开麦克风后回到 Dazzi，就会立即开始录音。",
       "stillDenied": "麦克风仍处于关闭状态。请在设置中打开后回到 Dazzi。"
     },
-    "steerHintLead": "搜索时也可以输入。",
-    "steerHintEnter": "纠正",
-    "steerHintAltEnter": "下一个问题",
     "steerPending": "等待中 · 将在下一步送达",
     "steerDelivered": "已应用到搜索",
     "steerDropped": "搜索已结束，未能应用",
+    "followUp": {
+      "postpone": "改为下一个问题",
+      "cancel": "取消",
+      "now": "立即应用",
+      "edit": "编辑",
+      "remove": "删除",
+      "copy": "复制",
+      "copied": "已复制"
+    },
     "queuedLabel": "下一个问题",
-    "queuedRemove": "取消下一个问题",
     "historyGroups": {
       "today": "今天",
       "yesterday": "昨天",

@@ -97,6 +97,7 @@ import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "..
 import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createChatTitler } from "./chat-title";
+import { createFollowUpSorter } from "./follow-up-sorter";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { createOsClipboard } from "./os-clipboard";
@@ -617,6 +618,11 @@ app.whenReady().then(async () => {
 			// Through Pi's runtime, which authenticates the plan's OAuth credential; a bare `completeSimple` has no key for it.
 			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
 			language: () => currentLanguage,
+		}),
+		// A message sent while an answer is in flight: the answer model says whether it corrects it or waits.
+		sortFollowUp: createFollowUpSorter({
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
 		}),
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore,

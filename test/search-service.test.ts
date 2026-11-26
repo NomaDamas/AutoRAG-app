@@ -874,6 +874,15 @@ describe("createSearchService", () => {
 			expect(stopped.agent.steer).not.toHaveBeenCalled();
 		});
 
+		it("sorts a follow-up with the question the run is answering, and says next without a sorter or a run", async () => {
+			const run = await runningSearch();
+			// No sorter is wired in this harness.
+			expect(await run.service.classifyFollowUp?.("search-steer", "Only June.")).toBe("next");
+			expect(await run.service.classifyFollowUp?.("search-unknown", "Only June.")).toBe("next");
+			run.finish();
+			await run.started;
+		});
+
 		it("refuses a blank steer", async () => {
 			const run = await runningSearch();
 
