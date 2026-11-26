@@ -6,11 +6,11 @@
  * keeps its own copy.
  */
 
-import { jevBackendFor, JEV_SLLM_BACKEND } from "./ai-roles";
+import { jevBackendFor, JEV_SLLM_BACKEND, visualGateBackendFor } from "./ai-roles";
 import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type JsonValue, type ModelCatalogEntry, type ProviderSummary } from "./settings-contract";
 
-/** The four model roles Settings → AI 모델 edits. */
-export type RoleId = "answer" | "decomposition" | "jev" | "rerank";
+/** The model roles Settings → AI 모델 edits. */
+export type RoleId = "answer" | "decomposition" | "jev" | "rerank" | "visualParse" | "visualParseGate";
 
 /**
  * Default API-key env-var name for a provider id (`foo-bar` → `FOO_BAR_API_KEY`).
@@ -93,6 +93,29 @@ export function roleSelectionFromConfig(role: RoleId, config: JsonObject, connec
 		const provider = stringOf(record?.provider);
 		const modelId = stringOf(record?.model);
 		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : null;
+	}
+	if (role === "visualParse") {
+		const raw = getAt(config, ["visualParse"]);
+		const record = asRecord(raw);
+		if (raw === undefined || raw === false || record === null || boolOf(record.enabled) === false) {
+			return { kind: "special", value: "off" };
+		}
+		const extractor = asRecord(record.extractor);
+		const kind = stringOf(extractor?.kind);
+		if (kind === "" || kind === "ocr") return { kind: "special", value: "ocr" };
+		const model = asRecord(extractor?.model);
+		const provider = stringOf(model?.provider);
+		const modelId = stringOf(model?.id);
+		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : null;
+	}
+	if (role === "visualParseGate") {
+		const record = asRecord(getAt(config, ["visualParse"]));
+		const gate = asRecord(record?.gate);
+		const backend = stringOf(gate?.backend);
+		const modelId = stringOf(gate?.model);
+		if (backend.length === 0 || modelId.length === 0) return { kind: "special", value: "auto" };
+		const matched = connected.find((provider) => visualGateBackendFor(provider.id) === backend);
+		return matched === undefined ? null : { kind: "model", provider: matched.id, modelId };
 	}
 	const raw = getAt(config, ["jev"]);
 	if (raw === false) return null;

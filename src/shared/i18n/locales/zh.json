@@ -2463,7 +2463,9 @@
         "answer": "回答",
         "decomposition": "问题拆分",
         "rerank": "重排",
-        "jev": "判断"
+        "jev": "判断",
+        "visualParse": "视觉解析",
+        "visualParseGate": "视觉判定"
       },
       "usedFor": "用于 {{roles}}",
       "subscriptionAccount": "订阅账户",
@@ -2483,6 +2485,12 @@
       "jevSllm": "不设置",
       "rerankModel": "搜索结果排序",
       "rerankHint": "把与问题最相关的文档排在前面。",
+      "visualParseModel": "视觉页面解析 (VLM / OCR)",
+      "visualParseHint": "检测包含图表、示意图或复杂表格的页面，并用 VLM 或本地 OCR 补充解析。",
+      "visualParseOcr": "本地 OCR",
+      "visualParseGateModel": "视觉页面判定模型",
+      "visualParseGateHint": "判断每页是否包含图表、示意图或复杂表格的视觉 Decision 模型。",
+      "visualParseGateAuto": "自动 (视觉判定模型)",
       "subDocUnderstanding": "文档理解",
       "selectRole": "选择 {{label}}",
       "login": {

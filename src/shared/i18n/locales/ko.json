@@ -2463,7 +2463,9 @@
         "answer": "답변",
         "decomposition": "질문 나누기",
         "rerank": "정렬",
-        "jev": "판단"
+        "jev": "판단",
+        "visualParse": "시각 파싱",
+        "visualParseGate": "시각 판별"
       },
       "usedFor": "{{roles}}에 사용 중",
       "subscriptionAccount": "구독 계정",
@@ -2483,6 +2485,12 @@
       "jevSllm": "설정 안 함",
       "rerankModel": "검색 결과 정렬",
       "rerankHint": "질문과 가장 관련 있는 문서를 맨 위에 표시합니다.",
+      "visualParseModel": "시각 문서 파싱 (VLM / OCR)",
+      "visualParseHint": "차트·도표·복잡한 표가 있는 페이지만 감지해 VLM 또는 로컬 OCR로 보강 파싱합니다.",
+      "visualParseOcr": "로컬 OCR",
+      "visualParseGateModel": "시각 페이지 판별 모델",
+      "visualParseGateHint": "각 페이지에 차트·도표·복잡한 표가 있는지 판별하는 비전 Decision 모델입니다.",
+      "visualParseGateAuto": "자동 (비전 판단 모델)",
       "subDocUnderstanding": "문서 이해",
       "selectRole": "{{label}} 선택",
       "login": {

@@ -23,10 +23,33 @@ import { FloatingMenu, ModalActions, ModalShell, Note, Row, SettingsPageHead } f
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
-import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
+import {
+	isVisualParseEnabled,
+	jevLabel,
+	jevOptionsFor,
+	providerRoleCleanup,
+	rerankLabel,
+	rerankOptionsFor,
+	roleSelectionFor,
+	visualGateOptionsFor,
+	visualParseGateLabel,
+	visualParseLabel,
+	visualParseOptionsFor,
+} from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
-import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition } from "../../../../shared/ai-roles";
-import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition, visualGateBackendFor } from "../../../../shared/ai-roles";
+import {
+	decompositionConfigUpdates,
+	jevConfigUpdates,
+	jevSllmConfigUpdates,
+	modelConfigUpdates,
+	rerankConfigUpdates,
+	visualParseGateAutoConfigUpdates,
+	visualParseGateConfigUpdates,
+	visualParseOcrConfigUpdates,
+	visualParseOffConfigUpdates,
+	visualParseVlmConfigUpdates,
+} from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 import { THINKING_LEVELS } from "../../../../shared/settings-options";
 
@@ -48,6 +71,13 @@ const DECOMPOSITION_SPECIALS = [
 const RERANK_OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
 /** The decision model is Jev or the small chat model; it cannot be switched off. */
 const JEV_SLLM_SPECIALS = [{ value: JEV_SLLM_BACKEND, labelKey: "settingsCore.ai.jevSllm" }] as const;
+/** Visual page parsing: off, local OCR, or any connected vision-capable VLM. */
+const VISUAL_PARSE_SPECIALS = [
+	{ value: "off", labelKey: "settingsCore.ai.off" },
+	{ value: "ocr", labelKey: "settingsCore.ai.visualParseOcr" },
+] as const;
+/** Visual page gate: automatic (inherits Jev when vision-capable), or a pinned vision decision model. */
+const VISUAL_PARSE_GATE_SPECIALS = [{ value: "auto", labelKey: "settingsCore.ai.visualParseGateAuto" }] as const;
 
 interface MenuState {
 	readonly kind: "connect" | "provider" | "picker" | "thinking";
@@ -67,6 +97,16 @@ function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string,
 	const jev = asRecord(getAt(snapshot.config, ["jev"]));
 	const jevBackend = jevBackendFor(providerId);
 	if (jevBackend !== undefined && stringOf(jev?.backend) === jevBackend) out.push(t("settingsCore.ai.role.jev"));
+	const visualParse = asRecord(getAt(snapshot.config, ["visualParse"]));
+	const visualModel = asRecord(asRecord(visualParse?.extractor)?.model);
+	if (visualParse?.enabled !== false && stringOf(visualModel?.provider) === providerId) {
+		out.push(t("settingsCore.ai.role.visualParse"));
+	}
+	const visualGate = asRecord(visualParse?.gate);
+	const visualGateBackend = visualGateBackendFor(providerId);
+	if (visualParse?.enabled !== false && visualGateBackend !== undefined && stringOf(visualGate?.backend) === visualGateBackend) {
+		out.push(t("settingsCore.ai.role.visualParseGate"));
+	}
 	return out;
 }
 
@@ -107,6 +147,9 @@ export function AiPage({
 	// plan comes first because `connected` is already ordered that way.
 	const jevOptions = useMemo(() => jevOptionsFor(connected), [connected]);
 	const rerankOptions = useMemo(() => rerankOptionsFor(connected), [connected]);
+	const visualParseOptions = useMemo(() => visualParseOptionsFor(connected), [connected]);
+	const visualGateOptions = useMemo(() => visualGateOptionsFor(connected), [connected]);
+	const visualParseActive = isVisualParseEnabled(snapshot.config);
 
 	function closeMenu(): void {
 		setMenu(null);
@@ -195,6 +238,8 @@ export function AiPage({
 		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "jev") return JEV_SLLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "rerank") return RERANK_OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "visualParse") return VISUAL_PARSE_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "visualParseGate") return VISUAL_PARSE_GATE_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		return [];
 	}
 
@@ -246,6 +291,10 @@ export function AiPage({
 					<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} currentTitle={roleTitle("decomposition", snapshot, t)} broken={roleBroken("decomposition", snapshot.config, connected)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
 					<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} currentTitle={roleTitle("jev", snapshot, t)} broken={roleBroken("jev", snapshot.config, connected)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
 					<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} currentTitle={roleTitle("rerank", snapshot, t)} broken={roleBroken("rerank", snapshot.config, connected)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+					<RoleRow role="visualParse" label={t("settingsCore.ai.visualParseModel")} hint={t("settingsCore.ai.visualParseHint")} current={visualParseLabel(snapshot.config, t)} currentTitle={roleTitle("visualParse", snapshot, t)} broken={roleBroken("visualParse", snapshot.config, connected)} provider={selectedProvider("visualParse", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParse" })} />
+					{visualParseActive ? (
+						<RoleRow role="visualParseGate" label={t("settingsCore.ai.visualParseGateModel")} hint={t("settingsCore.ai.visualParseGateHint")} current={visualParseGateLabel(snapshot.config, t)} currentTitle={roleTitle("visualParseGate", snapshot, t)} broken={roleBroken("visualParseGate", snapshot.config, connected)} provider={selectedProvider("visualParseGate", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParseGate" })} />
+					) : null}
 					<EmbeddingPicker name={t("settingsCore.ai.embeddingModel")} hint={t("settingsCore.ai.embeddingHint")} />
 				</div>
 			</section>
@@ -267,7 +316,17 @@ export function AiPage({
 					{menu.kind === "picker" ? (
 						<RolePicker
 							role={menu.arg ?? "answer"}
-							models={menu.arg === "jev" ? jevOptions : menu.arg === "rerank" ? rerankOptions : catalogModels}
+							models={
+								menu.arg === "jev"
+									? jevOptions
+									: menu.arg === "rerank"
+										? rerankOptions
+										: menu.arg === "visualParse"
+											? visualParseOptions
+											: menu.arg === "visualParseGate"
+												? visualGateOptions
+												: catalogModels
+							}
 							specials={specialsFor(menu.arg ?? "answer")}
 							selected={roleSelectionFor(menu.arg ?? "answer", snapshot.config, connected)}
 							onPick={(entry) => {
@@ -275,6 +334,8 @@ export function AiPage({
 								if (menu.arg === "decomposition") writeDecomposition(entry);
 								else if (menu.arg === "jev") void run(jevConfigUpdates(entry));
 								else if (menu.arg === "rerank") void run(rerankConfigUpdates(entry));
+								else if (menu.arg === "visualParse") void run(visualParseVlmConfigUpdates(entry, snapshot.config));
+								else if (menu.arg === "visualParseGate") void run(visualParseGateConfigUpdates(entry, snapshot.config));
 								else writeModel(entry);
 							}}
 							onSpecial={(special) => {
@@ -283,6 +344,9 @@ export function AiPage({
 								else if (menu.arg === "decomposition" && special === "default") void run([{ path: ["queryDecomposition"], remove: true }]);
 								else if (menu.arg === "jev" && special === JEV_SLLM_BACKEND) void run(jevSllmConfigUpdates());
 								else if (menu.arg === "rerank" && special === "off") void run([{ path: ["rerank"], value: false }]);
+								else if (menu.arg === "visualParse" && special === "off") void run(visualParseOffConfigUpdates());
+								else if (menu.arg === "visualParse" && special === "ocr") void run(visualParseOcrConfigUpdates(snapshot.config));
+								else if (menu.arg === "visualParseGate" && special === "auto") void run(visualParseGateAutoConfigUpdates());
 							}}
 						/>
 					) : null}
@@ -342,7 +406,11 @@ function formatModelTooltip(name: string, id: string): string | undefined {
 	return trimmedName || trimmedId || undefined;
 }
 
-function roleTitle(role: "answer" | "decomposition" | "jev" | "rerank", snapshot: AutoRagConfigSnapshot, t: TFunction): string | undefined {
+function roleTitle(
+	role: "answer" | "decomposition" | "jev" | "rerank" | "visualParse" | "visualParseGate",
+	snapshot: AutoRagConfigSnapshot,
+	t: TFunction,
+): string | undefined {
 	if (role === "answer") {
 		const model = asRecord(getAt(snapshot.config, ["model"]));
 		return formatModelTooltip(stringOf(model?.name), stringOf(model?.id));
@@ -355,6 +423,16 @@ function roleTitle(role: "answer" | "decomposition" | "jev" | "rerank", snapshot
 		return formatModelTooltip(stringOf(model?.name), stringOf(model?.id)) ?? t("settingsCore.ai.defaultModel");
 	}
 	if (role === "jev") return jevLabel(snapshot.config, t);
+	if (role === "visualParse") {
+		if (!isVisualParseEnabled(snapshot.config)) return t("settingsCore.ai.off");
+		const extractor = asRecord(asRecord(getAt(snapshot.config, ["visualParse"]))?.extractor);
+		if (stringOf(extractor?.kind) === "vlm") {
+			const model = asRecord(extractor?.model);
+			return formatModelTooltip(stringOf(model?.name), stringOf(model?.id)) ?? visualParseLabel(snapshot.config, t);
+		}
+		return visualParseLabel(snapshot.config, t);
+	}
+	if (role === "visualParseGate") return visualParseGateLabel(snapshot.config, t);
 	return rerankLabel(snapshot.config, t);
 }
 

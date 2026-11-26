@@ -10,7 +10,9 @@ export { providerConnectRoute, withoutAutorag } from "./account-contract";
  * account service read one source.
  */
 
-export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel-ai-gateway";
+export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel-ai-gateway" | "bivia";
+
+export type VisualGateBackend = "bivia" | "dazzi" | "openrouter" | "openai" | "typesafe" | "cloudflare-workers-ai";
 
 /**
  * `jev.backend` that makes the small chat model (`jev.sllm.model`, else the question-decomposition model) the decision
@@ -41,6 +43,7 @@ const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, JevBackend>> = {
 	typesafe: "typesafe",
 	openrouter: "openrouter",
 	"vercel-ai-gateway": "vercel-ai-gateway",
+	bivia: "bivia",
 };
 
 /** The Jev model ids each backend accepts. */
@@ -49,11 +52,46 @@ const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModelSpec[
 	typesafe: [{ id: "jev-latest", labelKey: "finderState.roles.jevLatest" }],
 	openrouter: [
 		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
+		{ id: "typesafe/jev-1.14", label: "Jev 1.14" },
 		{ id: "~typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" },
 	],
 	"vercel-ai-gateway": [
 		{ id: "typesafe-ai/jev-1.13.0", label: "Jev 1.13" },
 		{ id: "typesafe-ai/jev", labelKey: "finderState.roles.jevLatest" },
+	],
+	bivia: [{ id: "dec-1", label: "Bivia (dec-1)" }],
+};
+
+/** Vision-capable decision backends used by the visual-rich page gate (`visualParse.gate`). */
+const VISUAL_GATE_BACKEND_BY_PROVIDER: Readonly<Record<string, VisualGateBackend>> = {
+	[AUTORAG_PROVIDER_ID]: "dazzi",
+	bivia: "bivia",
+	openrouter: "openrouter",
+	openai: "openai",
+	typesafe: "typesafe",
+	"cloudflare-workers-ai": "cloudflare-workers-ai",
+};
+
+/** Vision-capable decision models each backend serves for visual-rich page gating. */
+const VISUAL_GATE_MODELS_BY_BACKEND: Readonly<Record<VisualGateBackend, readonly RoleModelSpec[]>> = {
+	bivia: [{ id: "dec-1", label: "Bivia (dec-1)" }],
+	dazzi: [
+		{ id: "typesafe/jev-1.14", label: "Jev 1.14" },
+		{ id: "jev-1.13", label: "Jev 1.13" },
+		{ id: "openai/gpt-6-luna-decisions", label: "GPT-6 Luna Decisions" },
+		{ id: "cloudflare/clef-omni", label: "Clef Omni" },
+	],
+	openrouter: [
+		{ id: "typesafe/jev-1.14", label: "Jev 1.14" },
+		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
+		{ id: "openai/gpt-6-luna-decisions", label: "GPT-6 Luna Decisions" },
+		{ id: "cloudflare/clef-omni", label: "Clef Omni" },
+	],
+	openai: [{ id: "gpt-6-luna", label: "GPT-6 Luna" }],
+	typesafe: [{ id: "jev-latest", labelKey: "finderState.roles.jevLatest" }],
+	"cloudflare-workers-ai": [
+		{ id: "@cf/cloudflare/clef-omni", label: "Clef Omni" },
+		{ id: "typesafe/jev-1.14.0", label: "Jev 1.14" },
 	],
 };
 
@@ -87,6 +125,19 @@ export function rerankModelsFor(providerId: string): readonly RoleModel[] {
 	const specs = RERANK_MODELS_BY_PROVIDER[providerId];
 	if (specs === undefined) return [];
 	return specs.map(({ id, label, labelKey }) => ({
+		id,
+		label: labelKey === undefined ? (label ?? id) : t(labelKey),
+	}));
+}
+
+export function visualGateBackendFor(providerId: string): VisualGateBackend | undefined {
+	return VISUAL_GATE_BACKEND_BY_PROVIDER[providerId];
+}
+
+export function visualGateModelsFor(providerId: string): readonly RoleModel[] {
+	const backend = VISUAL_GATE_BACKEND_BY_PROVIDER[providerId];
+	if (backend === undefined) return [];
+	return VISUAL_GATE_MODELS_BY_BACKEND[backend].map(({ id, label, labelKey }) => ({
 		id,
 		label: labelKey === undefined ? (label ?? id) : t(labelKey),
 	}));

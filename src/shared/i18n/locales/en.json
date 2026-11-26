@@ -2463,7 +2463,9 @@
         "answer": "Answer",
         "decomposition": "Question splitting",
         "rerank": "Rerank",
-        "jev": "Judge"
+        "jev": "Judge",
+        "visualParse": "Visual parsing",
+        "visualParseGate": "Visual gate"
       },
       "usedFor": "Used for {{roles}}",
       "subscriptionAccount": "Subscription Account",
@@ -2483,6 +2485,12 @@
       "jevSllm": "None",
       "rerankModel": "Search result ordering",
       "rerankHint": "Puts the documents most relevant to the question at the top.",
+      "visualParseModel": "Visual page parsing (VLM / OCR)",
+      "visualParseHint": "Detects pages with charts, diagrams, or complex tables and enriches them with a VLM or local OCR.",
+      "visualParseOcr": "Local OCR",
+      "visualParseGateModel": "Visual page gate",
+      "visualParseGateHint": "Vision decision model that checks whether each page contains visually rich charts, diagrams, or tables.",
+      "visualParseGateAuto": "Auto (vision decision model)",
       "subDocUnderstanding": "Document Understanding",
       "selectRole": "Select {{label}}",
       "login": {

@@ -1,5 +1,5 @@
-import { JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
-import type { AutoRagConfigUpdate, ModelCatalogEntry } from "./settings-contract";
+import { JEV_SLLM_BACKEND, jevBackendFor, visualGateBackendFor } from "./ai-roles";
+import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type ModelCatalogEntry } from "./settings-contract";
 
 /**
  * Wire protocols accepted by the shared AutoRAG config for `model.api` (upstream
@@ -65,4 +65,78 @@ export function jevSllmConfigUpdates(): AutoRagConfigUpdate[] {
 /** The leaf write that enables the reranker on the provider and model `entry` names. */
 export function rerankConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
 	return [{ path: ["rerank"], value: { enabled: true, provider: entry.provider, model: entry.id } }];
+}
+
+function existingVisualParseObject(config: JsonObject | undefined): Record<string, unknown> {
+	const raw = config?.visualParse;
+	return isJsonObject(raw) ? { ...raw } : {};
+}
+
+function modelRefFromEntry(entry: ModelCatalogEntry): Record<string, string> {
+	const model: Record<string, string> = { provider: entry.provider, id: entry.id };
+	const name = entry.name.trim();
+	const baseUrl = (entry.baseUrl ?? "").trim();
+	const env = (entry.apiKeyEnv ?? "").trim();
+	if (name.length > 0) model.name = name;
+	if (entry.api.length > 0 && isAllowedAgentApi(entry.api)) model.api = entry.api;
+	if (baseUrl.length > 0) model.baseUrl = baseUrl;
+	if (env.length > 0) model.apiKeyEnv = env;
+	return model;
+}
+
+/** Enable visual-rich page parsing with a VLM model, keeping any existing gate/limit settings intact. */
+export function visualParseVlmConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				extractor: { kind: "vlm", model: modelRefFromEntry(entry) },
+			} as JsonObject,
+		},
+	];
+}
+
+/** Enable visual-rich page parsing with local OCR, keeping any existing gate/limit settings intact. */
+export function visualParseOcrConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				extractor: { kind: "ocr" },
+			} as JsonObject,
+		},
+	];
+}
+
+/** Turn visual-rich page parsing off. */
+export function visualParseOffConfigUpdates(): AutoRagConfigUpdate[] {
+	return [{ path: ["visualParse"], value: false }];
+}
+
+/** Pin a vision-capable decision model as the visual-rich page gate, keeping existing extractor settings intact. */
+export function visualParseGateConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	const backend = visualGateBackendFor(entry.provider);
+	const gate: Record<string, string> = { model: entry.id, ...(backend === undefined ? {} : { backend }) };
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				gate,
+			} as JsonObject,
+		},
+	];
+}
+
+/** Return the visual-rich page gate to automatic selection (inherits Jev when vision-capable). */
+export function visualParseGateAutoConfigUpdates(): AutoRagConfigUpdate[] {
+	return [{ path: ["visualParse", "gate"], remove: true }];
 }

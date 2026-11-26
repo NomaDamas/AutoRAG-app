@@ -399,6 +399,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 					available: available.has(`${model.provider}/${model.id}`),
 					baseUrl: model.baseUrl ?? baseUrl,
 					apiKeyEnv,
+					...(Array.isArray(model.input) ? { supportsImage: model.input.includes("image") } : {}),
 				})),
 			};
 		}));

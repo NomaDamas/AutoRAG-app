@@ -2463,7 +2463,9 @@
         "answer": "回答",
         "decomposition": "質問の分割",
         "rerank": "並べ替え",
-        "jev": "判断"
+        "jev": "判断",
+        "visualParse": "視覚パース",
+        "visualParseGate": "視覚判定"
       },
       "usedFor": "{{roles}} に使用中",
       "subscriptionAccount": "サブスクリプションアカウント",
@@ -2483,6 +2485,12 @@
       "jevSllm": "設定しない",
       "rerankModel": "検索結果の並べ替え",
       "rerankHint": "質問に最も関連する文書を一番上に表示します。",
+      "visualParseModel": "視覚ページパース (VLM / OCR)",
+      "visualParseHint": "グラフ・図表・複雑な表があるページを検知し、VLM またはローカル OCR で補完パースします。",
+      "visualParseOcr": "ローカル OCR",
+      "visualParseGateModel": "視覚ページ判定モデル",
+      "visualParseGateHint": "各ページにグラフ・図表・複雑な表が含まれるかを判定するビジョン Decision モデルです。",
+      "visualParseGateAuto": "自動 (ビジョン判定モデル)",
       "subDocUnderstanding": "文書の理解",
       "selectRole": "{{label}} を選択",
       "login": {
