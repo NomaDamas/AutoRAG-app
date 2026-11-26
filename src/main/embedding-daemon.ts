@@ -27,13 +27,6 @@ const STDERR_LIMIT = 4_000;
 const DEFAULT_READY_TIMEOUT_MS = 10 * 60_000;
 const STOP_TIMEOUT_MS = 15_000;
 
-/** Pids of servers this process owns. The stall watchdog must not mistake their idling for a hang. */
-const ownedPids: Record<number, true> = {};
-
-export function isEmbeddingDaemonPid(pid: number): boolean {
-	return ownedPids[pid] === true;
-}
-
 /**
  * The model the app must serve for this config, or null when nothing local is needed: keyword-only mode, or
  * an embedder that names an endpoint (a remote API, or a server the user runs such as Ollama), which is
@@ -201,14 +194,12 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 	};
 	const recordOwner = (pid: number, model: string): void => {
 		owned = { pid, model };
-		ownedPids[pid] = true;
 		if (options.ownerFile === undefined) return;
 		mkdirSync(dirname(options.ownerFile), { recursive: true });
 		writeFileSync(options.ownerFile, `${JSON.stringify({ pid, model })}\n`);
 	};
 
 	const forgetOwner = (): void => {
-		if (owned !== undefined) delete ownedPids[owned.pid];
 		owned = undefined;
 		if (options.ownerFile !== undefined) rmSync(options.ownerFile, { force: true });
 	};
