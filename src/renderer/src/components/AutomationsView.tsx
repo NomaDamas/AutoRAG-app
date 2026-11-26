@@ -152,6 +152,26 @@ const TEMPLATES: readonly Template[] = [
 	{ id: "refresh", folder: "documents", kind: "all", event: "createUpdate", mode: "read", run: ["autorag", "refresh"] },
 ];
 
+/** A recommendation a right-click starts: the action it would add to the right-click menu. */
+interface RightClickTemplate {
+	readonly id: "translate";
+	readonly clickKind: RightClickKind;
+	readonly selection: MagicActionSelectionRule;
+	readonly mode: ModeId;
+}
+
+/**
+ * The page's recommendations, in order: two folder automations and one right-click automation, so both kinds of
+ * trigger are on offer. 검색 바로 최신화 stays a template for the chat's suggestions but is not recommended here.
+ */
+type Recommendation = { readonly trigger: "folder"; readonly template: Template } | { readonly trigger: "rightClick"; readonly template: RightClickTemplate };
+
+const RECOMMENDATIONS: readonly Recommendation[] = [
+	{ trigger: "folder", template: TEMPLATES[0]! },
+	{ trigger: "folder", template: TEMPLATES[1]! },
+	{ trigger: "rightClick", template: { id: "translate", clickKind: "document", selection: "single", mode: "write" } },
+];
+
 /** A standard folder the OS reports, by its sidebar glyph. */
 function standardFolders(locations: readonly FsLocation[]): readonly ChipOption<string>[] {
 	return FOLDER_ICONS.flatMap((kind) => {
@@ -1264,33 +1284,38 @@ function useRecommendationReasons(locations: readonly FsLocation[]): Reasons | n
  * row opens it downward to show what it would do, read-only (언제, 할 일); 추가하기 writes it at once, open or not.
  */
 function RecommendationCard({
-	template,
-	locations,
+	id,
+	when,
+	task,
+	canAdd,
 	reason,
 	glow = false,
 	quiet = false,
 	onAdd,
 }: {
-	readonly template: Template;
+	/** The template's id: its words in `automations.templates.<id>`. */
+	readonly id: string;
+	/** When it would run, as the automation's own sentence (a folder's change, or a right-click). */
+	readonly when: string;
+	readonly task: string;
+	/** False until it can be written (a folder automation waits for the OS to say where its folder is). */
+	readonly canAdd: boolean;
 	/** Once there are rules the recommendations step back: a row in one grouped list on a faint ground, no stroke, smaller words. */
 	readonly quiet?: boolean;
-	readonly locations: readonly FsLocation[];
 	/** While there are no rules the recommendations are the page's invitation: a soft aurora sits behind each card. */
 	readonly glow?: boolean;
 	/** Why it is worth having, from the person's files; without one the card says when it would run; null while counting. */
 	readonly reason: string | undefined | null;
-	readonly onAdd: (draft: AutomationDraft) => Promise<boolean>;
+	/** 추가하기: write it as a folder rule or a right-click action. */
+	readonly onAdd: () => Promise<boolean>;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [busy, setBusy] = useState(false);
-	const task = t(`automations.templates.${template.id}.task` as LocaleKey);
-	const draft = templateDraft(template, locations, task);
-	const when = draft === null ? t(`automations.templates.${template.id}.desc` as LocaleKey) : whenText(draftRule(draft));
 	const card = (
 		<div
 			className={cn("flex flex-col", quiet ? "gap-10 py-10 pr-14 pl-16" : cn("gap-12 rounded-12 border bg-window px-16 py-14", glow ? "border-transparent" : "border-border"))}
-			data-template={template.id}
+			data-template={id}
 			data-open={open ? "true" : undefined}
 		>
 			<div className="flex items-center gap-10">
@@ -1302,7 +1327,7 @@ function RecommendationCard({
 				>
 					<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
-						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${id}.title` as LocaleKey)}</span>
 						{/* While the reasons are being counted the line keeps its height and shows nothing yet. */}
 						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined || reason === null ? undefined : "true"}>
 							{reason === null ? "\u00a0" : (reason ?? when)}
@@ -1312,16 +1337,16 @@ function RecommendationCard({
 				<button
 					type="button"
 					data-action="automation-template-add"
-					disabled={draft === null || busy}
+					disabled={!canAdd || busy}
 					className={cn(
 						"inline-flex flex-none items-center rounded-6 border px-10 text-meta font-medium cursor-pointer disabled:cursor-default disabled:opacity-50",
 						quiet ? "h-26" : "h-28",
 						open ? "border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover" : "border-border bg-window text-ink-body hover:bg-hover",
 					)}
 					onClick={() => {
-						if (draft === null) return;
+						if (!canAdd) return;
 						setBusy(true);
-						void onAdd(draft).finally(() => setBusy(false));
+						void onAdd().finally(() => setBusy(false));
 					}}
 				>
 					{t("automations.recs.add")}
@@ -1578,7 +1603,7 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onCreateMagicAction, onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	// Which page the tab shows lives with the shell when it is given one, so coming back to the tab finds it again.
 	const [ownPlace, setOwnPlace] = useState<AutomationsPlace>(keptPlace ?? INITIAL_AUTOMATIONS_PLACE);
@@ -1634,9 +1659,46 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 	useEffect(() => {
 		scrollRef.current?.scrollTo?.({ top: 0 });
 	}, [detail?.id, page, magicId]);
-	const recommendations = TEMPLATES.filter((template) => !templateTaken(state.rules, template.id));
+	// A recommendation is gone once something already does it: a folder rule of its shape, or a right-click action with its task.
+	const recommendations = RECOMMENDATIONS.filter((item) =>
+		item.trigger === "folder"
+			? !templateTaken(state.rules, item.template.id)
+			: onCreateMagicAction !== undefined &&
+				!magicActions.some((action) => action.execution.kind === "agent" && action.execution.prompt.trim() === t(`automations.templates.${item.template.id}.task` as LocaleKey).trim()),
+	);
+	/** What a recommendation's card shows and what its 추가하기 writes, for either trigger. */
+	const recommendationProps = (item: Recommendation): Omit<Parameters<typeof RecommendationCard>[0], "glow" | "quiet"> => {
+		const task = t(`automations.templates.${item.template.id}.task` as LocaleKey);
+		if (item.trigger === "rightClick") {
+			const target = { selection: item.template.selection, ...rightClickTarget(item.template.clickKind, null) };
+			const action = normalizeMagicAction({
+				label: t(`automations.templates.${item.template.id}.title` as LocaleKey),
+				enabled: true,
+				...target,
+				execution: { kind: "agent", mode: item.template.mode === "write" ? "organize" : "read", prompt: task },
+			});
+			return {
+				id: item.template.id,
+				when: rightClickSentence(t, target),
+				task,
+				canAdd: action !== null && onCreateMagicAction !== undefined,
+				// No count from the person's files: the line says the right-click, which is what is new about it.
+				reason: reasons === null ? null : undefined,
+				onAdd: async () => (action === null ? false : ((await onCreateMagicAction?.(action)) ?? false)),
+			};
+		}
+		const draft = templateDraft(item.template, locations, task);
+		return {
+			id: item.template.id,
+			when: draft === null ? t(`automations.templates.${item.template.id}.desc` as LocaleKey) : whenText(draftRule(draft)),
+			task,
+			canAdd: draft !== null,
+			reason: reasons === null ? null : reasons[item.template.id],
+			onAdd: async () => (draft === null ? false : onCreate(draft)),
+		};
+	};
 	const reasons = useRecommendationReasons(locations);
-	const recommendationCards = recommendations.map((template) => <RecommendationCard key={template.id} template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} glow={state.rules.length === 0} onAdd={onCreate} />);
+	const recommendationCards = recommendations.map((item) => <RecommendationCard key={item.template.id} {...recommendationProps(item)} glow={state.rules.length === 0} />);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			{/* The AI 에이전트 tab's head: only 채팅 | 자동화 at the very middle, the same height as the chat side's and with no line under it. */}
@@ -1798,8 +1860,8 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 								<section className="flex flex-col gap-8" data-automation-recommendations>
 									<h2 className="m-0 text-meta leading-[16px] text-ink-muted">{t("automations.recs.section")}</h2>
 									<div className="flex flex-col overflow-hidden rounded-12 bg-subtle-alt [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider" data-quiet-recommendations>
-										{recommendations.map((template) => (
-											<RecommendationCard key={template.id} quiet template={template} locations={locations} reason={reasons === null ? null : reasons[template.id]} onAdd={onCreate} />
+										{recommendations.map((item) => (
+											<RecommendationCard key={item.template.id} quiet {...recommendationProps(item)} />
 										))}
 									</div>
 								</section>

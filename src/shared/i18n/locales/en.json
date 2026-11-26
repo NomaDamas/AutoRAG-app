@@ -770,6 +770,11 @@
         "desc": "When files in Documents are added or changed, update search right away",
         "task": "Update search right away"
       },
+      "translate": {
+        "title": "Translate a document",
+        "desc": "Right-click a document to make a copy translated into English",
+        "task": "Make a copy translated into English in the same folder"
+      },
       "add": "Add"
     },
     "row": {
@@ -813,8 +818,8 @@
         "refreshAgo": "Your Documents folder was last indexed {{time}}",
         "refreshChanged": "Files changed in Documents this past week: {{count}}"
       },
-      "hero": "Dazzi takes care of your files as they arrive or change",
-      "heroCaption": "Start with a recommended automation we found in your files."
+      "hero": "Leave repetitive file work to Dazzi",
+      "heroCaption": "When a file arrives or changes, or when you right-click it, Dazzi does the job you set. Start with a recommendation below."
     },
     "nudge": {
       "pdf": "An automation could summarize each new PDF as it arrives.",

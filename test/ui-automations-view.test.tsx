@@ -90,6 +90,7 @@ function props(overrides: Partial<AutomationsViewProps> = {}): AutomationsViewPr
 		onEdit: vi.fn(),
 		onAdd: vi.fn(),
 		onCreate: vi.fn(async () => true),
+		onCreateMagicAction: vi.fn(async () => true),
 		onPreview: vi.fn(),
 		onAskDelete: vi.fn(),
 		onSetDaemon: vi.fn(),
@@ -179,9 +180,10 @@ describe("AutomationsView list", () => {
 	it("suggests only the recommendations no rule already does", () => {
 		const pdfRule = rule("pdf-notes", { run: [], agent: { profile: "file-organizer", task: "요약" }, include: ["**/*.pdf"], events: ["create"] });
 		render(props({ state: state([pdfRule, failing]) }));
-		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "refresh"]);
-		const refreshRule = rule("refresh", { run: ["autorag", "refresh"], include: [], events: ["create", "update"] });
-		render(props({ state: state([pdfRule, refreshRule]) }));
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "translate"]);
+		// The right-click one is taken once a right-click automation does its task.
+		const translating = { id: "tr", label: "번역", enabled: true, selection: "single" as const, targetKind: "file" as const, extensions: [], execution: { kind: "agent" as const, mode: "organize" as const, prompt: "한국어로 번역한 사본을 같은 폴더에 만들어 줘" } };
+		render(props({ state: state([pdfRule]), magicActions: [translating] }));
 		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot"]);
 	});
 
@@ -261,8 +263,9 @@ describe("AutomationsView empty and error states", () => {
 		const onTalk = vi.fn();
 		render(props({ state: state([]), onTalk }));
 		expect(rows()).toEqual([]);
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["파일이 생기거나 바뀔 때 Dazzi가 알아서 처리합니다"]);
-		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "pdf", "refresh"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["반복하는 파일 작업은 Dazzi에게 맡기세요"]);
+		// Two folder automations and one right-click automation; 검색 바로 최신화 is left to the chat's suggestions.
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "pdf", "translate"]);
 		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-all-runs"]')).toBeNull();
@@ -281,8 +284,9 @@ describe("AutomationsView empty and error states", () => {
 		const reason = (id: string): string => text(host.querySelector(`[data-template="${id}"] button[aria-expanded]`)?.lastElementChild?.lastElementChild ?? null);
 		expect(reason("pdf")).toBe("다운로드에 PDF가 3개 있습니다");
 		expect(reason("screenshot")).toBe("데스크탑에 이름 없는 스크린샷이 2개 있습니다");
-		// Nothing in Documents changed this week and no index run was seen, so the card says when it would run.
-		expect(host.querySelector(`[data-template="refresh"] [data-recommendation-reason]`)).toBeNull();
+		// The right-click one has no count from the files: its line says the right-click.
+		expect(host.querySelector(`[data-template="translate"] [data-recommendation-reason]`)).toBeNull();
+		expect(reason("translate")).toBe("문서 파일 하나를 우클릭하면");
 	});
 
 	it("shows nothing but the frame before the first read finishes, instead of a false empty list", () => {
@@ -545,12 +549,15 @@ describe("AutomationsView 추천 자동화 (Figma 672:3718)", () => {
 			include: ["**/*.pdf"],
 			agent: { profile: "file-organizer", task: "핵심을 3줄로 요약해서 메모로 남겨 줘" },
 		});
-		// The search refresh stays a command, not an agent rule.
+		// The right-click one adds a right-click automation, not a folder rule.
 		await act(async () => {
-			add("refresh")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			add("translate")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
-		expect(p.onCreate).toHaveBeenLastCalledWith({ paths: ["/Users/jeffrey/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
+		expect(p.onCreate).toHaveBeenCalledTimes(1);
+		expect(p.onCreateMagicAction).toHaveBeenCalledWith(
+			expect.objectContaining({ label: "문서 번역", selection: "single", targetKind: "file", execution: expect.objectContaining({ kind: "agent", mode: "organize", prompt: "한국어로 번역한 사본을 같은 폴더에 만들어 줘" }) }),
+		);
 	});
 });
 
