@@ -970,6 +970,7 @@ export function App(): ReactElement {
 						aiSearchDrop={aiSearchDrop}
 						tagColorsDenied={tagCatalog.catalog.colorsDenied}
 						onGrantTagColors={grantTagColors}
+						onboardingPending={firstRun}
 						favorites={
 							finder === undefined
 								? undefined

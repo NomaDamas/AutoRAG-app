@@ -8,10 +8,16 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type R
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { DataSourceRow } from "../../../shared/settings-contract";
+import type { DefaultFileManagerStatus } from "../../../shared/default-file-manager-contract";
 import type { SettingsCategory } from "./SettingsView";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { retryIndexProblem, useIndexProblem } from "../hooks/useIndexProblem";
 import { cn } from "../lib/cn";
+import {
+	DEFAULT_FILE_MANAGER_NOTICE_ID,
+	DEFAULT_FILE_MANAGER_NOTICE_SIGNATURE,
+	shouldPromptDefaultFileManager,
+} from "../state/default-file-manager-notice";
 import { describeIndexProblem } from "../state/index-problem";
 import {
 	clearPastNotices,
@@ -125,21 +131,78 @@ function sourceDetail(row: DataSourceRow): string | null {
 export function NotificationCenter({
 	onOpenAiSettings,
 	onOpenSettingsPage,
+	onboardingPending = false,
 }: {
 	/** The index problem that wants another embedding opens Settings → AI. */
 	readonly onOpenAiSettings?: (() => void) | undefined;
 	/** Opens one Settings page by its category (`general`, `source:<alias>`, …). */
 	readonly onOpenSettingsPage?: ((category: SettingsCategory) => void) | undefined;
+	/** True while first-run onboarding has not finished yet. */
+	readonly onboardingPending?: boolean | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const notifications = useNotifications();
 	const problem = useIndexProblem();
 	const [sources, setSources] = useState<readonly DataSourceRow[]>([]);
+	const [signedIn, setSignedIn] = useState(false);
+	const [dfmStatus, setDfmStatus] = useState<DefaultFileManagerStatus | null>(null);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 	const [anchor, setAnchor] = useState<{ readonly left: number; readonly bottom: number } | null>(null);
 	const open = notifications.open;
 	const close = (): void => setNotificationCenterOpen(false);
+
+	// Track account sign-in state and default-file-manager registration so the prompt appears once onboarding + login finish.
+	useEffect(() => {
+		let live = true;
+		const account = window.autorag?.account;
+		if (account !== undefined) {
+			void account
+				.status()
+				.then((snapshot) => {
+					if (live) setSignedIn(snapshot.state === "signedIn");
+				})
+				.catch(() => undefined);
+			const offAccount = account.onChanged((snapshot) => {
+				if (live) setSignedIn(snapshot.state === "signedIn");
+			});
+			const dfm = window.autorag?.defaultFileManager;
+			let offDfm: (() => void) | undefined;
+			if (dfm !== undefined) {
+				void dfm
+					.status()
+					.then((next) => {
+						if (live) setDfmStatus(next);
+					})
+					.catch(() => undefined);
+				offDfm = dfm.onChange((next) => {
+					if (live) setDfmStatus(next);
+				});
+			}
+			return () => {
+				live = false;
+				offAccount();
+				offDfm?.();
+			};
+		}
+		return () => {
+			live = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		if (!open) return;
+		let live = true;
+		void window.autorag?.defaultFileManager
+			?.status()
+			.then((next) => {
+				if (live) setDfmStatus(next);
+			})
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, [open]);
 
 	// Connections that need attention: read on start and every time the panel opens.
 	useEffect(() => {
@@ -221,6 +284,42 @@ export function NotificationCenter({
 			actions: [
 				{ label: t("notifications.hide"), kind: "text", run: () => hideActiveNotice(`source:${row.id}`, body ?? "") },
 				{ label: t("notifications.openConnection"), kind: "primary", run: () => { onOpenSettingsPage?.(`source:${row.id}`); close(); } },
+			],
+		});
+	}
+	if (shouldPromptDefaultFileManager({ onboardingPending, signedIn, status: dfmStatus }) && dfmStatus !== null) {
+		const body = dfmStatus.platform === "win32" ? t("notifications.defaultFileManagerBodyWin") : t("notifications.defaultFileManagerBodyMac");
+		active.push({
+			id: DEFAULT_FILE_MANAGER_NOTICE_ID,
+			signature: DEFAULT_FILE_MANAGER_NOTICE_SIGNATURE,
+			tone: "warning",
+			title: t("notifications.defaultFileManagerTitle"),
+			body,
+			at: null,
+			actions: [
+				{
+					label: t("notifications.hide"),
+					kind: "text",
+					run: () => hideActiveNotice(DEFAULT_FILE_MANAGER_NOTICE_ID, DEFAULT_FILE_MANAGER_NOTICE_SIGNATURE),
+				},
+				{
+					label: t("notifications.defaultFileManagerOpenSettings"),
+					kind: "secondary",
+					run: () => {
+						onOpenSettingsPage?.("general");
+						close();
+					},
+				},
+				{
+					label: t("notifications.defaultFileManagerEnable"),
+					kind: "primary",
+					run: () => {
+						void window.autorag?.defaultFileManager
+							?.apply({ enabled: true, interceptReveal: dfmStatus.platform === "win32" })
+							.then((next) => setDfmStatus(next))
+							.catch(() => undefined);
+					},
+				},
 			],
 		});
 	}

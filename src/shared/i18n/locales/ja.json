@@ -2027,6 +2027,12 @@
       "launchAtLoginHint": "コンピュータにログインすると Dazzi がバックグラウンドで起動します。",
       "osMenu": "ファイルの右クリックメニューに追加",
       "osMenuHint": "Finder（macOS）やエクスプローラー（Windows）でファイルを右クリックすると、‘Dazziに質問’ と ‘Dazziで表示’ が表示されます。",
+      "defaultFileManager": "既定のファイルマネージャーとして使用",
+      "defaultFileManagerHintMac": "他アプリの「Finderで表示」やフォルダを開く操作を Finder の代わりに Dazzi で開きます。オフにすると Finder に戻ります。",
+      "defaultFileManagerHintWin": "フォルダを開く操作や Win+E をエクスプローラーの代わりに Dazzi で開きます。コントロールパネルなどの仮想フォルダは安全にエクスプローラーへ戻ります。",
+      "defaultFileManagerInterceptReveal": "他アプリの「フォルダに表示」も引き継ぐ",
+      "defaultFileManagerInterceptRevealHint": "Chrome や VS Code などが開くエクスプローラーウィンドウを検出し、Dazzi で対象ファイルを選択して開きます。",
+      "defaultFileManagerError": "既定のファイルマネージャー設定を変更できませんでした：{{error}}",
       "autoUpdates": "更新を自動インストール",
       "autoUpdatesHint": "新しいバージョンをバックグラウンドでダウンロードし、アプリの終了時にインストールします。",
       "appUpdate": "アプリのバージョン",
@@ -3344,7 +3350,12 @@
     "sourceTitle": "{{name}} の接続を確認してください",
     "openConnection": "接続を開く",
     "settings": "通知設定",
-    "viewInCenter": "通知センターで見る"
+    "viewInCenter": "通知センターで見る",
+    "defaultFileManagerTitle": "Dazzi を既定のファイルマネージャーにしますか？",
+    "defaultFileManagerBodyMac": "他アプリからファイルの場所やフォルダを開くとき、Finder の代わりに Dazzi で開けます。いつでも設定から元に戻せます。",
+    "defaultFileManagerBodyWin": "フォルダを開く操作や Win+E、他アプリの「フォルダに表示」をエクスプローラーの代わりに Dazzi で開けます。いつでも設定から元に戻せます。",
+    "defaultFileManagerEnable": "今すぐ設定",
+    "defaultFileManagerOpenSettings": "設定を開く"
   },
   "firstRun": {
     "folders": {

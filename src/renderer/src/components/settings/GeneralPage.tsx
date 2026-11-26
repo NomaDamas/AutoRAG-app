@@ -46,12 +46,19 @@ export function GeneralPage({
 		try {
 			onAppSettingsChanged(await autorag.settings.set(patch));
 		} catch (cause) {
-			// A rejected change (the right-click menu could not be written) leaves the stored setting as it was.
-			onSettingsError(t("settingsCore.general.osMenuError", { error: cause instanceof Error ? cause.message : String(cause) }));
+			// A rejected change (OS menu or default file manager registration failed) leaves the stored setting as it was.
+			const message = cause instanceof Error ? cause.message : String(cause);
+			const key = patch.defaultFileManager !== undefined || patch.defaultFileManagerInterceptReveal !== undefined
+				? "settingsCore.general.defaultFileManagerError"
+				: "settingsCore.general.osMenuError";
+			onSettingsError(t(key, { error: message }));
 		}
 	}
 	const quickSearch = typeof autorag.quickSearch?.status === "function";
-	const osMenu = hostPlatform() === "darwin" || hostPlatform() === "win32";
+	const platform = hostPlatform();
+	const osMenu = platform === "darwin" || platform === "win32";
+	const defaultFileManagerHint =
+		platform === "win32" ? t("settingsCore.general.defaultFileManagerHintWin") : t("settingsCore.general.defaultFileManagerHintMac");
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.general")} />
@@ -94,6 +101,27 @@ export function GeneralPage({
 					{osMenu ? (
 						<PlainRow name={t("settingsCore.general.osMenu")} hint={t("settingsCore.general.osMenuHint")}>
 							<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel={t("settingsCore.general.osMenu")} />
+						</PlainRow>
+					) : null}
+					{osMenu ? (
+						<PlainRow name={t("settingsCore.general.defaultFileManager")} hint={defaultFileManagerHint}>
+							<Switch
+								checked={appSettings.defaultFileManager}
+								onChange={() => void setApp({ defaultFileManager: !appSettings.defaultFileManager })}
+								ariaLabel={t("settingsCore.general.defaultFileManager")}
+							/>
+						</PlainRow>
+					) : null}
+					{platform === "win32" && appSettings.defaultFileManager ? (
+						<PlainRow
+							name={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+							hint={t("settingsCore.general.defaultFileManagerInterceptRevealHint")}
+						>
+							<Switch
+								checked={appSettings.defaultFileManagerInterceptReveal}
+								onChange={() => void setApp({ defaultFileManagerInterceptReveal: !appSettings.defaultFileManagerInterceptReveal })}
+								ariaLabel={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+							/>
 						</PlainRow>
 					) : null}
 					<PlainRow name={t("settingsCore.general.autoUpdates")} hint={t("settingsCore.general.autoUpdatesHint")}>
