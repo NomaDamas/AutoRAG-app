@@ -481,6 +481,14 @@
   --ai-glow-blur: 22px;
   --ai-glow-opacity: 0.28;
   --ai-glow-opacity-focus: 0.45;
+  /* A recommendation's light: the Settings sidebar AI card's yellow and blue (settings.css .sidebar-ai-hero), wide
+   * enough to drift slowly from side to side. */
+  --ai-glow-warm: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--tag-yellow) 70%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 50%,
+    color-mix(in srgb, var(--tag-yellow) 70%, transparent) 100%
+  );
 }
 
 /* The persisted app appearance drives Electron's nativeTheme.themeSource. Both

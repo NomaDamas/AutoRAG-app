@@ -311,6 +311,29 @@ small {
 	opacity: var(--ai-glow-opacity-focus);
 }
 
+/* A recommendation's glow: yellow and blue, as the Settings sidebar AI card, drifting slowly from side to side. */
+.ai-glow-host > .ai-glow.ai-glow-warm {
+	inset: -5px;
+	border-radius: 16px;
+	background: var(--ai-glow-warm);
+	background-size: 300% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.ai-glow-host > .ai-glow.ai-glow-warm {
+		animation: ai-glow-warm-drift 10s ease-in-out infinite alternate;
+	}
+}
+
+@keyframes ai-glow-warm-drift {
+	from {
+		background-position: 0% 50%;
+	}
+	to {
+		background-position: 100% 50%;
+	}
+}
+
 @media (prefers-reduced-motion: no-preference) {
 	[data-slide="block"],
 	[data-slide="ghost"],

@@ -1061,8 +1061,8 @@ function RecommendationCard({
 	);
 	return glow ? (
 		// Lower than the composer's glow: it invites, it does not call.
-		<div className="ai-glow-host [--ai-glow-opacity:0.16] [--ai-glow-opacity-focus:0.24] [--ai-glow-blur:18px]" data-ai-glow>
-			<div className="ai-glow" aria-hidden="true" />
+		<div className="ai-glow-host [--ai-glow-opacity:0.28] [--ai-glow-opacity-focus:0.36] [--ai-glow-blur:14px]" data-ai-glow>
+			<div className="ai-glow ai-glow-warm" aria-hidden="true" />
 			{card}
 		</div>
 	) : (
