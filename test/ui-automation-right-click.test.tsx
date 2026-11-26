@@ -66,7 +66,8 @@ describe("the 새 자동화 card's 우클릭하면 trigger", () => {
 
 		expect(host.querySelector('[data-testid="automation-request-folder"]')).toBeNull();
 		expect(host.querySelector('[data-testid="automation-request-rc-count"]')?.textContent).toBe(t("rightClickWhen.count.single"));
-		expect(host.querySelector('[data-testid="automation-request-run"]')).not.toBeNull();
+		// No AI | 스크립트 choice: the card always asks the agent.
+		expect(host.querySelector('[data-testid="automation-request-run"]')).toBeNull();
 		// A new action has no permission chip: it starts read-only.
 		expect(host.querySelector('[data-testid="automation-new-mode"]')).toBeNull();
 
@@ -150,6 +151,7 @@ describe("the 자동화 tab's right-click rows", () => {
 		expect(detail?.textContent).toContain(t("automations.detail.history"));
 		expect(detail?.querySelectorAll("[data-run]")).toHaveLength(1);
 		expect(detail?.querySelector('[data-testid="magic-detail-mode"]')).not.toBeNull();
+		expect(detail?.querySelector('[data-testid="magic-detail-run"]')).toBeNull();
 		expect(detail?.querySelector<HTMLButtonElement>('[data-action="magic-detail-save"]')?.disabled).toBe(true);
 		await act(async () => {
 			type(detail!.querySelector<HTMLTextAreaElement>('[data-testid="magic-detail-task"]')!, "다섯 줄로 요약해 줘");

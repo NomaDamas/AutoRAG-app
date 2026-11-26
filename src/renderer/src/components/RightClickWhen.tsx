@@ -100,32 +100,8 @@ export function RightClickWhen({
 	);
 }
 
+/** Whether an action asks the agent or runs a command; set when it is made, never picked in a form. */
 export type RunKind = "agent" | "script";
-
-/** AI | 스크립트, beside "Dazzi가 할 일": whether the action asks the agent or runs a command. */
-export function RunKindSegment({ value, onChange, testId }: { readonly value: RunKind; readonly onChange: (value: RunKind) => void; readonly testId: string }): ReactElement {
-	const { t } = useTranslation();
-	return (
-		<span role="radiogroup" aria-label={t("rightClickWhen.runLabel")} className="inline-flex rounded-[7px] bg-subtle-alt p-2" data-testid={testId}>
-			{(["agent", "script"] as const).map((option) => (
-				<button
-					key={option}
-					type="button"
-					role="radio"
-					aria-checked={value === option}
-					data-testid={`${testId}-${option}`}
-					className={cn(
-						"h-18 rounded-[5px] border-0 px-8 text-badge leading-[18px] cursor-pointer",
-						value === option ? "bg-window text-ink shadow-[0_0_0_0.5px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.08)]" : "bg-transparent text-ink-muted hover:text-ink",
-					)}
-					onClick={() => onChange(option)}
-				>
-					{t(`rightClickWhen.run.${option}`)}
-				</button>
-			))}
-		</span>
-	);
-}
 
 /** The 언제 sentence of a saved action as plain text ("PDF 파일 하나를 우클릭하면"), for a row that lists it. */
 export function rightClickSentence(t: TFunction, action: Pick<MagicAction, "selection" | "targetKind" | "extensions">): string {

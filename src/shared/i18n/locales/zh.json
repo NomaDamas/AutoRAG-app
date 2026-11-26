@@ -3939,11 +3939,6 @@
       "single": "当{{event}}{{count}}{{kind}}时",
       "multiple": "当{{event}}{{count}}{{kind}}时",
       "any": "当{{event}}{{count}}{{kind}}时"
-    },
-    "runLabel": "执行方式",
-    "run": {
-      "agent": "AI",
-      "script": "脚本"
     }
   }
 }

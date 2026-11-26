@@ -3939,11 +3939,6 @@
       "single": "When {{kind}} {{event}} {{count}}",
       "multiple": "When {{kind}} {{event}} {{count}}",
       "any": "When {{kind}} {{event}} {{count}}"
-    },
-    "runLabel": "How it runs",
-    "run": {
-      "agent": "AI",
-      "script": "Script"
     }
   }
 }

@@ -25,7 +25,7 @@ import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickKindOf
 import { onMagicActionDone } from "../hooks/useMagicAction";
 import { ConfirmDialog } from "./primitives/ConfirmDialog";
 import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
-import { RightClickWhen, RunKindSegment, rightClickSentence, type RunKind } from "./RightClickWhen";
+import { RightClickWhen, rightClickSentence, type RunKind } from "./RightClickWhen";
 import { openErrorFixDialog, startErrorFix, useErrorFixStore } from "../hooks/useErrorFix";
 import { ErrorDetails } from "./ErrorDetails";
 import { NoticeCard } from "./primitives/NoticeCard";
@@ -708,10 +708,8 @@ function MagicActionCard({ action, onSave }: { readonly action: MagicAction; rea
 				onCustom={set("custom")}
 				onSelection={set("selection")}
 			/>
-			<div className="mt-4 flex h-22 items-center justify-between">
-				<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.detail.task")}</span>
-				<RunKindSegment value={form.runKind} testId="magic-detail-run" onChange={set("runKind")} />
-			</div>
+			{/* No AI | 스크립트 choice: an action stays what it was made as (the assistant decides that when it makes one). */}
+			<span className="mt-4 flex h-22 items-center text-meta font-medium leading-[16px] text-ink-muted">{t("automations.detail.task")}</span>
 			<textarea
 				data-testid="magic-detail-task"
 				value={form.task}
@@ -1475,7 +1473,6 @@ export function AutomationDraftCard({
 	const [clickKind, setClickKind] = useState<RightClickKind>("pdf");
 	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(null);
 	const [selection, setSelection] = useState<MagicActionSelectionRule>("single");
-	const [runKind, setRunKind] = useState<RunKind>("agent");
 	const standard = standardFolders(locations);
 	const folders = folder === null || standard.some((option) => option.value === folder) ? standard : [...standard, { value: folder, label: folderLabel(folder), icon: <FolderGlyph size={13} /> }];
 	const draft: AutomationDraft | null =
@@ -1501,7 +1498,6 @@ export function AutomationDraftCard({
 	};
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
 	const canSubmit = (rightClick ? task.trim().length > 0 : draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0)) && !busy;
-	const script = rightClick && runKind === "script";
 	/** 우클릭하면: the card as the right-click menu action it makes, named from what it does. */
 	const magicAction = (): MagicAction | null =>
 		normalizeMagicAction({
@@ -1509,7 +1505,8 @@ export function AutomationDraftCard({
 			enabled: true,
 			selection,
 			...rightClickTarget(clickKind, customExtensions),
-			execution: script ? { kind: "script", command: task } : { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
+			// The card always asks the agent; a script action is made by asking the assistant, which decides.
+			execution: { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
 		});
 	return (
 		<div className="flex flex-col gap-8 rounded-12 border border-border bg-window p-12" data-automation-request>
@@ -1536,11 +1533,7 @@ export function AutomationDraftCard({
 					)}
 				</div>
 			)}
-			{/* One height with or without the AI | 스크립트 toggle, so the card keeps its shape whichever trigger is picked. */}
-			<div className="flex h-22 items-center justify-between">
-				<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
-				{rightClick ? <RunKindSegment value={runKind} testId="automation-request-run" onChange={setRunKind} /> : null}
-			</div>
+			<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
 			{rule.agent === undefined ? (
 				<code className="block rounded-6 bg-subtle-alt px-8 py-6 font-mono text-badge leading-[16px] text-ink [overflow-wrap:anywhere]" data-testid="automation-request-command">
 					{(rule.run ?? []).join(" ")}
@@ -1550,16 +1543,9 @@ export function AutomationDraftCard({
 					value={task}
 					rows={2}
 					aria-label={t("automations.create.task")}
-					placeholder={
-						script
-							? t(hostPlatform() === "win32" ? "settingsCore.contextMenu.editor.commandPlaceholderWindows" : "settingsCore.contextMenu.editor.commandPlaceholder")
-							: t("automations.create.taskPlaceholder")
-					}
+					placeholder={t("automations.create.taskPlaceholder")}
 					data-testid="automation-request-task"
-					className={cn(
-						"w-full resize-none rounded-6 border-[0.5px] border-divider bg-subtle-alt px-8 py-6 text-meta leading-[18px] text-ink outline-none focus:border-accent",
-						script && "font-mono",
-					)}
+					className="w-full resize-none rounded-6 border-[0.5px] border-divider bg-subtle-alt px-8 py-6 text-meta leading-[18px] text-ink outline-none focus:border-accent"
 					onChange={(change) => setTask(change.target.value)}
 				/>
 			)}

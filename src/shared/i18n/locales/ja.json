@@ -3939,11 +3939,6 @@
       "single": "{{kind}}を{{count}}{{event}}とき",
       "multiple": "{{kind}}を{{count}}{{event}}とき",
       "any": "{{kind}}を{{count}}{{event}}とき"
-    },
-    "runLabel": "実行方法",
-    "run": {
-      "agent": "AI",
-      "script": "スクリプト"
     }
   }
 }

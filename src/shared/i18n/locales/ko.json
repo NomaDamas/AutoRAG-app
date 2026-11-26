@@ -3939,11 +3939,6 @@
       "single": "{{kind}} {{count}}를 {{event}}",
       "multiple": "{{kind}} {{count}}를 {{event}}",
       "any": "{{kind}} {{count}}을 {{event}}"
-    },
-    "runLabel": "처리 방식",
-    "run": {
-      "agent": "AI",
-      "script": "스크립트"
     }
   }
 }
