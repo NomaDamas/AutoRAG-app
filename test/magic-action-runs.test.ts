@@ -32,8 +32,8 @@ describe("the right-click actions' run log", () => {
 		log.record({ type: "cancelled", runId: "r3", actionLabel: "summary" });
 
 		expect(await log.history("summary")).toEqual([
-			{ startedAt: 3_000, durationMs: 1_000, eventCount: 1, exitCode: null, signal: null, timedOut: false, error: "model unavailable" },
-			{ startedAt: 1_000, durationMs: 2_000, eventCount: 2, exitCode: 0, signal: null, timedOut: false },
+			{ startedAt: 3_000, durationMs: 1_000, eventCount: 1, exitCode: null, signal: null, timedOut: false, files: ["/a.pdf"], error: "model unavailable" },
+			{ startedAt: 1_000, durationMs: 2_000, eventCount: 2, exitCode: 0, signal: null, timedOut: false, files: ["/a.pdf", "/b.pdf"] },
 		]);
 		expect(await log.history("other")).toEqual([]);
 		// A new log over the same file reads what was kept.

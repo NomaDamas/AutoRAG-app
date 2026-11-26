@@ -23,7 +23,7 @@ export interface MagicActionRunLog {
 type LogFile = Record<string, readonly AutomationRun[]>;
 
 export function createMagicActionRunLog({ file, now = () => Date.now() }: { readonly file: string; readonly now?: () => number }): MagicActionRunLog {
-	const open = new Map<string, { readonly actionId: string; readonly startedAt: number; readonly files: number }>();
+	const open = new Map<string, { readonly actionId: string; readonly startedAt: number; readonly files: readonly string[] }>();
 	let cache: LogFile | null = null;
 	// Writes go one after another, so two runs ending together cannot lose each other.
 	let queue: Promise<void> = Promise.resolve();
@@ -55,14 +55,14 @@ export function createMagicActionRunLog({ file, now = () => Date.now() }: { read
 	return {
 		record(event) {
 			if (event.type === "started") {
-				open.set(event.runId, { actionId: event.actionId, startedAt: now(), files: event.paths.length });
+				open.set(event.runId, { actionId: event.actionId, startedAt: now(), files: event.paths });
 				return;
 			}
 			if (event.type !== "done" && event.type !== "error" && event.type !== "cancelled") return;
 			const started = open.get(event.runId);
 			open.delete(event.runId);
 			if (started === undefined || event.type === "cancelled") return;
-			const base = { startedAt: started.startedAt, durationMs: Math.max(0, now() - started.startedAt), eventCount: started.files, signal: null, timedOut: false };
+			const base = { startedAt: started.startedAt, durationMs: Math.max(0, now() - started.startedAt), eventCount: started.files.length, signal: null, timedOut: false, files: started.files };
 			append(
 				started.actionId,
 				event.type === "done"

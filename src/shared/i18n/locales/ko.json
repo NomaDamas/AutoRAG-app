@@ -624,7 +624,8 @@
       "matches": "조건에 맞는 파일 {{count}}개",
       "noMatches": "지금은 조건에 맞는 파일이 없습니다",
       "notRun": "아직 실행되지 않음",
-      "runFiles": "파일 {{count}}개"
+      "runFiles": "파일 {{count}}개",
+      "runFilesMore": "{{name}} 외 {{count}}개"
     },
     "quickLook": {
       "when": "언제",
@@ -689,7 +690,9 @@
       "program": "{{name}} 프로그램으로 처리"
     },
     "time": {
-      "now": "방금"
+      "now": "방금",
+      "todayAt": "오늘 {{time}}",
+      "yesterdayAt": "어제 {{time}}"
     },
     "lastRun": {
       "never": "아직 실행 안 됨",
@@ -776,7 +779,8 @@
       "ok": "성공",
       "failed": "실패",
       "settings": "설정",
-      "history": "실행 기록"
+      "history": "실행 기록",
+      "task": "할 일"
     },
     "tabs": {
       "rules": "자동화",

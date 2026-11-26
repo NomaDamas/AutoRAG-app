@@ -624,7 +624,8 @@
       "matches": "符合条件的文件 {{count}} 个",
       "noMatches": "目前没有符合条件的文件",
       "notRun": "尚未运行",
-      "runFiles": "文件 {{count}} 个"
+      "runFiles": "文件 {{count}} 个",
+      "runFilesMore": "{{name}} 等 {{count}} 个"
     },
     "quickLook": {
       "when": "何时",
@@ -689,7 +690,9 @@
       "program": "由 {{name}} 处理"
     },
     "time": {
-      "now": "刚刚"
+      "now": "刚刚",
+      "todayAt": "今天 {{time}}",
+      "yesterdayAt": "昨天 {{time}}"
     },
     "lastRun": {
       "never": "尚未运行",
@@ -776,7 +779,8 @@
       "ok": "成功",
       "failed": "失败",
       "settings": "设置",
-      "history": "运行记录"
+      "history": "运行记录",
+      "task": "任务"
     },
     "tabs": {
       "rules": "自动化",
