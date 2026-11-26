@@ -496,22 +496,17 @@
   },
   "interaction": {
     "mode": {
-      "menuLabel": "文件更改审批",
-      "triggerAria": "文件更改审批模式",
-      "ask": {
-        "label": "每次询问",
-        "desc": "修改文件或运行命令前每次都会询问。\n读取和搜索不会询问。",
-        "option": "每次询问"
-      },
-      "auto": {
-        "label": "必要时",
-        "desc": "符合请求的操作直接进行，只在不确定时询问。",
-        "option": "必要时询问"
+      "menuLabel": "文件权限",
+      "triggerAria": "文件权限模式",
+      "readonly": {
+        "label": "只读",
+        "desc": "仅读取和搜索。系统沙箱会阻止创建、编辑或删除文件。",
+        "option": "只读"
       },
       "full": {
-        "label": "不询问",
-        "desc": "不询问，直接修改文件或运行命令。",
-        "option": "不询问"
+        "label": "全部允许",
+        "desc": "允许创建、编辑和删除文件。",
+        "option": "全部允许"
       }
     },
     "stop": "停止",

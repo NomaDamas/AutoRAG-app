@@ -6,13 +6,16 @@ import { pathFromPreviewUrl, videoAudioTrackFromUrl } from "../shared/contract";
 import { parseByteRange } from "../shared/range";
 import { mimeForExtension } from "../shared/registry";
 import { videoAudioResponse } from "./video-audio";
-import { coordinatedRange, needsFileCoordination } from "./provider-access";
-
+import { coordinatedRange, isDatalessFile, needsFileCoordination } from "./provider-access";
 function isEnoent(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
 async function* fileChunks(filePath: string, start: number, end: number): AsyncGenerator<Buffer> {
+	if (await isDatalessFile(filePath)) {
+		yield* coordinatedRange(filePath, start, end);
+		return;
+	}
 	let offset = start;
 	try {
 		for await (const chunk of createReadStream(filePath, { start, end })) {

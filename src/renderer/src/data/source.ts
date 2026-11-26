@@ -88,6 +88,7 @@ export interface FinderSource {
 	 * another pass filled in meanwhile is never overwritten.
 	 */
 	enrich(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
+	enrichKinds?(entries: readonly FinderEntry[]): Promise<readonly FsEntryEnrichment[]>;
 	/**
 	 * Finder metadata (tags, dates, dimensions, default app) for the same rows,
 	 * also kept in the sidecar. Separate from `enrich` because it is far slower
@@ -234,6 +235,7 @@ export function createBridgeSource(
 			return listing.entries.map(entryFromFs);
 		},
 		enrich: (entries) => fs.enrichEntries(enrichmentTargets(entries), true),
+		enrichKinds: (entries) => fs.enrichEntries(enrichmentTargets(entries), false),
 		finderMetadata: (entries) => fs.finderMetadata(enrichmentTargets(entries)),
 		async readEntries(dir, paths) {
 			const patch = await fs.readEntries(dir, paths);

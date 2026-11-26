@@ -159,22 +159,26 @@ describe("createSettingsService", () => {
 		expect((await reloaded.get()).showHiddenFiles).toBe(true);
 	});
 
-	it("starts the approval mode on full, persists a choice, and never keeps a value that is not a mode", async () => {
+	it("starts the permission mode on readonly, migrates legacy ask/auto, persists a choice, and never keeps an invalid value", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-approval-"));
 		directories.push(directory);
 		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
-		expect((await service.get()).approvalMode).toBe("full");
+		expect((await service.get()).approvalMode).toBe("readonly");
 
-		await service.set({ approvalMode: "ask" });
+		await service.set({ approvalMode: "full" });
 		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
-		expect((await reloaded.get()).approvalMode).toBe("ask");
+		expect((await reloaded.get()).approvalMode).toBe("full");
 
-		// A patch or a stored file carrying anything else leaves the last good mode (or the default for a bad file).
+		// A patch carrying anything invalid leaves the last good mode.
 		await reloaded.set({ approvalMode: "yolo" as never });
-		expect((await reloaded.get()).approvalMode).toBe("ask");
+		expect((await reloaded.get()).approvalMode).toBe("full");
+		// Legacy `ask` / `auto` stored by earlier Dazzi versions migrate safely to `readonly`.
+		await writeFile(join(directory, "settings-state.json"), JSON.stringify({ settings: { approvalMode: "auto" }, permissions: {} }));
+		const migrated = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect((await migrated.get()).approvalMode).toBe("readonly");
 		await writeFile(join(directory, "settings-state.json"), JSON.stringify({ settings: { approvalMode: "yolo" }, permissions: {} }));
 		const corrupted = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
-		expect((await corrupted.get()).approvalMode).toBe("full");
+		expect((await corrupted.get()).approvalMode).toBe("readonly");
 	});
 
 	it("defaults to light appearance and persists the global dark choice", async () => {

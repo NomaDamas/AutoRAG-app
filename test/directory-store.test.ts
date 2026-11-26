@@ -407,4 +407,64 @@ describe("directory store", () => {
 		await settle();
 		expect(store.get("/shown")?.entries.map((row) => row.path)).toEqual(["/shown/a.md", "/shown/c.md"]);
 	});
+
+	it("enriches large folders in 24-entry waves so the first screenful paints immediately and stops waves on eviction", async () => {
+		const h = harness();
+		const store = createDirectoryStore({ source: h.source, sidecar: h.sidecar, capacity: 0 });
+		const release = store.retain("/big");
+		void store.load("/big", "navigate");
+		const rows = Array.from({ length: 60 }, (_, i) => entry(`/big/img-${i}.png`));
+		h.lists[0]?.answer.resolve(rows);
+		await settle();
+
+		// Wave 1 asks only for the first 24 visible entries, not all 60 at once.
+		expect(h.enrich).toHaveLength(1);
+		expect(h.enrich[0]?.entries).toHaveLength(24);
+		h.enrich[0]?.answer.resolve(
+			h.enrich[0].entries.map((row) => ({ path: row.path, mtimeMs: STAMP, osKind: "PNG image", iconUrl: `thumb://${row.name}` })),
+		);
+		await settle();
+		// First 24 icons are ALREADY live in the sidecar before Wave 2 finishes!
+		expect(h.sidecar.resolve(rows[0]!).iconUrl).toBe("thumb://img-0.png");
+		expect(h.enrich).toHaveLength(2);
+		expect(h.enrich[1]?.entries).toHaveLength(24);
+
+		// Evicting the folder before Wave 2 resolves stops Wave 3 from ever firing.
+		release();
+		h.enrich[1]?.answer.resolve([]);
+		await settle();
+		expect(h.enrich).toHaveLength(2);
+	});
+
+	it("uses enrichKinds (no off-screen thumbnails) past the first 24 rows so scrolling never queues behind hundreds of off-screen files", async () => {
+		const h = harness();
+		const enrichKindsCalls: (readonly FinderEntry[])[] = [];
+		const sourceWithKinds: DirectorySource = {
+			...h.source,
+			enrichKinds: async (entries) => {
+				enrichKindsCalls.push(entries);
+				return entries.map((row) => ({ path: row.path, mtimeMs: STAMP, osKind: "JPEG image", iconUrl: null }));
+			},
+		};
+		const store = createDirectoryStore({ source: sourceWithKinds, sidecar: h.sidecar, iconFlushMs: 10 });
+		store.retain("/scroll");
+		void store.load("/scroll", "navigate");
+		const rows = Array.from({ length: 60 }, (_, i) => entry(`/scroll/img-${i}.jpg`));
+		h.lists[0]?.answer.resolve(rows);
+		await settle();
+
+		// Only the first 24 rows ask for thumbnails up front; rows 24..59 ask for OS kinds only!
+		expect(h.enrich).toHaveLength(1);
+		expect(h.enrich[0]?.entries).toHaveLength(24);
+		h.enrich[0]?.answer.resolve(
+			h.enrich[0].entries.map((row) => ({ path: row.path, mtimeMs: STAMP, osKind: "JPEG image", iconUrl: `thumb://${row.name}` })),
+		);
+		await settle();
+		expect(h.enrich).toHaveLength(1);
+		expect(enrichKindsCalls.flat().map((r) => r.path)).toEqual(rows.slice(24).map((r) => r.path));
+		// Off-screen row 50 has its OS kind, and iconUrl stays undefined so requestIcon loads it immediately on scroll!
+		const resolved50 = h.sidecar.resolve(rows[50]!);
+		expect(resolved50.osKind).toBe("JPEG image");
+		expect(resolved50.iconUrl).toBeUndefined();
+	});
 });

@@ -1,6 +1,7 @@
 import { extname } from "node:path";
 import { readIcnsPreview } from "./icns-preview";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail, type EmbeddedThumbnail } from "./odf";
+import { isDatalessFile } from "./provider-access";
 import { readPsdComposite, readPsdThumbnail } from "./psd-preview";
 import { RAW_EXTENSIONS, readRawPreview } from "./raw-preview";
 import { readXmpThumbnail } from "./xmp-thumbnail";
@@ -22,7 +23,6 @@ export const EMBEDDED_IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
 	"eps",
 	"icns",
 ]);
-
 export interface EmbeddedImageOptions {
 	/**
 	 * The longest side in pixels the caller will draw (a tile asks for 128, the
@@ -53,6 +53,7 @@ export async function readEmbeddedImage(path: string, ext: string = extname(path
 	const key = ext.toLowerCase().replace(/^\./, "");
 	const want = options.want;
 	const wanting = want === undefined ? {} : { want };
+	if (await isDatalessFile(path)) return null;
 	if (EMBEDDED_THUMBNAIL_EXTENSIONS.has(key)) return readEmbeddedThumbnail(path, key);
 	if (RAW_EXTENSIONS.has(key)) return readRawPreview(path, key, wanting);
 	switch (key) {

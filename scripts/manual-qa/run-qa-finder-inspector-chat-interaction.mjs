@@ -265,32 +265,22 @@ await idle();
 await sleep(800);
 check("Stop drops the queued question: it is not asked", (await inspector.locator(".inspector-chat-question").count()) === 1 && (await inspector.locator(".queued-question").count()) === 0);
 
-// ── 3. Approval in the sidebar. ───────────────────────────────────────────
-await page.evaluate(() => window.autorag.interaction.setMode("ask"));
+// ── 3. Read-only vs Full in the sidebar. ──────────────────────────────────
+await page.evaluate(() => window.autorag.interaction.setMode("readonly"));
 const shellPath = (path) => path.replaceAll("\\", "/");
 const deleteOld = [{ text: "Looking at it." }, { tool: "bash", args: { command: `rm ${shellPath(file("old-draft.txt"))}` } }, { text: "Handled." }];
 script(deleteOld);
 await askFresh("remove the stale draft");
-await approval.waitFor();
-check("the approval card is inside the sidebar chat", (await inspector.locator('[role="alertdialog"]').count()) === 1);
-check("the card replaces the composer", (await inspector.locator("textarea").count()) === 0);
-check("the card names the call", (await approval.innerText()).includes(`rm ${shellPath(file("old-draft.txt"))}`), (await approval.innerText()).slice(0, 200));
-await shot("04-approval-in-sidebar");
-await approval.getByRole("button", { name: "Skip", exact: true }).click();
 await idle();
-check("Deny keeps the file", existsSync(file("old-draft.txt")));
-check("the model was told it was denied", toolResults().some((text) => /denied/i.test(text)), JSON.stringify(toolResults()));
-check("the composer is back", (await chatInput.count()) === 1);
+check("Read-only keeps the file intact without opening an approval card", existsSync(file("old-draft.txt")) && (await approval.count()) === 0);
 
+await page.evaluate(() => window.autorag.interaction.setMode("full"));
 script(deleteOld);
 await askFresh("really remove the stale draft");
-await approval.waitFor();
-await approval.getByRole("button", { name: "Allow once" }).click();
 await idle();
-check("Allow once runs the call", !existsSync(file("old-draft.txt")));
+check("Full lets the delete run", !existsSync(file("old-draft.txt")));
 check("nothing is left open in the main process", (await pending()).length === 0);
 seed();
-await page.evaluate(() => window.autorag.interaction.setMode("full"));
 
 // ── 4. ask_user in the sidebar. ───────────────────────────────────────────
 const SINGLE = {
@@ -344,7 +334,7 @@ script([{ text: "Checking." }, { tool: "ask_user", args: BATCH }, { text: "Done.
 await askFresh("convert them to gif");
 await question.waitFor();
 await question.getByRole("radio", { name: /All six/ }).click();
-await question.getByRole("button", { name: "Next" }).click();
+await question.getByRole("button", { name: "Next", exact: true }).click();
 await shot("06-batch-in-sidebar");
 const geometry = await page.evaluate(() => {
 	const root = document.querySelector(".inspector-chat");

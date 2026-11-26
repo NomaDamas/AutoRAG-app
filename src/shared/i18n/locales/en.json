@@ -496,22 +496,17 @@
   },
   "interaction": {
     "mode": {
-      "menuLabel": "File change approval",
-      "triggerAria": "File change approval mode",
-      "ask": {
-        "label": "Always ask",
-        "desc": "Asks every time before changing a file or running a command.\nReading and searching never ask.",
-        "option": "Always ask"
-      },
-      "auto": {
-        "label": "When unsure",
-        "desc": "Goes ahead with work that matches your request and asks only about work it is not sure of.",
-        "option": "Ask when unsure"
+      "menuLabel": "File permissions",
+      "triggerAria": "File permission mode",
+      "readonly": {
+        "label": "Read-only",
+        "desc": "Reads and searches only. OS sandboxing blocks creating, editing, or deleting files.",
+        "option": "Read-only"
       },
       "full": {
-        "label": "Don't ask",
-        "desc": "Changes files and runs commands without asking.",
-        "option": "Don't ask"
+        "label": "Full",
+        "desc": "Allows creating, editing, and deleting files.",
+        "option": "Full"
       }
     },
     "stop": "Stop",

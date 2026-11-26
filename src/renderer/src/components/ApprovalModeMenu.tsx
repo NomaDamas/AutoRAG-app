@@ -1,6 +1,6 @@
 /**
- * The approval-mode pill inside the composer (librarian v2.12). It shows the
- * mode now in force — Ask / Auto / Full — and opens a small menu to change it.
+ * The permission-mode pill inside the composer (librarian v2.15). It shows the
+ * mode now in force — Read-only / Full — and opens a small menu to change it.
  * Nothing runs through it: the panel reads the initial mode with
  * `interaction.getMode()`, changes it with `setMode()`, and keeps every window's
  * pill in sync through `onMode`.
@@ -45,7 +45,7 @@ export interface ApprovalModeMenuProps {
  * The mode a pill reads and writes: the stored value via `getMode`, every change
  * another window or the main process makes via `onMode`, and a `setMode` that
  * adopts the mode the main process resolved to rather than the one requested.
- * `auto` shows until the first read answers.
+ * `readonly` shows until the first read answers.
  */
 export function useApprovalMode(): { readonly mode: ApprovalMode; readonly setMode: (mode: ApprovalMode) => void } {
 	const [mode, setModeState] = useState<ApprovalMode>(DEFAULT_APPROVAL_MODE);

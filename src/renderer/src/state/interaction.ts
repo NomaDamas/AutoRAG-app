@@ -54,9 +54,9 @@ export function frontRequest(queue: InteractionQueue, searchId: string): Interac
 
 // ------------------------------------------------------------- mode labels
 
-export type ModeLabelKey = "interaction.mode.ask.label" | "interaction.mode.auto.label" | "interaction.mode.full.label";
+export type ModeLabelKey = "interaction.mode.readonly.label" | "interaction.mode.full.label";
 
-export type ModeDescriptionKey = "interaction.mode.ask.desc" | "interaction.mode.auto.desc" | "interaction.mode.full.desc";
+export type ModeDescriptionKey = "interaction.mode.readonly.desc" | "interaction.mode.full.desc";
 
 export function modeLabelKey(mode: ApprovalMode): ModeLabelKey {
 	return `interaction.mode.${mode}.label`;

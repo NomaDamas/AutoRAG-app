@@ -4,8 +4,7 @@ import { t } from "../../shared/i18n/core";
 import type { PreviewDocument } from "../shared/contract";
 import { mimeForExtension } from "../shared/registry";
 import { readCoordinatedHead } from "./coordinated-read";
-import { needsFileCoordination } from "./provider-access";
-
+import { isDatalessFile, needsFileCoordination } from "./provider-access";
 /** Documents parsed whole (PDF, Office, archives) are read up to this size. */
 export const PREVIEW_BYTE_CAP = 32 * 1024 * 1024;
 /** Text, code, Markdown, and HTML show at most their first 4MB: more would only slow the window down. */
@@ -27,8 +26,13 @@ function isEnoent(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
-/** The first `length` bytes of a file, coordinating on macOS if a file provider refuses POSIX access. */
+/**
+ * The first `length` bytes of a file, coordinating on macOS when the file is an
+ * unmaterialized cloud placeholder (`SF_DATALESS`, so libuv threads never block on
+ * iCloud downloads) or when a file provider refuses POSIX access (`EDEADLK`).
+ */
 export async function readHead(filePath: string, length: number): Promise<Uint8Array> {
+	if (await isDatalessFile(filePath)) return readCoordinatedHead(filePath, length);
 	try {
 		return await readPosixHead(filePath, length);
 	} catch (error) {

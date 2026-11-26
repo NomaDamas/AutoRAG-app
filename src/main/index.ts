@@ -9,6 +9,9 @@ import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
 import toolPins from "../shared/tool-pins.json";
 import { createToolVersionsService } from "./tool-versions";
+// Expand libuv's default 4-thread pool before any async fs work runs so concurrent
+// multi-pane listings, watches, and previews never queue behind 4 worker threads.
+process.env.UV_THREADPOOL_SIZE ??= "16";
 import {
 	app,
 	autoUpdater as nativeAutoUpdater,
@@ -122,6 +125,7 @@ import {
 } from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { migrateLegacyJev } from "./jev-migration";
+import { migrateLegacyPermissionMode } from "./permission-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
@@ -230,12 +234,13 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
-/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has, and the Jev settings the librarian now refuses. */
+/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has, and the Jev / permission settings the librarian now refuses. */
 function migrateEmbeddingConfig(configPath: string): void {
 	try {
 		const embedding = migrateLegacyEmbedding(readRawConfigObject(configPath));
 		const jev = migrateLegacyJev(embedding.raw);
-		if (embedding.changed || jev.changed) writeConfigObject(configPath, jev.raw);
+		const permission = migrateLegacyPermissionMode(jev.raw);
+		if (embedding.changed || jev.changed || permission.changed) writeConfigObject(configPath, permission.raw);
 	} catch (error) {
 		console.error("AutoRAG config migration failed", error);
 	}

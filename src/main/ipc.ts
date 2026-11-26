@@ -165,7 +165,7 @@ export interface InteractionIpcDeps {
 export function registerInteractionIpcHandlers(deps: InteractionIpcDeps): void {
 	ipcMain.handle(INTERACTION_CHANNELS.getMode, () => deps.getMode());
 	ipcMain.handle(INTERACTION_CHANNELS.setMode, (_event, mode: unknown) => {
-		if (!isApprovalMode(mode)) throw new TypeError("interaction:setMode expects ask, auto or full");
+		if (!isApprovalMode(mode)) throw new TypeError("interaction:setMode expects readonly or full");
 		return deps.setMode(mode);
 	});
 	ipcMain.handle(INTERACTION_CHANNELS.pending, () => deps.hub.pending());

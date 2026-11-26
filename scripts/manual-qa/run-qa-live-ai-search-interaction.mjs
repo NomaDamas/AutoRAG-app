@@ -231,7 +231,7 @@ try {
 		}
 	};
 
-	check("the mode defaults to full", (await page.evaluate(() => window.autorag.interaction.getMode())) === "full");
+	check("the mode defaults to readonly", (await page.evaluate(() => window.autorag.interaction.getMode())) === "readonly");
 
 	// ── 1. The model asks which report to summarize. ────────────────────────
 	await send(
@@ -273,45 +273,28 @@ try {
 		throw new Error("the run did not finish");
 	};
 	const chooseMode = async (label) => {
-		await page.locator('button[aria-label="File change approval mode"]').click();
+		await page.locator('button[aria-label="File permission mode"]').click();
 		await page.locator('[role="menuitemradio"]', { hasText: new RegExp(`^\\s*${label}`) }).click();
 	};
 	const deleteRequest = `Run exactly this shell command and nothing else: rm ${file("old-draft.txt")} (I confirm: it is a stale draft and I want it gone.)`;
 
-	// ── 2. Ask: the model's shell calls reach the person. ────────────────────
-	await chooseMode("Ask");
+	// ── 2. Read-only: OS sandbox blocks deletion without opening approval cards. ─
+	await chooseMode("Read-only");
 	await send(deleteRequest, { fresh: true });
-	const denied = await resolveCards("Deny");
-	check("the approval card shows the model's command", denied.length > 0 && denied.some((card) => card.includes(DOCS)), denied.map((card) => card.slice(0, 120).replace(/\s+/g, " ")).join(" || "));
-	check("Deny keeps the file", existsSync(file("old-draft.txt")));
-	check("no run error after Deny", (await runError()) === "", await runError());
-	await shot("live-04-after-deny");
+	const inReadOnly = await resolveCards("Deny");
+	check("Read-only keeps the file intact via OS sandbox with no approval dialog", existsSync(file("old-draft.txt")) && inReadOnly.length === 0, `cards=${inReadOnly.length}`);
+	check("no run error in Read-only", (await runError()) === "", await runError());
+	await shot("live-04-after-readonly");
 
-	await send(deleteRequest, { fresh: true });
-	const allowed = await resolveCards("Allow once");
-	console.log(`Allow once answered ${allowed.length} card(s); model said: ${(await answerText()).replace(/\s+/g, " ").slice(-300)}`);
-	check("Allow once lets the delete run", !existsSync(file("old-draft.txt")), `cards=${allowed.length}`);
-	check("no run error after Allow", (await runError()) === "", await runError());
-
-	// ── 3. Full: no card. ────────────────────────────────────────────────────
+	// ── 3. Full: no card, deletion runs. ─────────────────────────────────────
 	seed();
 	await chooseMode("Full");
 	await send(deleteRequest, { fresh: true });
 	const shownInFull = await resolveCards("Deny");
 	console.log(`Full: model said: ${(await answerText()).replace(/\s+/g, " ").slice(-400)}`);
-	// The gate is what Full switches off; what the model then does with the file (rm, or the trash its rules prefer) is its own call.
 	console.log(`Full: file still on disk: ${existsSync(file("old-draft.txt"))}`);
 	check("Full runs the shell calls without an approval card", shownInFull.length === 0, `cards=${shownInFull.length}`);
 	check("no run error in Full", (await runError()) === "", await runError());
-
-	// ── 4. Auto with Dazzi's judgment model (Jev): an explicit request that covers the call is let through, or asked about with Jev's reason. ──
-	seed();
-	await chooseMode("Auto");
-	await send(deleteRequest, { fresh: true });
-	const inAuto = await resolveCards("Allow once");
-	console.log(`Auto asked ${inAuto.length} time(s)${inAuto.length > 0 ? `: ${inAuto[0].replace(/\s+/g, " ").slice(0, 300)}` : " (Jev let it through)"}; model said: ${(await answerText()).replace(/\s+/g, " ").slice(-300)}`);
-	check("Auto removes the file the person explicitly asked to delete (Jev let it through or the person allowed it)", !existsSync(file("old-draft.txt")), `asked=${inAuto.length}`);
-	check("no run error in Auto", (await runError()) === "", await runError());
 	if (OPENROUTER_MODEL === "") check("the model request went through the Dazzi service", forwarded.some((entry) => entry.startsWith("POST /v1/")), forwarded.slice(-3).join(", "));
 
 	// ── 5. The chat is one conversation: the model remembers what the person told it, and still does after a restart. ──
