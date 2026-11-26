@@ -159,7 +159,10 @@ describe("the 자동화 tab's right-click rows", () => {
 		expect(onUpdateMagicAction.mock.calls[0]![0]).toMatchObject({ id: "pdf-summary", execution: { kind: "agent", prompt: "다섯 줄로 요약해 줘" } });
 
 		await act(async () => detail!.querySelector<HTMLButtonElement>('[data-action="magic-delete"]')?.click());
-		const confirm = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === t("automations.detail.delete") && button.closest('[data-magic-action-detail]') === null);
+		// The same dialog as deleting a rule: what stays, and the red 삭제.
+		expect(document.body.textContent).toContain(t("automations.confirm.magicMessage"));
+		const confirm = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === t("automations.confirm.action") && button.closest('[data-magic-action-detail]') === null);
+		expect(confirm?.classList.contains("is-danger")).toBe(true);
 		await act(async () => confirm?.click());
 		expect(onDeleteMagicAction).toHaveBeenCalledWith("pdf-summary");
 	});

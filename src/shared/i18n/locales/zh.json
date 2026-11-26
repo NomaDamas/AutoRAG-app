@@ -641,6 +641,7 @@
     "confirm": {
       "title": "要删除规则“{{title}}”吗？",
       "message": "只会删除这条规则，文件夹和文件保持不变。",
+      "magicMessage": "只会从右键菜单中移除，文件和文件夹保持不变。",
       "action": "删除"
     },
     "toast": {

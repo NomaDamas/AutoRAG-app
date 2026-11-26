@@ -641,6 +641,7 @@
     "confirm": {
       "title": "Delete the rule “{{title}}”?",
       "message": "Only the rule is removed; the folder and its files stay as they are.",
+      "magicMessage": "It only leaves the right-click menu; your files and folders stay as they are.",
       "action": "Delete"
     },
     "toast": {

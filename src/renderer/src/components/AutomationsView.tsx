@@ -1842,9 +1842,10 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 			{confirmMagic === null ? null : (
 				<ConfirmDialog
 					title={t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: confirmMagic.label })}
-					message={t("settingsCore.contextMenu.removeMagicConfirmBody")}
-					confirmLabel={t("automations.detail.delete")}
+					message={t("automations.confirm.magicMessage")}
+					confirmLabel={t("automations.confirm.action")}
 					cancelLabel={t("common.cancel")}
+					danger
 					onCancel={() => setConfirmMagic(null)}
 					onConfirm={() => {
 						const id = confirmMagic.id;
