@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appCustomizerProfile, createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
+import { createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import { createAppCustomizerService } from "../src/main/app-customizer-service";
 import { createSettingsService } from "../src/main/settings-service";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
@@ -69,7 +70,7 @@ function createStubSettings(onChanged?: () => void) {
 	});
 }
 
-describe("app-customizer pi agent profile & toolkit", () => {
+describe("app-customizer toolkit & settings-customizer profile", () => {
 	it("exposes structured customization tools with no raw filesystem/shell tools and states the AI Search & Automations lock rule", () => {
 		const settings = createStubSettings();
 		const kit = createAppCustomizerToolkit({
@@ -78,15 +79,14 @@ describe("app-customizer pi agent profile & toolkit", () => {
 			listTags: async () => TAGS,
 			homeDir: root,
 		});
-		const profile = appCustomizerProfile({ language: "ko", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "sidebar", toolkit: kit });
 
-		expect(profile.id).toBe("app-customizer");
+		expect(profile.id).toBe("settings-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual([
 			"delete_magic_action",
 			"get_app_settings",
 			"update_context_menu",
-			"update_general_settings",
 			"update_sidebar",
 			"upsert_magic_action",
 		]);
@@ -260,7 +260,7 @@ describe("app-customizer pi agent profile & toolkit", () => {
 		expect((await settings.get()).contextMenu.hiddenItems).toEqual([]);
 		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
 
-		const profile = appCustomizerProfile({ language: "ko", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "contextMenu", toolkit: kit });
 		expect(profile.systemPrompt).toContain("`builtin:pinToSidebar`");
 		const hideTool = kit.tools.find((t) => t.name === "update_context_menu");
 		expect(JSON.stringify(hideTool?.parameters)).toContain("builtin:pinToSidebar");

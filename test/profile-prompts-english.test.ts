@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CustomizerToolkit } from "../src/main/agents/profiles/customizer-kit";
-import { aiCustomizerProfile } from "../src/main/agents/profiles/ai-customizer";
-import { generalCustomizerProfile } from "../src/main/agents/profiles/general-customizer";
-import { searchCustomizerProfile } from "../src/main/agents/profiles/search-customizer";
 import { connectionsCustomizerProfile } from "../src/main/agents/profiles/connections-customizer";
 import { datasourceConnectionsProfile } from "../src/main/agents/profiles/datasource-connections-customizer";
 import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
-import { appCustomizerProfile } from "../src/main/agents/profiles/app-customizer";
-import { shortcutCustomizerProfile } from "../src/main/agents/profiles/shortcut-customizer";
 import { magicActionProfile } from "../src/main/agents/profiles/magic-action";
 import { documentEditProfile } from "../src/main/agents/profiles/document-edit";
 import { errorFixProfile, type ErrorFixToolkit } from "../src/main/agents/profiles/error-fix";
@@ -39,25 +34,6 @@ const emptyErrorFixKit: ErrorFixToolkit = {
 
 /** Builds one profile's system prompt for a given interface language; the toolkit itself never reaches the prompt. */
 const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (language: Language) => string }[] = [
-	{ name: "ai-customizer (ai page)", prompt: (language) => aiCustomizerProfile({ language, surface: "ai", toolkit: emptyKit }).systemPrompt },
-	{ name: "ai-customizer (web page)", prompt: (language) => aiCustomizerProfile({ language, surface: "web", toolkit: emptyKit }).systemPrompt },
-	{
-		name: "ai-customizer (with a shell)",
-		prompt: (language) =>
-			aiCustomizerProfile({
-				language,
-				surface: "ai",
-				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
-			}).systemPrompt,
-	},
-	{
-		name: "general-customizer",
-		prompt: (language) => generalCustomizerProfile({ language, surface: "general", toolkit: emptyKit }).systemPrompt,
-	},
-	{
-		name: "search-customizer",
-		prompt: (language) => searchCustomizerProfile({ language, surface: "indexing", toolkit: emptyKit }).systemPrompt,
-	},
 	{
 		name: "connections-customizer",
 		prompt: (language) => connectionsCustomizerProfile({ language, surface: "mcp", toolkit: emptyKit }).systemPrompt,
@@ -89,12 +65,8 @@ const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (langu
 			}).systemPrompt,
 	},
 	{
-		name: "app-customizer",
-		prompt: (language) => appCustomizerProfile({ language, toolkit: emptyKit }).systemPrompt,
-	},
-	{
-		name: "shortcut-customizer",
-		prompt: (language) => shortcutCustomizerProfile({ language, toolkit: emptyKit }).systemPrompt,
+		name: "settings-customizer (win32)",
+		prompt: (language) => settingsCustomizerProfile({ language, surface: "contextMenu", toolkit: emptyKit, platform: "win32" }).systemPrompt,
 	},
 	{
 		name: "magic-action",

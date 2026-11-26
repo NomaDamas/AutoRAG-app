@@ -1,8 +1,6 @@
 import { stat } from "node:fs/promises";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { AgentProfile } from "@autorag/librarian/profiles";
-import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import {
 	addSearchRoots,
 	excludePath,
@@ -19,13 +17,11 @@ import {
 	type JsonValue,
 } from "../../../shared/settings-contract";
 import { DUPEY_SCAN_INTERVALS, REFRESH_INTERVALS } from "../../../shared/settings-options";
-import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
+import type { ReplyLanguage } from "../profile-progress";
 import {
 	createCustomizerKit,
-	REPLY_LANGUAGE_NAME,
 	textResult,
 	type ConfigCustomizerDeps,
-	type ConfigCustomizerProfileInput,
 	type CustomizerToolkit,
 	type Localized,
 } from "./customizer-kit";
@@ -78,11 +74,6 @@ const REJECTION_LABEL: Readonly<Record<RejectedRoot["reason"], string>> = {
 	duplicate: "is already a search folder",
 	"inside-target": "is inside a folder that is already indexed",
 	"not-absolute": "is not an absolute path",
-};
-
-const SURFACE_FOCUS: Readonly<Record<string, string>> = {
-	indexing: "which folders are indexed and what is left out, the keep-up-to-date cadence, file-name watching, and automatic code-folder exclusion",
-	duplicates: "how identical and similar duplicate files are handled and how often the version scan runs",
 };
 
 export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps): CustomizerToolkit {
@@ -344,43 +335,4 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 
 	const tools: readonly ToolDefinition[] = [getSearchSettings, updateIndexScope, updateIndexOptions, updateDuplicates];
 	return kit.toolkit(tools);
-}
-
-function systemPrompt(language: ReplyLanguage, surface: AppCustomizerSurface): string {
-	const replyLang = REPLY_LANGUAGE_NAME[language];
-	const focus = SURFACE_FOCUS[surface] ?? SURFACE_FOCUS.indexing;
-	return [
-		"You are Dazzi's Search & Indexing Customization Assistant (`search-customizer`), embedded in Settings.",
-		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
-		"",
-		"## Role & Scope",
-		`- This session is about: ${focus}.`,
-		"- `update_index_scope`: which folders are indexed (`searchPaths`) and what is left out (`excludePaths`).",
-		"- `update_index_options`: the local refresh cadence (`appIndexing.refreshIntervalMs`), file-name watching (`fsearch.watch`), and automatic code-folder exclusion (`appIndexing.excludeCodeFolders`).",
-		"- `update_duplicates`: whether identical files are shown once (`excludeExactDuplicates`), the similar-version scan (`dupey`), and how often it runs.",
-		"",
-		"## Non-Negotiable Invariants",
-		"- Closed scope: change only the settings above. API keys, credentials, sign-in, remote access, approval mode, and datasource connectors are out of scope — refuse and explain.",
-		"- NEVER run an index build or refresh, and NEVER delete, move, rename or trash any file or folder. The tools only write config values and app preferences.",
-		"- A new search folder must be an absolute path that exists on disk; a folder already indexed, or inside one that is, is refused — never duplicated.",
-		"- An exclusion is an absolute path or a glob (`*`, `?`, `[`); every value is written exactly as the Settings page writes it.",
-		"- A cancelled run must stop at once: never claim a change that was not written.",
-		"",
-		"## Workflow",
-		"1. Call `get_search_settings` first when unsure what is currently set.",
-		"2. Apply the change with the matching `update_*` tool: apply the valid part, and report any refused part as a warning.",
-		"3. Summarize in 1-3 short sentences what changed and what was refused.",
-		"",
-		intentPromptLine(language),
-	].join("\n");
-}
-
-export function searchCustomizerProfile(input: ConfigCustomizerProfileInput): AgentProfile {
-	return {
-		id: "search-customizer",
-		systemPrompt: systemPrompt(input.language, input.surface),
-		tools: [],
-		customTools: withIntentTools(input.toolkit.tools, { language: input.language }),
-		thinking: "low",
-	};
 }

@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appCustomizerProfile, createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
+import { createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import { magicActionProfile } from "../src/main/agents/profiles/magic-action";
 import { createMagicActionService } from "../src/main/magic-action-service";
 import { createSettingsService } from "../src/main/settings-service";
@@ -136,7 +137,7 @@ describe("magic-action pi agent profile", () => {
 		expect(upsertTool.description).toContain("powershell.exe");
 		expect(upsertTool.description).not.toContain('receiving selected files in "$@"');
 
-		const winProf = appCustomizerProfile({ language: "ko", toolkit: winKit, platform: "win32" });
+		const winProf = settingsCustomizerProfile({ language: "ko", surface: "contextMenu", toolkit: winKit, platform: "win32" });
 		expect(winProf.systemPrompt).toContain("powershell.exe");
 		expect(winProf.systemPrompt).toContain("$args");
 	});
@@ -487,14 +488,14 @@ describe("magic-action-service execution", () => {
 		await svc.start("run-skills-off", { actionId: "without-skills", paths: [targetFile] });
 		expect(seenPromptsWithoutSkills[0]).not.toContain("SHARED-SKILL-DESCRIPTION-MARKER");
 
-		// 3) app-customizer profile NEVER enables skills or extensions
+		// 3) settings-customizer profile NEVER enables skills or extensions
 		const customizerKit = createAppCustomizerToolkit({
 			settings,
 			listLocations: async () => [],
 			listTags: async () => [],
 			homeDir: root,
 		});
-		const custProf = appCustomizerProfile({ language: "ko", toolkit: customizerKit });
+		const custProf = settingsCustomizerProfile({ language: "ko", surface: "contextMenu", toolkit: customizerKit });
 		expect(custProf.context).toBeUndefined();
 	});
 
