@@ -109,7 +109,7 @@ export function ReduceSizeDialog({
 
 						<div className="flex flex-col gap-6" role="radiogroup" aria-label={t("finder.reduce.outputLabel")}>
 							<span className="text-badge font-medium leading-[14px] text-ink-muted">{t("finder.reduce.outputLabel")}</span>
-							<div className="flex gap-2 rounded-10 bg-input p-3">
+							<div className="flex gap-2 rounded-9 bg-input p-3">
 								{([true, false] as const).map((replace) => {
 									const selected = state.replaceOriginal === replace;
 									return (
@@ -120,7 +120,7 @@ export function ReduceSizeDialog({
 											aria-checked={selected}
 											data-output-mode={replace ? "replace" : "copy"}
 											className={cn(
-												"flex-1 rounded-8 border-[0.5px] px-12 py-6 text-[13px] leading-[19px] cursor-pointer",
+												"flex-1 rounded-7 border-[0.5px] px-12 py-6 text-[13px] leading-[19px] cursor-pointer",
 												selected ? "border-border bg-window font-medium text-ink" : "border-transparent bg-transparent text-ink-muted hover:text-ink",
 											)}
 											onClick={() => onChangeReplaceOriginal(replace)}

@@ -457,7 +457,7 @@ function NewAutomationCard({
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
 
 	return (
-		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] bg-window p-14", pageMode && "border border-border")} data-testid="automation-new" data-editing={editing?.id}>
+		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-12 bg-window p-14", pageMode && "border border-border")} data-testid="automation-new" data-editing={editing?.id}>
 			<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.when")}</span>
 			<div className="flex flex-wrap items-center gap-8 py-4" data-testid="automation-new-when">
 				{sentence.map((part, index) =>

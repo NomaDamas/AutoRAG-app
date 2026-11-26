@@ -72,7 +72,7 @@ function contextIsLong(context: string): boolean {
 
 /** Both cards (Figma 625:6871, 625:7022): a white tile with a 14px radius, 16px padding and 14px between its parts. */
 const DOCK_CARD =
-	"flex min-w-(--dock-card-min-width) max-w-full flex-col gap-14 rounded-14 border border-divider bg-window p-16 shadow-[0_2px_6px_rgba(0,0,0,0.12)] [overflow-wrap:anywhere]";
+	"flex min-w-(--dock-card-min-width) max-w-full flex-col gap-14 rounded-12 border border-divider bg-window p-16 shadow-[0_2px_6px_rgba(0,0,0,0.12)] [overflow-wrap:anywhere]";
 const BUTTON = "inline-flex h-28 items-center justify-center gap-4 rounded-6 px-10 text-meta font-medium leading-[16px] cursor-pointer transition-opacity duration-(--dur-color) ease-out";
 const PRIMARY_BUTTON = `${BUTTON} flex-none border-0 bg-accent text-on-accent enabled:hover:opacity-80 disabled:cursor-default disabled:opacity-50`;
 const SECONDARY_BUTTON = `${BUTTON} border border-border bg-window text-ink-body enabled:hover:opacity-80`;

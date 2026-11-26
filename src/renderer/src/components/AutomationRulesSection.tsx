@@ -85,7 +85,7 @@ function RuleRow({
 	return (
 		<div
 			ref={ref}
-			className="rule-row relative flex w-full items-center gap-12 rounded-10 border border-border bg-window py-8 pl-12 pr-10"
+			className="rule-row relative flex w-full items-center gap-12 rounded-12 border border-border bg-window py-8 pl-12 pr-10"
 			onContextMenu={(event) => {
 				if (onMenu === undefined) return;
 				event.preventDefault();

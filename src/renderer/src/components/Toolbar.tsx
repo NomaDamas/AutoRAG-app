@@ -177,7 +177,7 @@ export function Toolbar({
 			<span className="toolbar-spacer flex-1" />
 			{fileControls ? (
 				<>
-					<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view")}>
+					<div className="seg flex flex-none items-center p-2 rounded-9 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view")}>
 						{VIEW_OPTIONS.map(({ mode, shortcutId, Icon }) => (
 							<button
 								key={mode}

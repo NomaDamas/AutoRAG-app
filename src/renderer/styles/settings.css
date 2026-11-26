@@ -469,7 +469,7 @@
 
 .settings-source {
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -1553,7 +1553,7 @@
 	display: flex;
 	gap: 2px;
 	padding: 3px;
-	border-radius: 10px;
+	border-radius: var(--radius-9);
 	background: var(--bg-input);
 }
 
@@ -1566,7 +1566,7 @@
 	min-width: 0;
 	padding: var(--space-6) var(--space-12);
 	border: 0.5px solid transparent;
-	border-radius: var(--radius-8);
+	border-radius: var(--radius-7);
 	background: transparent;
 	color: var(--text-muted);
 	font: inherit;
@@ -2457,7 +2457,7 @@
 	flex-direction: column;
 	gap: var(--space-6);
 	padding: var(--space-12) var(--space-14);
-	border-radius: 10px;
+	border-radius: var(--radius-12);
 	background: var(--bg-subtle-alt);
 	min-width: 0;
 }
@@ -2770,7 +2770,7 @@
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -2929,7 +2929,7 @@
 
 .settings-view .sidebar-section-card {
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -3689,7 +3689,7 @@
 	margin-top: var(--space-10);
 	padding: var(--space-16) 20px;
 	border: 1px solid var(--border);
-	border-radius: 16px;
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	min-width: 0;
 }
@@ -4200,7 +4200,7 @@
 	flex-direction: column;
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 
@@ -4580,7 +4580,7 @@
 	flex-direction: column;
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 
@@ -4629,7 +4629,7 @@
 	display: flex;
 	flex-direction: column;
 	padding: 8px 28px;
-	border-radius: 16px;
+	border-radius: var(--radius-12);
 	background: var(--bg-subtle-alt);
 }
 
@@ -5944,7 +5944,7 @@
 .settings-view [data-index-scope="refresh"] .settings-list {
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 

@@ -76,7 +76,7 @@ export function AutomationNudge({
 		// The glow is kept low here (a third of the composer's): the line is an offer, not a call to act.
 		<div className="ai-glow-host max-w-[560px] [--ai-glow-opacity:0.24] [--ai-glow-blur:14px]" data-ai-glow data-automation-nudge="nudge">
 			<div className="ai-glow ai-glow-warm" aria-hidden="true" />
-			<div className={narrow ? "relative flex flex-wrap items-center gap-x-10 gap-y-6 rounded-10 bg-window py-8 pr-8 pl-12" : "relative flex items-center gap-10 rounded-10 bg-window py-7 pr-8 pl-14"}>
+			<div className={narrow ? "relative flex flex-wrap items-center gap-x-10 gap-y-6 rounded-12 bg-window py-8 pr-8 pl-12" : "relative flex items-center gap-10 rounded-12 bg-window py-7 pr-8 pl-14"}>
 				<ZapIcon size={13} className="flex-none text-accent" />
 				<span className={narrow ? "min-w-0 flex-[1_1_70%] text-meta leading-[18px] text-ink-body" : "min-w-0 flex-1 text-meta leading-[18px] text-ink-body"}>{t(`automations.nudge.${template}` as LocaleKey)}</span>
 				<button type="button" data-action="automation-nudge-make" className="inline-flex h-26 flex-none items-center rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink cursor-pointer hover:bg-hover" onClick={() => onPhase("confirm")}>
