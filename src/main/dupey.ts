@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { compareVersions, VERSION_FLOORS } from "../../scripts/release/version-floors.mjs";
 
 /** Command a user runs to provide the dupey CLI this app requires. */
 export const DUPEY_INSTALL_COMMAND = "cargo install dupey --locked";
@@ -56,7 +57,14 @@ export function createDupeyProbe(options: DupeyProbeOptions = {}): DupeyProbe {
 			let status: DupeyStatus;
 			try {
 				const output = await run();
-				status = { available: true, version: output.length > 0 ? output : null, error: null };
+				// Supplying our own runner to scanWithDupey bypasses the librarian's version check.
+				const version = /^dupey\s+(\d+\.\d+\.\d+)(?:[-+][^\s]*)?\s*$/mu.exec(output)?.[1];
+				const tooOld = version !== undefined && compareVersions(version, VERSION_FLOORS.dupey) < 0;
+				status = {
+					available: !tooOld,
+					version: output.length > 0 ? output : null,
+					error: tooOld ? `dupey ${version} is older than the required ${VERSION_FLOORS.dupey}` : null,
+				};
 			} catch (error) {
 				status = {
 					available: false,

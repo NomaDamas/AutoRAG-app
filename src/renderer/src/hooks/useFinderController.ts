@@ -91,6 +91,7 @@ import {
 	type VersionFamilies,
 	type VersionFamiliesResult,
 	type VersionFamilyError,
+	versionFamilyErrorFor,
 	type VersionFamilyView,
 	type VersionRelation,
 } from "../state/version-family";
@@ -558,7 +559,7 @@ export function useFinderController(
 		() => (dupey.fenced ? EMPTY_VERSION_FAMILIES : buildVersionFamilies(dupey.result.families)),
 		[dupey.fenced, dupey.result.families],
 	);
-	const versionFamilyError = dupey.result.error;
+	const versionFamilyError = useMemo(() => versionFamilyErrorFor(dupey.result, path), [dupey.result, path]);
 	pathRef.current = path;
 	tabsRef.current = tabsState.tabs;
 	searchingRef.current = searching;
@@ -745,6 +746,7 @@ export function useFinderController(
 				const result: VersionFamiliesResult = {
 					families: [],
 					scannedAt: null,
+					scanFailures: [],
 					error: {
 						code: "scan-failed",
 						message: error instanceof Error ? error.message : String(error),
@@ -1604,6 +1606,7 @@ export function useFinderController(
 				const result: VersionFamiliesResult = {
 					families: [],
 					scannedAt: null,
+					scanFailures: [],
 					error: {
 						code: "scan-failed",
 						message: error instanceof Error ? error.message : String(error),
