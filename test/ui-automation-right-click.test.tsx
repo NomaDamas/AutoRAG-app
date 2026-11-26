@@ -207,16 +207,16 @@ describe("전체 기록 with right-click runs", () => {
 			await Promise.resolve();
 			await Promise.resolve();
 		});
-		// The list row carries the click glyph on the name's line.
-		expect(host.querySelector('[data-magic-action-row="minutes"] [data-kind="magic"]')).not.toBeNull();
+		// Every automation looks alike in the list: no kind glyph, the line under the name says what starts it.
+		expect(host.querySelector('[data-magic-action-row="minutes"] [data-kind]')).toBeNull();
 		await act(async () => host.querySelector<HTMLElement>('[data-action="automation-all-runs"]')?.click());
 		const line = host.querySelector("[data-automation-all-runs] [data-run]");
 		expect(line?.querySelector("[data-run-title]")?.textContent).toBe(t("automations.inspector.runFilesMore", { name: "회의록.txt", count: 2 }));
 		expect(line?.querySelector("[data-run-caption]")?.textContent).toBe(`세 줄 요약 · ${t("automations.inspector.runDone")}`);
-		expect(line?.querySelector('[data-kind="magic"]')).not.toBeNull();
+		expect(line?.querySelector("[data-kind]")).toBeNull();
 		await act(async () => (line as HTMLElement | null)?.click());
 		expect(host.querySelector('[data-magic-action-detail="minutes"]')).not.toBeNull();
-		// On the action's page the run reads its time as a clock time and opens its folder; it has no kind glyph, the page already says which automation it is.
+		// On the action's page the run reads its time as a clock time and opens its folder.
 		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run]')?.textContent).toContain(t("automations.time.todayAt", { time: "" }).trim());
 		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run] [data-kind]')).toBeNull();
 		// Opened from 전체 기록, its path keeps that stop, and the stop leads back there.

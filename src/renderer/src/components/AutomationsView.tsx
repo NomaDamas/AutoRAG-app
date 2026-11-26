@@ -17,7 +17,7 @@ import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
 import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runDotTone, runTone, whatText, whenText, type RunDotTone } from "../state/automations";
-import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, MousePointerClickIcon, PencilIcon, TabPlusIcon, ZapIcon } from "./icons";
+import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { AgentSegment } from "./AgentSegment";
 import { normalizeMagicAction, type MagicAction, type MagicActionSelectionRule } from "../../../shared/context-menu-contract";
 import { hostPlatform } from "../lib/shortcuts";
@@ -515,11 +515,8 @@ function RuleRow({
 			<RunDot tone={runDotTone(rule.lastRun)} />
 			{/* The same title and caption sizes as a recommendation's (Figma 672:3740): 14px over 12px. */}
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
-				{/* Figma 696:2873: the kind's glyph just before the name — the bolt for a folder automation. */}
-				<span className="flex min-w-0 items-center gap-6">
-					<KindIcon kind="rule" />
-					<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
-				</span>
+				{/* Every automation looks alike here; what starts it is said by the line under the name. */}
+				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{whenText(rule)}</span>
 			</div>
 			{/* Figma 641:13493: the on/off switch is drawn, not wired yet (the librarian's rule format has no such field). */}
@@ -552,10 +549,7 @@ function MagicActionRow({
 		<div role="row" data-magic-action-row={action.id} className="flex items-center gap-14 py-10 pr-14 pl-16 select-none bg-window cursor-pointer hover:bg-hover-row" onClick={() => onOpen(action.id)}>
 			<RunDot tone={runDotTone(lastRun)} />
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-1">
-				<span className="flex min-w-0 items-center gap-6">
-					<KindIcon kind="magic" />
-					<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
-				</span>
+				<span className="truncate text-[14px] font-medium leading-[20px] text-ink">{action.label}</span>
 				<span className="truncate text-meta leading-[17px] text-ink-muted">{rightClickSentence(t, action)}</span>
 			</div>
 			<span role="presentation" className="flex flex-none items-center" onClick={(event) => event.stopPropagation()}>
@@ -788,7 +782,6 @@ function MagicActionDetail({
 			<div className="flex flex-col gap-6">
 				<Breadcrumb crumbs={crumbs} current={action.label} />
 				<div className="flex min-w-0 items-center gap-8">
-					<KindIcon kind="magic" size={16} />
 					<MagicTitle key={action.id} action={action} onRename={(label) => void onUpdate({ ...action, label })} />
 					<span className="flex-1" />
 					<span className="flex-none text-badge leading-[16px] text-ink-muted">{t("automations.detail.runOn")}</span>
@@ -857,16 +850,6 @@ function useRunHistory(ids: readonly string[], changed: string): Readonly<Record
 /** Which kind of automation a row is: a folder rule or a right-click (magic) action. */
 type AutomationKind = "rule" | "magic";
 
-/** The kind's glyph, before a name: the bolt for a folder automation, the click glyph (Settings → 우클릭 메뉴's) for a right-click action. */
-function KindIcon({ kind, size = 14 }: { readonly kind: AutomationKind; readonly size?: number }): ReactElement {
-	const { t } = useTranslation();
-	return (
-		<span className="flex flex-none text-ink-muted" role="img" aria-label={t(kind === "magic" ? "automations.magic.kind" : "automations.kind")} data-kind={kind}>
-			{kind === "magic" ? <MousePointerClickIcon size={size} /> : <ZapIcon size={size} />}
-		</span>
-	);
-}
-
 const baseName = (path: string): string => path.split(/[\\/]/).filter((part) => part.length > 0).pop() ?? path;
 const parentDir = (path: string): string => {
 	const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -900,22 +883,19 @@ function runAt(at: number, t: TFunction, language: string, now: number = Date.no
 }
 
 /**
- * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, in 전체 기록 the kind's glyph, the file the run worked on,
+ * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, the file the run worked on,
  * and under it, in 전체 기록, the automation's name and how it ended ("핵심 요약 · 시간 초과"), or on the automation's own
  * page just how it ended. Then when, and › when the line opens something: its automation from 전체 기록, the file's folder
  * on a page. A failed run on its own page shows the error it left.
  */
 function RunLine({
 	run,
-	kind,
 	name,
 	onOpen,
 	absoluteTime = false,
 	flat = false,
 }: {
 	readonly run: AutomationRun;
-	/** The automation's kind, drawn before the file in 전체 기록; left out on the automation's own page, which already says it. */
-	readonly kind?: AutomationKind | undefined;
 	/** The automation's name, in 전체 기록, where runs of every automation are mixed. */
 	readonly name?: string;
 	readonly onOpen?: (() => void) | undefined;
@@ -934,10 +914,7 @@ function RunLine({
 			<div className="flex w-full items-center gap-10">
 				<RunDot tone={runDotTone(run)} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
-					<span className="flex min-w-0 items-center gap-6">
-						{kind === undefined ? null : <KindIcon kind={kind} />}
-						<span className="truncate text-[13px] leading-[20px] text-ink" data-run-title>{first}</span>
-					</span>
+					<span className="truncate text-[13px] leading-[20px] text-ink" data-run-title>{first}</span>
 					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted" data-run-caption>{second}</span>}
 				</div>
 				<span className="flex-none text-meta leading-[18px] text-ink-muted">{absoluteTime ? runAt(run.startedAt, t, i18n.language) : relativeTime(run.startedAt)}</span>
@@ -1048,8 +1025,6 @@ function AutomationDetail({
 			<div className="flex flex-col gap-6">
 				<Breadcrumb crumbs={crumbs} current={ruleTitle(rule)} />
 				<div className="flex min-w-0 items-center gap-8">
-					{/* Figma 676:835: the kind's glyph before the name. */}
-					<KindIcon kind="rule" size={16} />
 					<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
 					<span className="flex-1" />
 					{/* Figma 641:13600: drawn, not wired yet (the librarian's rule format has no on/off field). */}
@@ -1157,7 +1132,7 @@ function AllRunsPage({ entries, onOpen, crumbs }: { readonly entries: readonly R
 							<h2 className="m-0 border-b-[0.5px] border-divider pb-6 text-meta font-medium leading-[16px] text-ink-muted">{day.label}</h2>
 							<div role="list" aria-label={day.label} className="flex flex-col border-b-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 								{day.runs.map((entry) => (
-									<RunLine key={entry.key} run={entry.run} kind={entry.kind} name={entry.name} onOpen={() => onOpen(entry)} flat />
+									<RunLine key={entry.key} run={entry.run} name={entry.name} onOpen={() => onOpen(entry)} flat />
 								))}
 							</div>
 						</div>
