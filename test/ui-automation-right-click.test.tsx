@@ -213,8 +213,9 @@ describe("전체 기록 with right-click runs", () => {
 		expect(line?.querySelector('[data-kind="magic"]')).not.toBeNull();
 		await act(async () => (line as HTMLElement | null)?.click());
 		expect(host.querySelector('[data-magic-action-detail="minutes"]')).not.toBeNull();
-		// On the action's page the run reads its time as a clock time and opens its folder.
+		// On the action's page the run reads its time as a clock time and opens its folder; it has no kind glyph, the page already says which automation it is.
 		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run]')?.textContent).toContain(t("automations.time.todayAt", { time: "" }).trim());
+		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run] [data-kind]')).toBeNull();
 	});
 });
 

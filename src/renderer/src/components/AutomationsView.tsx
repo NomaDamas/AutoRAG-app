@@ -804,7 +804,7 @@ function MagicActionDetail({
 				) : (
 					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} kind="magic" absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
 						))}
 					</div>
 				)}
@@ -900,7 +900,7 @@ function runAt(at: number, t: TFunction, language: string, now: number = Date.no
 }
 
 /**
- * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, the kind's glyph before the file the run worked on,
+ * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, in 전체 기록 the kind's glyph, the file the run worked on,
  * and under it, in 전체 기록, the automation's name and how it ended ("핵심 요약 · 시간 초과"), or on the automation's own
  * page just how it ended. Then when, and › when the line opens something: its automation from 전체 기록, the file's folder
  * on a page. A failed run on its own page shows the error it left.
@@ -914,7 +914,8 @@ function RunLine({
 	flat = false,
 }: {
 	readonly run: AutomationRun;
-	readonly kind: AutomationKind;
+	/** The automation's kind, drawn before the file in 전체 기록; left out on the automation's own page, which already says it. */
+	readonly kind?: AutomationKind | undefined;
 	/** The automation's name, in 전체 기록, where runs of every automation are mixed. */
 	readonly name?: string;
 	readonly onOpen?: (() => void) | undefined;
@@ -934,7 +935,7 @@ function RunLine({
 				<RunDot tone={runDotTone(run)} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
 					<span className="flex min-w-0 items-center gap-6">
-						<KindIcon kind={kind} />
+						{kind === undefined ? null : <KindIcon kind={kind} />}
 						<span className="truncate text-[13px] leading-[20px] text-ink" data-run-title>{first}</span>
 					</span>
 					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted" data-run-caption>{second}</span>}
@@ -1066,7 +1067,7 @@ function AutomationDetail({
 				) : (
 					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} kind="rule" absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
 						))}
 					</div>
 				)}
@@ -1325,15 +1326,9 @@ function RecommendationCard({
 					className="flex min-w-0 flex-1 items-center gap-10 border-0 bg-transparent p-0 text-left cursor-pointer"
 					onClick={() => setOpen((was) => !was)}
 				>
-					{quiet ? null : (
-						<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
-					)}
+					<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
-						{/* Under the person's own automations a recommendation reads like one of them: the bolt just before its name. */}
-						<span className="flex min-w-0 items-center gap-6">
-							{quiet ? <KindIcon kind="rule" /> : null}
-							<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-						</span>
+						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
 						{/* While the reasons are being counted the line keeps its height and shows nothing yet. */}
 						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined || reason === null ? undefined : "true"}>
 							{reason === null ? "\u00a0" : (reason ?? when)}
