@@ -1,5 +1,7 @@
 import {
+	Fragment,
 	forwardRef,
+	useContext,
 	useEffect,
 	useImperativeHandle,
 	useLayoutEffect,
@@ -44,6 +46,7 @@ import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import { SeedLoader } from "./SeedLoader";
 import { PipeTable } from "./PipeTable";
 import dazziLogo from "../assets/dazzi-logo.png";
@@ -57,25 +60,46 @@ import {
 	unresolvedCitationNumbers,
 	type EvidenceSelectionSource,
 } from "../state/evidence";
-import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
+import { HISTORY_SEARCH_DEBOUNCE_MS, groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, FileTextIcon, FolderOutlineIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SearchIcon, SparklesIcon, TabCloseIcon, ZapIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { FileMention } from "./FileMention";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
+import { AgentSegment } from "./AgentSegment";
+import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
+import { AutomationsContext } from "./AutomationsTab";
+import { AutomationDraftCard, templateTaken } from "./AutomationsView";
+import { isAutomationRequest } from "../state/automation-intent";
+import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
+
 import { IndexNoticeBanner } from "./IndexNotice";
 import { CompactingStatus, ContextNoticeView } from "./ContextNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
 
+/**
+ * The kinds of work the empty AI tab hints at under the composer (Figma 672:3638).
+ * A hint only names a direction: picking one reads pressed and changes the composer's
+ * placeholder; the question is still whatever the person types.
+ */
+const CAPABILITIES = [
+	{ id: "find", Icon: SearchIcon },
+	{ id: "summarize", Icon: FileTextIcon },
+	{ id: "organize", Icon: FolderOutlineIcon },
+	{ id: "automate", Icon: ZapIcon },
+] as const;
+type Capability = (typeof CAPABILITIES)[number]["id"];
+
 const autorag = window.autorag;
 
 /** History search fires this long after the last keystroke, so typing stays smooth. */
-const HISTORY_SEARCH_DEBOUNCE_MS = 300;
-const CENTERED = "mx-auto w-full max-w-[820px]";
+/** The composer's column (Figma 672:3638: 680 of the 959 frame); the conversation reads in a slightly narrower one. */
+const CENTERED = "mx-auto w-full max-w-[680px]";
+const MESSAGES = "mx-auto w-full max-w-[620px]";
 
 /**
  * Imperative surface the shell drives on the active AI Search tab: ⌘K focuses
@@ -108,6 +132,8 @@ export interface AiDockHandle {
 	openChat(id: string): void;
 	/** Open the 대화 기록 list (it stays open if it already is). */
 	showHistory(): void;
+	/** The stored chat this tab shows, or null before its first question (the 자동화 tab's chat follows it). */
+	currentChatId(): string | null;
 }
 
 export interface AiSearchPanelProps {
@@ -134,6 +160,8 @@ export interface AiSearchPanelProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source, by its alias (a button of the AI fix). */
 	readonly onOpenSource: (alias: string) => void;
+	/** The 자동화 half of the head's 채팅 | 자동화 (absent on the phone, which has its own tabs). */
+	readonly onShowAutomations?: (() => void) | undefined;
 	/**
 	 * A citation chip or a source card was tapped. The desktop shows evidence in the
 	 * inspector beside the chat, so it leaves this out; the phone shell has no room
@@ -160,7 +188,7 @@ export function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
+	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false, onShowAutomations },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -204,6 +232,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const pastTurnsRef = useRef(pastTurns);
 	pastTurnsRef.current = pastTurns;
 	const chatIdRef = useRef(chatId);
+	/** The head's title: the chat's model-written title, its first question until that arrives, or null for a new chat. */
+	const [chatTitle, setChatTitle] = useState<string | null>(null);
 	/** Which turn and phase's citation chip the user clicked last; null uses the newest non-empty turn. */
 	const [evidenceSource, setEvidenceSource] = useState<EvidenceSelectionSource | null>(null);
 	chatIdRef.current = chatId;
@@ -215,13 +245,20 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [steers, setSteers] = useState<readonly SteerItem[]>([]);
 	/** Questions queued with ⌥Enter during a run, asked one by one once it ends. */
 	const [queued, setQueued] = useState<readonly string[]>([]);
+	/** The hint picked in the empty tab; cleared once the conversation starts. */
+	const [capability, setCapability] = useState<Capability | null>(null);
+	/** The automation this turn's answer suggests under it, and how far the person took it. */
+	const [suggestion, setSuggestion] = useState<{ readonly id: SuggestableTemplate; readonly phase: NudgePhase | "gone" } | null>(null);
+	// "자동화 만들어줘" asked here: the person's words, the reply, and the empty 새 자동화 card, as the 자동화 sidebar
+	// answers its 새 자동화 button. Each keeps its place after the turns asked before it (`after`) and is not a search.
+	const [starters, setStarters] = useState<readonly { readonly key: string; readonly ask: string; readonly after: number; readonly added: boolean }[]>([]);
+	const automationsShell = useContext(AutomationsContext);
 	const queuedRef = useRef(queued);
 	queuedRef.current = queued;
 	/** The current run already showed its Quick answer (read by steer timing). */
 	const quickShownRef = useRef(false);
 	const [deepElapsed, setDeepElapsed] = useState<number | null>(null);
 	const [dragActive, setDragActive] = useState(false);
-	const [dragOver, setDragOver] = useState(false);
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -291,6 +328,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
+	/** The chat follows its newest line only while the person is at the bottom; scrolling up lets go, and the floating button brings it back. */
+	const followRef = useRef(true);
+	const [awayFromBottom, setAwayFromBottom] = useState(false);
 	const historySeq = useRef(0);
 	const historyDebounce = useRef<number | null>(null);
 	const startedAtRef = useRef(0);
@@ -346,6 +386,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
+			// The title comes after the run is over, for whichever chat it names.
+			if (event.type === "title") {
+				if (event.chatId === chatIdRef.current) setChatTitle(event.title);
+				return;
+			}
 			if (event.searchId !== searchIdRef.current) return;
 			switch (event.type) {
 				case "progress":
@@ -488,8 +533,27 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	useEffect(() => {
 		const body = bodyRef.current;
-		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions]);
+		if (body !== null && followRef.current) body.scrollTop = body.scrollHeight;
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions, starters]);
+
+	useEffect(() => {
+		followRef.current = true;
+		setAwayFromBottom(false);
+	}, [submittedQuery]);
+	const onBodyScroll = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		const away = body.scrollHeight - body.scrollTop - body.clientHeight > 120;
+		followRef.current = !away;
+		setAwayFromBottom(away);
+	};
+	const scrollToBottom = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		followRef.current = true;
+		setAwayFromBottom(false);
+		body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+	};
 
 	const shortcutSettings = useShortcutSettings();
 	const historyShortcutLabel = useFormattedShortcut("aiToggleHistory");
@@ -540,7 +604,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			if (event.clientX <= 0 && event.clientY <= 0) {
 				lastDragAtRef.current = 0;
 				setDragActive(false);
-				setDragOver(false);
 				setDragName(null);
 				return;
 			}
@@ -550,7 +613,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const reset = (): void => {
 			lastDragAtRef.current = 0;
 			setDragActive(false);
-			setDragOver(false);
 			setDragName(null);
 		};
 		window.addEventListener("dragover", onDragOver);
@@ -611,6 +673,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeepElapsed(null);
 		setProgress(t("aiSearch.reviewing"));
 		setChatId(nextChatId);
+		// A new chat is headed by its question until the model names it.
+		if (chatIdRef.current === null) setChatTitle(text.replace(/s+/gu, " ").trim());
 		startedAtRef.current = Date.now();
 		setAttachments([]);
 		setQuery("");
@@ -644,7 +708,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const runId = searchIdRef.current;
 		const action = composerAction({ searching: runId !== null, altKey });
 		if (action === "ask") {
-			if (text.length > 0) void runSearch(text, attachments);
+			if (text.length === 0) return;
+			if (automationsShell !== null && !phone && capability === null && attachments.length === 0 && isAutomationRequest(text)) {
+				setQuery("");
+				followRef.current = true;
+				setStarters((current) => [...current, { key: crypto.randomUUID(), ask: text, after: pastTurns.length + (submittedQueryRef.current === null ? 0 : 1), added: false }]);
+				return;
+			}
+			void runSearch(text, attachments);
 			return;
 		}
 		if (text.length === 0 || runId === null) return;
@@ -743,7 +814,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSteers([]);
 		setQueued([]);
 		setChatId(null);
+		setChatTitle(null);
 		setPastTurns([]);
+		setStarters([]);
 		setHistoryOpen(false);
 		setDeepElapsed(null);
 	}
@@ -755,6 +828,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const turns = restoreChat(record.messages);
 		const latest = turns[turns.length - 1];
 		if (latest === undefined) return;
+		setStarters([]);
 		const assistant = latest.assistant;
 		setPastTurns(
 			turns.slice(0, -1).map((turn) => ({
@@ -791,6 +865,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setRevisionsMove(false);
 		setProgress("");
 		setChatId(id);
+		setChatTitle(record.title);
 		setHistoryOpen(false);
 		// The store keeps no timing, so a restored chat shows its deep answer
 		// without a "Worked for Ns" label rather than inventing a duration.
@@ -872,6 +947,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		showHistory(): void {
 			if (!historyOpen) void openHistory();
 		},
+		currentChatId: () => chatIdRef.current,
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
@@ -879,7 +955,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		lastDragAtRef.current = Date.now();
 		event.preventDefault();
 		setDragActive(true);
-		setDragOver(true);
 	}
 
 	function onDockDragOver(event: ReactDragEvent): void {
@@ -888,7 +963,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		event.preventDefault();
 		event.dataTransfer.dropEffect = "copy";
 		setDragActive(true);
-		setDragOver(true);
 		const item = event.dataTransfer.items?.[0];
 		const file = item?.kind === "file" ? item.getAsFile() : null;
 		setDragName(file?.name ?? null);
@@ -897,7 +971,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	function onDockDragLeave(event: ReactDragEvent): void {
 		const next = event.relatedTarget;
 		if (next instanceof Node && event.currentTarget.contains(next)) return;
-		setDragOver(false);
 		setDragName(null);
 	}
 
@@ -906,7 +979,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		event.preventDefault();
 		const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
 		setDragActive(false);
-		setDragOver(false);
 		setDragName(null);
 		if (dropped.length === 0) return;
 		setAttachments((current) => mergeAttachments(current, dropped));
@@ -930,16 +1002,119 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// panel of that run shows it: another tab's panel has a different run id.
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
-	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
+	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady && starters.length === 0;
+	// A fresh conversation puts the composer in the middle with the hints under it;
+	// the first question sends it back to the bottom.
+	const centered = showEmpty && !phone && pastTurns.length === 0 && interactionRequest === null && queued.length === 0;
+	// One row (Figma 672:3638, 672:3658): the mode, the field, the button; thumbnails and a dictation note need the taller box.
+	const hintsHidden = capability === null && query.trim().length > 0;
+	const pickedCapability = CAPABILITIES.find((item) => item.id === capability) ?? null;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
 	const contextBeforeQuick = contextNotices.filter((notice) => notice.timing === "before-quick");
 	const contextAfterQuick = contextNotices.filter((notice) => notice.timing === "after-quick");
+	useEffect(() => {
+		if (!centered) setCapability(null);
+	}, [centered]);
+	// A new question drops the last answer's suggestion; a finished answer may offer one (Figma 672:3658).
+	useEffect(() => {
+		setSuggestion(null);
+	}, [submittedQuery]);
+	const answered = !searching && submittedQuery !== null && (quickReady || deepReady);
+	useEffect(() => {
+		if (!answered || phone || automationsShell === null || submittedQuery === null) return;
+		const sources = [...(quick?.evidence ?? []), ...(deep?.evidence ?? [])].map((item) => `${item.title} ${item.source ?? ""}`).join(" ");
+		const rules = automationsShell.props.state.rules;
+		const id = suggestTemplate(`${submittedQuery} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
+		if (id !== null) setSuggestion((current) => current ?? { id, phase: "nudge" });
+	}, [answered]);
+	/** The 새 자동화 starters asked after `after` turns: the person's words, the reply, and the card, rising one after another. */
+	const startersAt = (after: number): ReactElement[] =>
+		starters
+			.filter((starter) => starter.after === after)
+			.map((starter) => (
+				<div key={starter.key} className="flex flex-col gap-14" data-automation-starter>
+					<div className="message user-msg flex justify-end animate-rise [animation-fill-mode:both]">
+						<div className="bubble max-w-bubble-max rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{starter.ask}</div>
+					</div>
+					<p className="m-0 text-body leading-[1.55] text-ink animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
+					<div className="max-w-[480px] animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+						{starter.added || automationsShell === null ? (
+							<AutomationNudge template="pdf" phase="created" onPhase={() => undefined} onLater={() => undefined} onCreate={async () => false} onView={() => onShowAutomations?.()} />
+						) : (
+							<AutomationDraftCard
+								initial={null}
+								onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
+								onCreate={async (draft) => {
+									const ok = await automationsShell.props.onCreate(draft);
+									if (ok) setStarters((current) => current.map((item) => (item.key === starter.key ? { ...item, added: true } : item)));
+									return ok;
+								}}
+								onCreateMagicAction={async (action) => {
+									// A right-click action is not an automation: the card closes, and the toast says where it went.
+									const ok = (await automationsShell.props.onCreateMagicAction?.(action)) ?? false;
+									if (ok) setStarters((current) => current.filter((item) => item.key !== starter.key));
+									return ok;
+								}}
+							/>
+						)}
+					</div>
+				</div>
+			));
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
 		dropped: t("aiSearch.steerDropped"),
 	};
+
+	const composerActions = (
+		<div className="composer-actions flex items-center gap-7">
+			{searching && query.trim().length > 0 ? (
+				<button
+					type="submit"
+					className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+					title={t("aiSearch.steerSend")}
+					aria-label={t("aiSearch.steerSend")}
+				>
+					<ArrowUpIcon />
+				</button>
+			) : null}
+			{searching ? (
+				<button
+					type="button"
+					className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+					title={t("aiSearch.stop")}
+					aria-label={t("aiSearch.stop")}
+					onClick={() => void stop()}
+				>
+					<Square size={10} strokeWidth={3} fill="currentColor" />
+				</button>
+														) : query.trim().length === 0 && attachments.length === 0 ? (
+				<button
+					type="button"
+					className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+					title={t("aiSearch.voiceStart")}
+					aria-label={t("aiSearch.voiceStart")}
+					aria-pressed="false"
+					onClick={() => {
+						setVoiceNotice(null);
+						voice.toggle();
+					}}
+				>
+					<MicIcon size={17} />
+				</button>
+			) : (
+				<button
+					type="submit"
+					className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+					title={t("aiSearch.askDazzi")}
+					aria-label={t("aiSearch.askDazzi")}
+				>
+					<ArrowUpIcon />
+				</button>
+			)}
+	</div>
+	);
 
 	return (
 		<section
@@ -952,12 +1127,23 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
-				<span className="ai-mark grid flex-none place-items-center text-accent">
-					<SparklesIcon />
-				</span>
-				<strong className="flex-none text-sm font-medium leading-[19.5px] text-ink">{t("aiSearch.title")}</strong>
+			<div className="ai-head relative flex flex-none items-center gap-8 h-48 overflow-hidden px-12 select-none">
+				{/* The chat's title (no mark), cut before the 채팅 | 자동화 segment in the middle; a new chat shows none. */}
+				{chatTitle === null ? null : (
+					<strong className="min-w-0 max-w-[calc(50%-144px)] truncate text-sm font-medium leading-[19.5px] text-ink" title={chatTitle} data-chat-title>
+						{chatTitle}
+					</strong>
+				)}
 				<span className="flex-1" />
+				{/* 채팅 | 자동화 sits at the very middle of the head, whatever the two sides hold; the head draws no line under it.
+				    A head narrower than the segment cuts it at both edges rather than moving or shrinking it. */}
+				{onShowAutomations === undefined ? null : (
+					<span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+						<span className="pointer-events-auto">
+							<AgentSegment value="chat" onChange={(side) => (side === "automations" ? onShowAutomations() : undefined)} />
+						</span>
+					</span>
+				)}
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
@@ -1011,9 +1197,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{historyGroups.length === 0 ? (
 								<span className="block px-16 py-24 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
-								historyGroups.map((group) => (
+								historyGroups.map((group, index) => (
 									<div key={group.label}>
-										<div className="history-group px-16 pt-4 pb-2 text-badge font-bold leading-[15px] text-ink-muted">
+										{/* A hairline above each period after the first (어제, 지난 7일, …) so where one ends is easy to see. */}
+										<div className={cn("history-group text-badge font-bold leading-[15px] text-ink-muted", index === 0 ? "px-16 pt-4 pb-2" : "mx-16 mt-6 border-t-[0.5px] border-divider pt-10 pb-2")}>
 											{t(HISTORY_BUCKET_KEYS[group.label])}
 										</div>
 										{group.items.map((item) => (
@@ -1042,8 +1229,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				</>
 			) : null}
 
-			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
-				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
+			<div className="relative flex min-h-0 flex-1 flex-col">
+			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16" onScroll={onBodyScroll}>
+				<div className={cn(MESSAGES, "flex flex-col space-y-16")}>
 					{showEmpty ? (
 						phone ? (
 							<div className="ai-empty ai-empty-phone">
@@ -1059,7 +1247,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									))}
 								</div>
 							</div>
-						) : (
+						) : centered ? null : (
 							<div className="ai-empty my-28 text-center">
 								<strong className="block text-title font-medium leading-[27px] text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
 								<p className="mt-8 text-body leading-[21px] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
@@ -1067,9 +1255,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						)
 					) : null}
 
+					{startersAt(0)}
 					{pastTurns.map((turn, index) => (
+						<Fragment key={index}>
 						<PastTurnView
-							key={index}
 							turn={turn}
 							turnIndex={index}
 							activeSource={evidenceSource}
@@ -1083,6 +1272,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							onRephrase={prefill}
 							phone={phone}
 						/>
+						{startersAt(index + 1)}
+						</Fragment>
 					))}
 
 					{submittedQuery === null ? null : (
@@ -1116,7 +1307,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						/>
 					)}
 
-					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={() => onOpenSettings("indexing")} />}
+					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={() => onOpenSettings("indexing")} onClose={() => setIndexNotice(null)} />}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
@@ -1172,6 +1363,19 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									</div>
 								</div>
 							) : null}
+							{answered && suggestion !== null && suggestion.phase !== "gone" && automationsShell !== null ? (
+								<AutomationNudge
+									template={suggestion.id}
+									phase={suggestion.phase}
+									onPhase={(phase) => setSuggestion({ id: suggestion.id, phase })}
+									onLater={() => {
+										putOff(suggestion.id);
+										setSuggestion({ id: suggestion.id, phase: "gone" });
+									}}
+									onCreate={automationsShell.props.onCreate}
+									onView={() => onShowAutomations?.()}
+								/>
+							) : null}
 							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
 							{searching && compacting ? (
 								<CompactingStatus />
@@ -1187,6 +1391,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					)}
 
 					{stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped")}</div> : null}
+
+					{submittedQuery === null ? null : startersAt(pastTurns.length + 1)}
 
 					{queued.length > 0 ? (
 						<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
@@ -1209,6 +1415,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					) : null}
 				</div>
 			</div>
+			{awayFromBottom ? <ScrollToBottomButton answering={searching} onClick={scrollToBottom} /> : null}
+			</div>
 
 			<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
 				{interactionRequest !== null ? (
@@ -1217,6 +1425,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					</div>
 				) : (
 				<div className={CENTERED}>
+					{centered ? <h2 className="m-0 mb-20 text-center text-[24px] font-bold leading-[32px] text-ink" data-chat-start-heading>{t("aiSearch.startHeading")}</h2> : null}
 					{attachments.some((att) => !isThumbnailAttachment(att)) ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
 							{attachments.map((att, index) => (isThumbnailAttachment(att) ? null : <DraftPill key={`${att.id}:${att.name}`} att={att} onRemove={() => removeAttachment(index)} />))}
@@ -1235,7 +1444,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						ref={composeBoxRef}
 						className={cn(
 															"compose-box border border-divider bg-window shadow-[0_2px_5px_rgba(20,20,41,0.07)] transition-[border-color,border-radius] duration-(--dur-color) ease-out",
-							voiceActive ? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8" : "flex flex-col gap-8 rounded-[16px] px-16 py-12",
+							voiceActive
+									? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
+									: "flex flex-col gap-8 rounded-[16px] px-16 py-12",
 						)}
 						onMouseDown={(event) => {
 							if (voiceActive) return;
@@ -1317,7 +1528,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
 									onPasteImages={pasteImages}
-									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
+									placeholder={
+										searching
+											? t("aiSearch.steerPlaceholder")
+											: pickedCapability === null
+												? t("aiSearch.askPlaceholder")
+												: t(`aiSearch.capability.${pickedCapability.id}Placeholder`)
+									}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
 								{voiceNotice === null ? null : (
@@ -1325,71 +1542,54 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										{voiceNotice}
 									</p>
 								)}
+								{/* The words on their own row; the mode and the send button share the row under them. */}
 								<div className="composer-toolbar flex items-center justify-between gap-8">
 									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-																			<div className="composer-actions flex items-center gap-7">
-										{searching && query.trim().length > 0 ? (
-											<button
-												type="submit"
-												className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-												title={t("aiSearch.steerSend")}
-												aria-label={t("aiSearch.steerSend")}
-											>
-												<ArrowUpIcon />
-											</button>
-										) : null}
-										{searching ? (
-											<button
-												type="button"
-												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-												title={t("aiSearch.stop")}
-												aria-label={t("aiSearch.stop")}
-												onClick={() => void stop()}
-											>
-												<Square size={10} strokeWidth={3} fill="currentColor" />
-											</button>
-																					) : query.trim().length === 0 && attachments.length === 0 ? (
-											<button
-												type="button"
-												className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-												title={t("aiSearch.voiceStart")}
-												aria-label={t("aiSearch.voiceStart")}
-												aria-pressed="false"
-												onClick={() => {
-													setVoiceNotice(null);
-													voice.toggle();
-												}}
-											>
-												<MicIcon size={17} />
-											</button>
-										) : (
-											<button
-												type="submit"
-												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-												title={t("aiSearch.askDazzi")}
-												aria-label={t("aiSearch.askDazzi")}
-											>
-												<ArrowUpIcon />
-											</button>
-										)}
-									</div>
+									{composerActions}
 								</div>
 							</>
 						)}
 					</div>
-					<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					{centered ? (
+						<div
+							className={cn("capability-hints mt-10 flex flex-wrap justify-center gap-2 transition-opacity duration-(--dur-color) ease-out", hintsHidden && "pointer-events-none opacity-0")}
+							role="group"
+							aria-label={t("aiSearch.capability.hints")}
+							aria-hidden={hintsHidden ? true : undefined}
+						>
+							{CAPABILITIES.map((item) => (
+								<button
+									key={item.id}
+									type="button"
+									tabIndex={hintsHidden ? -1 : undefined}
+									aria-pressed={item.id === capability}
+									className={cn(
+										"inline-flex h-26 cursor-pointer items-center gap-4 rounded-6 border-0 px-8 text-meta transition-colors duration-(--dur-color) ease-out",
+										item.id === capability ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink-body",
+									)}
+									onClick={() => {
+										setCapability((was) => (was === item.id ? null : item.id));
+										inputRef.current?.focus();
+									}}
+								>
+									<item.Icon size={13} />
+									{t(`aiSearch.capability.${item.id}`)}
+								</button>
+							))}
+						</div>
+					) : (
+						<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					)}
 				</div>
 				)}
 			</form>
+			{centered ? <div className="flex-[1.2]" aria-hidden="true" /> : null}
 
+			{/* One drop screen, over the panel or over the field alike (Figma 603:6785): the words and the file's name. */}
 			{dragActive ? (
-				<div className="pointer-events-none absolute inset-8 z-20 flex flex-col items-center justify-center gap-10 rounded-14 border-[1.5px] border-dashed border-accent bg-accent-drop-hover backdrop-blur-sm">
-					<span className="relative flex size-64 items-center justify-center rounded-12 bg-accent-soft text-accent">
-						<SparklesIcon size={28} />
-						<span className="absolute -bottom-4 -right-4 flex size-22 items-center justify-center rounded-full bg-accent text-badge font-bold text-on-accent">+</span>
-					</span>
-					<span className="text-body font-medium text-ink">{dragOver ? t("aiSearch.dropAttach") : t("aiSearch.dropPrompt")}</span>
-					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
+				<div className="pointer-events-none absolute inset-8 z-20 flex flex-col items-center justify-center gap-10 rounded-14 border-[1.5px] border-dashed border-accent bg-accent-drop-hover backdrop-blur-[2px]" data-testid="ai-drop-overlay">
+					<span className="text-[13px] font-medium text-ink">{t("aiSearch.dropHere")}</span>
+					{dragName === null ? null : <span className="text-badge text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
 			{voice.permission === null ? null : (

@@ -12,7 +12,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { ChartNoAxesColumn, Copy, FileText, Globe, Info, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import { isAppCustomizerSurface, type AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -22,10 +22,8 @@ import { LtrPage } from "./settings/LtrPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
-import { AboutPage } from "./settings/AboutPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
-import { SettingsAssistantHeroContext, type SettingsAssistantHero } from "./settings/SettingsKit";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
@@ -57,7 +55,6 @@ type NavLabelKey =
 	| "settingsCore.nav.contextMenu"
 	| "settingsCore.nav.shortcuts"
 	| "settingsCore.nav.remote"
-	| "settingsCore.nav.about"
 	| "settingsCore.nav.ai"
 	| "settingsCore.nav.web"
 	| "settingsCore.nav.indexing"
@@ -94,7 +91,6 @@ export const PAGES = [
 	{ id: "contextMenu", labelKey: "settingsCore.nav.contextMenu", icon: MousePointerClick, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.contextMenu" },
 	{ id: "shortcuts", labelKey: "settingsCore.nav.shortcuts", icon: Keyboard, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.shortcuts" },
 	{ id: "remote", labelKey: "settingsCore.nav.remote", icon: MonitorSmartphone, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.remote" },
-	{ id: "about", labelKey: "settingsCore.nav.about", icon: Info, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.about" },
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
 	{ id: "ltr", labelKey: "settingsCore.nav.ltr", icon: ListOrdered, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ltr" },
@@ -152,8 +148,6 @@ function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | nul
 	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
 }
 
-/** The pages that draw their own invitation to the assistant; every other assistant page gets it from its head. */
-const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["sidebar", "contextMenu", "shortcuts"];
 
 /**
  * What every settings page reads and writes: the app settings, the config
@@ -287,12 +281,15 @@ export function SettingsPageContent({
 	onNavigate,
 	customizerOpen = true,
 	onOpenCustomizer = () => undefined,
+	onStartMagicAction,
 }: {
 	readonly data: SettingsData;
 	readonly category: SettingsCategory;
 	readonly onNavigate: (category: SettingsCategory) => void;
 	readonly customizerOpen?: boolean;
 	readonly onOpenCustomizer?: () => void;
+	/** 우클릭 메뉴's 매직 액션 만들기: open the new-action card in the assistant beside the page. Without it, the modal makes it. */
+	readonly onStartMagicAction?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const { appSettings, snapshot, sources, sourcesReady, saveSnapshot, setSources, setError, changeAppSettings } = data;
@@ -305,18 +302,18 @@ export function SettingsPageContent({
 			return <AccountPage />;
 		case "plan":
 			return <PlanPage />;
+		// 정보 is now part of 일반 (versions) and 인덱싱 (the embedding server); an old link to it lands on 일반.
+		case "about":
 		case "general":
 			return <GeneralPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "sidebar":
 			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "contextMenu":
-			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
+			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} onStartMagicAction={onStartMagicAction} />;
 		case "shortcuts":
 			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
-		case "about":
-			return <AboutPage />;
 		case "ai":
 			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
 		case "ltr":
@@ -396,6 +393,12 @@ export function SettingsView({
 		setCustomizerFocus((count) => count + 1);
 	}, [showAssistant]);
 	const openAiSettings = useCallback((): void => setCategory("ai"), []);
+	// 매직 액션 만들기 opens a new-action card in the 우클릭 메뉴 assistant, as 새 자동화 does in the AI column.
+	const [magicStarter, setMagicStarter] = useState(0);
+	const startMagicAction = useCallback((): void => {
+		showAssistant?.();
+		setMagicStarter((count) => count + 1);
+	}, [showAssistant]);
 
 	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
 	useEffect(() => {
@@ -462,20 +465,15 @@ export function SettingsView({
 		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
-	const hero = useMemo<SettingsAssistantHero | null>(
-		() => (activeSurface === null || customizerShown || SELF_INVITING_SURFACES.includes(activeSurface) ? null : { surface: activeSurface, onOpen: openCustomizer }),
-		[activeSurface, customizerShown, openCustomizer],
-	);
 	const content = (
-		<SettingsAssistantHeroContext value={hero}>
-			<SettingsPageContent
-				data={data}
-				category={category}
-				onNavigate={setCategory}
-				customizerOpen={customizerShown}
-				onOpenCustomizer={openCustomizer}
-			/>
-		</SettingsAssistantHeroContext>
+		<SettingsPageContent
+			data={data}
+			category={category}
+			onNavigate={setCategory}
+			customizerOpen={customizerShown}
+			onOpenCustomizer={openCustomizer}
+			onStartMagicAction={assistant === null ? undefined : startMagicAction}
+		/>
 	);
 
 	const sourceButtons = filteredSources.map((entry) => {
@@ -596,6 +594,7 @@ export function SettingsView({
 						surface={surface}
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
+						starterRequest={surface === "contextMenu" ? magicStarter : 0}
 						onSettingsUpdated={changeAppSettings}
 						onChangesApplied={data.reloadAfterAssistant}
 						onOpenAiSettings={openAiSettings}

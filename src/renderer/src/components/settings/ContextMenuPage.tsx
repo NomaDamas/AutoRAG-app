@@ -22,6 +22,7 @@ import type { ShortcutId } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { formatContextMenuKeycap } from "../../state/context-menu";
 import { cn } from "../../lib/cn";
+import { attachMagicActionEdit } from "../../state/magic-action-edit-request";
 import { autoMagicLabel, newMagicActionId, rightClickKindOf, rightClickTarget, type RightClickKind } from "../../state/right-click-trigger";
 import { ChipSelect, type ChipOption } from "../primitives/ChipSelect";
 import { RightClickWhen, RunKindSegment, type RunKind } from "../RightClickWhen";
@@ -252,6 +253,7 @@ export function ContextMenuPage({
 	onSettingsError,
 	customizerOpen,
 	onOpenCustomizer,
+	onStartMagicAction,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
@@ -259,6 +261,8 @@ export function ContextMenuPage({
 	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
 	readonly customizerOpen: boolean;
 	readonly onOpenCustomizer: () => void;
+	/** 매직 액션 만들기 opens the new-action card in the assistant beside the page; without an assistant the modal makes it. */
+	readonly onStartMagicAction?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
@@ -268,6 +272,18 @@ export function ContextMenuPage({
 	});
 
 	const contextMenu = useMemo(() => normalizeContextMenuSettings(appSettings.contextMenu), [appSettings.contextMenu]);
+	// The 자동화 tab's right-click rows open their action here, in the edit modal.
+	const actionsRef = useRef(contextMenu.magicActions);
+	actionsRef.current = contextMenu.magicActions;
+	useEffect(() => {
+		const openEditor = (id: string): void => {
+			const action = actionsRef.current.find((item) => item.id === id);
+			if (action !== undefined) setEditorState({ open: true, initial: action });
+		};
+		const { initial, detach } = attachMagicActionEdit(openEditor);
+		if (initial !== null) openEditor(initial);
+		return detach;
+	}, []);
 	const hiddenItems = useMemo(() => new Set<string>(contextMenu.hiddenItems), [contextMenu.hiddenItems]);
 	const hiddenSections = useMemo(() => new Set<string>(contextMenu.hiddenSections), [contextMenu.hiddenSections]);
 
@@ -334,7 +350,10 @@ export function ContextMenuPage({
 		void updateContextMenu({ ...contextMenu, magicActions: next });
 	};
 
+	// The X asks first (the action leaves the right-click menu for good); the modal's 삭제 removes it.
+	const [removing, setRemoving] = useState<MagicAction | null>(null);
 	const removeMagicAction = (id: string): void => {
+		setRemoving(null);
 		void updateContextMenu({
 			...contextMenu,
 			magicActions: contextMenu.magicActions.filter((item) => item.id !== id),
@@ -466,7 +485,7 @@ export function ContextMenuPage({
 							data-action={`remove-magic-${action.id}`}
 							title={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
 							aria-label={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
-							onClick={() => removeMagicAction(action.id)}
+							onClick={() => setRemoving(action)}
 						>
 							<X size={14} strokeWidth={1.5} />
 						</button>
@@ -531,7 +550,7 @@ export function ContextMenuPage({
 								type="button"
 								className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
 								data-action="add-magic-action"
-								onClick={() => setEditorState({ open: true, initial: null })}
+								onClick={() => (onStartMagicAction === undefined ? setEditorState({ open: true, initial: null }) : onStartMagicAction())}
 							>
 								<Plus aria-hidden="true" />
 								{t("settingsCore.contextMenu.addMagicAction")}
@@ -679,6 +698,20 @@ export function ContextMenuPage({
 				</p>
 			</div>
 
+			{removing === null ? null : (
+				<ModalShell onClose={() => setRemoving(null)}>
+					<h2>{t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: removing.label })}</h2>
+					<p>{t("settingsCore.contextMenu.removeMagicConfirmBody")}</p>
+					<ModalActions>
+						<button type="button" className="linear-btn" autoFocus onClick={() => setRemoving(null)}>
+							{t("common.cancel")}
+						</button>
+						<button type="button" className="linear-btn is-danger" data-action="confirm-remove-magic" onClick={() => removeMagicAction(removing.id)}>
+							{t("common.delete")}
+						</button>
+					</ModalActions>
+				</ModalShell>
+			)}
 			{editorState.open ? (
 				<MagicActionEditorModal
 					initial={editorState.initial}

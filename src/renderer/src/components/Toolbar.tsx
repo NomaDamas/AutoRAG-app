@@ -72,6 +72,7 @@ export function Toolbar({
 	onEmptyTrash,
 	sidebarHidden,
 	onShowSidebar,
+	fileControls = true,
 }: {
 	readonly title: string;
 	readonly canGoBack: boolean;
@@ -104,6 +105,8 @@ export function Toolbar({
 	readonly onEmptyTrash: () => void;
 	readonly sidebarHidden: boolean;
 	readonly onShowSidebar: () => void;
+	/** False on a tab that lists no files (자동화, AI 에이전트): the view, sort and group controls are not shown. */
+	readonly fileControls?: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
 	const shortcutSettings = useShortcutSettings();
@@ -172,39 +175,43 @@ export function Toolbar({
 				{title}
 			</strong>
 			<span className="toolbar-spacer flex-1" />
-			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view")}>
-				{VIEW_OPTIONS.map(({ mode, shortcutId, Icon }) => (
-					<button
-						key={mode}
-						type="button"
-						className={[
-							`seg__button${mode === viewMode ? " seg__button--active" : ""}`,
-							"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
-							mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
-						].join(" ")}
-						title={t("toolbar.viewAs", { label: viewLabel(mode), shortcut: formatShortcutChord(effectiveShortcuts[shortcutId], platform) })}
-						aria-label={viewLabel(mode)}
-						aria-pressed={mode === viewMode}
-						onClick={() => onViewModeChange(mode)}
-					>
-						<Icon size={18} />
-					</button>
-				))}
-			</div>
-			<ToolbarControl
-				label={t("toolbar.sort")}
-				active={sort !== null}
-				open={menu?.kind === "sort"}
-				icon={<SortIcon size={14} />}
-				onClick={(event) => openMenu("sort", event)}
-			/>
-			<ToolbarControl
-				label={t("toolbar.group")}
-				active={grouping !== "none"}
-				open={menu?.kind === "group"}
-				icon={<GroupIcon size={14} />}
-				onClick={(event) => openMenu("group", event)}
-			/>
+			{fileControls ? (
+				<>
+					<div className="seg flex flex-none items-center p-2 rounded-9 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view")}>
+						{VIEW_OPTIONS.map(({ mode, shortcutId, Icon }) => (
+							<button
+								key={mode}
+								type="button"
+								className={[
+									`seg__button${mode === viewMode ? " seg__button--active" : ""}`,
+									"flex items-center justify-center size-toolbar-icon p-0 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease]",
+									mode === viewMode ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:text-ink",
+								].join(" ")}
+								title={t("toolbar.viewAs", { label: viewLabel(mode), shortcut: formatShortcutChord(effectiveShortcuts[shortcutId], platform) })}
+								aria-label={viewLabel(mode)}
+								aria-pressed={mode === viewMode}
+								onClick={() => onViewModeChange(mode)}
+							>
+								<Icon size={18} />
+							</button>
+						))}
+					</div>
+					<ToolbarControl
+						label={t("toolbar.sort")}
+						active={sort !== null}
+						open={menu?.kind === "sort"}
+						icon={<SortIcon size={14} />}
+						onClick={(event) => openMenu("sort", event)}
+					/>
+					<ToolbarControl
+						label={t("toolbar.group")}
+						active={grouping !== "none"}
+						open={menu?.kind === "group"}
+						icon={<GroupIcon size={14} />}
+						onClick={(event) => openMenu("group", event)}
+					/>
+				</>
+			) : null}
 			<div className="tgroup flex flex-none items-center gap-2 [-webkit-app-region:no-drag]">
 				{trashActive ? (
 					<>
@@ -253,7 +260,7 @@ export function Toolbar({
 					<InspectorToggleIcon open={false} />
 				</button>
 			) : null}
-			{menu === null ? null : (
+			{menu === null || !fileControls ? null : (
 				<ToolbarMenu
 					kind={menu.kind}
 					trigger={menu.trigger}

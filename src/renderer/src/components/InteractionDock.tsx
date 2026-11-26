@@ -2,12 +2,14 @@
  * The interaction dock: what the AI Search panel shows in place of its composer
  * while the librarian's agent waits for the person (librarian v2.12).
  *
- * Two cards share the frame:
+ * Three cards share the frame:
  *
  * - a **question** from `ask_user` — one question, or 2–4 shown as a stepper;
  *   options (single or multiple choice) and a "write your own answer" row;
  * - an **approval** from the file-change gate — the call, what it changes and
- *   why, with allow once / allow for the session / skip (deny).
+ *   why, with allow once / allow for the session / skip (deny);
+ * - an **automation** the agent is about to save — the rule filled in, to change
+ *   and 추가하기, or 취소 (Figma 672:3740).
  *
  * The person's answer goes back through the preload bridge; the dock never
  * touches run state. Stop is the panel's own handler, still reachable from the
@@ -20,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Copy, Info, ShieldCheck } from "lucide-react";
 import type {
 	ApprovalRequest,
+	AutomationRequest,
 	InteractionAnswer,
 	InteractionBridge,
 	InteractionRequest,
@@ -48,6 +51,7 @@ import {
 	type QuestionState,
 } from "../state/interaction";
 import { CheckIcon } from "./icons";
+import { AutomationDraftCard } from "./AutomationsView";
 
 /** A context longer than this (or more than three lines) starts collapsed with a Show more toggle. */
 const CONTEXT_COLLAPSE_LIMIT = 200;
@@ -68,7 +72,7 @@ function contextIsLong(context: string): boolean {
 
 /** Both cards (Figma 625:6871, 625:7022): a white tile with a 14px radius, 16px padding and 14px between its parts. */
 const DOCK_CARD =
-	"flex min-w-0 max-w-full flex-col gap-14 rounded-14 border border-divider bg-window p-16 shadow-[0_2px_6px_rgba(0,0,0,0.12)] [overflow-wrap:anywhere]";
+	"flex min-w-(--dock-card-min-width) max-w-full flex-col gap-14 rounded-12 border border-divider bg-window p-16 shadow-[0_2px_6px_rgba(0,0,0,0.12)] [overflow-wrap:anywhere]";
 const BUTTON = "inline-flex h-28 items-center justify-center gap-4 rounded-6 px-10 text-meta font-medium leading-[16px] cursor-pointer transition-opacity duration-(--dur-color) ease-out";
 const PRIMARY_BUTTON = `${BUTTON} flex-none border-0 bg-accent text-on-accent enabled:hover:opacity-80 disabled:cursor-default disabled:opacity-50`;
 const SECONDARY_BUTTON = `${BUTTON} border border-border bg-window text-ink-body enabled:hover:opacity-80`;
@@ -128,6 +132,7 @@ export function InteractionDock({ request, onStop }: InteractionDockProps): Reac
 		return () => window.removeEventListener("keydown", onKeyDown, true);
 	}, [request]);
 
+	if (request.kind === "automation") return <AutomationRequestCard request={request} />;
 	return request.kind === "approval" ? (
 		<ApprovalCard request={request} />
 	) : (
@@ -411,6 +416,27 @@ function ApprovalCard({ request }: { readonly request: ApprovalRequest }): React
 					</button>
 				</div>
 			</div>
+		</div>
+	);
+}
+
+/**
+ * An automation the agent is about to save (Figma 672:3678, 672:3740): the lead line, then the rule filled in. 추가하기
+ * saves it as the card shows it; 취소 (or Escape) saves nothing.
+ */
+function AutomationRequestCard({ request }: { readonly request: AutomationRequest }): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<div className="flex flex-col gap-8" data-interaction="automation">
+			<p className="m-0 text-meta leading-[18px] text-ink-body">{t("automations.nudge.lead")}</p>
+			<AutomationDraftCard
+				initial={request.rule}
+				onCancel={() => answerRequest(request.id, cancelAnswer())}
+				onCreate={async (rule) => {
+					answerRequest(request.id, { kind: "automation", rule });
+					return true;
+				}}
+			/>
 		</div>
 	);
 }

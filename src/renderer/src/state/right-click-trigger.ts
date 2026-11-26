@@ -3,7 +3,8 @@
  * a choice becomes a magic action's target, and the name a new one gets when the person gives none.
  */
 
-import type { MagicActionSelectionRule, MagicActionTargetKind } from "../../../shared/context-menu-contract";
+import { normalizeContextMenuSettings, type MagicAction, type MagicActionSelectionRule, type MagicActionTargetKind } from "../../../shared/context-menu-contract";
+import type { AppSettings } from "../../../shared/settings-contract";
 
 /** The file-kind chip's choices; `folder` and `both` exist only for a right-click (a watched folder has files). */
 export type RightClickKind = "all" | "pdf" | "image" | "document" | "folder" | "both";
@@ -70,4 +71,26 @@ export function newMagicActionId(label: string, taken: readonly string[]): strin
 		const next = `${base}-${n}`;
 		if (!taken.includes(next)) return next;
 	}
+}
+
+/** The settings bridge's two calls a new action needs. */
+export interface MagicActionSettingsWriter {
+	get(): Promise<AppSettings>;
+	set(patch: Partial<AppSettings>): Promise<AppSettings>;
+}
+
+/**
+ * Add a new action to the right-click menu, from the freshest settings: it gets an id no other action has, and the
+ * menu's magic section is shown again if it was hidden. Returns the settings as saved.
+ */
+export async function appendMagicAction(settings: MagicActionSettingsWriter, action: MagicAction): Promise<AppSettings> {
+	const current = normalizeContextMenuSettings((await settings.get()).contextMenu);
+	const id = newMagicActionId(action.label, current.magicActions.map((item) => item.id));
+	return settings.set({
+		contextMenu: normalizeContextMenuSettings({
+			...current,
+			hiddenSections: current.hiddenSections.filter((section) => section !== "magic"),
+			magicActions: [...current.magicActions, { ...action, id }],
+		}),
+	});
 }

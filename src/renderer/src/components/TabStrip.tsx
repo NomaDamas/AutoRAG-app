@@ -12,6 +12,8 @@ export interface TabView {
 	readonly flash: boolean;
 	/** The tab shows the AI Search chat: a drop on it attaches instead of moving files. */
 	readonly aiSearch: boolean;
+	/** The tab shows the 자동화 list: it leads with the bolt, as the AI Search tab leads with its sparkles. */
+	readonly automations?: boolean;
 	/** The tab hosts the in-app Document Editor for a file. */
 	readonly documentEditor?: boolean;
 }
@@ -103,7 +105,8 @@ export function TabStrip({
 							onSelect(tab.id);
 						}}
 					>
-						{tab.aiSearch ? <SparklesIcon size={11} className="flex-none text-accent" /> : tab.documentEditor ? <ChatNewIcon size={11} className="flex-none text-accent" /> : null}
+						{/* The 자동화 side is the AI 에이전트 tab too: one mark for both. */}
+						{tab.aiSearch || tab.automations === true ? <SparklesIcon size={11} className="flex-none text-accent" /> : tab.documentEditor ? <ChatNewIcon size={11} className="flex-none text-accent" /> : null}
 						<span className="min-w-0 truncate">{tab.title}</span>
 					</button>
 					{canClose ? (

@@ -16,10 +16,14 @@ import {
 	Archive,
 	ArrowDownUp,
 	ArrowLeft,
+	ArrowDown,
 	ArrowUp,
 	ChartNoAxesColumn,
 	Check,
 	ChevronDown,
+	CircleX,
+	FilePen,
+	FileText,
 	FileArchive,
 	Maximize,
 	ChevronLeft,
@@ -40,6 +44,7 @@ import {
 	Film,
 	Flag,
 	FoldVertical,
+	Folder as FolderOutline,
 	HardDrive,
 	History,
 	Image as ImageGlyph,
@@ -49,6 +54,7 @@ import {
 	List,
 	Maximize2,
 	MessagesSquare,
+	MessageSquare,
 	Mic,
 	Monitor,
 	PackageOpen,
@@ -156,6 +162,8 @@ export const ExpandCornersIcon = glyph(Expand, 16, 1.75);
 export const ArrowLeftIcon = glyph(ArrowLeft, 13, 2.2);
 
 export const MessagesIcon = glyph(MessagesSquare, 12, 2);
+/** One speech bubble: the 채팅 side of the AI 에이전트 head (Figma 672:3658). */
+export const ChatBubbleIcon = glyph(MessageSquare, 13, 1.8);
 
 export const ChevronDownIcon = glyph(ChevronDown, 10, 3);
 
@@ -203,6 +211,7 @@ export const SendIcon = glyph(Send, 16, 2.4);
 export const SparklesIcon = glyph(Sparkles, 14, 2);
 
 export const ArrowUpIcon = glyph(ArrowUp, 16, 2.6);
+export const ArrowDownIcon = glyph(ArrowDown, 16, 2);
 
 export const MicIcon = glyph(Mic, 16, 2);
 
@@ -235,6 +244,14 @@ export const ListRowsIcon = glyph(Rows3, 16, 1.9);
 export const PanelLeftIcon = glyph(PanelLeft, 16, 1.9);
 
 export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
+
+/** 자동화 (Figma 611:3601): a failed rule's badge, a document, an image, a rule that may change files. */
+export const CircleXIcon = glyph(CircleX, 14, 2);
+export const FileTextIcon = glyph(FileText, 14, 2);
+/** An outline folder for an action on folders (the AI tab's "organize" hint); a folder item itself uses `FolderGlyph`. */
+export const FolderOutlineIcon = glyph(FolderOutline, 14, 2);
+export const ImageIcon = glyph(ImageGlyph, 14, 2);
+export const FilePenIcon = glyph(FilePen, 13, 2);
 
 /** A notice that something may not work as expected (a search over an index that is not ready). */
 export const WarningIcon = glyph(TriangleAlert, 14, 2);

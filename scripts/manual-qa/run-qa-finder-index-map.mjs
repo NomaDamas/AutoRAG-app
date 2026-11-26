@@ -317,7 +317,7 @@ await openMap("Indexing", "Search Scope");
 const placement = await page.evaluate(() => {
 	const panel = document.querySelector(".index-map-panel");
 	const section = panel?.closest(".settings-section") ?? null;
-	const card = section?.querySelector(".settings-activity, [data-testid='index-activity-idle']") ?? null;
+	const card = section?.querySelector("[data-testid='index-status']") ?? null;
 	return {
 		modal: document.querySelector(".settings-modal-backdrop") !== null,
 		inSection: section !== null,

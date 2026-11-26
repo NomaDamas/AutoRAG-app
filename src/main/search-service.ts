@@ -16,6 +16,7 @@ import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-image
 import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
+import { confirmAutomationSaves } from "./automation-confirm";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
@@ -136,6 +137,11 @@ export interface SearchServiceDeps {
 	 * the search it follows.
 	 */
 	readonly afterAnsweredSearch?: () => void | Promise<unknown>;
+	/**
+	 * Writes a chat's short title from its first question and answer, or null. Asked once per chat, after its first
+	 * answered run; the title is kept on the record and sent as a `title` event. Absent: a chat is titled by its first question.
+	 */
+	readonly titleChat?: (question: string, answer: string) => Promise<string | null>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
 	/**
@@ -525,6 +531,29 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
+	/** Chats whose title is being written, so a quick follow-up does not ask for a second one. */
+	const titling = new Set<string>();
+
+	/** Gives an answered chat its model-written title once: detached, and silent when the model has none to give. */
+	function titleChatOnce(run: SearchRun): void {
+		const titleChat = deps.titleChat;
+		if (titleChat === undefined || titling.has(run.chatId)) return;
+		titling.add(run.chatId);
+		void (async () => {
+			const record = await deps.chatStore.get(run.chatId);
+			if (record === null || record.summaryTitle !== undefined) return;
+			const question = record.messages.find((message) => message.role === "user");
+			const answer = record.messages.find((message) => message.role === "assistant" && (message.quick ?? message.deep) !== null);
+			if (question?.role !== "user" || answer?.role !== "assistant") return;
+			const title = await titleChat(question.text, (answer.quick ?? answer.deep)?.answer ?? "");
+			if (title === null) return;
+			await writeChat(run, (existing) => ({ ...existing, summaryTitle: title }));
+			emit({ type: "title", searchId: run.searchId, chatId: run.chatId, title });
+		})()
+			.catch(() => undefined)
+			.finally(() => titling.delete(run.chatId));
+	}
+
 	/** Runs one read-modify-write of the run's chat record after every earlier one. */
 	function writeChat(run: SearchRun, update: (existing: ChatRecord) => ChatRecord): Promise<void> {
 		const write = run.writes.then(async () => {
@@ -725,7 +754,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				// A stream that ended with no answer at all did not answer.
 				const answered = !(run.failed || (run.quick === null && run.deep === null));
 				reportFinished(run, answered ? "answered" : "failed");
-				if (answered) runAfterAnswered();
+				if (answered) {
+					runAfterAnswered();
+					titleChatOnce(run);
+				}
 			}
 			active.delete(run.searchId);
 			run.resolveFinish();
@@ -785,6 +817,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				snippet: "",
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
+				// A follow-up keeps the title the chat was given.
+				...(existing?.summaryTitle === undefined ? {} : { summaryTitle: existing.summaryTitle }),
 			});
 			let refusal: SearchRefusal | null = null;
 			try {
@@ -981,10 +1015,13 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
 		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
+		const interaction = createAgentInteraction();
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), interaction);
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
+		// A rule the agent saves is shown to the person filled in first, and written only once they add it.
+		confirmAutomationSaves(agent, () => interaction.current());
 		return agent as SearchAgent;
 	};
 }

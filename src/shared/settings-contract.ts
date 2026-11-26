@@ -115,6 +115,24 @@ export interface AppSettings {
 	readonly shortcuts: ShortcutSettings;
 	/** The system-wide quick-search launcher shortcut (Settings → General). */
 	readonly quickSearch: QuickSearchSettings;
+	/**
+	 * Names people gave their file automations, by rule id (자동화 → 내 자동화 → ⋯ → 이름 바꾸기). The librarian's
+	 * rules file has no name field and refuses unknown ones, so the app keeps them; a rule without one shows the title
+	 * the app derives from its trigger and action.
+	 */
+	readonly automationNames: Readonly<Record<string, string>>;
+}
+
+/** Only non-empty string names, trimmed, under a non-empty id. */
+export function normalizeAutomationNames(value: unknown): Readonly<Record<string, string>> {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+	const names: Record<string, string> = {};
+	for (const [id, name] of Object.entries(value as Record<string, unknown>)) {
+		if (id.length === 0 || typeof name !== "string") continue;
+		const trimmed = name.trim();
+		if (trimmed.length > 0) names[id] = trimmed;
+	}
+	return names;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -136,6 +154,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
 	quickSearch: DEFAULT_QUICK_SEARCH_SETTINGS,
+	automationNames: {},
 };
 
 /** Whether the backend a datasource needs is present on this machine. */

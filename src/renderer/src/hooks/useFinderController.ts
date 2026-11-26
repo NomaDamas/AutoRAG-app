@@ -97,6 +97,7 @@ import {
 import {
 	activeTab,
 	AI_SEARCH_PATH,
+	AUTOMATIONS_PATH,
 	applyColumnChoice,
 	exitVirtualTab,
 	goBack,
@@ -455,6 +456,8 @@ export function useFinderController(
 		readonly onFocusComposer?: () => void;
 		/** The window's toast: one for every pane. */
 		readonly onToast?: (message: string) => void;
+		/** A failure: the toast with the red badge (and the notification center). Without it, failures fall back to `onToast`. */
+		readonly onErrorToast?: (message: string) => void;
 	} = {},
 ): FinderController {
 	const { store, sidecar } = data;
@@ -468,6 +471,8 @@ export function useFinderController(
 	focusComposerRef.current = options.onFocusComposer;
 	const toastRef = useRef(options.onToast);
 	toastRef.current = options.onToast;
+	const errorToastRef = useRef(options.onErrorToast);
+	errorToastRef.current = options.onErrorToast;
 	const { pane, focused, update: updateWorkspace } = binding;
 	const paneId = pane.id;
 	const tabsState: TabsState = { tabs: pane.tabs, activeId: pane.activeId, nextId: 0 };
@@ -607,7 +612,7 @@ export function useFinderController(
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
-		(error: unknown) => toastRef.current?.(conversionErrorMessage(error)),
+		(error: unknown) => (errorToastRef.current ?? toastRef.current)?.(conversionErrorMessage(error)),
 		[],
 	);
 
@@ -1666,7 +1671,7 @@ export function useFinderController(
 				.then((entries) => {
 					const entry = findEvidenceSource(entries, target);
 					if (entry === undefined) {
-						throw new Error(`Evidence source was not found in its folder: ${target}`);
+						throw new Error(t("finder.evidenceMissing", { name: basename(target) }));
 					}
 					setTabsState((state) => openTabRevealing(state, folder, entry.path));
 					setFlashPath(entry.path);
@@ -2337,6 +2342,7 @@ export function useFinderController(
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
+					automations: current.path === AUTOMATIONS_PATH,
 					documentEditor: isDocumentEditorTabPath(current.path),
 				};
 			}),

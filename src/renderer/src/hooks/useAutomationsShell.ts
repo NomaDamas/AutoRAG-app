@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import { t } from "../../../shared/i18n/core";
 import type { AutomationsViewProps } from "../components/AutomationsView";
-import { addPrompt, editPrompt, ruleTitle } from "../state/automations";
+import { addPrompt, ruleTitle } from "../state/automations";
 import { ruleKeyAction } from "../state/automations-keys";
 import { ruleMenuEntries, stepRuleSelection, type AutomationsStore, type AutomationsView } from "../state/automations-store";
 import type { FinderMenuAction, FinderMenuEntry } from "../state/context-menu";
+import { appendMagicAction } from "../state/right-click-trigger";
+import { normalizeContextMenuSettings, type MagicAction } from "../../../shared/context-menu-contract";
 
 /** How long the "삭제했어요 · 실행 취소" toast offers its undo. */
 const UNDO_MS = 5000;
@@ -23,16 +25,34 @@ export interface AutomationsShellDeps {
 	readonly showInList: (id: string) => void;
 	/** Surface an error the way the window shows one: a toast. */
 	readonly onError: (message: string) => void;
+	/** The names people gave their rules; passed so the list redraws when one changes. */
+	readonly names?: Readonly<Record<string, string>>;
+	/**
+	 * Turn the background service on by itself when there are rules and it is off (the desktop window). The phone
+	 * layout keeps its own switch and leaves this off, so a person who switched it off there is not overruled.
+	 */
+	readonly autoStartService?: boolean;
+	/** Store a rule's name (an empty one goes back to the derived title). */
+	readonly renameRule?: (id: string, name: string) => Promise<void>;
+	/** The 채팅 half of the AI 에이전트 tab's segment. */
+	readonly showChat?: () => void;
+	/** 새 자동화 and 말로 만들기: bring the AI chat column up to make a rule in words. */
+	readonly talk?: () => void;
+	/** A right-click row's ›: open Settings → 우클릭 메뉴 with that action's editor. */
+	readonly openMagicAction?: (id: string) => void;
 }
 
 export interface AutomationsShell {
 	/** Everything the list view takes, ready to spread. */
 	readonly props: AutomationsViewProps;
 	readonly selectedRule: AutomationRule | null;
+	/** The rule the 새 자동화 card is making, for the inspector while nothing is picked. */
+	readonly draft: AutomationRule | null;
 	readonly preview: AutomationRule | null;
 	readonly confirm: AutomationRule | null;
 	readonly menu: { readonly cursor: { readonly x: number; readonly y: number }; readonly entries: readonly FinderMenuEntry[] } | null;
-	readonly undoToast: { readonly message: string; readonly onUndo: () => Promise<void> } | null;
+	/** While the confirmed delete runs, the toast reads 삭제 중… with no undo (`onUndo` null); then the undo toast. */
+	readonly undoToast: { readonly message: string; readonly onUndo: (() => Promise<void>) | null; readonly busy?: boolean } | null;
 	/** The toast's close button: the delete stands, the undo is gone. */
 	readonly dismissUndoToast: () => void;
 	/** Edit (AI draft) a rule: shared by the list, Quick Look, and the inspectors. */
@@ -42,6 +62,8 @@ export interface AutomationsShell {
 	readonly closePreview: () => void;
 	readonly confirmDelete: () => Promise<void>;
 	readonly cancelDelete: () => void;
+	/** The confirmed delete is running: the confirm stays up and reads 삭제 중… until it is done. */
+	readonly deleting: boolean;
 	readonly menuSelect: (action: FinderMenuAction, format: unknown, serviceId: unknown, tagName: unknown) => void;
 	readonly closeMenu: () => void;
 	/** A rule row's right-click menu from a folder inspector: adds "show in list". */
@@ -68,13 +90,61 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const { store, view, active } = deps;
 	const rules = view.state.rules;
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [draft, setDraft] = useState<AutomationRule | null>(null);
+	// The rule 수정 put in the 새 자동화 card; null while the card makes a new one.
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
+	const [deleting, setDeleting] = useState(false);
+	// The rule being removed: it stays in the list until the CLI is done, but it cannot be opened again.
+	const [deletingId, setDeletingId] = useState<string | null>(null);
+	// The 삭제 중… toast, shown while the delete runs; the window stays usable meanwhile (no modal over it).
+	const [deletingMessage, setDeletingMessage] = useState<string | null>(null);
+	// Making or saving a rule says so in the toast (만드는 중… → 만들었습니다), not on the card's button, so the window stays free.
+	const [progress, setProgress] = useState<{ readonly message: string; readonly busy: boolean } | null>(null);
+	const progressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const showProgress = useCallback((message: string, busy: boolean) => {
+		clearTimeout(progressTimer.current);
+		setProgress({ message, busy });
+		if (!busy) progressTimer.current = setTimeout(() => setProgress(null), UNDO_MS);
+	}, []);
+	const clearProgress = useCallback(() => {
+		clearTimeout(progressTimer.current);
+		setProgress(null);
+	}, []);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
 	const [undoMessage, setUndoMessage] = useState<string | null>(null);
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const latest = useRef(deps);
 	latest.current = deps;
+
+	// The right-click actions, listed beside the rules: read once, then kept as Settings (or its assistant) changes them.
+	const [magicActions, setMagicActions] = useState<readonly MagicAction[]>([]);
+	useEffect(() => {
+		const settings = window.autorag?.settings;
+		if (settings === undefined) return;
+		let live = true;
+		const apply = (next: { readonly contextMenu?: unknown }): void => {
+			if (live) setMagicActions(normalizeContextMenuSettings(next.contextMenu).magicActions);
+		};
+		void settings.get().then(apply).catch(() => undefined);
+		const off = settings.onChanged?.(apply);
+		return () => {
+			live = false;
+			off?.();
+		};
+	}, []);
+
+	// No rule runs while the service is off, so the window turns it on once there is something to run: once per
+	// launch, so a failure (shown as a toast) or a later 끄기 is not fought over.
+	const autoStarted = useRef(false);
+	const daemon = view.state.daemon;
+	useEffect(() => {
+		if (deps.autoStartService !== true || autoStarted.current || view.daemonBusy) return;
+		if (!view.state.ready || rules.length === 0 || daemon === null || daemon.running === true) return;
+		autoStarted.current = true;
+		store.setDaemon(true).catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
+	}, [deps.autoStartService, view.state.ready, rules.length, daemon?.running, daemon === null, view.daemonBusy]);
 
 	const byId = useCallback((id: string | null): AutomationRule | null => (id === null ? null : (rules.find((rule) => rule.id === id) ?? null)), [rules]);
 	// A rule deleted elsewhere (the agent, another window) leaves nothing selected, previewed, or asked about.
@@ -88,7 +158,14 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	}, []);
 	useEffect(() => clearUndoTimer, [clearUndoTimer]);
 
-	const edit = useCallback((rule: AutomationRule) => latest.current.openAiDraft(editPrompt(rule)), []);
+	// 수정 opens the rule's own page in the 자동화 tab, wherever it was asked from (the list, the inspectors, Quick Look, a menu).
+	const edit = useCallback((rule: AutomationRule) => {
+		setMenuState(null);
+		setPreviewId(null);
+		setEditingId(rule.id);
+		setSelectedId(rule.id);
+		latest.current.showInList(rule.id);
+	}, []);
 	const add = useCallback(() => latest.current.openAiDraft(addPrompt()), []);
 
 	const askDelete = useCallback((rule: AutomationRule) => {
@@ -100,15 +177,31 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const confirmDelete = useCallback(async () => {
 		const rule = byId(confirmId);
 		setConfirmId(null);
-		if (rule === null) return;
+		if (rule === null || deleting) return;
 		const index = rules.findIndex((candidate) => candidate.id === rule.id);
+		// A rule deleted from its own page leaves for the list at once, not when the CLI has finished removing it.
+		const leftItsPage = editingId === rule.id;
+		if (leftItsPage) setEditingId(null);
+		setDeleting(true);
+		setDeletingId(rule.id);
+		clearUndoTimer();
+		setUndoMessage(null);
+		setDeletingMessage(t("automations.toast.deleting", { title: ruleTitle(rule) }));
 		try {
 			await store.remove(rule.id);
 		} catch (cause) {
+			// Not deleted after all: back to the page it was deleted from.
+			if (leftItsPage) setEditingId(rule.id);
 			latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 			return;
+		} finally {
+			setDeleting(false);
+			setDeletingId(null);
+			setDeletingMessage(null);
 		}
 		const left = rules.filter((candidate) => candidate.id !== rule.id);
+		// A rule deleted from its own page leaves for the list.
+		setEditingId((current) => (current === rule.id ? null : current));
 		setSelectedId((current) => (current === rule.id ? (left[Math.min(index, left.length - 1)]?.id ?? null) : current));
 		setPreviewId((current) => (current === rule.id ? null : current));
 		setUndoMessage(t("automations.toast.deleted", { title: ruleTitle(rule) }));
@@ -118,9 +211,12 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			setUndoMessage(null);
 			store.clearUndo();
 		}, UNDO_MS);
-	}, [byId, confirmId, rules, store, clearUndoTimer]);
+	}, [byId, confirmId, deleting, editingId, rules, store, clearUndoTimer]);
 
 	const dismissUndoToast = useCallback(() => {
+		setDeletingMessage(null);
+		clearTimeout(progressTimer.current);
+		setProgress(null);
 		clearUndoTimer();
 		setUndoMessage(null);
 		store.clearUndo();
@@ -213,7 +309,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 					setPreviewId((current) => (current === null ? selectedId : null));
 					return;
 				case "edit":
-					if (selectedRule !== null) edit(selectedRule);
+					if (selectedRule !== null && selectedRule.id !== deletingId) edit(selectedRule);
 					return;
 				case "delete":
 					if (selectedRule !== null) askDelete(selectedRule);
@@ -227,7 +323,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [active, askDelete, confirmId, edit, menuState, previewId, rules, selectedId, selectedRule]);
+	}, [active, askDelete, confirmId, deleting, deletingId, edit, menuState, previewId, rules, selectedId, selectedRule]);
 
 	// Quick Look belongs to the list tab. A menu or confirm may have been opened from a folder inspector, so they stay.
 	useEffect(() => {
@@ -236,6 +332,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	const props: AutomationsViewProps = {
 		state: view.state,
+		deletingId,
 		daemonBusy: view.daemonBusy,
 		selectedId: selectedRule?.id ?? null,
 		onSelect: setSelectedId,
@@ -244,6 +341,81 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			if (rule !== null) edit(rule);
 		},
 		onAdd: add,
+		onShowChat: () => latest.current.showChat?.(),
+		onTalk: () => latest.current.talk?.(),
+		onCreate: async (draft) => {
+			showProgress(t("automations.toast.creating"), true);
+			try {
+				const id = await store.create(draft);
+				if (id !== null) setSelectedId(id);
+				if (id !== null) showProgress(t("automations.toast.created"), false);
+				else clearProgress();
+				return id !== null;
+			} catch (cause) {
+				clearProgress();
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
+		// 우클릭하면 on a 새 자동화 card: the action joins the right-click menu (Settings → 우클릭 메뉴 lists it), under an id
+		// no other action has, and the menu's magic section is shown again if it was hidden.
+		onCreateMagicAction: async (action) => {
+			const settings = window.autorag?.settings;
+			if (settings === undefined) return false;
+			showProgress(t("automations.toast.addingToMenu"), true);
+			try {
+				await appendMagicAction(settings, action);
+				showProgress(t("automations.toast.addedToMenu", { title: action.label }), false);
+				return true;
+			} catch (cause) {
+				clearProgress();
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
+		magicActions,
+		onOpenMagicAction: (id) => latest.current.openMagicAction?.(id),
+		onToggleMagicAction: (id) => {
+			const settings = window.autorag?.settings;
+			if (settings === undefined) return;
+			void (async () => {
+				const current = normalizeContextMenuSettings((await settings.get()).contextMenu);
+				const saved = await settings.set({
+					contextMenu: { ...current, magicActions: current.magicActions.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)) },
+				});
+				setMagicActions(normalizeContextMenuSettings(saved.contextMenu).magicActions);
+			})().catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
+		},
+		editing: byId(editingId),
+		onUpdate: async (id, next) => {
+			showProgress(t("automations.toast.saving"), true);
+			try {
+				const ok = await store.update(id, next);
+				// Saving keeps the rule's page open: its 실행 기록 is right under the card.
+				if (ok) setSelectedId(id);
+				if (ok) showProgress(t("automations.toast.saved"), false);
+				else clearProgress();
+				return ok;
+			} catch (cause) {
+				clearProgress();
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
+		onCancelEdit: () => setEditingId(null),
+		names: deps.names ?? {},
+		onRename: async (id, name) => {
+			try {
+				await latest.current.renameRule?.(id, name);
+			} catch (cause) {
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+			}
+		},
+		onDraftChange: (next) => {
+			setDraft(next);
+			// Making a rule takes the inspector over from the one picked.
+			if (next !== null) setSelectedId(null);
+		},
 		onPreview: (id) => {
 			setSelectedId(id);
 			setPreviewId(id);
@@ -251,6 +423,9 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		onAskDelete: (id) => {
 			const rule = byId(id);
 			if (rule !== null) askDelete(rule);
+		},
+		onRetryStatus: () => {
+			void store.reload();
 		},
 		onSetDaemon: (enabled) => {
 			store.setDaemon(enabled).catch((cause: unknown) => latest.current.onError(cause instanceof Error ? cause.message : String(cause)));
@@ -266,10 +441,18 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	return {
 		props,
 		selectedRule,
+		draft,
 		preview,
 		confirm,
 		menu,
-		undoToast: undoMessage === null ? null : { message: undoMessage, onUndo: undo },
+		undoToast:
+			deletingMessage !== null
+				? { message: deletingMessage, onUndo: null, busy: true }
+				: progress !== null
+					? { message: progress.message, onUndo: null, busy: progress.busy }
+					: undoMessage === null
+						? null
+						: { message: undoMessage, onUndo: undo },
 		dismissUndoToast,
 		edit,
 		askDelete,
@@ -281,6 +464,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		closePreview: () => setPreviewId(null),
 		confirmDelete,
 		cancelDelete: () => setConfirmId(null),
+		deleting,
 		menuSelect,
 		closeMenu,
 		openRuleMenu: (rule, cursor) => setMenuState({ ruleId: rule.id, cursor, fromFolder: true }),

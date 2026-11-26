@@ -370,8 +370,9 @@ export function tabTitle(tab: { readonly path: string }, view: { readonly query:
 	if (tab.path === AI_SEARCH_PATH) {
 		return t("places.aiSearch");
 	}
+	// 자동화 is the AI 에이전트 tab's other side: the tab keeps its name.
 	if (tab.path === AUTOMATIONS_PATH) {
-		return t("places.automations");
+		return t("places.aiSearch");
 	}
 	const editedFile = editorFilePathOf(tab.path);
 	if (editedFile !== null) {

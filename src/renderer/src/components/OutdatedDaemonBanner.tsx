@@ -9,7 +9,7 @@ import { NoticeCard } from "./primitives/NoticeCard";
  * restart when Dazzi owns the daemon, and a read-only link to Settings → About
  * when the daemon was started outside Dazzi (never killing a user-started server).
  */
-export function OutdatedDaemonBanner({ onOpenAbout }: { readonly onOpenAbout: () => void }): ReactElement | null {
+export function OutdatedDaemonBanner({ onOpenSettings }: { readonly onOpenSettings: () => void }): ReactElement | null {
 	const { t } = useTranslation();
 	const bridge = window.autorag?.toolVersions;
 	const [snapshot, setSnapshot] = useState<ToolVersionsSnapshot | null>(null);
@@ -79,7 +79,7 @@ export function OutdatedDaemonBanner({ onOpenAbout }: { readonly onOpenAbout: ()
 						]
 					: [
 							{ label: t("common.later"), onClick: dismiss },
-							{ label: t("settingsCore.about.openAbout"), primary: true, onClick: onOpenAbout },
+							{ label: t("settingsCore.about.openSettings"), primary: true, onClick: onOpenSettings },
 						]
 			}
 		>

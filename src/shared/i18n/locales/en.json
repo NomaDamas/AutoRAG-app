@@ -113,6 +113,7 @@
     "new": "New tab ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "Couldn’t find ‘{{name}}’ in its folder. It may have been moved or deleted.",
     "emptyFolder": "Empty folder",
     "emptyRecents": "No recently opened files",
     "emptyTag": "No items tagged \"{{name}}\"",
@@ -154,20 +155,20 @@
       "levelLabel": "Compression strength",
       "recommended": "Recommended",
       "levels": {
-        "light": "Light (High quality)",
+        "light": "Light",
         "balanced": "Balanced",
-        "max": "Maximum (Smallest size)"
+        "max": "Maximum"
       },
       "specs": {
         "pdf": {
-          "light": "High quality · up to 1600px (~30–65% off)",
-          "balanced": "Standard · up to 1280px (~55–80% off)",
-          "max": "Smallest · up to 960px (~75–90% off)"
+          "light": "High quality (~30–65% off)",
+          "balanced": "Standard (~55–80% off)",
+          "max": "Smallest (~75–90% off)"
         },
         "image": {
-          "light": "High quality · 256-color/2560px (~35–60% off)",
-          "balanced": "Balanced · up to 1920px (~55–75% off)",
-          "max": "Smallest · up to 1280px (~70–85% off)"
+          "light": "High quality (~35–60% off)",
+          "balanced": "Balanced (~55–75% off)",
+          "max": "Smallest (~70–85% off)"
         },
         "video": {
           "light": "Original res · ~35%+ bitrate cut",
@@ -185,7 +186,8 @@
       "copyMode": "Save a copy",
       "replaceHint": "Moves the original to the Trash and replaces “{{name}}” in place.",
       "copyHint": "Keeps the original and saves “{{copyName}}” alongside it.",
-      "workingHint": "The original file stays untouched until compression finishes."
+      "workingHint": "The original file stays untouched until compression finishes.",
+      "working": "Reducing size…"
     }
   },
   "contextMenu": {
@@ -299,7 +301,8 @@
       "evidenceFolder": "Sources Folder",
       "evidenceFolderTooltip": "Open this session's source files in a temporary folder tab",
       "openPreview": "Preview at the cited passage",
-      "newSource": "New source {{number}}"
+      "newSource": "New source {{number}}",
+      "emptyHint": "The sources behind an answer appear here"
     },
     "chat": {
       "title": "AI Agent",
@@ -342,7 +345,21 @@
     "searchHistory": "Search chat history",
     "emptyHistory": "No saved chats.",
     "emptyHistorySearch": "No chats matching \"{{query}}\"",
+    "scrollToBottom": "Scroll to the bottom",
+    "startHeading": "What can I help you with?",
+    "askPlaceholder": "Ask Dazzi anything",
     "emptyPromptTitle": "What can I find for you?",
+    "capability": {
+      "hints": "Things you can do",
+      "find": "Find",
+      "findPlaceholder": "Describe the file you’re looking for",
+      "summarize": "Summarize",
+      "summarizePlaceholder": "Name the document to summarize",
+      "organize": "Organize",
+      "organizePlaceholder": "Say how you’d like things organized",
+      "automate": "Automate",
+      "automatePlaceholder": "Say what should happen, and when"
+    },
     "emptyPromptDesc": "Search across files, emails, and chats for quick and deep answers side by side.",
     "generatingDeep": "Generating deep answer…",
     "askDazzi": "Ask AI",
@@ -359,8 +376,7 @@
     "workedFor": "Worked for {{time}}",
     "reviewing": "Reviewing the query.",
     "stopped": "Generation stopped.",
-    "dropAttach": "Drop to attach to chat",
-    "dropPrompt": "Drag here to ask AI",
+    "dropHere": "Drop files here",
     "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
     "steerSend": "Correct the search",
     "voiceStart": "Dictate with your voice",
@@ -372,7 +388,7 @@
     "voiceUnavailable": "No microphone is available on this device.",
     "voiceFailed": "Could not transcribe your voice: {{message}}",
     "micPermission": {
-      "title": "Microphone permission is needed.",
+      "title": "Microphone permission needed",
       "body": "To ask with your voice, Dazzi needs microphone permission. It records only when you press the microphone button.",
       "stepsMac": "Turn on Dazzi in System Settings › Privacy & Security › Microphone.",
       "stepsWindows": "In Settings › Privacy & security › Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”.",
@@ -402,6 +418,11 @@
       "compacted": "Summarized the earlier conversation.",
       "compactedHint": "The earlier conversation is remembered as a summary. Mention again anything that was left out.",
       "trimmed": "The search result was long, so only part of it was read."
+    },
+    "segment": {
+      "label": "AI Agent view",
+      "chat": "Chat",
+      "automations": "Automations"
     }
   },
   "appError": {
@@ -479,11 +500,13 @@
       "triggerAria": "File permission mode",
       "readonly": {
         "label": "Read-only",
-        "desc": "Reads and searches only. OS sandboxing blocks creating, editing, or deleting files."
+        "desc": "Reads and searches only. OS sandboxing blocks creating, editing, or deleting files.",
+        "option": "Read-only"
       },
       "full": {
         "label": "Full",
-        "desc": "Allows creating, editing, and deleting files."
+        "desc": "Allows creating, editing, and deleting files.",
+        "option": "Full"
       }
     },
     "stop": "Stop",
@@ -542,6 +565,11 @@
     },
     "errors": {
       "config": "The rules file cannot be read",
+      "statusTitle": "Couldn't check the automations",
+      "fixing": "AI is finding and fixing the cause…",
+      "fixingView": "View progress",
+      "statusHint": "Check again in a moment, or let the AI agent find the cause and fix it.",
+      "retry": "Check again",
       "configHint": "Fix the rule in AI Agent or edit the file by hand."
     },
     "daemon": {
@@ -555,7 +583,7 @@
     },
     "menu": {
       "preview": "Quick Look",
-      "edit": "Edit in AI Agent",
+      "edit": "Edit",
       "reveal": "Show in Automations",
       "add": "Add a rule in AI Agent…",
       "openFolder": "Open watched folder",
@@ -585,13 +613,24 @@
       "agentProfile": "AI profile",
       "more": "More",
       "menuEdit": "Edit",
-      "menuDelete": "Delete"
+      "menuDelete": "Delete",
+      "runDone": "Done",
+      "serviceOff": "off",
+      "failedRules": "{{count}} failed — {{name}}",
+      "recentRuns": "Recent runs",
+      "noRuns": "Nothing has run yet",
+      "draftRule": "Automation rule",
+      "agentDoes": "AI: “{{task}}”",
+      "matches": "Files that match: {{count}}",
+      "noMatches": "No files match right now",
+      "notRun": "Not run yet",
+      "runFiles": "Files: {{count}}"
     },
     "quickLook": {
       "when": "When",
       "what": "Does",
       "folders": "Folders",
-      "edit": "Edit in AI Agent",
+      "edit": "Edit",
       "close": "Close",
       "ranFail": "Ran {{time}} · {{reason}}"
     },
@@ -602,8 +641,15 @@
     },
     "toast": {
       "deleted": "Deleted the rule “{{title}}”.",
+      "creating": "Creating the automation…",
+      "created": "Automation created.",
+      "saving": "Saving your changes…",
+      "saved": "Changes saved.",
+      "deleting": "Deleting the rule ‘{{title}}’…",
       "undo": "Undo",
-      "restored": "Restored the rule “{{title}}”."
+      "restored": "Restored the rule “{{title}}”.",
+      "addingToMenu": "Adding to the right-click menu…",
+      "addedToMenu": "Added ‘{{title}}’ to the right-click menu."
     },
     "kinds": {
       "screenshot": "Screenshot",
@@ -664,6 +710,126 @@
     "agent": {
       "reads": "Reads only",
       "writes": "Can change files"
+    },
+    "mine": "My Automations",
+    "create": {
+      "new": "+ New automation",
+      "headButton": "New automation",
+      "title": "New Automation",
+      "when": "When",
+      "task": "What Dazzi does",
+      "taskPlaceholder": "e.g. Summarize it in three lines and save it as a note",
+      "submit": "Create",
+      "sentence": "When {{kind}} {{event}} in {{folder}}",
+      "kindLabel": "File type",
+      "eventLabel": "Change",
+      "modeLabel": "Permission",
+      "pickFolder": "Choose folder",
+      "kind": {
+        "all": "any files",
+        "pdf": "PDF files",
+        "image": "images",
+        "document": "documents"
+      },
+      "event": {
+        "create": "arrive",
+        "update": "change",
+        "createUpdate": "arrive or change",
+        "delete": "are deleted",
+        "other": "change in other ways"
+      },
+      "mode": {
+        "read": "Read only",
+        "write": "Can edit files"
+      },
+      "submitEdit": "Save Changes",
+      "editTitle": "Edit Automation",
+      "open": "New automation"
+    },
+    "templates": {
+      "title": "Suggested Automations",
+      "screenshot": {
+        "title": "Tidy screenshot names",
+        "desc": "When a screenshot lands on the Desktop, give it a name that says what it is",
+        "task": "Give it a name that says what it is"
+      },
+      "pdf": {
+        "title": "Summarize new PDFs",
+        "desc": "When a PDF arrives in Downloads, summarize it in three lines and save it as a note",
+        "task": "Summarize it in three lines and save it as a note"
+      },
+      "refresh": {
+        "title": "Keep search up to date",
+        "desc": "When files in Documents are added or changed, update search right away",
+        "task": "Update search right away"
+      },
+      "add": "Add"
+    },
+    "row": {
+      "rename": "Rename",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "detail": {
+      "delete": "Delete automation",
+      "runOn": "Running",
+      "ok": "Succeeded",
+      "failed": "Failed",
+      "settings": "Settings",
+      "history": "Run history"
+    },
+    "tabs": {
+      "rules": "Automations",
+      "all": "All runs"
+    },
+    "all": {
+      "count": "Runs: {{count}}",
+      "failOnly": "Failures only",
+      "noFails": "No failed runs recorded",
+      "title": "All runs",
+      "open": "See all runs",
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "assistant": {
+      "caption": "Ask the AI to create or change an automation"
+    },
+    "recs": {
+      "section": "More to try",
+      "add": "Add",
+      "more": "Not what you need?",
+      "talk": "Make one in chat",
+      "reason": {
+        "pdf": "PDFs sitting in Downloads: {{count}}",
+        "screenshot": "Unnamed screenshots on your Desktop: {{count}}",
+        "refreshAgo": "Your Documents folder was last indexed {{time}}",
+        "refreshChanged": "Files changed in Documents this past week: {{count}}"
+      },
+      "hero": "Dazzi takes care of your files as they arrive or change",
+      "heroCaption": "Start with a recommended automation we found in your files."
+    },
+    "nudge": {
+      "pdf": "An automation could summarize each new PDF as it arrives.",
+      "screenshot": "An automation could give each new screenshot a name you can recognize.",
+      "refresh": "An automation could update search whenever a document changes.",
+      "make": "Create",
+      "later": "Later",
+      "lead": "Here's the automation. Change any part, then select Add.",
+      "created": "Automation created. Turn it on or off on the Automations side.",
+      "view": "View"
+    },
+    "request": {
+      "command": "Command"
+    },
+    "starter": {
+      "ask": "Create a new automation",
+      "reply": "Fill in the form, or describe the automation in chat to add it."
+    },
+    "back": "Back",
+    "magic": {
+      "title": "Right-click menu",
+      "open": "Open in Settings",
+      "on": "Show in the right-click menu"
     }
   },
   "osMenu": {
@@ -704,6 +870,19 @@
       "everything": "Indexing file names",
       "fsearch": "Indexing file names",
       "finalizing": "Finishing up"
+    }
+  },
+  "indexStatus": {
+    "eta": "About {{duration}} left",
+    "etaCalculating": "Working out the time left",
+    "stopped": "Indexing paused",
+    "waiting": "Waiting for the next refresh",
+    "justNow": "Just now",
+    "count": "{{done}}/{{total}} files",
+    "paused": {
+      "battery": "It will continue when you plug in power.",
+      "window": "It will continue during the allowed hours.",
+      "day": "It will continue on an allowed day."
     }
   },
   "indexProgress": {
@@ -813,14 +992,14 @@
   },
   "confirm": {
     "compressStopTitle": "Stop compressing?",
-    "compressStopMessage": "Compressing {{name}} stops and the partial archive is deleted.",
+    "compressStopMessage": "The partial archive will be deleted.",
     "compressStopAction": "Stop",
     "compressKeep": "Keep Compressing",
-    "emptyTrashTitle": "Empty Trash",
+    "emptyTrashTitle": "Empty the Trash?",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
     "emptyTrashAction": "Empty",
-    "closeEvidenceFolderTitle": "Close Sources Folder",
-    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Sources Folder. Your original files will stay untouched. Are you sure you want to close it?",
+    "closeEvidenceFolderTitle": "Close the Sources Folder?",
+    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Sources Folder. Your original files will stay untouched.",
     "closeEvidenceFolderAction": "Close"
   },
   "settings": {
@@ -949,6 +1128,7 @@
     "openWithDefault": "{{name}} (Default)",
     "openWithOther": "Other…",
     "source": {
+      "nameTaken": "A file or folder named ‘{{name}}’ already exists",
       "actionsUnavailable": "File actions can't run in this environment",
       "shareUnavailable": "Sharing can't run in this environment",
       "nothingToUndo": "Nothing to undo",
@@ -1042,6 +1222,49 @@
     }
   },
   "main": {
+    "errors": {
+      "config": {
+        "pathEmpty": "No setting was named to change.",
+        "pathInvalid": "This name can’t be used for a setting: ‘{{path}}’",
+        "pathManaged": "Dazzi manages this setting itself, so it can’t be changed here: ‘{{field}}’",
+        "valueNotJson": "This value can’t be saved in the settings.",
+        "plaintextSecret": "Secrets such as keys and tokens aren’t saved in the settings file. Enter it in the key field instead: ‘{{field}}’",
+        "urlInvalid": "The address isn’t in a valid format. Enter an address that starts with http:// or https://: ‘{{field}}’",
+        "urlNotLoopback": "So that document contents never leave this device, this address has to point at this device (localhost): ‘{{field}}’",
+        "remoteNeedsKey": "An embedding server outside this device needs an API key. Enter the server’s API key as well: ‘{{field}}’",
+        "urlNeedsHttps": "A remote server address that uses a token has to start with https://: ‘{{field}}’",
+        "renameSame": "The new name is the same as the current one.",
+        "renameIntoItself": "‘{{name}}’ can’t be moved into itself.",
+        "renameTaken": "The name ‘{{name}}’ is already taken. Enter a different name.",
+        "renameMissing": "Couldn’t find ‘{{name}}’. It may already have been deleted."
+      },
+      "account": {
+        "authFileUnreadable": "Couldn’t read the sign-in file ‘{{name}}’, so nothing was changed. Check the file’s contents."
+      },
+      "provider": {
+        "nameEmpty": "Enter a name.",
+        "addressEmpty": "Enter the server address.",
+        "addressInvalid": "The server address isn’t in a valid format. Enter an address that starts with http:// or https://.",
+        "localOnly": "A local server has to run on this device. Enter a localhost or 127.0.0.1 address.",
+        "serverUnreachable": "Couldn’t connect to the server. Check that it’s running and that the address is correct.",
+        "serverKeyRefused": "The server refused the API key. Check the key.",
+        "modelsFileUnreadable": "Couldn’t read the model settings file ‘{{name}}’, so nothing was changed. Check the file’s contents.",
+        "noBrowserLogin": "‘{{name}}’ doesn’t support signing in through the browser.",
+        "loginNotWaiting": "Sign-in isn’t waiting for input. Start signing in again."
+      },
+      "credentials": {
+        "storeUnreadable": "Couldn’t read the stored API key file. Nothing was changed, so your existing keys are kept.",
+        "envNameInvalid": "‘{{name}}’ can’t be used as an environment variable name. Use only letters, digits and underscores (_), and don’t start with a digit.",
+        "keyEmpty": "Enter an API key.",
+        "encryptionUnavailable": "This device has no secure keyring, so the API key wasn’t saved. Set up the system keyring and try again."
+      },
+      "errorFix": {
+        "noResult": "The AI finished without reporting a result."
+      },
+      "ltr": {
+        "statusUnreadable": "This version of the app can’t read its format. Update the app to the latest version."
+      }
+    },
     "interaction": {
       "yes": "Yes",
       "no": "No"
@@ -1273,6 +1496,9 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "Could not turn automations off. Please try again in a moment.",
+        "daemonOnScheduler": "Could not turn automations on. Windows Task Scheduler did not accept the registration; permissions or security policy on this PC may be blocking it.",
+        "daemonOnFailed": "Could not turn automations on. Please try again in a moment.",
         "unreadable": "Cannot read the automation rules file: {{reason}}",
         "unknownRule": "No rule named “{{id}}”.",
         "cliFailed": "Could not check the automations: {{reason}}",
@@ -1719,7 +1945,6 @@
       "contextMenu": "Context Menu",
       "shortcuts": "Shortcuts",
       "remote": "Remote Access",
-      "about": "About",
       "ai": "AI Models",
       "web": "Web Search",
       "indexing": "Indexing",
@@ -1737,15 +1962,14 @@
       "keywords": {
         "account": "account sign in email name profile",
         "plan": "plan billing credits usage subscription",
-        "general": "display theme appearance language hidden files login updates statistics document language document language reading parser OCR",
+        "general": "display theme appearance language hidden files login updates statistics document language document language reading parser OCR about versions librarian minsync inl mailcrawl lazykatok embedding daemon path mismatch",
         "sidebar": "sidebar favorites cloud locations tags folders hide show order customize AI",
         "contextMenu": "right click context menu magic action script automation agent extensions tags customize AI",
         "shortcuts": "shortcuts keyboard hotkeys keybindings record customize AI",
         "remote": "remote access phone mobile browser pairing code QR Cloudflare tunnel domain devices",
-        "about": "about versions librarian minsync inl mailcrawl lazykatok embedding daemon path mismatch",
         "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
         "web": "web search internet search service page reading",
-        "indexing": "refresh sync incremental index indexing update interval schedule search scope folders exclude paths",
+        "indexing": "refresh sync incremental index indexing update interval schedule search scope folders exclude paths about versions librarian minsync inl mailcrawl lazykatok embedding daemon path mismatch",
         "duplicates": "duplicate files versions cleanup dupey",
         "ltr": "learning to rank ltr ranking model train reorder xgboost log search history training data reranker",
         "apps": "connections apps data sources messenger mail cloud",
@@ -1819,6 +2043,8 @@
       "addMagicAction": "Add Magic Action",
       "editMagicAction": "Edit {{name}}",
       "removeMagicAction": "Remove {{name}}",
+      "removeMagicConfirmTitle": "Delete the magic action ‘{{name}}’?",
+      "removeMagicConfirmBody": "It will be removed from the right-click menu. This cannot be undone.",
       "condSingle": "Single item",
       "condMultiple": "Multiple items",
       "condAnySelection": "Single or multiple",
@@ -1890,7 +2116,10 @@
         "promptSummarizeDoc": "Summarize the key points of a PDF or Word document in three lines",
         "promptCompareFiles": "When I pick two files, sum up what changed between them",
         "promptPaperToDiscord": "Summarize a paper, post it to Discord #paper-summaries, and save it as slides in a \"Paper Summaries\" folder",
-        "promptMaskToPdf": "Mask the names in hwp and docx files and save them as PDF"
+        "promptMaskToPdf": "Mask the names in hwp and docx files and save them as PDF",
+        "starterUser": "New magic action",
+        "starterReply": "Fill in the form, or describe the action in the chat to add it.",
+        "starterAdded": "Added ‘{{title}}’ to the right-click menu."
       },
       "dragHint": "Reorder {{name}}: drag, or press ↑ or ↓"
     },
@@ -2014,7 +2243,6 @@
       "quickSearchTaken": "{{shortcut}} is already used by another app or the system. Choose another combination."
     },
     "about": {
-      "description": "Resolved versions of Dazzi, the librarian, pinned tools, and the shared local embedding daemon.",
       "daemonTitle": "Embedding Daemon",
       "daemonName": "Local embedding server",
       "daemonRunning": "{{owner}} ({{engine}} {{version}}, port {{port}})",
@@ -2030,9 +2258,7 @@
       "restartFailed": "Could not restart the embedding daemon: {{message}}",
       "refresh": "Refresh",
       "versionsTitle": "Component Versions",
-      "pinnedHint": "Pinned {{version}}",
       "bundledAndPinnedHint": "Bundled {{bundled}} (pinned {{pinned}})",
-      "notBundled": "Not bundled (pinned {{pinned}})",
       "pathMismatch": "PATH copy is {{pathVersion}} ({{path}}) — differs from {{expected}}",
       "manifestMismatch": "Bundled manifest {{bundled}} differs from pin {{pinned}}",
       "manifestDriftTitle": "Bundled tools differ from pinned versions",
@@ -2040,7 +2266,11 @@
       "bannerTitle": "Embedding daemon update available",
       "bannerOwnedDetail": "The running embedding daemon ({{version}} on port {{port}}) is older than pinned {{pinned}}. Restart it to apply the update without reindexing.",
       "bannerExternalDetail": "An older embedding daemon ({{version}} on port {{port}}) started outside Dazzi is running (pinned {{pinned}}). Restart it manually when ready.",
-      "openAbout": "Open About"
+      "versionsHint": "Versions of the librarian and the tools Dazzi works with.",
+      "versionsOff": "{{count}} item(s) differ from the versions Dazzi pins.",
+      "versionsShow": "Show",
+      "versionsHide": "Hide",
+      "openSettings": "Open Indexing settings"
     },
     "remote": {
       "description": "Use this computer's Dazzi from a browser on another computer or phone.",
@@ -2222,8 +2452,7 @@
       "testOk": "connection successful",
       "testFail": "connection failed",
       "discoverFound": "{{name}}: found {{count}} models ({{protocol}})",
-      "discoverFailed": "{{name}}: {{error}}",
-      "discoverFailWord": "discovery failed",
+      "discoverFailed": "Couldn’t find models on ‘{{name}}’. Check that the server is running and that the address is correct.",
       "menu": {
         "dazziPlan": "Dazzi Plans",
         "apiKeys": "API Keys",
@@ -2362,7 +2591,7 @@
         "save": "Save",
         "advanced": "This entry has settings the app does not edit; they are kept as they are.",
         "badLine": "Cannot read the line \"{{line}}\".",
-        "removeTitle": "Remove \"{{name}}\"?",
+        "removeTitle": "Remove ‘{{name}}’?",
         "removeBody": "The server is deleted from the config file. Data the server stored is left alone.",
         "argsHint": "One per line.",
         "envFormatHint": "One per line, as NAME=value.\nA value can refer to another environment variable as ${NAME}.",
@@ -2493,6 +2722,11 @@
       "no": "Don't allow",
       "save": "Save",
       "secretPlaceholder": "Paste it here"
+    },
+    "assistantGreeting": {
+      "title": "How can I help?",
+      "desc": "Change this page's settings in your own words, or ask anything about them.",
+      "placeholder": "Ask anything"
     }
   },
   "settingsLtr": {
@@ -2849,7 +3083,7 @@
       "connectApps": "Connect an app",
       "connect": "Connect",
       "promptTitle": "Connect {{name}}",
-      "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
+      "promptDesc": "Enter a connection id. Leave it empty to use the template name.",
       "promptLabel": "Connection id",
       "promptConfirm": "Add connection",
       "macOnlyCalendar": "Only available on macOS (EventKit).",
@@ -2885,7 +3119,7 @@
       "removeSection": "Disconnect",
       "removeHint": "Removed only from Dazzi search; the source app's data is not deleted.",
       "confirmTitle": "Disconnect this connection?",
-      "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
+      "confirmBody": "The ‘{{alias}}’ connection will be removed from Dazzi search. The source app's data is not deleted.",
       "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer.",
       "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer.",
       "whatsappOnlyNote": "WhatsApp is read through wacrawl, which only finds the Mac app's database, so this connection is inactive on this computer. If you have a copied data folder, set it as the source path.",
@@ -2969,7 +3203,7 @@
     },
     "reading": {
       "title": "Document language",
-      "langHint": "You can select more than one."
+      "langHint": "The languages used to read text in scanned documents and images."
     },
     "duplicates": {
       "title": "Duplicate cleanup",
@@ -3044,9 +3278,9 @@
   "magicAction": {
     "running": "Running Magic Action…",
     "completed": "Completed",
-    "failedTitle": "Magic Action Failed",
+    "failedTitle": "Couldn't run the Magic Action",
     "stoppedTitle": "Action Stopped",
-    "minimize": "Continue in Background",
+    "minimize": "Run in background",
     "stop": "Stop",
     "close": "Close",
     "copyOutput": "Copy Output",
@@ -3369,16 +3603,14 @@
       "skip": "Skip",
       "finish": "Done",
       "clickHint": "Click it to try",
-      "sendHint": "Send it yourself",
-      "typingHint": "Typing…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "Here is how to ask",
-        "body": "Let's try it on the files we just read. Click send, or change the text and ask your own."
+        "title": "Ask about your files",
+        "body": "We drafted something to ask from your own documents.\nClick send to try it."
       },
       "cite": {
-        "title": "Got an answer — click the citation number",
-        "body": "Every answer is grounded in your files. Click the blue number to open the exact source.",
+        "title": "Answers show their sources",
+        "body": "Click a number to see, in the info pane on the right, which file that sentence came from.",
         "waitingTitle": "Finding the answer",
         "waitingBody": "Reading what's inside your files.",
         "noCiteTitle": "Here's your answer",
@@ -3387,16 +3619,16 @@
         "failedBody": "You can rephrase the question and ask again."
       },
       "evidence": {
-        "title": "Sources gather here",
-        "body": "The exact passage from the original. Click its title to go to the file."
+        "title": "Jump to the original file",
+        "body": "Click the source title. The folder holding that file opens in a new tab."
       },
       "duplicates": {
-        "title": "Click the stacked document",
-        "body": "Copies and older versions fold into one row. Click it to expand all versions."
+        "title": "Similar files stay together",
+        "body": "Similar files are stacked into one row.\nClick it to open them and see which is the latest."
       },
       "versions": {
         "title": "Check the latest version here",
-        "body": "Identical and near-identical documents side by side. Click one to jump to it."
+        "body": "The info pane shows the latest version and its near-copies.\nThe other copies are kept as they are."
       }
     },
     "signin": {
@@ -3515,7 +3747,7 @@
     "dragHint": "Drag the photo over"
   },
   "fullDiskAccess": {
-    "title": "Allow Full Disk Access",
+    "title": "Full Disk Access needed",
     "titleGranted": "Full Disk Access allowed",
     "leadTagColors": "Finder's tag colors live in a location macOS protects. Turn Dazzi on in System Settings and choose Quit & Reopen when prompted.",
     "leadSource": "This source reads another app's data. Turn on Full Disk Access for Dazzi in System Settings and choose Quit & Reopen when prompted.",

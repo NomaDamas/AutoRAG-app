@@ -1229,21 +1229,24 @@ html[data-appearance="dark"] .fr-reveal-base {
 	box-shadow: 0 0 0 200vmax var(--fr-scrim);
 }
 
+/* The card (Figma 156:591): white, 20px round, 20px in from every edge, sized to its words between two widths. */
 .fr-coach {
 	position: absolute;
-	width: 320px;
+	width: max-content;
+	min-width: 266px;
+	max-width: min(360px, calc(100vw - 32px));
 	transition: left 520ms var(--fr-spring), top 520ms var(--fr-spring);
 	pointer-events: auto;
 }
 
 .fr-coach-card {
-	padding: 16px 18px 14px;
-	border: 1px solid var(--fr-card-border);
-	border-radius: 16px;
-	background: var(--fr-card);
-	box-shadow: var(--fr-shadow);
-	-webkit-backdrop-filter: blur(22px) saturate(1.6);
-	backdrop-filter: blur(22px) saturate(1.6);
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	padding: 20px;
+	border-radius: 20px;
+	background: var(--bg-window);
+	box-shadow: 0 0 16px rgba(0, 0, 0, 0.3);
 	animation: fr-bubble-in 520ms var(--fr-spring) both;
 }
 
@@ -1254,13 +1257,10 @@ html[data-appearance="dark"] .fr-reveal-base {
 	}
 }
 
-.fr-coach-count {
-	margin: 0 0 6px;
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	color: var(--accent-text);
-	font-variant-numeric: tabular-nums;
+.fr-coach-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 .fr-coach-title {
@@ -1270,103 +1270,128 @@ html[data-appearance="dark"] .fr-reveal-base {
 	margin: 0;
 	font-size: 15px;
 	font-weight: 700;
-	line-height: 1.35;
+	line-height: 20.25px;
+	color: var(--fr-ink);
 }
 
+/* The copy breaks where it was written to (
+ in the strings), then wherever the card runs out. */
 .fr-coach-body {
-	margin: 6px 0 0;
-	font-size: 13px;
-	line-height: 1.55;
+	margin: 0;
+	font-size: 14px;
+	line-height: 1.5;
 	color: var(--fr-muted);
+	white-space: pre-line;
+	word-break: keep-all;
+	overflow-wrap: anywhere;
+}
+
+.fr-coach-note {
+	margin: 0;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--accent-text);
 }
 
 .fr-coach-actions {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-top: 14px;
+	gap: 24px;
+	min-height: 20px;
 }
 
-.fr-coach-hint {
-	display: inline-flex;
+/* Where the tour is: the current step a 20px pill, the rest 8px dots. */
+.fr-coach-dots {
+	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 12.5px;
-	font-weight: 600;
-	color: var(--accent-text);
 }
 
-.fr-coach-hint-dot {
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
+.fr-coach-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--border);
+	transition: width 260ms var(--fr-spring), background-color 260ms ease;
+}
+
+.fr-coach-dot[data-current] {
+	width: 20px;
 	background: var(--accent);
-	animation: fr-pulse 1.3s ease-in-out infinite;
 }
 
-.fr-coach-hint .fr-kbd {
-	background: var(--bg-input);
+.fr-coach-links {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+.fr-coach-link {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 13px;
+	line-height: 19.5px;
 	color: var(--fr-muted);
+	white-space: nowrap;
+	cursor: pointer;
+	transition: opacity var(--dur-color) ease-out;
 }
 
-/* Animated click-guide cursor: tracks the real target element and taps gently. */
+.fr-coach-link:hover {
+	opacity: 0.8;
+}
+
+.fr-coach-link--primary {
+	font-weight: 500;
+	color: var(--accent);
+}
+
+.fr-coach-link:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Where to click: the sunflower beside a ring on a small target, or on the corner of a wider one. Clicks pass through. */
 .fr-cursor {
 	position: absolute;
 	z-index: 2;
-	width: 26px;
-	height: 26px;
+	width: 0;
+	height: 0;
 	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring);
 	pointer-events: none;
 }
 
 .fr-cursor-ring {
 	position: absolute;
-	left: -17px;
-	top: -17px;
-	width: 34px;
-	height: 34px;
+	box-sizing: border-box;
 	border-radius: 50%;
-	border: 2px solid var(--accent);
-	background: rgba(10, 100, 216, 0.16);
-	animation: fr-cursor-ripple 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+	border-style: solid;
+	border-color: var(--accent);
+	box-shadow: 0 0 7.7px var(--accent);
+	animation: fr-ring-pulse 1.6s ease-in-out infinite;
 }
 
-.fr-cursor-glyph {
+@keyframes fr-ring-pulse {
+	50% {
+		box-shadow: 0 0 14px var(--accent);
+	}
+}
+
+.fr-mascot {
 	position: absolute;
-	left: -5px;
-	top: -3px;
-	filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.34));
-	transform-origin: 5px 3px;
-	animation: fr-cursor-tap 1.5s ease-in-out infinite;
+	width: 60px;
+	height: 60px;
+	filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.25));
+	animation: fr-mascot-bob 2.4s ease-in-out infinite;
+	user-select: none;
 }
 
-@keyframes fr-cursor-tap {
-	0%,
-	100% {
-		transform: translate(8px, 10px) scale(1);
-	}
-	42% {
-		transform: translate(0, 0) scale(0.9);
-	}
-	58% {
-		transform: translate(1px, 1px) scale(0.95);
-	}
-}
-
-@keyframes fr-cursor-ripple {
-	0%,
-	34% {
-		opacity: 0;
-		transform: scale(0.45);
-	}
-	46% {
-		opacity: 0.95;
-		transform: scale(0.85);
-	}
-	88%,
-	100% {
-		opacity: 0;
-		transform: scale(1.65);
+@keyframes fr-mascot-bob {
+	50% {
+		transform: translateY(-4px) rotate(-4deg);
 	}
 }
 
@@ -1644,12 +1669,12 @@ html[data-appearance="dark"] .fr-reveal-base {
 	.fr-cinema-bars::before,
 	.fr-cinema-bars::after,
 	.fr-coach-card,
+	.fr-cursor-ring,
+	.fr-mascot,
 	.fr-signin-sheet,
 	.fr-signin-check,
 	.fr-progress-fill::after,
-	.fr-coach-hint-dot,
-	.fr-cursor-ring,
-	.fr-cursor-glyph {
+	.fr-coach-spinner {
 		animation: none;
 	}
 

@@ -285,7 +285,7 @@ function SignaturePadModal({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label={t("documentEditor.pdf.signatureTitle")}>
-			<div className="flex w-[460px] max-w-[92vw] flex-col gap-12 rounded-12 border border-border bg-window p-16 shadow-xl">
+			<div className="flex w-[460px] max-w-[92vw] flex-col gap-12 rounded-modal-md border border-border bg-window p-16 shadow-xl">
 				<div className="flex items-center justify-between">
 					<h3 className="m-0 text-body font-semibold text-ink">{t("documentEditor.pdf.signatureTitle")}</h3>
 					<button

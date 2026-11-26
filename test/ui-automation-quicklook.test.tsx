@@ -82,7 +82,7 @@ describe("AutomationQuickLook", () => {
 		expect(value("하는 일")).toBe("“이 문서를 세 줄로 요약해서 같은 폴더에 저장해줘”");
 		expect(value("대상 폴더")).toBe("다운로드");
 		expect(host.textContent).toContain("3분 전 실행 · 성공");
-		expect(textButton("AI 에이전트에서 수정")).toBeDefined();
+		expect(textButton("수정")).toBeDefined();
 		expect(labelledButton("닫기")).toBeDefined();
 	});
 
@@ -116,7 +116,7 @@ describe("AutomationQuickLook", () => {
 		const shown = rule();
 		const edits: AutomationRule[] = [];
 		act(() => root.render(<AutomationQuickLook rule={shown} onClose={noop} onEdit={(next) => edits.push(next)} />));
-		click(textButton("AI 에이전트에서 수정"));
+		click(textButton("수정"));
 		expect(edits).toEqual([shown]);
 	});
 
@@ -136,7 +136,7 @@ describe("AutomationQuickLook", () => {
 		expect(value("When")).toBe(triggerText(shown));
 		expect(value("Does")).toBe(whatText(shown, { full: true }));
 		expect(value("Folders")).toBe("Downloads");
-		expect(textButton("Edit in AI Agent")).toBeDefined();
+		expect(textButton("Edit")).toBeDefined();
 		expect(host.textContent).toContain("Ran 3 minutes ago · succeeded");
 		expect(host.textContent).not.toContain("언제");
 	});

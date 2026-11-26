@@ -16,8 +16,9 @@ import type {
 	McpServerInput,
 	SettingsBridge,
 } from "../shared/settings-contract";
-import { DEFAULT_SETTINGS } from "../shared/settings-contract";
+import { DEFAULT_SETTINGS, normalizeAutomationNames } from "../shared/settings-contract";
 import { isApprovalMode, normalizeApprovalMode } from "../shared/interaction-contract";
+import { t } from "../shared/i18n/core";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
 import { normalizeShortcutSettings } from "../shared/shortcuts-contract";
@@ -84,6 +85,7 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 				contextMenu: persisted.contextMenu === undefined ? defaults.contextMenu : normalizeContextMenuSettings(persisted.contextMenu),
 				shortcuts: persisted.shortcuts === undefined ? defaults.shortcuts : normalizeShortcutSettings(persisted.shortcuts),
 				quickSearch: persisted.quickSearch === undefined ? defaults.quickSearch : normalizeQuickSearchSettings(persisted.quickSearch),
+				automationNames: normalizeAutomationNames(persisted.automationNames),
 			},
 			permissions: state.permissions ?? {},
 		};
@@ -165,11 +167,12 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 					const trimmed = patch.remoteTunnelHostname.trim();
 					const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
 					// A rejected change leaves the stored hostname as it was; the renderer shows the reason.
-					if (normalized === null) throw new Error(`Not a domain name: ${trimmed}`);
+					if (normalized === null) throw new Error(t("settingsCore.remote.domainInvalid", { value: trimmed }));
 					remoteTunnelHostname = normalized;
 				}
 				const quickSearch = patch.quickSearch === undefined ? current.settings.quickSearch : normalizeQuickSearchSettings(patch.quickSearch);
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname };
+				const automationNames = patch.automationNames === undefined ? current.settings.automationNames : normalizeAutomationNames(patch.automationNames);
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname, automationNames };
 				return current;
 			});
 			deps.onSettingsChanged?.(state.settings);

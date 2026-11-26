@@ -6,10 +6,11 @@
 
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { MagicActionSelectionRule } from "../../../shared/context-menu-contract";
+import type { TFunction } from "i18next";
+import type { MagicAction, MagicActionSelectionRule } from "../../../shared/context-menu-contract";
 import { normalizeExtensionList } from "../../../shared/context-menu-contract";
 import { cn } from "../lib/cn";
-import { RIGHT_CLICK_KINDS, SELECTIONS, type RightClickKind } from "../state/right-click-trigger";
+import { RIGHT_CLICK_KINDS, SELECTIONS, rightClickKindOf, type RightClickKind } from "../state/right-click-trigger";
 import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
 
 export function RightClickWhen({
@@ -21,6 +22,7 @@ export function RightClickWhen({
 	onCustom,
 	onSelection,
 	testId,
+	className = "flex flex-wrap items-center gap-8 py-4",
 }: {
 	readonly kind: RightClickKind;
 	/** A typed extension list; while it is set the chip names it instead of `kind`. */
@@ -32,6 +34,8 @@ export function RightClickWhen({
 	readonly onCustom: (extensions: readonly string[]) => void;
 	readonly onSelection: (selection: MagicActionSelectionRule) => void;
 	readonly testId: string;
+	/** The sentence row's layout, so it can sit in the same rhythm as the sentence it replaces. */
+	readonly className?: string;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [typed, setTyped] = useState("");
@@ -82,7 +86,7 @@ export function RightClickWhen({
 	// The word order is the language's: the chips sit where its {{kind}}, {{count}} and {{event}} are.
 	const sentence = t(`rightClickWhen.sentence.${selection}`, { kind: "\u0000kind\u0000", count: "\u0000count\u0000", event: "\u0000event\u0000" }).split("\u0000");
 	return (
-		<div className="flex flex-wrap items-center gap-8 py-4" data-testid={`${testId}-when`}>
+		<div className={className} data-testid={`${testId}-when`}>
 			{sentence.map((part, index) =>
 				part in chips ? (
 					<Fragment key={index}>{chips[part]}</Fragment>
@@ -111,7 +115,7 @@ export function RunKindSegment({ value, onChange, testId }: { readonly value: Ru
 					aria-checked={value === option}
 					data-testid={`${testId}-${option}`}
 					className={cn(
-						"h-22 rounded-[5px] border-0 px-9 text-badge cursor-pointer",
+						"h-18 rounded-[5px] border-0 px-8 text-badge leading-[18px] cursor-pointer",
 						value === option ? "bg-window text-ink shadow-[0_0_0_0.5px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.08)]" : "bg-transparent text-ink-muted hover:text-ink",
 					)}
 					onClick={() => onChange(option)}
@@ -121,4 +125,11 @@ export function RunKindSegment({ value, onChange, testId }: { readonly value: Ru
 			))}
 		</span>
 	);
+}
+
+/** The 언제 sentence of a saved action as plain text ("PDF 파일 하나를 우클릭하면"), for a row that lists it. */
+export function rightClickSentence(t: TFunction, action: Pick<MagicAction, "selection" | "targetKind" | "extensions">): string {
+	const { kind, custom } = rightClickKindOf(action.targetKind, action.extensions);
+	const kindLabel = custom === null ? t(`rightClickWhen.kind.${kind}`) : t("rightClickWhen.custom", { exts: custom.map((ext) => ext.toUpperCase()).join("/") });
+	return t(`rightClickWhen.sentence.${action.selection}`, { kind: kindLabel, count: t(`rightClickWhen.count.${action.selection}`), event: t("rightClickWhen.event") });
 }

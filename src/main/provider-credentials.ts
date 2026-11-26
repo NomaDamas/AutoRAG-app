@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import type { ProviderCredentialStatus } from "../shared/settings-contract";
 import { hasErrorCode } from "./fs-entry";
 import { isJsonObject } from "../shared/settings-contract";
+import { t } from "../shared/i18n/core";
 
 /**
  * Provider API keys are stored once, encrypted at rest, and loaded into
@@ -72,16 +73,17 @@ export function createProviderCredentialService(deps: ProviderCredentialServiceD
 			parsed = JSON.parse(await readFile(deps.filePath, "utf8"));
 		} catch (error) {
 			if (hasErrorCode(error, "ENOENT")) return { version: STORE_VERSION, entries: {} };
-			throw new Error(`Credential store is unreadable; refusing to overwrite it (${String(error)})`);
+			console.warn(`[credentials] ${deps.filePath} is unreadable: ${String(error)}`);
+			throw new Error(t("main.errors.credentials.storeUnreadable"));
 		}
 		if (!isJsonObject(parsed) || parsed.version !== STORE_VERSION) {
-			throw new Error("Credential store version is not supported; refusing to overwrite it");
+			throw new Error(t("main.errors.credentials.storeUnreadable"));
 		}
 		const entries = isJsonObject(parsed.entries) ? parsed.entries : undefined;
-		if (entries === undefined) throw new Error("Credential store is malformed; refusing to overwrite it");
+		if (entries === undefined) throw new Error(t("main.errors.credentials.storeUnreadable"));
 		const cleaned: Record<string, string> = {};
 		for (const [envName, value] of Object.entries(entries)) {
-			if (typeof value !== "string") throw new Error("Credential store has a malformed entry; refusing to overwrite it");
+			if (typeof value !== "string") throw new Error(t("main.errors.credentials.storeUnreadable"));
 			cleaned[envName] = value;
 		}
 		return { version: STORE_VERSION, entries: cleaned };
@@ -119,10 +121,10 @@ export function createProviderCredentialService(deps: ProviderCredentialServiceD
 	return {
 		list: async (envNames) => status(await readStore(), envNames),
 		set: (envName, secret) => {
-			if (!ENV_NAME.test(envName)) return Promise.reject(new Error(`Invalid environment variable name: ${envName}`));
-			if (typeof secret !== "string" || secret.length === 0) return Promise.reject(new Error("API key must not be empty"));
+			if (!ENV_NAME.test(envName)) return Promise.reject(new Error(t("main.errors.credentials.envNameInvalid", { name: envName })));
+			if (typeof secret !== "string" || secret.length === 0) return Promise.reject(new Error(t("main.errors.credentials.keyEmpty")));
 			if (!encryptionAvailable()) {
-				return Promise.reject(new Error("OS encryption is unavailable (no secure keyring), so the API key cannot be stored securely"));
+				return Promise.reject(new Error(t("main.errors.credentials.encryptionUnavailable")));
 			}
 			return serialized(async () => {
 				const store = await readStore();
@@ -135,7 +137,7 @@ export function createProviderCredentialService(deps: ProviderCredentialServiceD
 			});
 		},
 		remove: (envName) => {
-			if (!ENV_NAME.test(envName)) return Promise.reject(new Error(`Invalid environment variable name: ${envName}`));
+			if (!ENV_NAME.test(envName)) return Promise.reject(new Error(t("main.errors.credentials.envNameInvalid", { name: envName })));
 			return serialized(async () => {
 				const store = await readStore();
 				delete store.entries[envName];

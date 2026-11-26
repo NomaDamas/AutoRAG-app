@@ -167,43 +167,41 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await settle();
 		expect(currentSettings.contextMenu.sectionOrder[0]).toBe("magic");
 
-		// Open Magic Action editor modal and create a single-file PDF AI summary action
+		// 매직 액션 만들기 opens the new-action card in the assistant beside the page (the 자동화 form set to 우클릭하면), not a modal.
 		const addBtn = host.querySelector<HTMLButtonElement>('[data-action="add-magic-action"]');
 		await act(async () => {
 			addBtn?.click();
 		});
 		await settle();
-
-		const editor = document.querySelector('[data-testid="magic-action-editor-modal"]');
-		expect(editor).not.toBeNull();
-		// The modal is the 자동화 form set to 우클릭하면: no skills or MCP switches, and no permission chip on a new action.
-		expect(editor!.querySelector('[data-sidebar-switch="magic-editor:useSkills"]')).toBeNull();
-		expect(editor!.querySelector('[data-sidebar-switch="magic-editor:useMcp"]')).toBeNull();
-		expect(editor!.querySelector('[data-testid="magic-editor-agent-mode"]')).toBeNull();
-		expect(editor!.querySelector('[data-testid="magic-editor-rc-event"]')?.textContent).toBe(t("rightClickWhen.event"));
-
-		await act(async () => {
-			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-label"]')!, "PDF 3줄 요약");
-			setInputValue(editor!.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-prompt"]')!, "핵심 3줄 요약해줘");
-		});
-		// The file-kind chip takes a typed extension list: Enter turns it into the chip's label.
-		await act(async () => {
-			editor!.querySelector<HTMLButtonElement>('[data-testid="magic-editor-rc-kind"]')?.click();
-		});
-		await act(async () => {
-			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-rc-ext"]')!, ".pdf, md");
-		});
-		await act(async () => {
-			editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-rc-ext"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-		});
-		expect(editor!.querySelector('[data-testid="magic-editor-rc-kind"]')?.textContent).toBe(t("rightClickWhen.custom", { exts: "PDF/MD" }));
-		expect(editor!.querySelector('[data-testid="magic-editor-rc-count"]')?.textContent).toBe(t("rightClickWhen.count.single"));
-		await settle();
+		expect(document.querySelector('[data-testid="magic-action-editor-modal"]')).toBeNull();
+		const starter = document.querySelector('[data-magic-starter]');
+		expect(starter?.textContent).toContain(t("settingsCore.contextMenu.assistant.starterUser"));
+		const card = starter!.querySelector('[data-automation-request]')!;
+		// The trigger is fixed here (plain text, no chip), and a new action has no permission chip.
+		expect(card.querySelector('[data-testid="automation-request-rc-event"]')?.textContent).toBe(t("rightClickWhen.event"));
+		expect(card.querySelector('[data-testid="automation-request-event"]')).toBeNull();
+		expect(card.querySelector('[data-testid="magic-editor-agent-mode"]')).toBeNull();
 
 		await act(async () => {
-			editor!.querySelector<HTMLButtonElement>('[data-action="save-magic-editor"]')?.click();
+			setInputValue(card.querySelector<HTMLTextAreaElement>('[data-testid="automation-request-task"]')!, "PDF 3줄 요약");
+		});
+		// The file-kind chip takes a typed extension list: Enter turns it into the chip's label. Its menu opens in a layer of its own.
+		await act(async () => {
+			card.querySelector<HTMLButtonElement>('[data-testid="automation-request-rc-kind"]')?.click();
+		});
+		await act(async () => {
+			setInputValue(document.querySelector<HTMLInputElement>('[data-testid="automation-request-rc-ext"]')!, ".pdf, md");
+		});
+		await act(async () => {
+			document.querySelector<HTMLInputElement>('[data-testid="automation-request-rc-ext"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+		});
+		expect(card.querySelector('[data-testid="automation-request-rc-kind"]')?.textContent).toBe(t("rightClickWhen.custom", { exts: "PDF/MD" }));
+		expect(card.querySelector('[data-testid="automation-request-rc-count"]')?.textContent).toBe(t("rightClickWhen.count.single"));
+		await act(async () => {
+			card.querySelector<HTMLButtonElement>('[data-action="automation-request-add"]')?.click();
 		});
 		await settle();
+		expect(starter?.textContent).toContain(t("settingsCore.contextMenu.assistant.starterAdded", { title: "PDF 3줄 요약" }));
 
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
 		expect(currentSettings.contextMenu.magicActions[0]).toMatchObject({
@@ -211,7 +209,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			selection: "single",
 			targetKind: "file",
 			extensions: ["pdf", "md"],
-			execution: { kind: "agent", mode: "read", prompt: "핵심 3줄 요약해줘", useSkills: true, useMcp: true },
+			execution: { kind: "agent", mode: "read", prompt: "PDF 3줄 요약" },
 		});
 
 		const actionId = currentSettings.contextMenu.magicActions[0]!.id;
@@ -238,7 +236,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			editModal?.querySelector<HTMLButtonElement>('[data-testid="magic-editor-agent-mode"]')?.click();
 		});
 		await act(async () => {
-			editModal?.querySelector<HTMLButtonElement>('[data-testid="magic-editor-agent-mode-organize"]')?.click();
+			document.querySelector<HTMLButtonElement>('[data-testid="magic-editor-agent-mode-organize"]')?.click();
 		});
 		await settle();
 		await act(async () => {
@@ -253,9 +251,23 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			useSkills: true,
 			useMcp: true,
 		});
-		// Remove Magic Action
+		// Remove Magic Action: the X asks first; 취소 keeps it, 삭제 removes it.
+		const askRemove = async (): Promise<void> => {
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>(`[data-action="remove-magic-${actionId}"]`)?.click();
+			});
+		};
+		await askRemove();
+		expect(document.body.textContent).toContain("‘PDF 3줄 요약’ 매직 액션을 삭제할까요?");
+		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
 		await act(async () => {
-			host.querySelector<HTMLButtonElement>(`[data-action="remove-magic-${actionId}"]`)?.click();
+			[...document.querySelectorAll<HTMLButtonElement>(".linear-btn")].find((button) => button.textContent === "취소")?.click();
+		});
+		expect(document.querySelector('[data-action="confirm-remove-magic"]')).toBeNull();
+		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
+		await askRemove();
+		await act(async () => {
+			document.querySelector<HTMLButtonElement>('[data-action="confirm-remove-magic"]')?.click();
 		});
 		await settle();
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(0);
@@ -360,16 +372,15 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				host.querySelector<HTMLButtonElement>('[data-action="add-magic-action"]')?.click();
 			});
 			await settle();
-			const editor = document.body.querySelector('[data-testid="magic-action-editor-modal"]')!;
+			const card = document.body.querySelector('[data-magic-starter] [data-automation-request]')!;
 			await act(async () => {
-				editor.querySelector<HTMLButtonElement>('[data-testid="magic-editor-kind-script"]')?.click();
+				card.querySelector<HTMLButtonElement>('[data-testid="automation-request-run-script"]')?.click();
 			});
 			await settle();
 
-			const cmdInput = editor.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-command"]')!;
+			const cmdInput = card.querySelector<HTMLTextAreaElement>('[data-testid="automation-request-task"]')!;
 			expect(cmdInput.getAttribute("placeholder")).toContain("Get-FileHash");
-			expect(editor.textContent).toContain("PowerShell");
-			expect(editor.textContent).not.toContain('"$@"');
+			expect(cmdInput.getAttribute("placeholder")).not.toContain('"$@"');
 		} finally {
 			Reflect.set(globalThis, "autorag", prevBridge);
 		}

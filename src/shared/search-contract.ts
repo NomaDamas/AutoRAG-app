@@ -135,7 +135,9 @@ export type SearchStreamEvent =
 	/** pi is summarising the chat's earlier turns (`active`), or has stopped: the run is not stuck meanwhile. */
 	| { readonly type: "compacting"; readonly searchId: string; readonly active: boolean }
 	| { readonly type: "context-notice"; readonly searchId: string; readonly notice: ContextNotice }
-	| { readonly type: "done"; readonly searchId: string };
+	| { readonly type: "done"; readonly searchId: string }
+	/** Sent after `done`, once the chat has a model-written title (see {@link ChatRecord.summaryTitle}). */
+	| { readonly type: "title"; readonly searchId: string; readonly chatId: string; readonly title: string };
 
 /** When a steer reached the run: before or after its Quick answer was shown. */
 export type SteerTiming = "before-quick" | "after-quick";
@@ -174,6 +176,8 @@ export interface ChatSummary {
 
 export interface ChatRecord extends ChatSummary {
 	readonly messages: readonly ChatMessage[];
+	/** The short title the answer model wrote once the first answer was in; it replaces the first question as `title`. */
+	readonly summaryTitle?: string;
 }
 
 export interface SearchBridge {

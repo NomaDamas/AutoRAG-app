@@ -14,7 +14,8 @@ export const ERROR_FIX_CHANNELS = {
 } as const;
 
 /** Where the error was shown; the agent is told, since the same message can mean different things. */
-export type ErrorFixSurface = "ai-search";
+export const ERROR_FIX_SURFACES = ["ai-search", "automations"] as const;
+export type ErrorFixSurface = (typeof ERROR_FIX_SURFACES)[number];
 
 export interface ErrorFixRequest {
 	/** The message exactly as the person saw it. */
@@ -23,7 +24,7 @@ export interface ErrorFixRequest {
 }
 
 export function isErrorFixRequest(value: unknown): value is ErrorFixRequest {
-	return typeof value === "object" && value !== null && "message" in value && typeof value.message === "string" && "surface" in value && value.surface === "ai-search";
+	return typeof value === "object" && value !== null && "message" in value && typeof value.message === "string" && "surface" in value && ERROR_FIX_SURFACES.some((surface) => surface === value.surface);
 }
 
 /** One thing the agent changed: a config value (as short JSON text; a secret is never writable, so none appears here) or a whole file (its size in bytes). */

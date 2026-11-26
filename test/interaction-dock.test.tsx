@@ -88,7 +88,8 @@ describe("InteractionDock in a narrow sidebar", () => {
 		);
 
 		const card = host.querySelector('[role="dialog"]') as HTMLElement;
-		expect(card.className).toContain("min-w-0");
+		// It narrows with the sidebar down to the sidebar's minimum width, then is cut rather than squeezed.
+		expect(card.className).toContain("min-w-(--dock-card-min-width)");
 		expect(card.querySelector("strong")?.textContent).toBe("Convert videos");
 		expect(card.textContent).toContain(t("interaction.step", { current: 1, total: 2 }));
 		expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.prevQuestion")}"]`)?.disabled).toBe(true);
