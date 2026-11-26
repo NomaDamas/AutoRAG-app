@@ -45,7 +45,14 @@ describe("shouldPromptDefaultFileManager", () => {
 		).toBe(false);
 	});
 
-	it("does not prompt when already enabled or OS-registered", () => {
+	it("prompts when setting is enabled by default but OS has not registered Dazzi yet, and hides once OS-registered", () => {
+		expect(
+			shouldPromptDefaultFileManager({
+				onboardingPending: false,
+				signedIn: true,
+				status: { ...baseStatus, enabled: true, osRegistered: false },
+			}),
+		).toBe(true);
 		expect(
 			shouldPromptDefaultFileManager({
 				onboardingPending: false,

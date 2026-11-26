@@ -2027,6 +2027,7 @@
       "launchAtLoginHint": "登录电脑时，Dazzi 会在后台运行。",
       "osMenu": "添加到文件右键菜单",
       "osMenuHint": "在访达（macOS）或文件资源管理器（Windows）中右键点击文件，会显示‘向 Dazzi 提问’和‘在 Dazzi 中显示’。",
+      "defaultFileManagerSection": "默认文件管理器",
       "defaultFileManager": "设为默认文件管理器",
       "defaultFileManagerHintMac": "在其他应用中打开文件夹或执行“在访达中显示”时，将改由 Dazzi 打开。关闭后可随时恢复默认访达。",
       "defaultFileManagerHintWin": "打开文件夹和按下 Win+E 时，将改由 Dazzi 打开。控制面板等系统虚拟文件夹会安全回退至资源管理器。",

@@ -88,13 +88,15 @@ try {
 	console.log("initial defaultFileManager.status:", JSON.stringify(initialStatus));
 	check("bridge status reports supported on this OS", initialStatus.supported === true, initialStatus.platform);
 
-	// Open Settings → General
+	// Open Settings → General (Default File Manager is now the top section and defaults to ON).
 	await page.locator(".sidebar__item--settings").click();
 	const dfmSwitch = page.getByRole("switch", { name: /Use as Default File Manager|기본 파일 관리자로 사용/u });
 	await dfmSwitch.waitFor({ timeout: 20_000 });
-	check("default file manager switch starts OFF", (await dfmSwitch.getAttribute("aria-checked")) === "false");
+	check("default file manager switch defaults to ON at top of General", (await dfmSwitch.getAttribute("aria-checked")) === "true");
 
-	// Turn ON
+	// Toggle OFF then ON to exercise full live registration in unpackaged QA runs.
+	await dfmSwitch.click();
+	await until(async () => (await dfmSwitch.getAttribute("aria-checked")) === "false");
 	await dfmSwitch.click();
 	const enabledStatus = await until(async () => {
 		const s = await page.evaluate(() => window.autorag.defaultFileManager.status());

@@ -2027,6 +2027,7 @@
       "launchAtLoginHint": "コンピュータにログインすると Dazzi がバックグラウンドで起動します。",
       "osMenu": "ファイルの右クリックメニューに追加",
       "osMenuHint": "Finder（macOS）やエクスプローラー（Windows）でファイルを右クリックすると、‘Dazziに質問’ と ‘Dazziで表示’ が表示されます。",
+      "defaultFileManagerSection": "既定のファイルマネージャー",
       "defaultFileManager": "既定のファイルマネージャーとして使用",
       "defaultFileManagerHintMac": "他アプリの「Finderで表示」やフォルダを開く操作を Finder の代わりに Dazzi で開きます。オフにすると Finder に戻ります。",
       "defaultFileManagerHintWin": "フォルダを開く操作や Win+E をエクスプローラーの代わりに Dazzi で開きます。コントロールパネルなどの仮想フォルダは安全にエクスプローラーへ戻ります。",

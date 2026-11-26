@@ -2027,6 +2027,7 @@
       "launchAtLoginHint": "Dazzi runs in the background when you log in to your computer.",
       "osMenu": "Add to File Right-Click Menu",
       "osMenuHint": "Right-click a file in Finder (macOS) or File Explorer (Windows) to see ‘Ask Dazzi’ and ‘Show in Dazzi’.",
+      "defaultFileManagerSection": "Default File Manager",
       "defaultFileManager": "Use as Default File Manager",
       "defaultFileManagerHintMac": "Open folders and ‘Reveal in Finder’ requests from other apps in Dazzi instead of Finder. Turning this off restores Finder.",
       "defaultFileManagerHintWin": "Open folders and Win+E in Dazzi instead of File Explorer. System virtual folders like Control Panel safely fall back to Explorer.",

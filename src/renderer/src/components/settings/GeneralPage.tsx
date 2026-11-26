@@ -62,8 +62,34 @@ export function GeneralPage({
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.general")} />
-			{/* Figma 416:12228: 화면, 파일, 빠른 검색, 시작 및 업데이트, 개인정보; each a titled group of plain rows, ruled apart. */}
+			{/* Figma 416:12228: 기본 파일 관리자, 화면, 파일, 빠른 검색, 시작 및 업데이트, 개인정보; each a titled group of plain rows, ruled apart. */}
 			<div className="plain-sections">
+				{osMenu ? (
+					<>
+						<PlainSection title={t("settingsCore.general.defaultFileManagerSection")}>
+							<PlainRow name={t("settingsCore.general.defaultFileManager")} hint={defaultFileManagerHint} anchor="default-file-manager">
+								<Switch
+									checked={appSettings.defaultFileManager}
+									onChange={() => void setApp({ defaultFileManager: !appSettings.defaultFileManager })}
+									ariaLabel={t("settingsCore.general.defaultFileManager")}
+								/>
+							</PlainRow>
+							{platform === "win32" && appSettings.defaultFileManager ? (
+								<PlainRow
+									name={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+									hint={t("settingsCore.general.defaultFileManagerInterceptRevealHint")}
+								>
+									<Switch
+										checked={appSettings.defaultFileManagerInterceptReveal}
+										onChange={() => void setApp({ defaultFileManagerInterceptReveal: !appSettings.defaultFileManagerInterceptReveal })}
+										ariaLabel={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+									/>
+								</PlainRow>
+							) : null}
+						</PlainSection>
+						<PlainDivider />
+					</>
+				) : null}
 				<PlainSection title={t("settingsCore.general.screenTitle")} alignTop>
 					<PlainRow name={t("settingsCore.general.appearanceName")} hint={t("settingsCore.general.appearanceHint")}>
 						<SelectField className="linear-select settings-plain-select" aria-label={t("settingsCore.general.appearanceName")} value={appSettings.appearance} options={[{ value: "light", label: t("settingsCore.general.appearanceLight") }, { value: "dark", label: t("settingsCore.general.appearanceDark") }]} onValueChange={(appearance) => {
@@ -101,27 +127,6 @@ export function GeneralPage({
 					{osMenu ? (
 						<PlainRow name={t("settingsCore.general.osMenu")} hint={t("settingsCore.general.osMenuHint")}>
 							<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel={t("settingsCore.general.osMenu")} />
-						</PlainRow>
-					) : null}
-					{osMenu ? (
-						<PlainRow name={t("settingsCore.general.defaultFileManager")} hint={defaultFileManagerHint}>
-							<Switch
-								checked={appSettings.defaultFileManager}
-								onChange={() => void setApp({ defaultFileManager: !appSettings.defaultFileManager })}
-								ariaLabel={t("settingsCore.general.defaultFileManager")}
-							/>
-						</PlainRow>
-					) : null}
-					{platform === "win32" && appSettings.defaultFileManager ? (
-						<PlainRow
-							name={t("settingsCore.general.defaultFileManagerInterceptReveal")}
-							hint={t("settingsCore.general.defaultFileManagerInterceptRevealHint")}
-						>
-							<Switch
-								checked={appSettings.defaultFileManagerInterceptReveal}
-								onChange={() => void setApp({ defaultFileManagerInterceptReveal: !appSettings.defaultFileManagerInterceptReveal })}
-								ariaLabel={t("settingsCore.general.defaultFileManagerInterceptReveal")}
-							/>
 						</PlainRow>
 					) : null}
 					<PlainRow name={t("settingsCore.general.autoUpdates")} hint={t("settingsCore.general.autoUpdatesHint")}>

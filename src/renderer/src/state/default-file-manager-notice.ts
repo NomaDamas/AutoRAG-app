@@ -5,7 +5,9 @@ import type { DefaultFileManagerStatus } from "../../../shared/default-file-mana
  * as the OS default file manager (Finder on macOS / File Explorer on Windows).
  *
  * Shown only once onboarding has finished AND the user has signed in, when the
- * OS supports default file manager registration and Dazzi is not yet enabled.
+ * OS supports default file manager registration and the OS does not yet point
+ * at Dazzi (`!osRegistered`) — e.g. if the user previously turned it off, or
+ * another app reclaimed the OS handler.
  */
 export function shouldPromptDefaultFileManager(input: {
 	readonly onboardingPending: boolean;
@@ -14,7 +16,7 @@ export function shouldPromptDefaultFileManager(input: {
 }): boolean {
 	if (input.onboardingPending || !input.signedIn) return false;
 	if (input.status === null || !input.status.supported) return false;
-	if (input.status.enabled || input.status.osRegistered) return false;
+	if (input.status.osRegistered) return false;
 	return true;
 }
 
