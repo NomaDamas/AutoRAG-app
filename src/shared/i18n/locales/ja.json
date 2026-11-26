@@ -2053,7 +2053,7 @@
       "quickSearchEnabled": "クイック検索のショートカットを使う",
       "quickSearchEnabledHint": "ショートカットを押すと、どこからでも検索ウインドウが開きます。もう一度押すか Esc を押すと閉じます。",
       "quickSearchShortcut": "ショートカット",
-      "quickSearchShortcutHint": "ボタンを押してから、使うキーの組み合わせを押してください。",
+      "quickSearchShortcutHint": "ボタンをクリックしてから、使うキーの組み合わせを押してください。",
       "quickSearchNeedsModifier": "すべてのアプリで使うショートカットのため、⌘/Ctrlまたは⌥/Altと一緒に押してください。",
       "quickSearchTaken": "{{shortcut}}はほかのアプリかシステムが使用中です。別の組み合わせを選んでください。"
     },
@@ -3013,7 +3013,7 @@
     },
     "reading": {
       "title": "文書の言語",
-      "langHint": "複数選択できます。"
+      "langHint": "スキャンした文書や画像内の文字を読み取るときに使う言語です。"
     },
     "duplicates": {
       "title": "重複ファイルの整理",

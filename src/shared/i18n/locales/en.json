@@ -3013,7 +3013,7 @@
     },
     "reading": {
       "title": "Document language",
-      "langHint": "You can select more than one."
+      "langHint": "The languages used to read text in scanned documents and images."
     },
     "duplicates": {
       "title": "Duplicate cleanup",
