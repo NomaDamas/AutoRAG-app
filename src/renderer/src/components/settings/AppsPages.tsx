@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
+import { EmbeddingDaemonSection } from "./ToolVersions";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, ExternalLink, Minus, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
@@ -413,6 +414,8 @@ export function IndexingPage({
 				<ScheduleConditions config={snapshot.config} onApply={(next) => run(scheduleUpdates(next))} />
 				<hr className="scope-divider" />
 				<FileNameWatchRow snapshot={snapshot} run={run} />
+				{/* Once on Settings → 정보: the embedding server search and indexing depend on. */}
+				<EmbeddingDaemonSection />
 			</div>
 			{editor.prompt}
 		</div>

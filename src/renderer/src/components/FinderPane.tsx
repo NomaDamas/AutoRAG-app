@@ -402,8 +402,8 @@ export const FinderPane = memo(function FinderPane({
 							}}
 						/>
 						<OutdatedDaemonBanner
-							onOpenAbout={() => {
-								requestSettingsCategory("about");
+							onOpenSettings={() => {
+								requestSettingsCategory("indexing");
 								finder.openSettings();
 							}}
 						/>

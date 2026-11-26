@@ -1943,7 +1943,6 @@
       "contextMenu": "右键菜单",
       "shortcuts": "快捷键",
       "remote": "远程访问",
-      "about": "关于",
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
@@ -1961,15 +1960,14 @@
       "keywords": {
         "account": "账户 登录 邮箱 名称 个人资料",
         "plan": "套餐 付款 额度 用量 订阅 billing",
-        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言 文档语言 读取 解析器 OCR",
+        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言 文档语言 读取 解析器 OCR 关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "sidebar": "侧边栏 个人收藏 云盘 位置 标签 文件夹 隐藏 显示 顺序 自定义 AI",
         "contextMenu": "右键 上下文菜单 魔法动作 脚本 自动化 智能体 扩展名 标签 自定义 AI",
         "shortcuts": "快捷键 键盘 热键 按键 录制 自定义 AI shortcut hotkey",
         "remote": "远程访问 手机 移动 浏览器 配对码 二维码 QR Cloudflare 隧道 域名 设备 remote",
-        "about": "关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
-        "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径",
+        "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径 关于 版本 librarian minsync inl mailcrawl lazykatok 嵌入 守护进程 PATH 不一致",
         "duplicates": "重复文件 版本 整理 dupey",
         "ltr": "排序学习 ltr 排名 模型 训练 重排 xgboost 日志 搜索记录 训练数据 reranker",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
@@ -2284,7 +2282,6 @@
       "quickSearchTaken": "{{shortcut}} 已被其他应用或系统占用，请选择其他组合键。"
     },
     "about": {
-      "description": "查看 Dazzi、核心库、固定版本工具以及共享本地嵌入守护进程的解析版本。",
       "daemonTitle": "嵌入守护进程",
       "daemonName": "本地嵌入服务",
       "daemonRunning": "{{owner}} ({{engine}} {{version}}，端口 {{port}})",
@@ -2300,9 +2297,7 @@
       "restartFailed": "无法重启嵌入守护进程：{{message}}",
       "refresh": "刷新",
       "versionsTitle": "组件版本",
-      "pinnedHint": "固定 {{version}}",
       "bundledAndPinnedHint": "内置 {{bundled}} (固定 {{pinned}})",
-      "notBundled": "未内置 (固定 {{pinned}})",
       "pathMismatch": "PATH 中的版本为 {{pathVersion}} ({{path}}) — 与 {{expected}} 不一致",
       "manifestMismatch": "内置清单 {{bundled}} 与固定版本 {{pinned}} 不一致",
       "manifestDriftTitle": "内置工具与固定版本不一致",
@@ -2310,7 +2305,11 @@
       "bannerTitle": "嵌入守护进程有可用更新",
       "bannerOwnedDetail": "当前运行的嵌入守护进程 ({{version}}，端口 {{port}}) 低于固定版本 {{pinned}}。重启即可生效，不会重建索引。",
       "bannerExternalDetail": "检测到由 Dazzi 外部启动的旧版嵌入守护进程 ({{version}}，端口 {{port}}，固定版本 {{pinned}})。请在方便时手动重启。",
-      "openAbout": "打开关于"
+      "versionsHint": "与 Dazzi 一起运行的 librarian 和工具的版本。",
+      "versionsOff": "有 {{count}} 项与 Dazzi 固定的版本不同。",
+      "versionsShow": "显示",
+      "versionsHide": "收起",
+      "openSettings": "打开索引设置"
     },
     "remote": {
       "description": "可在其他电脑或手机的浏览器中使用这台电脑上的 Dazzi。",

@@ -1943,7 +1943,6 @@
       "contextMenu": "右クリックメニュー",
       "shortcuts": "ショートカット",
       "remote": "リモートアクセス",
-      "about": "情報",
       "ai": "AI モデル",
       "web": "ウェブ検索",
       "indexing": "インデックス作成",
@@ -1961,15 +1960,14 @@
       "keywords": {
         "account": "アカウント ログイン メール 名前 プロフィール",
         "plan": "プラン 支払い クレジット 使用量 サブスクリプション billing",
-        "general": "画面 テーマ 外観 言語 隠しファイル ログイン アップデート 統計 書類の言語 文書の言語 読み取り パーサ OCR",
+        "general": "画面 テーマ 外観 言語 隠しファイル ログイン アップデート 統計 書類の言語 文書の言語 読み取り パーサ OCR 情報 バージョン librarian minsync inl mailcrawl lazykatok 埋め込み デーモン PATH 不一致",
         "sidebar": "サイドバー お気に入り クラウド 場所 タグ フォルダ 非表示 表示 並び順 カスタム AI",
         "contextMenu": "右クリック コンテキストメニュー マジックアクション スクリプト 自動化 エージェント 拡張子 タグ カスタム AI",
         "shortcuts": "ショートカット キーボード ホットキー キーバインド 記録 カスタム AI shortcut hotkey",
         "remote": "リモートアクセス スマホ モバイル ブラウザー ペアリング コード QR Cloudflare トンネル ドメイン 端末 remote",
-        "about": "情報 バージョン librarian minsync inl mailcrawl lazykatok 埋め込み デーモン PATH 不一致",
         "ai": "LLM モデル プロバイダ サービス API キー サブスクリプション 埋め込み Jev 質問分解 並べ替え",
         "web": "ウェブ検索 インターネット 検索 サービス ページ読み取り",
-        "indexing": "更新 同期 増分 インデックス インデックス作成 インデクシング 更新間隔 sync 検索範囲 フォルダ 除外 パス",
+        "indexing": "更新 同期 増分 インデックス インデックス作成 インデクシング 更新間隔 sync 検索範囲 フォルダ 除外 パス 情報 バージョン librarian minsync inl mailcrawl lazykatok 埋め込み デーモン PATH 不一致",
         "duplicates": "重複ファイル バージョン 整理 dupey",
         "ltr": "順位学習 ltr ランキング モデル 学習 並べ替え xgboost ログ 検索履歴 学習データ reranker",
         "apps": "接続 アプリ データソース メッセンジャー メール クラウド",
@@ -2284,7 +2282,6 @@
       "quickSearchTaken": "{{shortcut}}はほかのアプリかシステムが使用中です。別の組み合わせを選んでください。"
     },
     "about": {
-      "description": "Dazzi、ライブラリアン、固定されたツール、共有ローカル埋め込みデーモンの解決済みバージョンを表示します。",
       "daemonTitle": "埋め込みデーモン",
       "daemonName": "ローカル埋め込みサーバー",
       "daemonRunning": "{{owner}} ({{engine}} {{version}}、ポート {{port}})",
@@ -2300,9 +2297,7 @@
       "restartFailed": "埋め込みデーモンを再起動できませんでした：{{message}}",
       "refresh": "更新",
       "versionsTitle": "コンポーネントバージョン",
-      "pinnedHint": "固定 {{version}}",
       "bundledAndPinnedHint": "同梱 {{bundled}} (固定 {{pinned}})",
-      "notBundled": "未同梱 (固定 {{pinned}})",
       "pathMismatch": "PATH 上の版 {{pathVersion}} ({{path}}) — 基準 {{expected}} と不一致",
       "manifestMismatch": "同梱マニフェスト {{bundled}} が固定 {{pinned}} と不一致",
       "manifestDriftTitle": "同梱ツールが固定バージョンと異なります",
@@ -2310,7 +2305,11 @@
       "bannerTitle": "埋め込みデーモンの更新があります",
       "bannerOwnedDetail": "稼働中の埋め込みデーモン ({{version}}、ポート {{port}}) は固定バージョン {{pinned}} より古いです。再インデックスなしで再起動して適用できます。",
       "bannerExternalDetail": "Dazzi の外部で起動された古い埋め込みデーモン ({{version}}、ポート {{port}}) が稼働中です (固定 {{pinned}})。準備ができたら手動で再起動してください。",
-      "openAbout": "情報を開く"
+      "versionsHint": "Dazziと一緒に動作するライブラリアンとツールのバージョンです。",
+      "versionsOff": "{{count}}件がDazziの固定バージョンと異なります。",
+      "versionsShow": "表示",
+      "versionsHide": "閉じる",
+      "openSettings": "インデックス設定を開く"
     },
     "remote": {
       "description": "別のパソコンやスマートフォンのブラウザから、このパソコンの Dazzi を使えます。",
