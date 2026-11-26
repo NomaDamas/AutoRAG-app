@@ -24,7 +24,7 @@ import { formatContextMenuKeycap } from "../../state/context-menu";
 import { cn } from "../../lib/cn";
 import { autoMagicLabel, newMagicActionId, rightClickKindOf, rightClickTarget, type RightClickKind } from "../../state/right-click-trigger";
 import { ChipSelect, type ChipOption } from "../primitives/ChipSelect";
-import { RightClickWhen, RunKindSegment, type RunKind } from "../RightClickWhen";
+import { RightClickWhen, type RunKind } from "../RightClickWhen";
 import { buttonClass } from "../primitives/button";
 import { Switch } from "../primitives/Switch";
 import { ModalActions, ModalShell, SettingsPageHead } from "./SettingsKit";
@@ -127,7 +127,8 @@ function MagicActionEditorModal({
 	const isWindows = hostPlatform() === "win32";
 	const start = initial === null ? { kind: "pdf" as RightClickKind, custom: null } : rightClickKindOf(initial.targetKind, initial.extensions);
 	const [label, setLabel] = useState(initial?.label ?? "");
-	const [runKind, setRunKind] = useState<RunKind>(initial?.execution.kind === "script" ? "script" : "agent");
+	// No AI | 스크립트 choice: a new action asks the agent, an edited one stays what it was made as.
+	const runKind: RunKind = initial?.execution.kind === "script" ? "script" : "agent";
 	const [agentMode, setAgentMode] = useState<MagicActionAgentMode>(initial?.execution.kind === "agent" ? initial.execution.mode : "read");
 	const [prompt, setPrompt] = useState(initial?.execution.kind === "agent" ? initial.execution.prompt : "");
 	const [command, setCommand] = useState(initial?.execution.kind === "script" ? initial.execution.command : "");
@@ -200,10 +201,7 @@ function MagicActionEditorModal({
 						onCustom={setCustomExtensions}
 						onSelection={setSelection}
 					/>
-					<div className="magic-editor-label-row">
-						<span className="magic-editor-label">{t("rightClickWhen.task")}</span>
-						<RunKindSegment value={runKind} testId="magic-editor-kind" onChange={setRunKind} />
-					</div>
+					<span className="magic-editor-label">{t("rightClickWhen.task")}</span>
 					{runKind === "agent" ? (
 						<textarea
 							data-testid="magic-editor-prompt"

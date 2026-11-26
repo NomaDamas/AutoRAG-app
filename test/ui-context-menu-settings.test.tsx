@@ -365,6 +365,10 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			currentSettings = {
 				...currentSettings,
 				shortcuts: { overrides: { quickLook: "Alt+P", rename: "F2" } },
+				contextMenu: {
+					...currentSettings.contextMenu,
+					magicActions: [{ id: "hash", label: "해시 보기", enabled: true, selection: "single", targetKind: "file", extensions: [], execution: { kind: "script", command: "Get-FileHash $args[0]" } }],
+				},
 			};
 			await act(async () => {
 				root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
@@ -374,17 +378,15 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			expect(host.querySelector('[data-cmenu-row="builtin:quickLook"]')?.textContent).toContain("Alt+P");
 			expect(host.querySelector('[data-cmenu-row="builtin:rename"]')?.textContent).toContain("F2");
 
+			// A script automation (made by the assistant) is edited as one: no AI | 스크립트 choice, the command in PowerShell.
 			await act(async () => {
-				host.querySelector<HTMLButtonElement>('[data-action="add-magic-action"]')?.click();
+				host.querySelector<HTMLButtonElement>('[data-action="edit-magic-hash"]')?.click();
 			});
 			await settle();
-			const card = document.body.querySelector('[data-magic-starter] [data-automation-request]')!;
-			await act(async () => {
-				card.querySelector<HTMLButtonElement>('[data-testid="automation-request-run-script"]')?.click();
-			});
-			await settle();
-
-			const cmdInput = card.querySelector<HTMLTextAreaElement>('[data-testid="automation-request-task"]')!;
+			const editModal = document.querySelector('[data-testid="magic-action-editor-modal"]')!;
+			expect(editModal.querySelector('[data-testid="magic-editor-kind"]')).toBeNull();
+			const cmdInput = editModal.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-command"]')!;
+			expect(cmdInput.value).toBe("Get-FileHash $args[0]");
 			expect(cmdInput.getAttribute("placeholder")).toContain("Get-FileHash");
 			expect(cmdInput.getAttribute("placeholder")).not.toContain('"$@"');
 		} finally {
