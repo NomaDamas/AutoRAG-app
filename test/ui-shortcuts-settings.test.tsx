@@ -319,20 +319,21 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(rows.sort()).toEqual(Object.keys(currentSettings.shortcuts.overrides).sort());
 	});
 
-	it("offers no AI banner or assistant on 단축키: the right sidebar stays the Inspector's, shown or hidden", async () => {
+	it("docks the shortcuts AI assistant in the right sidebar and shows no head hero banner when hidden", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
-		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
-		expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')).toBeNull();
+		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')?.getAttribute("data-surface")).toBe("shortcuts");
 		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
+		await settle();
 		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
-		expect(host.querySelector('[data-action="open-shortcut-customizer"]')).toBeNull();
+		expect(host.querySelector('[data-assistant-hero="shortcuts"]')).toBeNull();
 	});
 });

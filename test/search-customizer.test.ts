@@ -5,7 +5,8 @@ import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProv
 import { createProfileSession } from "@autorag/librarian/profiles";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
-import { createSearchCustomizerToolkit, searchCustomizerProfile } from "../src/main/agents/profiles/search-customizer";
+import { createSearchCustomizerToolkit } from "../src/main/agents/profiles/search-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import type { CustomizerToolkit } from "../src/main/agents/profiles/customizer-kit";
 import { createSettingsService } from "../src/main/settings-service";
 import type { AppSettings, RefreshScheduleStatus } from "../src/shared/settings-contract";
@@ -116,24 +117,23 @@ function warningsOf(parsed: Record<string, unknown>): readonly string[] {
 	return Array.isArray(parsed.warnings) ? (parsed.warnings as readonly string[]) : [];
 }
 
-describe("search-customizer pi agent profile & toolkit", () => {
-	it("exposes only the six closed tools, states the no-refresh/no-delete invariants, and never offers an index-run or file tool", () => {
+describe("search-customizer toolkit & settings-customizer profile", () => {
+	it("exposes only the six closed search tools and states the Settings safety boundaries", () => {
 		const { settings } = createStubSettings();
 		const kit = createSearchCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
-		const profile = searchCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
 
-		expect(profile.id).toBe("search-customizer");
+		expect(profile.id).toBe("settings-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(TOOL_NAMES);
 
 		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
 		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
 		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
-		expect(profile.systemPrompt).toContain("never");
-		expect(profile.systemPrompt).toContain("refresh");
-		for (const forbidden of ["run", "delete", "move", "trash"]) {
-			expect(profile.systemPrompt.toLowerCase()).toContain(forbidden);
-		}
+		expect(profile.systemPrompt.toLowerCase()).toContain("never");
+		expect(profile.systemPrompt).toContain("update_index_scope");
+		expect(profile.systemPrompt).toContain("update_index_options");
+		expect(profile.systemPrompt).toContain("update_duplicates");
 	});
 
 	it("reports the current scope, cadence, watch, doc-language and duplicate settings", async () => {
@@ -309,7 +309,7 @@ describe("search-customizer pi agent profile & toolkit", () => {
 		const registration = register();
 		const { settings } = createStubSettings();
 		const kit = createSearchCustomizerToolkit({ settings, language: () => "ko" });
-		const profile = searchCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
 
 		const session = await createProfileSession({
 			profile,
@@ -327,7 +327,7 @@ describe("search-customizer pi agent profile & toolkit", () => {
 
 		await session.prompt("새로고침을 15분마다 하게 해줘");
 
-		expect((await readConfig()).appIndexing?.refreshIntervalMs).toBe(900_000);
+		expect(((await readConfig()).appIndexing as { refreshIntervalMs?: number } | undefined)?.refreshIntervalMs).toBe(900_000);
 		expect(kit.takeChanges()[0]?.kind).toBe("search");
 	});
 

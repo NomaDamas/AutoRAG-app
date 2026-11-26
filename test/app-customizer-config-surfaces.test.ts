@@ -76,6 +76,8 @@ async function run(surface: AppCustomizerSurface, toolCalls: ReadonlyArray<reado
 describe("the app customizer service routes each Settings section to its own pi agent profile", () => {
 	it("accepts every surface in a request and rejects an unknown one", () => {
 		for (const surface of APP_CUSTOMIZER_SURFACES) expect(isAppCustomizerRequest({ sessionId: "s", message: "hi", surface })).toBe(true);
+		expect(isAppCustomizerRequest({ sessionId: "s", message: "hi", surface: "source", sourceAlias: "slack" })).toBe(true);
+		expect(isAppCustomizerRequest({ sessionId: "s", message: "hi", surface: "source", sourceAlias: "" })).toBe(false);
 		expect(isAppCustomizerRequest({ sessionId: "s", message: "hi", surface: "billing" })).toBe(false);
 	});
 
@@ -107,5 +109,55 @@ describe("the app customizer service routes each Settings section to its own pi 
 		await run("mcp", [["update_mcp_server", { name: "docs", action: "upsert", url: "https://example.com/mcp" }]], "add docs server");
 		const mcp = JSON.parse(await readFile(join(agentDir, "mcp.json"), "utf8"));
 		expect(mcp.mcpServers.docs.url).toBe("https://example.com/mcp");
+	});
+
+	it("apps: routes to the dedicated datasource connections profile and connects a datasource", async () => {
+		await run("apps", [["add_datasource", { type: "obsidian", alias: "notes", connector: { vaultPath: join(root, "existing") } }]], "connect obsidian");
+		const config = JSON.parse(await readFile(configPath, "utf8"));
+		expect(config.datasources.notes).toMatchObject({ type: "obsidian", connector: { vaultPath: join(root, "existing") } });
+	});
+
+	it("source: forwards sourceAlias context to the datasource connections profile", async () => {
+		const registration = register();
+		const settings = realSettings();
+		let seenPrompt = "";
+		const service = createAppCustomizerService({
+			send: (event) => events.push(event),
+			resolveModel: async () => ({ model: registration.getModel()! }),
+			agentDir,
+			env: {},
+			cwd: root,
+			language: () => "en",
+			settings,
+			listLocations: async () => [],
+			listTags: async () => [],
+		});
+		registration.setResponses([
+			(context: { messages?: Array<{ role?: string; content?: Array<{ text?: string }> }> }) => {
+				const user = context.messages?.find((m) => m.role === "user");
+				seenPrompt = (user?.content ?? []).map((c) => c.text ?? "").join("");
+				return fauxAssistantMessage("Checked.");
+			},
+		] as never);
+		await service.send("run-source", { sessionId: "sess-source", surface: "source", sourceAlias: "work-notes", message: "update this connection" });
+		service.dispose();
+		expect(seenPrompt).toContain('[Active Settings datasource page: "work-notes"]');
+	});
+
+	it("ltr / account / about / remote: unified settings profile edits settings across domains from any tab", async () => {
+		await run(
+			"about",
+			[
+				["update_general_settings", { appearance: "dark" }],
+				["update_ltr_settings", { rankingLog: false }],
+				["update_shortcuts", { preset: "windowsExplorer" }],
+			],
+			"switch to dark mode, disable ranking log, and use windows shortcuts",
+		);
+		const appSettings = JSON.parse(await readFile(join(root, "settings", "settings-state.json"), "utf8")).settings;
+		const config = JSON.parse(await readFile(configPath, "utf8"));
+		expect(appSettings.appearance).toBe("dark");
+		expect(appSettings.shortcuts.overrides.rename).toBe("F2");
+		expect(config.rankingLog).toBe(false);
 	});
 });

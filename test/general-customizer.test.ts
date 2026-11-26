@@ -7,7 +7,8 @@ import { createProfileSession } from "@autorag/librarian/profiles";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import type { CustomizerToolkit } from "../src/main/agents/profiles/customizer-kit";
-import { createGeneralCustomizerToolkit, generalCustomizerProfile } from "../src/main/agents/profiles/general-customizer";
+import { createGeneralCustomizerToolkit } from "../src/main/agents/profiles/general-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import { createSettingsService } from "../src/main/settings-service";
 import type { AppSettings } from "../src/shared/settings-contract";
 
@@ -111,13 +112,13 @@ function execute(definition: ToolDefinition, callId: string, params: unknown): P
 	return definition.execute(callId, params as never, undefined, undefined, undefined as never);
 }
 
-describe("general-customizer pi agent profile & toolkit", () => {
+describe("general-customizer toolkit & settings-customizer profile", () => {
 	it("exposes only get_general_settings/update_general_settings/update_reading, never a remote-access or approval-mode tool, and states the exclusions in the prompt", () => {
 		const settings = createStubSettings();
 		const kit = createGeneralCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
-		const profile = generalCustomizerProfile({ language: "ko", surface: "general", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "general", toolkit: kit });
 
-		expect(profile.id).toBe("general-customizer");
+		expect(profile.id).toBe("settings-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(["get_general_settings", "update_general_settings", "update_reading"]);
 
@@ -136,7 +137,6 @@ describe("general-customizer pi agent profile & toolkit", () => {
 		expect(profile.systemPrompt).toContain("remotePort");
 		expect(profile.systemPrompt).toContain("remoteTunnelHostname");
 		expect(profile.systemPrompt).toContain("approvalMode");
-		expect(profile.systemPrompt).toContain("dupeyScanIntervalMinutes");
 	});
 
 	it("writes every allowed preference to settings-state.json in one set call", async () => {
@@ -319,7 +319,7 @@ describe("general-customizer pi agent profile & toolkit", () => {
 		const registration = register();
 		const settings = createStubSettings();
 		const kit = createGeneralCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
-		const profile = generalCustomizerProfile({ language: "ko", surface: "general", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "general", toolkit: kit });
 
 		const session = await createProfileSession({
 			profile,

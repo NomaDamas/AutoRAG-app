@@ -2654,88 +2654,43 @@
     },
     "assistants": {
       "general": {
-        "title": "AI 常规设置助手",
-        "emptyTitle": "要更改哪项设置？",
-        "emptyDesc": "只需提出要求，就能更改外观、语言、启动方式和快速搜索快捷键。",
-        "placeholder": "告诉我想更改的设置",
-        "prompt1": "把外观改成深色模式",
-        "prompt2": "把应用语言改成英语",
-        "prompt3": "开机时自动打开",
-        "heroTitle": "用 AI 更改常规设置",
-        "heroDesc": "只需提出要求，例如“改成深色模式并显示隐藏文件”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI 常规设置助手"
       },
       "ai": {
-        "title": "AI 模型助手",
-        "emptyTitle": "想使用哪个模型？",
-        "emptyDesc": "可以为回答、拆分问题、判断和重新排序分别选择已连接服务的模型。",
-        "placeholder": "告诉我想换成哪个模型",
-        "prompt1": "告诉我现在能用哪些模型",
-        "prompt2": "回答时让它思考得更深入",
-        "prompt3": "关闭重新排序",
-        "heroTitle": "用 AI 选择模型",
-        "heroDesc": "只需提出要求，例如“回答时多思考一会儿”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI 模型助手"
       },
       "web": {
-        "title": "AI 网页搜索助手",
-        "emptyTitle": "想怎样使用网页搜索？",
-        "emptyDesc": "可以开启或关闭网页搜索，也可以选择使用的搜索服务。",
-        "placeholder": "告诉我想怎样更改网页搜索",
-        "prompt1": "关闭网页搜索",
-        "prompt2": "搜索服务改用 DuckDuckGo",
-        "prompt3": "也开启读取网页内容",
-        "heroTitle": "用 AI 设置网页搜索",
-        "heroDesc": "只需提出要求，例如“网页搜索用 DuckDuckGo”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI 网页搜索助手"
       },
       "indexing": {
-        "title": "AI 搜索范围助手",
-        "emptyTitle": "要搜索哪些文件夹？",
-        "emptyDesc": "可以添加或移除搜索的文件夹，设置要排除的项目，并更改更新频率。",
-        "placeholder": "告诉我想怎样更改搜索范围",
-        "prompt1": "把我的文档文件夹加入搜索",
-        "prompt2": "每小时自动更新一次",
-        "prompt3": "备份文件夹不要参与搜索",
-        "heroTitle": "用 AI 整理搜索范围",
-        "heroDesc": "只需提出要求，例如“加入文档文件夹，排除备份文件夹”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI 搜索范围助手"
       },
       "duplicates": {
-        "title": "AI 重复文件助手",
-        "emptyTitle": "要怎样处理重复文件？",
-        "emptyDesc": "可以更改查找相同文件和不同版本文件的方式，以及检查的频率。",
-        "placeholder": "告诉我想怎样更改重复文件设置",
-        "prompt1": "相同的文件不要参与搜索",
-        "prompt2": "关闭查找不同版本的文件",
-        "prompt3": "每天只检查一次",
-        "heroTitle": "用 AI 设置重复文件",
-        "heroDesc": "只需提出要求，例如“每天只检查一次”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI 重复文件助手"
       },
       "mcp": {
-        "title": "AI MCP 服务器助手",
-        "emptyTitle": "要处理哪个工具服务器？",
-        "emptyDesc": "可以开启或关闭已连接的 MCP 服务器、更改显示方式，也可以添加新服务器。",
-        "placeholder": "告诉我想怎样更改 MCP 服务器",
-        "prompt1": "显示已连接的 MCP 服务器",
-        "prompt2": "关闭不用的服务器",
-        "prompt3": "添加 https://example.com/mcp 这个服务器",
-        "heroTitle": "用 AI 管理 MCP 服务器",
-        "heroDesc": "只需提出要求，例如“关闭不用的服务器”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI MCP 服务器助手"
       },
       "apps": {
-        "title": "AI 已连接应用助手",
-        "emptyTitle": "要更改哪个应用的连接？",
-        "emptyDesc": "可以开启或关闭已连接的应用，并更改说明和更新频率。",
-        "placeholder": "告诉我想怎样更改应用连接",
-        "prompt1": "告诉我已连接应用的状态",
-        "prompt2": "Slack 每小时更新一次",
-        "prompt3": "关闭不用的应用",
-        "heroTitle": "用 AI 管理已连接的应用",
-        "heroDesc": "只需提出要求，例如“Slack 每小时更新一次”。",
-        "heroButton": "请 AI 处理"
+        "title": "AI 已连接应用助手"
+      },
+      "source": {
+        "title": "AI 数据源连接助手"
+      },
+      "account": {
+        "title": "AI 设置助手"
+      },
+      "plan": {
+        "title": "AI 设置助手"
+      },
+      "remote": {
+        "title": "AI 设置助手"
+      },
+      "ltr": {
+        "title": "AI 搜索排序学习助手"
+      },
+      "all": {
+        "title": "AI 全局设置助手"
       }
     },
     "assistantPrompt": {

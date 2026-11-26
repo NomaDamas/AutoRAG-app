@@ -41,7 +41,16 @@ const bridge = vi.hoisted(() => {
 		fs: { locations: vi.fn(), tags: vi.fn(), indexMap: vi.fn(), onIndexRefreshed: () => () => undefined },
 		appCustomizer,
 		appUpdate: { get: () => Promise.withResolvers<never>().promise, onChange: () => () => undefined },
-		account: { get: () => Promise.withResolvers<never>().promise, onChange: () => () => undefined },
+		account: {
+			get: () => Promise.withResolvers<never>().promise,
+			status: () => Promise.withResolvers<never>().promise,
+			refresh: () => Promise.withResolvers<never>().promise,
+			onChange: () => () => undefined,
+			onChanged: () => () => undefined,
+		},
+		ltr: { get: () => Promise.withResolvers<never>().promise, train: vi.fn(), deleteModel: vi.fn(), onTraining: () => () => undefined },
+		remote: { status: () => Promise.withResolvers<never>().promise, onChanged: () => () => undefined },
+		toolVersions: { get: () => Promise.withResolvers<never>().promise, restartDaemon: vi.fn() },
 	});
 	return {
 		settings,
@@ -65,8 +74,8 @@ const SOURCES: DataSourcesSnapshot = {
 	sources: [],
 };
 
-/** The Settings pages that gained an assistant, with the one that stays hidden until the assistant has a surface. */
-const CONFIG_PAGES = ["general", "ai", "web", "indexing", "duplicates", "mcp", "apps"] as const;
+/** Every Settings page with an assistant hero in its head when the right sidebar is hidden. */
+const CONFIG_PAGES = ["account", "plan", "general", "remote", "ai", "web", "ltr", "indexing", "duplicates", "mcp", "apps"] as const;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -133,7 +142,82 @@ afterEach(async () => {
 
 describe("Settings pages with an AI assistant in the right sidebar", () => {
 	it("lists every Settings section the assistants cover as a surface", () => {
-		expect([...APP_CUSTOMIZER_SURFACES].sort()).toEqual(["ai", "apps", "contextMenu", "duplicates", "general", "indexing", "mcp", "shortcuts", "sidebar", "web"]);
+		expect([...APP_CUSTOMIZER_SURFACES].sort()).toEqual([
+			"account",
+			"ai",
+			"all",
+			"apps",
+			"contextMenu",
+			"duplicates",
+			"general",
+			"indexing",
+			"ltr",
+			"mcp",
+			"plan",
+			"remote",
+			"shortcuts",
+			"sidebar",
+			"source",
+			"web",
+		]);
+	});
+
+	it("docks the dedicated source assistant on a datasource detail page (source:<alias>) and sends sourceAlias", async () => {
+		bridge.settings.configGet.mockResolvedValue({
+			...CONFIG,
+			config: { ...CONFIG.config, datasources: { slack: { type: "slack" } } },
+		});
+		await open("source:slack");
+		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		expect(panel?.getAttribute("data-surface")).toBe("source");
+		expect(panel?.textContent).not.toContain("settingsCore.");
+		await askAssistant("Connect Slack");
+		await settle();
+		const [, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
+		expect(request).toMatchObject({ surface: "source", sourceAlias: "slack" });
+	});
+
+	it("reloads LtrPage status after the assistant changes LTR settings", async () => {
+		const ltrGet = vi.fn().mockResolvedValue({
+			enabled: false,
+			selection: "latest",
+			serving: { status: "disabled" },
+			loggedRuns: 50,
+			models: [],
+			lastAttempt: null,
+			autoTrain: { enabled: false, minNewRuns: 200, due: false },
+			minTrainingRuns: 300,
+			training: false,
+		});
+		(globalThis as unknown as { autorag: { ltr: { get: typeof ltrGet } } }).autorag.ltr.get = ltrGet;
+		await open("ltr");
+		const callsBefore = ltrGet.mock.calls.length;
+		await askAssistant("Enable LTR auto-train");
+		await settle();
+		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
+		ltrGet.mockResolvedValue({
+			enabled: false,
+			selection: "latest",
+			serving: { status: "disabled" },
+			loggedRuns: 50,
+			models: [],
+			lastAttempt: null,
+			autoTrain: { enabled: true, minNewRuns: 150, due: false },
+			minTrainingRuns: 300,
+			training: false,
+		});
+		await act(async () => {
+			bridge.emit({
+				type: "turn-done",
+				runId,
+				sessionId: request.sessionId,
+				messages: ["Updated LTR auto-train."],
+				changes: [{ kind: "ai", summary: "Updated search ranking settings", fields: ["ltr.autoTrain.enabled"] }],
+				settings: currentSettings,
+			});
+		});
+		await settle();
+		expect(ltrGet.mock.calls.length).toBeGreaterThan(callsBefore);
 	});
 
 	for (const page of CONFIG_PAGES) {

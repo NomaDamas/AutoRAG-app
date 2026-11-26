@@ -141,11 +141,13 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Settings pages whose AI assistant fills the window's right sidebar; each page is its own surface. 사이드바 and
- * 단축키 are surfaces of the main-process profiles but have no assistant in the UI, so their right sidebar stays the Inspector's.
+ * Every Settings page docks an AI assistant in the window's right sidebar so settings can be edited
+ * immediately from any tab. Individual datasource detail pages (`source:<alias>`) dock the dedicated
+ * `source` surface.
  */
-function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
-	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
+function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface {
+	if (sourceAliasOf(page) !== null) return "source";
+	return isAppCustomizerSurface(page) ? page : "all";
 }
 
 
@@ -317,7 +319,7 @@ export function SettingsPageContent({
 		case "ai":
 			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
 		case "ltr":
-			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} />;
+			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} assistantRevision={data.assistantRevision} />;
 		case "web":
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":
@@ -408,14 +410,12 @@ export function SettingsView({
 			const next = normalizeCategory(request.category);
 			setCategory(next);
 			if (request.assistantPrompt !== undefined && request.assistantPrompt.trim().length > 0) {
-				const targetSurface = sourceAliasOf(next) === null ? customizerSurfaceOf(next) : null;
-				if (targetSurface !== null) {
-					showAssistant?.();
-					setMountedSurfaces((current) => (current.includes(targetSurface) ? current : [...current, targetSurface]));
-					prefillSeq.current += 1;
-					setAssistantPrefill({ surface: targetSurface, text: request.assistantPrompt, nonce: prefillSeq.current });
-					setCustomizerFocus((count) => count + 1);
-				}
+				const targetSurface = customizerSurfaceOf(next);
+				showAssistant?.();
+				setMountedSurfaces((current) => (current.includes(targetSurface) ? current : [...current, targetSurface]));
+				prefillSeq.current += 1;
+				setAssistantPrefill({ surface: targetSurface, text: request.assistantPrompt, nonce: prefillSeq.current });
+				setCustomizerFocus((count) => count + 1);
 			}
 		},
 		[showAssistant],
@@ -450,7 +450,7 @@ export function SettingsView({
 	useEffect(() => {
 		if (sourceAlias !== null && snapshot !== null && entries.every((entry) => entry.alias !== sourceAlias)) setCategory("apps");
 	}, [sourceAlias, snapshot, entries]);
-	const activeSurface = sourceAlias === null && assistant !== null ? customizerSurfaceOf(normalizeCategory(category)) : null;
+	const activeSurface = assistant !== null ? customizerSurfaceOf(normalizeCategory(category)) : null;
 	/** Without a right sidebar to host it (no window shell) there is no assistant, so the page hero never offers it. */
 	const customizerShown = assistant === null || assistant.shown;
 	useEffect(() => {
@@ -613,6 +613,7 @@ export function SettingsView({
 					<AppCustomizerPanel
 						key={surface}
 						surface={surface}
+						sourceAlias={surface === "source" ? sourceAlias : null}
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
 						prefill={assistantPrefill !== null && assistantPrefill.surface === surface ? assistantPrefill : null}

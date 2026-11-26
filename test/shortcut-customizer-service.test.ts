@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createShortcutCustomizerToolkit, shortcutCustomizerProfile } from "../src/main/agents/profiles/shortcut-customizer";
+import { createShortcutCustomizerToolkit } from "../src/main/agents/profiles/shortcut-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import { createAppCustomizerService } from "../src/main/app-customizer-service";
 import { createSettingsService } from "../src/main/settings-service";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
@@ -51,13 +52,13 @@ function createStubSettings(onChanged?: () => void) {
 	});
 }
 
-describe("shortcut-customizer pi agent profile & toolkit", () => {
+describe("shortcut-customizer toolkit & settings-customizer profile", () => {
 	it("exposes only get_shortcuts and update_shortcuts tools and states the fixed-catalog & Esc lock rules", () => {
 		const settings = createStubSettings();
 		const kit = createShortcutCustomizerToolkit({ settings, platform: "darwin" });
-		const profile = shortcutCustomizerProfile({ language: "ko", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "shortcuts", toolkit: kit });
 
-		expect(profile.id).toBe("shortcut-customizer");
+		expect(profile.id).toBe("settings-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(["get_shortcuts", "update_shortcuts"]);
 		expect(profile.systemPrompt).toContain("Esc");
