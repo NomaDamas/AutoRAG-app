@@ -1634,7 +1634,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 	const setPage = (next: AutomationsPlace["page"]): void => movePlace({ page: next });
 	// A right-click action's own page, one step in from the list as a rule's is.
 	const setMagicId = (next: string | null): void => movePlace({ magicId: next });
-	/** The rule's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
+	/** A rule's or a right-click action's page was opened from 전체 기록: its path says so, and a step on it goes straight back there. */
 	const setFromAll = (next: boolean): void => movePlace({ fromAll: next });
 	const magic = magicActions.find((action) => action.id === magicId) ?? null;
 	const magicRuns = useMagicRunHistory(magicActions.map((action) => action.id));
@@ -1663,7 +1663,9 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 	};
 	const mainCrumb: Crumb = { label: t("places.automations"), action: "automation-back", onClick: toMain };
 	const allCrumb: Crumb = { label: t("automations.all.title"), action: "automation-crumb-all", onClick: () => {
+		setPage("all");
 		setFromAll(false);
+		setMagicId(null);
 		onCancelEdit?.();
 	} };
 	const scrollRef = useRef<HTMLDivElement>(null);
@@ -1730,7 +1732,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 						<MagicActionDetail
 							action={magic}
 							runs={magicRuns[magic.id]}
-							crumbs={[mainCrumb]}
+							crumbs={fromAll ? [mainCrumb, allCrumb] : [mainCrumb]}
 							onUpdate={async (next) => (await onUpdateMagicAction?.(next)) ?? false}
 							onToggle={onToggleMagicAction}
 							onDelete={() => setConfirmMagic(magic)}
@@ -1763,8 +1765,9 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 								),
 							]}
 							onOpen={(entry) => {
+								// Either page opens over 전체 기록, which stays where it is behind it and in the page's path.
 								if (entry.kind === "magic") {
-									setPage("list");
+									setFromAll(true);
 									setMagicId(entry.id);
 									return;
 								}
@@ -1814,7 +1817,10 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 									))}
 									{/* The right-click actions are automations too, with another trigger: they sit in the same list. */}
 									{magicActions.map((action) => (
-										<MagicActionRow key={action.id} action={action} lastRun={magicRuns[action.id]?.[0] ?? null} onOpen={setMagicId} onToggle={onToggleMagicAction} />
+										<MagicActionRow key={action.id} action={action} lastRun={magicRuns[action.id]?.[0] ?? null} onOpen={(id) => {
+											setFromAll(false);
+											setMagicId(id);
+										}} onToggle={onToggleMagicAction} />
 									))}
 								</div>
 								{state.rules.length === 0 && magicActions.length === 0 ? null : (
@@ -1850,6 +1856,9 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 					onConfirm={() => {
 						const id = confirmMagic.id;
 						setConfirmMagic(null);
+						// A deleted action leaves for the main page, as a deleted rule does, not for the 전체 기록 it was opened from.
+						setPage("list");
+						setFromAll(false);
 						setMagicId(null);
 						void onDeleteMagicAction?.(id);
 					}}
