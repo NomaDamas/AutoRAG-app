@@ -3237,7 +3237,7 @@
     },
     "reading": {
       "title": "文档语言",
-      "langHint": "可以选择多个。"
+      "langHint": "读取扫描文档和图片中的文字时使用的语言。"
     },
     "duplicates": {
       "title": "重复文件整理",
