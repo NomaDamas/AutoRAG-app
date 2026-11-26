@@ -1310,13 +1310,15 @@ function RecommendationCard({
 					className="flex min-w-0 flex-1 items-center gap-10 border-0 bg-transparent p-0 text-left cursor-pointer"
 					onClick={() => setOpen((was) => !was)}
 				>
-					{quiet ? (
-						<SparklesIcon size={13} className="flex-none text-ink-faint" />
-					) : (
+					{quiet ? null : (
 						<ChevronDownIcon size={13} className={cn("flex-none text-ink-faint transition-transform duration-(--dur-color)", open && "rotate-180")} />
 					)}
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
-						<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						{/* Under the person's own automations a recommendation reads like one of them: the bolt just before its name. */}
+						<span className="flex min-w-0 items-center gap-6">
+							{quiet ? <KindIcon kind="rule" /> : null}
+							<span className={cn("truncate text-ink", quiet ? "text-[13px] leading-[17px]" : "text-[14px] font-medium leading-[17px]")}>{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+						</span>
 						{/* While the reasons are being counted the line keeps its height and shows nothing yet. */}
 						<span className="truncate text-meta leading-[14px] text-ink-muted" data-recommendation-reason={reason === undefined || reason === null ? undefined : "true"}>
 							{reason === null ? "\u00a0" : (reason ?? when)}
