@@ -236,25 +236,25 @@ function summarizeContextMenuChange(
 	if (opts.upsertedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 저장: ${opts.upsertedLabel}`;
+				return `자동화 저장: ${opts.upsertedLabel}`;
 			case "ja":
-				return `マジックアクションを保存: ${opts.upsertedLabel}`;
+				return `自動化を保存: ${opts.upsertedLabel}`;
 			case "zh":
-				return `已保存魔法动作: ${opts.upsertedLabel}`;
+				return `已保存自动化: ${opts.upsertedLabel}`;
 			default:
-				return `Saved Magic Action: ${opts.upsertedLabel}`;
+				return `Saved automation: ${opts.upsertedLabel}`;
 		}
 	}
 	if (opts.deletedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 삭제: ${opts.deletedLabel}`;
+				return `자동화 삭제: ${opts.deletedLabel}`;
 			case "ja":
-				return `マジックアクションを削除: ${opts.deletedLabel}`;
+				return `自動化を削除: ${opts.deletedLabel}`;
 			case "zh":
-				return `已删除魔法动作: ${opts.deletedLabel}`;
+				return `已删除自动化: ${opts.deletedLabel}`;
 			default:
-				return `Deleted Magic Action: ${opts.deletedLabel}`;
+				return `Deleted automation: ${opts.deletedLabel}`;
 		}
 	}
 	const parts: string[] = [];
@@ -1124,6 +1124,8 @@ function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = proce
 		"- Sidebar: `AI Agent` (`app:aiSearch`) and `Automations` (`app:automations`) at the top of Favorites can NEVER be hidden or removed.",
 		"- Right-Click Context Menu: `Tags` (`builtin:tags`, and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
 		"- If the person asks to hide any locked item (or asks to 'hide everything'), keep the locked items visible, apply the rest of their request, and explain politely which core items always remain shown.",
+		"",
+		"The app now calls Magic Actions **automations** (a right-click automation), in every language: say automation to the person, in their language, never Magic Action; only the tool names keep the old name.",
 		"",
 		"## Workflow",
 		"1. Call `get_app_settings` when you need to inspect the current sidebar, right-click context menu, Magic Actions, or app preferences.",

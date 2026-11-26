@@ -258,7 +258,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			});
 		};
 		await askRemove();
-		expect(document.body.textContent).toContain("‘PDF 3줄 요약’ 매직 액션을 삭제할까요?");
+		expect(document.body.textContent).toContain("‘PDF 3줄 요약’ 자동화를 삭제할까요?");
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
 		await act(async () => {
 			[...document.querySelectorAll<HTMLButtonElement>(".linear-btn")].find((button) => button.textContent === "취소")?.click();
@@ -342,8 +342,8 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				type: "turn-done",
 				runId,
 				sessionId: req.sessionId,
-				messages: ["PDF 3줄 요약 매직 액션을 추가했습니다."],
-				changes: [{ kind: "contextMenu", summary: "매직 액션 저장: PDF 3줄 요약", fields: ["contextMenu.magicActions"] }],
+				messages: ["PDF 3줄 요약 자동화를 추가했습니다."],
+				changes: [{ kind: "contextMenu", summary: "자동화 저장: PDF 3줄 요약", fields: ["contextMenu.magicActions"] }],
 				settings: nextSettings,
 			});
 		});

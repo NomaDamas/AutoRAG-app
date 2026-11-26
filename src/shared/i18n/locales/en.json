@@ -2046,13 +2046,13 @@
       "presetCustom": "Custom",
       "presetCustomEmpty": "Your own setup is saved here once you change something",
       "shortcutNote": "Keyboard shortcuts on built-in actions stay standard to Finder and cannot be reassigned here.",
-      "magicTitle": "Custom Magic Actions",
-      "magicEmpty": "No Magic Actions yet. Ask AI or create one yourself.",
-      "addMagicAction": "Add Magic Action",
+      "magicTitle": "Right-click automations",
+      "magicEmpty": "No right-click automations yet. Ask AI or create one yourself.",
+      "addMagicAction": "Add automation",
       "editMagicAction": "Edit {{name}}",
       "removeMagicAction": "Remove {{name}}",
-      "removeMagicConfirmTitle": "Delete the magic action ‘{{name}}’?",
-      "removeMagicConfirmBody": "It will be removed from the right-click menu. This cannot be undone.",
+      "removeMagicConfirmTitle": "Delete the automation ‘{{name}}’?",
+      "removeMagicConfirmBody": "It only leaves the right-click menu; your files and folders stay as they are.",
       "condSingle": "Single item",
       "condMultiple": "Multiple items",
       "condAnySelection": "Single or multiple",
@@ -2067,7 +2067,7 @@
       "sectionCount": "{{visible}}/{{total}} shown",
       "sections": {
         "open": "Open & Quick Look",
-        "magic": "Magic Actions",
+        "magic": "Automations",
         "index": "Indexing",
         "clipboard": "Clipboard & Rename",
         "actions": "File Operations (Folder, Archive, Share)",
@@ -2098,10 +2098,10 @@
         "trash": "Move to Trash / Put Back"
       },
       "editor": {
-        "createTitle": "Add Magic Action",
-        "editTitle": "Edit Magic Action",
+        "createTitle": "New automation",
+        "editTitle": "Edit automation",
         "labelField": "Button Label",
-        "labelPlaceholder": "Magic action name",
+        "labelPlaceholder": "Automation name",
         "agentModeField": "Agent Capabilities",
         "modeRead": "Read & Analyze Only (summarize, inspect, Q&A)",
         "modeOrganize": "Create & Modify Files (convert, edit, organize, shell)",
@@ -2117,7 +2117,7 @@
         "modeOrganizeShort": "Can edit files"
       },
       "assistant": {
-        "title": "Context Menu & Magic Action AI Agent",
+        "title": "Context Menu & Automation AI Agent",
         "emptyTitle": "What should appear when you right-click?",
         "emptyDesc": "Set up the menu you get when you right-click a file, your way.",
         "placeholder": "Tell me what to make",
@@ -2125,8 +2125,8 @@
         "promptCompareFiles": "When I pick two files, sum up what changed between them",
         "promptPaperToDiscord": "Summarize a paper, post it to Discord #paper-summaries, and save it as slides in a \"Paper Summaries\" folder",
         "promptMaskToPdf": "Mask the names in hwp and docx files and save them as PDF",
-        "starterUser": "New magic action",
-        "starterReply": "Fill in the form, or describe the action in the chat to add it.",
+        "starterUser": "New automation",
+        "starterReply": "Fill in the form, or describe the automation in the chat to add it.",
         "starterAdded": "Added ‘{{title}}’ to the right-click menu."
       },
       "dragHint": "Reorder {{name}}: drag, or press ↑ or ↓"
@@ -3284,9 +3284,9 @@
     "modelDownloadOpen": "Show model download status"
   },
   "magicAction": {
-    "running": "Running Magic Action…",
+    "running": "Running automation…",
     "completed": "Completed",
-    "failedTitle": "Couldn't run the Magic Action",
+    "failedTitle": "Couldn't run the automation",
     "stoppedTitle": "Action Stopped",
     "minimize": "Run in background",
     "stop": "Stop",
@@ -3298,7 +3298,7 @@
     "saveFailed": "Couldn't save to chat history.",
     "emptyOutput": " Finished with no text output.",
     "targetsCount": "{{count}} item(s)",
-    "sidebarOpen": "Open Magic Action result"
+    "sidebarOpen": "Open automation result"
   },
   "quickSearch": {
     "title": "Quick Search",
@@ -3400,7 +3400,7 @@
       "askOne": "AI summary",
       "askFolder": "Ask about this folder",
       "askMany": "Ask AI about {{count}} items",
-      "magic": "Magic actions",
+      "magic": "Automations",
       "tools": "Quick actions",
       "toolsHint": "Compress · Indexing · Duplicate",
       "agent": "AI agent",
@@ -3712,7 +3712,7 @@
     "contextMenu": {
       "intro": {
         "title": "Add your own button to the right-click menu",
-        "body": "Let's make a Magic Action called \"Peek at contents\". Right-click a text file and it shows the size and first lines right away.",
+        "body": "Let's make an automation called \"Peek at contents\". Right-click a text file and it shows the size and first lines right away.",
         "action": "Create the example"
       },
       "sample": {
@@ -3721,15 +3721,15 @@
       },
       "pick": {
         "title": "There it is",
-        "body": "A Magic Action you make only appears when you right-click a matching file. Click it to run it."
+        "body": "A right-click automation you make only appears when you right-click a matching file. Click it to run it."
       },
       "result": {
         "title": "The result is right there",
-        "body": "The script read the size and first lines of the selected file. An AI action that summarizes works the same way."
+        "body": "The script read the size and first lines of the selected file. An AI automation that summarizes works the same way."
       },
       "more": {
         "title": "Make more of your own",
-        "body": "In Settings › Right-click menu you can create actions by describing them, hide items, and reorder them. This example is for practice, so feel free to delete it.",
+        "body": "In Settings › Right-click menu you can create automations by describing them, hide items, and reorder them. This example is for practice, so feel free to delete it.",
         "action": "Open Settings"
       }
     },

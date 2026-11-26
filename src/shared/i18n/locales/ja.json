@@ -2046,13 +2046,13 @@
       "presetCustom": "カスタム",
       "presetCustomEmpty": "設定を変更すると、その構成がここに保存されます",
       "shortcutNote": "標準項目のキーボードショートカットは Finder 標準のまま維持され、ここでは変更できません。",
-      "magicTitle": "カスタムマジックアクション",
-      "magicEmpty": "登録されたマジックアクションはありません。AIに頼むか手動で作成してください。",
-      "addMagicAction": "マジックアクションを追加",
+      "magicTitle": "右クリック自動化",
+      "magicEmpty": "右クリック自動化はまだありません。AIに頼むか手動で作成してください。",
+      "addMagicAction": "自動化を追加",
       "editMagicAction": "{{name}} を編集",
       "removeMagicAction": "{{name}} を削除",
-      "removeMagicConfirmTitle": "マジックアクション「{{name}}」を削除しますか？",
-      "removeMagicConfirmBody": "右クリックメニューからこのマジックアクションが削除されます。この操作は取り消せません。",
+      "removeMagicConfirmTitle": "自動化「{{name}}」を削除しますか？",
+      "removeMagicConfirmBody": "右クリックメニューから外れるだけで、ファイルとフォルダはそのまま残ります。",
       "condSingle": "単一項目",
       "condMultiple": "複数選択",
       "condAnySelection": "単一・複数すべて",
@@ -2067,7 +2067,7 @@
       "sectionCount": "{{visible}}/{{total}} 表示",
       "sections": {
         "open": "開く・クイックルック",
-        "magic": "マジックアクション",
+        "magic": "自動化",
         "index": "インデックス",
         "clipboard": "クリップボード・名称変更",
         "actions": "ファイル操作（フォルダ・圧縮・共有）",
@@ -2098,10 +2098,10 @@
         "trash": "ゴミ箱に入れる / 戻す"
       },
       "editor": {
-        "createTitle": "マジックアクションを追加",
-        "editTitle": "マジックアクションを編集",
+        "createTitle": "自動化を作成",
+        "editTitle": "自動化を編集",
         "labelField": "ボタン名",
-        "labelPlaceholder": "マジックアクション名",
+        "labelPlaceholder": "自動化の名前",
         "agentModeField": "エージェント権限",
         "modeRead": "読み取り・分析のみ（要約・確認・Q&A）",
         "modeOrganize": "ファイル作成・操作を許可（変換・編集・整理・スクリプト）",
@@ -2117,7 +2117,7 @@
         "modeOrganizeShort": "ファイル変更を許可"
       },
       "assistant": {
-        "title": "右クリックメニュー＆マジックアクション AI エージェント",
+        "title": "右クリックメニュー＆自動化 AI エージェント",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
         "emptyDesc": "ファイルを右クリックしたときのメニューを自由に設定できます。",
         "placeholder": "作りたい機能を教えてください",
@@ -2125,8 +2125,8 @@
         "promptCompareFiles": "ファイルを2つ選んだら、変わった内容をまとめて",
         "promptPaperToDiscord": "論文を要約してDiscordの #論文要約 に送り、スライドにして「論文要約」フォルダに入れて",
         "promptMaskToPdf": "hwp・docxファイルの名前を伏せてPDFに変換して保存して",
-        "starterUser": "新しいマジックアクション",
-        "starterReply": "フォームに入力するか、チャットで説明してマジックアクションを追加できます。",
+        "starterUser": "新しい自動化",
+        "starterReply": "フォームに入力するか、チャットで説明して自動化を追加できます。",
         "starterAdded": "右クリックメニューに「{{title}}」を追加しました。"
       },
       "dragHint": "{{name}} の並べ替え: ドラッグするか ↑↓ キーを押します"
@@ -3284,9 +3284,9 @@
     "modelDownloadOpen": "モデルのダウンロード状態を表示"
   },
   "magicAction": {
-    "running": "マジックアクションを実行中…",
+    "running": "自動化を実行中…",
     "completed": "実行完了",
-    "failedTitle": "マジックアクションの実行に失敗しました",
+    "failedTitle": "自動化の実行に失敗しました",
     "stoppedTitle": "実行を停止しました",
     "minimize": "バックグラウンドで実行",
     "stop": "停止",
@@ -3298,7 +3298,7 @@
     "saveFailed": "チャット履歴に保存できませんでした。",
     "emptyOutput": "出力テキストはありません。",
     "targetsCount": "対象 {{count}} 件",
-    "sidebarOpen": "マジックアクションの結果を開く"
+    "sidebarOpen": "自動化の結果を開く"
   },
   "quickSearch": {
     "title": "クイック検索",
@@ -3400,7 +3400,7 @@
       "askOne": "AI 要約",
       "askFolder": "このフォルダについて聞く",
       "askMany": "{{count}} 項目について AI に聞く",
-      "magic": "マジックアクション",
+      "magic": "自動化",
       "tools": "クイックアクション",
       "toolsHint": "圧縮 · インデックス · 複製",
       "agent": "AI エージェント",
@@ -3712,7 +3712,7 @@
     "contextMenu": {
       "intro": {
         "title": "右クリックに自分だけのボタンを",
-        "body": "「中身をひと目で確認」というマジックアクションを今作ってみます。テキストファイルを右クリックすると、サイズと最初の数行をすぐ表示します。",
+        "body": "「中身をひと目で確認」という自動化を今作ってみます。テキストファイルを右クリックすると、サイズと最初の数行をすぐ表示します。",
         "action": "例を作る"
       },
       "sample": {
@@ -3721,15 +3721,15 @@
       },
       "pick": {
         "title": "ここにあります",
-        "body": "作ったマジックアクションは、対象のファイルを右クリックしたときだけメニューに出ます。クリックして実行してみましょう。"
+        "body": "作った右クリック自動化は、対象のファイルを右クリックしたときだけメニューに出ます。クリックして実行してみましょう。"
       },
       "result": {
         "title": "結果がすぐ出ます",
-        "body": "スクリプトが選んだファイルのサイズと最初の数行を読み取りました。AI が要約するアクションも同じ方法で作れます。"
+        "body": "スクリプトが選んだファイルのサイズと最初の数行を読み取りました。AI が要約する自動化も同じ方法で作れます。"
       },
       "more": {
-        "title": "自分のアクションをもっと作る",
-        "body": "設定 › 右クリックメニューで、言葉でアクションを作ったり、項目を隠したり並べ替えたりできます。この例は練習用なので、自由に削除して構いません。",
+        "title": "自分の自動化をもっと作る",
+        "body": "設定 › 右クリックメニューで、言葉で自動化を作ったり、項目を隠したり並べ替えたりできます。この例は練習用なので、自由に削除して構いません。",
         "action": "設定を開く"
       }
     },

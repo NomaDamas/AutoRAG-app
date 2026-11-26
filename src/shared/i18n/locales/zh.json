@@ -2046,13 +2046,13 @@
       "presetCustom": "自定义",
       "presetCustomEmpty": "更改任何设置后，你的配置会保存在这里",
       "shortcutNote": "内置菜单项的键盘快捷键保持 Finder 标准设置，无法在此处更改。",
-      "magicTitle": "自定义魔法动作",
-      "magicEmpty": "暂无魔法动作。您可以请 AI 处理，或手动创建。",
-      "addMagicAction": "添加魔法动作",
+      "magicTitle": "右键自动化",
+      "magicEmpty": "暂无右键自动化。您可以请 AI 处理，或手动创建。",
+      "addMagicAction": "添加自动化",
       "editMagicAction": "编辑 {{name}}",
       "removeMagicAction": "删除 {{name}}",
-      "removeMagicConfirmTitle": "要删除魔法操作“{{name}}”吗？",
-      "removeMagicConfirmBody": "此魔法操作将从右键菜单中删除。此操作无法撤销。",
+      "removeMagicConfirmTitle": "要删除自动化“{{name}}”吗？",
+      "removeMagicConfirmBody": "只会从右键菜单中移除，文件和文件夹保持不变。",
       "condSingle": "单个项目",
       "condMultiple": "多项批量",
       "condAnySelection": "单选或多选",
@@ -2067,7 +2067,7 @@
       "sectionCount": "显示 {{visible}}/{{total}}",
       "sections": {
         "open": "打开与快速查看",
-        "magic": "魔法动作",
+        "magic": "自动化",
         "index": "索引",
         "clipboard": "剪贴板与重命名",
         "actions": "文件操作（文件夹·压缩·共享）",
@@ -2098,10 +2098,10 @@
         "trash": "移到废纸篓 / 放回原处"
       },
       "editor": {
-        "createTitle": "添加魔法动作",
-        "editTitle": "编辑魔法动作",
+        "createTitle": "新建自动化",
+        "editTitle": "编辑自动化",
         "labelField": "按钮名称",
-        "labelPlaceholder": "魔法操作名称",
+        "labelPlaceholder": "自动化名称",
         "agentModeField": "智能体权限",
         "modeRead": "仅读取与分析（总结·审阅·问答）",
         "modeOrganize": "允许创建与操作文件（转换·编辑·整理·脚本）",
@@ -2117,7 +2117,7 @@
         "modeOrganizeShort": "允许修改文件"
       },
       "assistant": {
-        "title": "右键菜单与魔法动作 AI 智能体",
+        "title": "右键菜单与自动化 AI 智能体",
         "emptyTitle": "想在右键菜单里加入什么功能？",
         "emptyDesc": "可以随心设置右键点击文件时出现的菜单。",
         "placeholder": "告诉我要做什么功能",
@@ -2125,8 +2125,8 @@
         "promptCompareFiles": "选两个文件时，整理出它们的不同之处",
         "promptPaperToDiscord": "总结论文并发到 Discord #论文摘要，再做成幻灯片放进“论文摘要”文件夹",
         "promptMaskToPdf": "遮住 hwp、docx 文件里的姓名，并转成 PDF 保存",
-        "starterUser": "新建魔法操作",
-        "starterReply": "填写表单，或在聊天中描述来添加魔法操作。",
+        "starterUser": "新建自动化",
+        "starterReply": "填写表单，或在聊天中描述来添加自动化。",
         "starterAdded": "已将“{{title}}”添加到右键菜单。"
       },
       "dragHint": "调整 {{name}} 的顺序：拖动或按 ↑↓ 键"
@@ -3284,9 +3284,9 @@
     "modelDownloadOpen": "查看模型下载状态"
   },
   "magicAction": {
-    "running": "正在运行魔法动作…",
+    "running": "正在运行自动化…",
     "completed": "运行完成",
-    "failedTitle": "未能运行魔法动作",
+    "failedTitle": "未能运行自动化",
     "stoppedTitle": "已停止运行",
     "minimize": "在后台运行",
     "stop": "停止",
@@ -3298,7 +3298,7 @@
     "saveFailed": "无法保存到对话记录。",
     "emptyOutput": "已完成，无文本输出。",
     "targetsCount": "共 {{count}} 项",
-    "sidebarOpen": "查看魔法动作结果"
+    "sidebarOpen": "查看自动化结果"
   },
   "quickSearch": {
     "title": "快速搜索",
@@ -3400,7 +3400,7 @@
       "askOne": "AI 摘要",
       "askFolder": "询问此文件夹",
       "askMany": "询问 AI 关于 {{count}} 项",
-      "magic": "魔法操作",
+      "magic": "自动化",
       "tools": "快速操作",
       "toolsHint": "压缩 · 索引 · 复制",
       "agent": "AI 智能体",
@@ -3712,7 +3712,7 @@
     "contextMenu": {
       "intro": {
         "title": "给右键菜单加一个自己的按钮",
-        "body": "现在就做一个名为“快速查看内容”的魔法操作。右键点击文本文件，就会立刻显示大小和开头几行。",
+        "body": "现在就做一个名为“快速查看内容”的自动化。右键点击文本文件，就会立刻显示大小和开头几行。",
         "action": "创建示例"
       },
       "sample": {
@@ -3721,15 +3721,15 @@
       },
       "pick": {
         "title": "就在这里",
-        "body": "你创建的魔法操作只会在右键点击匹配的文件时出现。点击它来运行。"
+        "body": "你创建的右键自动化只会在右键点击匹配的文件时出现。点击它来运行。"
       },
       "result": {
         "title": "结果立刻出现",
-        "body": "脚本读取了所选文件的大小和开头几行。让 AI 做摘要的操作也是同样的做法。"
+        "body": "脚本读取了所选文件的大小和开头几行。让 AI 做摘要的自动化也是同样的做法。"
       },
       "more": {
-        "title": "创建更多自己的操作",
-        "body": "在 设置 › 右键菜单 中，可以用描述的方式创建操作，也可以隐藏和调整项目顺序。这个示例仅供练习，可以随意删除。",
+        "title": "创建更多自己的自动化",
+        "body": "在 设置 › 右键菜单 中，可以用描述的方式创建自动化，也可以隐藏和调整项目顺序。这个示例仅供练习，可以随意删除。",
         "action": "打开设置"
       }
     },
