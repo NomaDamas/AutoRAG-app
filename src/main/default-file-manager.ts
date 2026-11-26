@@ -301,6 +301,8 @@ export function createDefaultFileManagerService(deps: DefaultFileManagerServiceD
 				deps.windowsWatcher?.stop();
 				return;
 			}
+			// Never mutate the developer's host OS defaults on unpackaged `electron .` runs unless the user explicitly toggled it.
+			if (!deps.isPackaged) return;
 			if (platform === "win32") {
 				// Refresh registry paths in case the executable path moved across updates.
 				for (const args of winDefaultManagerInstallCommands(deps)) {
@@ -309,8 +311,8 @@ export function createDefaultFileManagerService(deps: DefaultFileManagerServiceD
 				if (stored.interceptReveal) {
 					deps.windowsWatcher?.start();
 				}
-			} else if (platform === "darwin" && deps.isPackaged) {
-				// Ensure NSFileViewer stays intact if the user enabled it.
+			} else if (platform === "darwin") {
+				// Ensure NSFileViewer and public.folder stay bound to Dazzi by default.
 				if (!(await readMacRegistered())) {
 					await applyMac(true);
 				}

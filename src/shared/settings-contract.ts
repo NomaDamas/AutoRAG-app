@@ -132,7 +132,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
-	defaultFileManager: false,
+	defaultFileManager: true,
 	defaultFileManagerInterceptReveal: true,
 	approvalMode: DEFAULT_APPROVAL_MODE,
 	remoteAccess: false,
