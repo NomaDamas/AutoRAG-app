@@ -12,6 +12,7 @@ const bridge = vi.hoisted(() => {
 		configPatch: vi.fn(),
 		configSet: vi.fn(),
 		configRemove: vi.fn(),
+		configRefresh: vi.fn(),
 		onProviderLoginEvent: vi.fn(() => () => undefined),
 	};
 	Reflect.set(globalThis, "autorag", {
@@ -157,7 +158,7 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 		]);
 	});
 
-	it("renders a single unified Decision model (Jev) row and one Visual page parsing row without a duplicate gate row", async () => {
+	it("renders a single unified Decision model (Jev) row and Advanced visual parsing row with Stage-2 Run now action when enabled", async () => {
 		const openrouter = provider("openrouter", "OpenRouter", {
 			models: [
 				model("openrouter", "google/gemini-3.5-flash-lite", { supportsImage: true }),
@@ -165,15 +166,25 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 			],
 		});
 
+		await render([openrouter], {});
+		expect(host.textContent).toContain("Decision model (Jev)");
+		expect(host.textContent).toContain("Advanced visual parsing");
+		expect(host.querySelector('[data-action="run-visualParse"]')).toBeNull();
+
+		bridge.configRefresh.mockResolvedValue({ ok: true, written: 3 });
 		await render([openrouter], {
 			visualParse: {
 				enabled: true,
 				extractor: { kind: "vlm", model: { provider: "openrouter", id: "google/gemini-3.5-flash-lite" } },
 			},
 		});
-		expect(host.textContent).toContain("Decision model (Jev)");
-		expect(host.textContent).toContain("Visual page parsing");
 		expect(host.textContent).not.toContain("Visual page gate");
+		const runBtn = host.querySelector<HTMLButtonElement>('[data-action="run-visualParse"]');
+		expect(runBtn).not.toBeNull();
+		await act(async () => {
+			runBtn!.click();
+		});
+		expect(bridge.configRefresh).toHaveBeenCalledWith(["visual", "minsync"]);
 		expect(
 			roleSelectionFor(
 				"visualParse",

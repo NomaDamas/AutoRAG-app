@@ -113,6 +113,7 @@ export function AiPage({
 	const { run, error } = useConfigWriter(onSaved);
 	const [providers, setProviders] = useState<readonly ProviderSummary[] | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
+	const [visualRunning, setVisualRunning] = useState(false);
 	const [menu, setMenu] = useState<MenuState | null>(null);
 	const [disconnect, setDisconnect] = useState<ProviderSummary | null>(null);
 	const reload = useCallback(async (): Promise<void> => {
@@ -137,6 +138,25 @@ export function AiPage({
 	const jevOptions = useMemo(() => jevOptionsFor(connected), [connected]);
 	const rerankOptions = useMemo(() => rerankOptionsFor(connected), [connected]);
 	const visualParseOptions = useMemo(() => visualParseOptionsFor(connected), [connected]);
+	const visualParseActive = isVisualParseEnabled(snapshot.config);
+
+	async function runVisualParseStage(): Promise<void> {
+		if (visualRunning) return;
+		setVisualRunning(true);
+		setNotice(t("settingsCore.ai.visualParseRunning"));
+		try {
+			const result = await settings.configRefresh(["visual", "minsync"]);
+			setNotice(
+				result.ok
+					? t("settingsCore.ai.visualParseDone", { written: result.written })
+					: (result.error ?? t("settingsCore.ai.visualParseFailed")),
+			);
+		} catch (cause) {
+			setNotice(errorText(cause));
+		} finally {
+			setVisualRunning(false);
+		}
+	}
 
 	function closeMenu(): void {
 		setMenu(null);
@@ -277,7 +297,25 @@ export function AiPage({
 					<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} currentTitle={roleTitle("decomposition", snapshot, t)} broken={roleBroken("decomposition", snapshot.config, connected)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
 					<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} currentTitle={roleTitle("jev", snapshot, t)} broken={roleBroken("jev", snapshot.config, connected)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
 					<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} currentTitle={roleTitle("rerank", snapshot, t)} broken={roleBroken("rerank", snapshot.config, connected)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
-					<RoleRow role="visualParse" label={t("settingsCore.ai.visualParseModel")} hint={t("settingsCore.ai.visualParseHint")} current={visualParseLabel(snapshot.config, t)} currentTitle={roleTitle("visualParse", snapshot, t)} broken={roleBroken("visualParse", snapshot.config, connected)} provider={selectedProvider("visualParse", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParse" })} />
+					<RoleRow
+						role="visualParse"
+						label={t("settingsCore.ai.visualParseModel")}
+						hint={t("settingsCore.ai.visualParseHint")}
+						current={visualParseLabel(snapshot.config, t)}
+						currentTitle={roleTitle("visualParse", snapshot, t)}
+						broken={roleBroken("visualParse", snapshot.config, connected)}
+						provider={selectedProvider("visualParse", snapshot.config, connected)}
+						onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParse" })}
+						action={
+							visualParseActive
+								? {
+										label: visualRunning ? t("settingsCore.ai.visualParseRunningBtn") : t("settingsCore.ai.visualParseRunBtn"),
+										disabled: visualRunning,
+										onClick: () => void runVisualParseStage(),
+									}
+								: undefined
+						}
+					/>
 					<EmbeddingPicker name={t("settingsCore.ai.embeddingModel")} hint={t("settingsCore.ai.embeddingHint")} />
 				</div>
 			</section>
@@ -451,6 +489,7 @@ function RoleRow({
 	provider,
 	onOpen,
 	thinking,
+	action,
 }: {
 	readonly role: string;
 	readonly label: string;
@@ -462,11 +501,12 @@ function RoleRow({
 	readonly provider?: ProviderSummary | null;
 	readonly onOpen: (anchor: HTMLElement) => void;
 	readonly thinking?: { readonly onOpen: (anchor: HTMLElement) => void };
+	readonly action?: { readonly label: string; readonly disabled?: boolean; readonly onClick: () => void } | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
 		<Row name={label} hint={hint}>
-			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
+			<span className={`settings-split${thinking === undefined && action === undefined ? " is-solo" : ""}`}>
 				{broken ? (
 					<span className="ai-role-alert" role="img" aria-label={t("settingsCore.ai.roleBroken")} title={t("settingsCore.ai.roleBroken")}>
 						!
@@ -476,6 +516,11 @@ function RoleRow({
 				{thinking !== undefined ? (
 					<button type="button" className="settings-icon-btn" aria-label={t("settingsCore.ai.thinkingDepthFor", { label })} title={t("settingsCore.ai.thinkingDepth")} onClick={(event) => thinking.onOpen(event.currentTarget)}>
 						<Ellipsis size={16} aria-hidden="true" focusable="false" />
+					</button>
+				) : null}
+				{action !== undefined ? (
+					<button type="button" className="linear-btn settings-btn-quiet" data-action={`run-${role}`} disabled={action.disabled} onClick={action.onClick}>
+						{action.label}
 					</button>
 				) : null}
 				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} title={unset ? undefined : currentTitle} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
