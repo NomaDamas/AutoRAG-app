@@ -1288,7 +1288,7 @@
 	overflow-y: auto;
 	padding: 22px 22px 18px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-12);
+	border-radius: var(--radius-modal-md);
 	background: var(--bg-window);
 	box-shadow: var(--shadow-menu);
 }
@@ -1439,7 +1439,7 @@
 	gap: var(--space-12);
 	width: min(416px, calc(100% - 32px));
 	padding: var(--space-14) var(--space-16);
-	border-radius: 14px;
+	border-radius: var(--radius-modal-md);
 	box-shadow: var(--shadow-notice);
 }
 
@@ -1480,7 +1480,7 @@
 	width: min(468px, calc(100% - 32px));
 	padding: 22px 20px 18px;
 	border: 0;
-	border-radius: 16px;
+	border-radius: var(--radius-modal-md);
 	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
 }
 

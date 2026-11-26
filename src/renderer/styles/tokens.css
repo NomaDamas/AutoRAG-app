@@ -469,6 +469,11 @@
   --radius-11: 11px;
   --radius-12: 12px;
   --radius-14: 14px;
+  /* A modal's corner grows with the modal, so a small confirm and a wide panel read equally round:
+   * under 400px wide 14, 400-499px 16 (the Figma modal template, 111:3985), 500px and wider 18. */
+  --radius-modal-sm: 14px;
+  --radius-modal-md: 16px;
+  --radius-modal-lg: 18px;
   --radius-full: 50%;
 
   /* --------------------------------------------------------------- §7 Scrollbars */

@@ -41,7 +41,7 @@ export function AutomationQuickLook({ rule, onClose, onEdit }: AutomationQuickLo
 			<div
 				role="dialog"
 				aria-label={ruleTitle(rule)}
-				className="flex flex-col w-620 overflow-hidden rounded-[18px] bg-ql-panel text-ql-ink font-ql shadow-[var(--shadow-ql-panel),var(--shadow-window)] [backdrop-filter:var(--backdrop-ql-float)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex flex-col w-620 overflow-hidden rounded-modal-lg bg-ql-panel text-ql-ink font-ql shadow-[var(--shadow-ql-panel),var(--shadow-window)] [backdrop-filter:var(--backdrop-ql-float)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 			>
 				<header className="flex flex-none items-center gap-6 h-46 pl-12 pr-10">
 					<button

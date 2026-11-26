@@ -43,7 +43,7 @@ export function ReduceSizeDialog({
 			}}
 		>
 			<div
-				className="flex w-[480px] max-w-[calc(100vw-32px)] min-w-(--modal-min-width) flex-col gap-20 rounded-[16px] border border-divider bg-window p-20 shadow-[0_10px_35px_rgba(0,0,0,0.2)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex w-[480px] max-w-[calc(100vw-32px)] min-w-(--modal-min-width) flex-col gap-20 rounded-modal-md border border-divider bg-window p-20 shadow-[0_10px_35px_rgba(0,0,0,0.2)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="alertdialog"
 				aria-modal="true"
 				aria-label={t("finder.reduce.title")}

@@ -35,7 +35,7 @@ export function ConvertRenameDialog({
 			}}
 		>
 			<div
-				className="flex w-380 flex-col gap-16 p-16 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex w-380 flex-col gap-16 p-16 border border-border rounded-modal-sm bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="alertdialog"
 				aria-modal="true"
 				aria-label={t("finder.convert.title")}

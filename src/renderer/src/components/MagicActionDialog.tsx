@@ -290,7 +290,7 @@ export function MagicActionDialog(): ReactElement | null {
 			}}
 		>
 			<div
-				className="flex max-h-[84vh] w-[520px] max-w-[92vw] flex-col gap-14 overflow-hidden rounded-12 border border-border bg-window p-18 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex max-h-[84vh] w-[520px] max-w-[92vw] flex-col gap-14 overflow-hidden rounded-modal-lg border border-border bg-window p-18 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-label={title}

@@ -178,7 +178,7 @@ ${t("appError.fix.fixedHint")}`;
 			}}
 		>
 			<div
-				className="flex max-h-[82vh] w-max min-w-[max(var(--modal-min-width),min(373px,92vw))] max-w-[max(var(--modal-min-width),min(560px,92vw))] flex-col gap-12 overflow-y-auto rounded-14 border border-border bg-window px-16 py-14 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex max-h-[82vh] w-max min-w-[max(var(--modal-min-width),min(373px,92vw))] max-w-[max(var(--modal-min-width),min(560px,92vw))] flex-col gap-12 overflow-y-auto rounded-modal-md border border-border bg-window px-16 py-14 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("appError.fix.title")}

@@ -37,7 +37,7 @@ export function ConfirmDialog({
 			}}
 		>
 			<div
-				className="flex w-360 flex-col gap-16 p-16 border border-border rounded-14 bg-window shadow-[0_10px_35px_rgba(0,0,0,0.2)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex w-360 flex-col gap-16 p-16 border border-border rounded-modal-sm bg-window shadow-[0_10px_35px_rgba(0,0,0,0.2)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="alertdialog"
 				aria-modal="true"
 				aria-label={title}
