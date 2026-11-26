@@ -1,12 +1,10 @@
 /**
  * Pure first-run logic: which screen opens, which tour steps the data
- * supports, the version family the tour shows, where a coach bubble sits, and
- * the split the tour arranges. The React layer (`FirstRun.tsx`) only renders it.
+ * supports, where a coach bubble sits, and the window the tour arranges. The React layer (`FirstRun.tsx`) only renders it.
  */
 
 import type { SetupStatus } from "../../../shared/onboarding-contract";
-import type { VersionFamilyData } from "../state/version-family";
-import { AI_SEARCH_PATH, openAiSearchTab, openOrSelectFolderTab, openTabAt } from "../state/tabs";
+import { AI_SEARCH_PATH, openOrSelectFolderTab, openTabAt, showAiSearchInActiveTab } from "../state/tabs";
 import { allTabs, focusPane, moveTab, updatePaneTabs, type Workspace } from "../state/workspace";
 
 /** The visible AI Search panel (one AI host per tab; hidden ones carry `.hidden`). */
@@ -23,13 +21,14 @@ export function initialScreen(status: SetupStatus): FirstRunScreen {
 /**
  * Whether the person may start the app while the first index is still being read: a question the real AI Search
  * already answered from its own document exists (the tour has something confident to show). Once the files are read
- * (`preparing`, then `ready`) the ordinary screens take over, and the duplicate-file steps are only seconds away.
+ * (`preparing`, then `ready`) the ordinary screens take over.
  */
 export function canStartEarly(status: SetupStatus | null): boolean {
 	return status !== null && status.demo !== null && status.stage === "indexing";
 }
 
-export type TourStepId = "ask" | "cite" | "evidence" | "duplicates" | "versions";
+/** One thing, shown well: ask about your own files, get an answer, open what it rests on. */
+export type TourStepId = "ask" | "cite" | "evidence";
 
 /** Steps that only make sense once the demo question produced a cited answer. */
 const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { evidence: true };
@@ -38,20 +37,16 @@ const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { evidence: tru
 export const ACTION_REQUIRED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = {
 	ask: true,
 	cite: true,
-	duplicates: true,
 };
 
 /**
- * The tour the data supports: the AI steps need the verified demo question,
- * the duplicate steps a version family. The window is already split (folder on
- * the left, AI Search on the right) when the tour starts, so nothing asks the
- * person to arrange panes.
+ * The tour the data supports: the verified demo question, or nothing. The
+ * window already shows the AI 에이전트 tab alone when the tour starts, so
+ * nothing asks the person to arrange panes. Duplicates and versions are left
+ * for later, where the person meets a stacked row.
  */
-export function tourSteps(input: { readonly demo: boolean; readonly family: boolean }): readonly TourStepId[] {
-	return [
-		...(input.demo ? (["ask", "cite", "evidence"] as const) : []),
-		...(input.family ? (["duplicates", "versions"] as const) : []),
-	];
+export function tourSteps(input: { readonly demo: boolean }): readonly TourStepId[] {
+	return input.demo ? ["ask", "cite", "evidence"] : [];
 }
 
 /** The step after `current`; an answer without citations skips the citation steps. Null ends the tour. */
@@ -65,30 +60,14 @@ export function nextStep(steps: readonly TourStepId[], current: TourStepId, opti
 }
 
 /**
- * The family the duplicates step shows: one whose head the Finder can list
- * (its entry is known) and that really has another copy, preferring one inside
- * the folder the left pane already shows, then the largest.
+ * The tour's window: the focused pane's tab becomes the AI 에이전트 tab, as the
+ * sidebar's AI 에이전트 does (Back returns to the folder), so the chat is the
+ * only thing on screen. A pane already showing it is focused instead.
  */
-export function pickTourFamily(families: readonly VersionFamilyData[], preferDir: string | null): VersionFamilyData | null {
-	const usable = families.filter((family) => family.members.length > 0 && family.entriesByPath[family.head] !== undefined);
-	if (usable.length === 0) return null;
-	const inside = (family: VersionFamilyData): boolean => preferDir !== null && preferDir !== "" && family.head.startsWith(`${preferDir.replace(/[\\/]+$/u, "")}/`);
-	return [...usable].sort((a, b) => Number(inside(b)) - Number(inside(a)) || b.members.length - a.members.length)[0] ?? null;
-}
-
-/**
- * The tour's window: the folder the focused pane shows on the left and an AI
- * Search tab split off to its right, which takes focus. A workspace that
- * already shows AI Search in another pane is left as it is.
- */
-export function splitWithAiSearch(ws: Workspace): Workspace {
-	const shown = ws.panes.filter((pane) => pane.tabs.find((tab) => tab.id === pane.activeId)?.path === AI_SEARCH_PATH);
-	if (shown.length > 0 && ws.panes.length > 1) return focusPane(ws, shown[0]?.id ?? ws.focusedPaneId);
-	const paneId = ws.focusedPaneId;
-	const opened = updatePaneTabs(ws, paneId, openAiSearchTab);
-	const aiTab = allTabs(opened).findLast((tab) => tab.path === AI_SEARCH_PATH);
-	if (aiTab === undefined) return ws;
-	return moveTab(opened, aiTab.id, { kind: "split", paneId, edge: "right" });
+export function showAiSearchAlone(ws: Workspace): Workspace {
+	const shown = ws.panes.find((pane) => pane.tabs.find((tab) => tab.id === pane.activeId)?.path === AI_SEARCH_PATH);
+	if (shown !== undefined) return focusPane(ws, shown.id);
+	return updatePaneTabs(ws, ws.focusedPaneId, showAiSearchInActiveTab);
 }
 
 /**

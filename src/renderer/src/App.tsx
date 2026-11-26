@@ -70,7 +70,7 @@ import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, SETTIN
 import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { windowColumns } from "./state/window-layout";
 import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
-import { folderPaneId, splitTwoFolders, splitWithAiSearch } from "./first-run/tour";
+import { showAiSearchAlone, splitTwoFolders } from "./first-run/tour";
 import { Tutorials } from "./first-run/Tutorials";
 import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
@@ -422,7 +422,7 @@ export function App(): ReactElement {
 			arrange: () => {
 				setSidebarVisible(true);
 				setInspectorVisible(true);
-				setWorkspace((current) => splitWithAiSearch(current));
+				setWorkspace((current) => showAiSearchAlone(current));
 			},
 			focusAi: () => {
 				setWorkspace((current) => focusAiSearchInWorkspace(current));
@@ -434,24 +434,13 @@ export function App(): ReactElement {
 				aiHandlesRef.current.get(aiTab.id)?.prefill(text, { focus });
 				if (focus) setWorkspace((current) => focusAiSearchInWorkspace(current));
 			},
-			showFamily: (family) => {
-				const paneId = folderPaneId(workspaceRef.current);
-				const head = family.entriesByPath[family.head];
-				if (paneId === null || head === undefined) return;
-				// Open the folder and scroll the stacked head row into view without selecting it yet:
-				// the user's own click on the spotlighted row unfolds the stack and opens Versions.
-				store.get(paneId)?.showEntryFolder(head);
-				setWorkspace((current) => focusPane(current, paneId));
-			},
-			versionFamilies: async () => (await source.versionFamilies()).families,
-			folderPath: () => {
-				const paneId = folderPaneId(workspaceRef.current);
-				const pane = workspaceRef.current.panes.find((candidate) => candidate.id === paneId);
-				return pane?.tabs.find((tab) => tab.id === pane.activeId)?.path ?? null;
+			resetAi: () => {
+				const aiTab = allTabs(workspaceRef.current).find((tab) => tab.path === AI_SEARCH_PATH);
+				if (aiTab !== undefined) aiHandlesRef.current.get(aiTab.id)?.newChat();
 			},
 			setCovered: setFirstRunCovered,
 		}),
-		[source, store],
+		[],
 	);
 	const endFirstRun = useCallback(() => {
 		setFirstRun(false);

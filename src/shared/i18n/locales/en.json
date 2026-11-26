@@ -3413,34 +3413,22 @@
       "skip": "Skip",
       "finish": "Done",
       "clickHint": "Click it to try",
-      "sendHint": "Send it yourself",
-      "typingHint": "Typing…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "Here is how to ask",
-        "body": "Let's try it on the files we just read. Click send, or change the text and ask your own."
+        "title": "Ask about your files",
+        "body": "We drafted something to ask from your own documents.\nClick send to try it."
       },
       "cite": {
-        "title": "Got an answer — click the citation number",
-        "body": "Every answer is grounded in your files. Click the blue number to open the exact source.",
+        "title": "Answers show their sources",
+        "body": "Click a number to see, in the info pane on the right, which file that sentence came from.",
         "waitingTitle": "Finding the answer",
         "waitingBody": "Reading what's inside your files.",
         "noCiteTitle": "Here's your answer",
-        "noCiteBody": "Every answer is grounded in your files only.",
-        "failedTitle": "No answer this time",
-        "failedBody": "You can rephrase the question and ask again."
+        "noCiteBody": "Every answer is grounded in your files only."
       },
       "evidence": {
-        "title": "Sources gather here",
-        "body": "The exact passage from the original. Click its title to go to the file."
-      },
-      "duplicates": {
-        "title": "Click the stacked document",
-        "body": "Copies and older versions fold into one row. Click it to expand all versions."
-      },
-      "versions": {
-        "title": "Check the latest version here",
-        "body": "Identical and near-identical documents side by side. Click one to jump to it."
+        "title": "Jump to the original file",
+        "body": "Click the source title. The folder holding that file opens in a new tab."
       }
     },
     "signin": {
