@@ -35,6 +35,11 @@ export function createOsRequestService(deps: OsRequestServiceDeps): OsRequestSer
 	const queue: OsRendererRequest[] = [];
 	return {
 		async push(request) {
+			if (request.action === "focus") {
+				queue.push({ action: "focus" });
+				deps.onQueued();
+				return;
+			}
 			const found: { readonly path: string; readonly kind: "file" | "folder" }[] = [];
 			for (const path of request.paths) {
 				const kind = await deps.kindOf(path);

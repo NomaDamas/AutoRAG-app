@@ -16,6 +16,7 @@ import {
 	type JsonObject,
 	type JsonValue,
 } from "../../../shared/settings-contract";
+import { evaluateRefreshScheduleHealth } from "../../../shared/refresh-schedule-health";
 import { DUPEY_SCAN_INTERVALS, REFRESH_INTERVALS } from "../../../shared/settings-options";
 import type { ReplyLanguage } from "../profile-progress";
 import {
@@ -68,6 +69,7 @@ function localized(ko: string, en: string, ja: string, zh: string): Localized {
 
 const SCOPE_SUMMARY = localized("검색 범위(폴더·제외 항목)를 변경", "Updated the search scope (folders & exclusions)", "検索範囲(フォルダ・除外項目)を変更", "已更新搜索范围（文件夹与排除项）");
 const OPTIONS_SUMMARY = localized("검색 유지 옵션을 변경", "Updated the indexing options", "インデックス維持オプションを変更", "已更新索引选项");
+const SCHEDULE_REPAIR_SUMMARY = localized("자동 업데이트 예약을 다시 등록", "Re-registered the automatic update schedule", "自動更新の予約を再登録", "已重新注册自动更新计划");
 const DUPLICATES_SUMMARY = localized("중복 파일 정리 설정을 변경", "Updated the duplicate-file settings", "重複ファイル設定を変更", "已更新重复文件设置");
 
 const REJECTION_LABEL: Readonly<Record<RejectedRoot["reason"], string>> = {
@@ -333,6 +335,49 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 		},
 	});
 
-	const tools: readonly ToolDefinition[] = [getSearchSettings, updateIndexScope, updateIndexOptions, updateDuplicates];
+	const getRefreshSchedule = defineTool({
+		name: "get_refresh_schedule",
+		label: "Inspect Automatic Refresh Schedule",
+		description:
+			"Read the OS background refresh schedule status (`supported`, `mechanism`, `installed`, `wanted`, `intervalMs`, `lastTickAt`, `paused`, `local`, `sources`, `conflicts`, `error`) and its evaluated health issues (`not-registered`, `overdue`, `failing`, `conflicts`). Use this whenever the person asks why automatic updates stopped, fell behind, failed, or conflicted.",
+		parameters: Type.Object({}),
+		execute: async () => {
+			ensureLive();
+			try {
+				const status = await deps.settings.refreshScheduleGet();
+				return textResult({ ok: true, status, issues: evaluateRefreshScheduleHealth(status) });
+			} catch (error) {
+				return textResult({ ok: false, error: errorText(error) });
+			}
+		},
+	});
+
+	const repairRefreshSchedule = defineTool({
+		name: "repair_refresh_schedule",
+		label: "Re-register Automatic Refresh Schedule",
+		description:
+			"Reconcile Dazzi's OS background refresh job to match the current config (re-installs a missing/unloaded LaunchAgent, cron line, or Task Scheduler task, or removes it if everything is manual). Does not run an immediate index build or touch user files.",
+		parameters: Type.Object({}),
+		execute: async () => {
+			ensureLive();
+			try {
+				const status = await deps.settings.refreshScheduleApply();
+				const ok = status.error === null && (!status.wanted || status.installed);
+				if (ok) record({ kind: "search", summary: SCHEDULE_REPAIR_SUMMARY, fields: ["refreshSchedule"] });
+				return textResult({ ok, status, issues: evaluateRefreshScheduleHealth(status) });
+			} catch (error) {
+				return textResult({ ok: false, error: errorText(error) });
+			}
+		},
+	});
+
+	const tools: readonly ToolDefinition[] = [
+		getSearchSettings,
+		getRefreshSchedule,
+		repairRefreshSchedule,
+		updateIndexScope,
+		updateIndexOptions,
+		updateDuplicates,
+	];
 	return kit.toolkit(tools);
 }

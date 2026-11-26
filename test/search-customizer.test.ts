@@ -33,7 +33,14 @@ const SCHEDULE_STATUS: RefreshScheduleStatus = {
 	error: null,
 };
 
-const TOOL_NAMES = ["get_search_settings", "update_duplicates", "update_index_options", "update_index_scope"];
+const TOOL_NAMES = [
+	"get_refresh_schedule",
+	"get_search_settings",
+	"repair_refresh_schedule",
+	"update_duplicates",
+	"update_index_options",
+	"update_index_scope",
+];
 
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "search-agent-root-"));
@@ -65,10 +72,12 @@ function register(): FauxProviderRegistration {
 	return registration;
 }
 
-function createStubSettings(options: { readonly reconcile?: () => Promise<RefreshScheduleStatus> } = {}) {
+function createStubSettings(options: { readonly reconcile?: () => Promise<RefreshScheduleStatus>; readonly status?: () => Promise<RefreshScheduleStatus> } = {}) {
 	const reconcile = vi.fn(options.reconcile ?? (async () => SCHEDULE_STATUS));
+	const status = vi.fn(options.status ?? (async () => SCHEDULE_STATUS));
 	return {
 		reconcile,
+		status,
 		settings: createSettingsService({
 			directory: settingsDir,
 			dataSources: { list: vi.fn(), setEnabled: vi.fn(), setDescription: vi.fn(), sync: vi.fn() } as never,
@@ -76,7 +85,7 @@ function createStubSettings(options: { readonly reconcile?: () => Promise<Refres
 			config: createAutoRagConfigService({ env, cwd: root }),
 			refreshConfig: vi.fn() as never,
 			credentials: { list: vi.fn(), set: vi.fn(), remove: vi.fn() } as never,
-			refreshScheduler: { status: vi.fn(), reconcile, remove: vi.fn() } as never,
+			refreshScheduler: { status, reconcile, remove: vi.fn() } as never,
 			onSettingsChanged: undefined as never,
 		}),
 	};
@@ -109,7 +118,7 @@ function warningsOf(parsed: Record<string, unknown>): readonly string[] {
 }
 
 describe("search-customizer toolkit & settings-customizer profile", () => {
-	it("exposes only the four closed search tools and states the Settings safety boundaries", () => {
+	it("exposes only the six closed search tools and states the Settings safety boundaries", () => {
 		const { settings } = createStubSettings();
 		const kit = createSearchCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
 		const profile = settingsCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
@@ -320,5 +329,22 @@ describe("search-customizer toolkit & settings-customizer profile", () => {
 
 		expect((await readConfig()).appIndexing?.refreshIntervalMs).toBe(900_000);
 		expect(kit.takeChanges()[0]?.kind).toBe("search");
+	});
+
+	it("inspects and repairs the OS background refresh schedule through dedicated tools", async () => {
+		const { settings, reconcile } = createStubSettings({
+			status: async () => ({ ...SCHEDULE_STATUS, installed: false }),
+			reconcile: async () => ({ ...SCHEDULE_STATUS, installed: true }),
+		});
+		const kit = createSearchCustomizerToolkit({ settings, language: () => "ko" });
+
+		const inspected = parse(await tool(kit, "get_refresh_schedule").execute("call-1", {}, undefined, undefined, undefined));
+		expect(inspected.ok).toBe(true);
+		expect((inspected.issues as { kind: string }[])[0]?.kind).toBe("not-registered");
+
+		const repaired = parse(await tool(kit, "repair_refresh_schedule").execute("call-2", {}, undefined, undefined, undefined));
+		expect(repaired.ok).toBe(true);
+		expect(reconcile).toHaveBeenCalledTimes(1);
+		expect(kit.takeChanges()[0]?.fields).toEqual(["refreshSchedule"]);
 	});
 });

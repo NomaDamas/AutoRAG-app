@@ -108,4 +108,74 @@ describe("the notification center", () => {
 		expect(panel()?.textContent).not.toContain("다시 로그인해야 합니다.");
 		expect(panel()?.textContent).toContain(t("notifications.empty"));
 	});
+
+	it("surfaces automatic refresh issues with 숨기기 and AI로 해결하기, opening Indexing with a prefilled AI prompt", async () => {
+		const fixed = {
+			supported: true,
+			mechanism: "launchd" as const,
+			installed: true,
+			wanted: true,
+			localScheduled: false,
+			scheduledSourceIds: ["kakao"],
+			intervalMs: 30 * 60_000,
+			lastTickAt: new Date().toISOString(),
+			local: null,
+			sources: {},
+			paused: null,
+			conflicts: [],
+			error: null,
+		};
+		const onOpenSettingsPage = vi.fn();
+		let currentSchedule = { ...fixed, installed: false };
+		let pushedListener: ((status: typeof fixed) => void) | null = null;
+		Reflect.set(window, "autorag", {
+			settings: {
+				sourcesList: async () => ({ sources: [] }),
+				refreshScheduleGet: async () => currentSchedule,
+				onRefreshScheduleChanged: (listener: (status: typeof fixed) => void) => {
+					pushedListener = listener;
+					return () => {
+						pushedListener = null;
+					};
+				},
+			},
+		});
+		act(() => root.render(<NotificationCenter onOpenSettingsPage={onOpenSettingsPage} />));
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(bell().getAttribute("aria-label")).toBe(t("notifications.openUnread"));
+		await act(async () => {
+			bell().click();
+			await Promise.resolve();
+		});
+		expect(panel()?.textContent).toContain(t("notifications.scheduleNotRegisteredTitle"));
+		const itemButtons = [...(panel()?.querySelectorAll<HTMLButtonElement>(".notice-item button") ?? [])].map((button) => button.textContent);
+		expect(itemButtons).toEqual([t("notifications.hide"), t("appError.fixAction")]);
+		const fixBtn = [...(panel()?.querySelectorAll<HTMLButtonElement>(".notice-item button") ?? [])].find((button) => button.textContent === t("appError.fixAction"));
+		act(() => fixBtn?.click());
+		expect(onOpenSettingsPage).toHaveBeenCalledWith("indexing", { assistantPrompt: t("notifications.scheduleNotRegisteredPrompt") });
+		expect(panel()).toBeNull();
+
+		// A later background audit push showing a failing scheduled item lights the bell again and prefills its prompt.
+		currentSchedule = {
+			...fixed,
+			sources: { kakao: { at: new Date().toISOString(), ok: false, error: "timeout", durationMs: 30_000, detail: "failed" } },
+		};
+		act(() => {
+			pushedListener?.(currentSchedule);
+		});
+		await act(async () => {
+			bell().click();
+			await Promise.resolve();
+		});
+		expect(panel()?.textContent).toContain(t("notifications.scheduleFailingTitle"));
+		expect(panel()?.textContent).toContain("kakao");
+		const fixFailingBtn = [...(panel()?.querySelectorAll<HTMLButtonElement>(".notice-item button") ?? [])].find((button) => button.textContent === t("appError.fixAction"));
+		act(() => fixFailingBtn?.click());
+		expect(onOpenSettingsPage).toHaveBeenLastCalledWith("indexing", {
+			assistantPrompt: t("notifications.scheduleFailingPrompt", { items: "kakao" }),
+		});
+	});
 });

@@ -23,8 +23,8 @@ import { OS_REQUEST_FLAG, OS_REQUEST_PATH_FLAG, type OsRequestAction } from "../
  * {@link OsMenuIntegration.uninstall}.
  */
 
-/** The requests the OS file menu offers; `open` belongs to the `dazzi` command only. */
-export type MenuAction = Exclude<OsRequestAction, "open">;
+/** The requests the OS file menu offers; `open` belongs to the `dazzi` command and `focus` to default-manager activation. */
+export type MenuAction = Exclude<OsRequestAction, "open" | "focus">;
 
 /** The actions the menu offers, in menu order. */
 export const MENU_ACTIONS: readonly MenuAction[] = ["ask", "reveal"];

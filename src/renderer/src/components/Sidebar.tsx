@@ -12,6 +12,7 @@ import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { NotificationCenter } from "./NotificationCenter";
 import type { SettingsCategory } from "./SettingsView";
+import type { SettingsNavigationOptions } from "../state/settings-navigation";
 import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
@@ -88,6 +89,7 @@ export function Sidebar({
 	aiSearchDrop,
 	tagColorsDenied = false,
 	onGrantTagColors,
+	onboardingPending = false,
 	favorites,
 }: {
 	readonly groups: readonly NavGroup[];
@@ -105,8 +107,8 @@ export function Sidebar({
 	readonly onOpenIndexing: () => void;
 	/** Model download entries open Settings on its AI page. */
 	readonly onOpenAiSettings?: (() => void) | undefined;
-	/** The notification center opens a Settings page by category (`general`, `source:<alias>`). */
-	readonly onOpenSettingsPage?: ((category: SettingsCategory) => void) | undefined;
+	/** The notification center opens a Settings page by category (`general`, `indexing`, `source:<alias>`). */
+	readonly onOpenSettingsPage?: ((category: SettingsCategory, options?: SettingsNavigationOptions) => void) | undefined;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
@@ -124,6 +126,8 @@ export function Sidebar({
 	/** macOS refused the app Finder's tag registry: the Tags group offers the Full Disk Access grant. */
 	readonly tagColorsDenied?: boolean;
 	readonly onGrantTagColors?: (() => void) | undefined;
+	/** True while first-run onboarding is active; defers post-onboarding prompts in the notification center. */
+	readonly onboardingPending?: boolean;
 	/** Pin (drop a folder between rows), reorder (drag a row), and unpin (right-click) in Favorites; absent turns them off. */
 	readonly favorites?: FavoritesDropTarget | undefined;
 }): ReactElement {
@@ -290,7 +294,7 @@ export function Sidebar({
 						<UsageIcon />
 					</button>
 					{/* Figma 553:6673: the bell sits after the usage chart and opens the notification center above it. */}
-					<NotificationCenter onOpenAiSettings={onOpenAiSettings} onOpenSettingsPage={onOpenSettingsPage} />
+					<NotificationCenter onOpenAiSettings={onOpenAiSettings} onOpenSettingsPage={onOpenSettingsPage} onboardingPending={onboardingPending} />
 					<div className="flex-1" aria-hidden="true" />
 					<SidebarUpdateButton />
 				</div>
