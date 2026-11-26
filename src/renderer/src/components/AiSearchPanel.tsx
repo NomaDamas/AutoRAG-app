@@ -1191,9 +1191,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{historyGroups.length === 0 ? (
 								<span className="block px-16 py-24 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
-								historyGroups.map((group) => (
+								historyGroups.map((group, index) => (
 									<div key={group.label}>
-										<div className="history-group px-16 pt-4 pb-2 text-badge font-bold leading-[15px] text-ink-muted">
+										{/* A hairline above each period after the first (어제, 지난 7일, …) so where one ends is easy to see. */}
+										<div className={cn("history-group text-badge font-bold leading-[15px] text-ink-muted", index === 0 ? "px-16 pt-4 pb-2" : "mx-16 mt-6 border-t-[0.5px] border-divider pt-10 pb-2")}>
 											{t(HISTORY_BUCKET_KEYS[group.label])}
 										</div>
 										{group.items.map((item) => (
