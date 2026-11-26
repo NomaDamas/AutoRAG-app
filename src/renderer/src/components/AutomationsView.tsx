@@ -1509,7 +1509,7 @@ export function AutomationDraftCard({
 			execution: { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
 		});
 	return (
-		<div className="flex flex-col gap-8 rounded-12 border border-border bg-window p-12" data-automation-request>
+		<div className="flex flex-col gap-8 rounded-12 border border-divider bg-window p-12" data-automation-request>
 			<span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span>
 			{rightClick ? (
 				<RightClickWhen
