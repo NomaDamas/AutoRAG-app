@@ -35,17 +35,22 @@ const bridge = vi.hoisted(() => {
 			return () => customizerListeners.delete(fn);
 		},
 	};
+	const magicAction = {
+		verify: vi.fn(),
+	};
 	Reflect.set(globalThis, "autorag", {
 		platform: "darwin",
 		settings,
 		fs,
 		appCustomizer,
+		magicAction,
 		appUpdate: { get: () => new Promise(() => undefined), onChange: () => () => undefined },
 	});
 	return {
 		settings,
 		fs,
 		appCustomizer,
+		magicAction,
 		emitCustomizerEvent: (event: AppCustomizerEvent) => {
 			for (const fn of customizerListeners) fn(event);
 		},
@@ -118,6 +123,7 @@ beforeEach(async () => {
 	bridge.appCustomizer.send.mockReset().mockResolvedValue(undefined);
 	bridge.appCustomizer.cancel.mockReset().mockResolvedValue(undefined);
 	bridge.appCustomizer.reset.mockReset().mockResolvedValue(undefined);
+	bridge.magicAction.verify.mockReset();
 
 	host = document.createElement("div");
 	document.body.append(host);
@@ -392,5 +398,92 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		} finally {
 			Reflect.set(globalThis, "autorag", prevBridge);
 		}
+	});
+
+	it("lets the user test a Magic Action in a temporary folder inside the editor modal and shows pass/fail + diff", async () => {
+		bridge.magicAction.verify
+			.mockResolvedValueOnce({
+				ok: false,
+				executionKind: "script",
+				exitCode: 127,
+				timedOut: false,
+				durationMs: 25,
+				output: "",
+				stderr: "bad_cmd: command not found",
+				error: "bad_cmd: command not found",
+				targetPaths: ["sample.txt"],
+				diff: { created: [], modified: [], deleted: [], unchanged: ["sample.txt"] },
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				executionKind: "script",
+				exitCode: 0,
+				timedOut: false,
+				durationMs: 18,
+				output: "2 sample.txt",
+				targetPaths: ["sample.txt"],
+				diff: {
+					created: [{ path: "out.txt", kind: "file", size: 12, contentPreview: "2 sample.txt" }],
+					modified: [],
+					deleted: [],
+					unchanged: ["sample.txt"],
+				},
+			});
+
+		currentSettings = {
+			...DEFAULT_SETTINGS,
+			contextMenu: {
+				...DEFAULT_SETTINGS.contextMenu,
+				magicActions: [
+					{
+						id: "count-lines",
+						label: "줄 수 세기",
+						enabled: true,
+						selection: "single",
+						targetKind: "file",
+						extensions: ["txt"],
+						execution: { kind: "script", command: 'bad_cmd "$@"' },
+					},
+				],
+			},
+		};
+
+		await act(async () => {
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
+		});
+		await settle();
+
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="edit-magic-count-lines"]')?.click();
+		});
+		await settle();
+
+		const editor = document.body.querySelector('[data-testid="magic-action-editor-modal"]')!;
+		expect(editor).not.toBeNull();
+		expect(editor.querySelector('[data-testid="magic-editor-kind"]')).toBeNull();
+
+		await act(async () => {
+			editor.querySelector<HTMLButtonElement>('[data-action="test-magic-editor"]')?.click();
+		});
+		await settle();
+
+		const failBox = editor.querySelector('[data-testid="magic-editor-verify-result"]')!;
+		expect(failBox.getAttribute("data-verify-ok")).toBe("false");
+		expect(failBox.textContent).toContain("bad_cmd: command not found");
+
+		await act(async () => {
+			setInputValue(editor.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-command"]')!, 'wc -l "$@"');
+		});
+		await settle();
+		await act(async () => {
+			editor.querySelector<HTMLButtonElement>('[data-action="test-magic-editor"]')?.click();
+		});
+		await settle();
+
+		const okBox = editor.querySelector('[data-testid="magic-editor-verify-result"]')!;
+		expect(okBox.getAttribute("data-verify-ok")).toBe("true");
+		expect(okBox.textContent).toContain("2 sample.txt");
+		expect(okBox.textContent).toContain("out.txt");
+		expect(bridge.magicAction.verify).toHaveBeenCalledTimes(2);
 	});
 });

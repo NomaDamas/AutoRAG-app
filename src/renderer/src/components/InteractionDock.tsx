@@ -26,6 +26,7 @@ import type {
 	InteractionAnswer,
 	InteractionBridge,
 	InteractionRequest,
+	MagicActionRequest,
 	Question,
 	QuestionRequest,
 } from "../../../shared/interaction-contract";
@@ -133,6 +134,7 @@ export function InteractionDock({ request, onStop }: InteractionDockProps): Reac
 	}, [request]);
 
 	if (request.kind === "automation") return <AutomationRequestCard request={request} />;
+	if (request.kind === "magic-action") return <MagicActionRequestCard request={request} />;
 	return request.kind === "approval" ? (
 		<ApprovalCard request={request} />
 	) : (
@@ -434,6 +436,31 @@ function AutomationRequestCard({ request }: { readonly request: AutomationReques
 				onCancel={() => answerRequest(request.id, cancelAnswer())}
 				onCreate={async (rule) => {
 					answerRequest(request.id, { kind: "automation", rule });
+					return true;
+				}}
+			/>
+		</div>
+	);
+}
+
+/**
+ * A verified right-click automation the agent is about to save: the exact same unified card as a folder automation,
+ * prefilled in right-click mode so the person reviews the trigger and task and clicks 추가하기/저장 or 취소.
+ */
+function MagicActionRequestCard({ request }: { readonly request: MagicActionRequest }): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<div className="flex flex-col gap-8" data-interaction="magic-action">
+			<p className="m-0 text-meta leading-[18px] text-ink-body">{t("automations.nudge.lead")}</p>
+			<AutomationDraftCard
+				initial={null}
+				initialMagicAction={request.action}
+				rightClickOnly
+				submitLabel={request.isUpdate ? t("settingsCore.contextMenu.editor.save") : t("automations.recs.add")}
+				onCancel={() => answerRequest(request.id, cancelAnswer())}
+				onCreate={async () => false}
+				onCreateMagicAction={async (action) => {
+					answerRequest(request.id, { kind: "magic-action", action });
 					return true;
 				}}
 			/>

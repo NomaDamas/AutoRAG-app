@@ -7,10 +7,12 @@ import {
 	type InteractionAnswer,
 	type InteractionClosed,
 	type InteractionRequest,
+	type MagicActionRequest,
 	type Question,
 	type QuestionAnswer,
 	type QuestionRequest,
 } from "../shared/interaction-contract";
+import { normalizeMagicAction } from "../shared/context-menu-contract";
 
 /**
  * The open requests of the running searches: what the agent asked the person and has not been answered yet.
@@ -20,7 +22,11 @@ import {
  * knows nothing of Electron: the window is reached through the two `emit` callbacks.
  */
 
-export type RequestBody = Omit<QuestionRequest, "id" | "searchId"> | Omit<ApprovalRequest, "id" | "searchId"> | Omit<AutomationRequest, "id" | "searchId">;
+export type RequestBody =
+	| Omit<QuestionRequest, "id" | "searchId">
+	| Omit<ApprovalRequest, "id" | "searchId">
+	| Omit<AutomationRequest, "id" | "searchId">
+	| Omit<MagicActionRequest, "id" | "searchId">;
 
 export interface InteractionHubDeps {
 	readonly emitRequest: (request: InteractionRequest) => void;
@@ -73,6 +79,28 @@ const answerSchema = Type.Union([
 			run: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
 		}),
 	}),
+	Type.Object({
+		kind: Type.Literal("magic-action"),
+		action: Type.Object({
+			id: Type.String({ minLength: 1 }),
+			label: Type.String({ minLength: 1 }),
+			description: Type.Optional(Type.String()),
+			enabled: Type.Boolean(),
+			selection: Type.Union([Type.Literal("any"), Type.Literal("single"), Type.Literal("multiple")]),
+			targetKind: Type.Union([Type.Literal("any"), Type.Literal("file"), Type.Literal("folder")]),
+			extensions: Type.Array(Type.String()),
+			execution: Type.Union([
+				Type.Object({ kind: Type.Literal("script"), command: Type.String({ minLength: 1 }) }),
+				Type.Object({
+					kind: Type.Literal("agent"),
+					mode: Type.Union([Type.Literal("read"), Type.Literal("organize")]),
+					prompt: Type.String({ minLength: 1 }),
+					useSkills: Type.Optional(Type.Boolean()),
+					useMcp: Type.Optional(Type.Boolean()),
+				}),
+			]),
+		}),
+	}),
 ]);
 
 function fitsSelection(question: Question, answer: Extract<QuestionAnswer, { kind: "selection" }>): boolean {
@@ -94,6 +122,7 @@ function fits(request: InteractionRequest, answer: InteractionAnswer): boolean {
 	if (request.kind === "approval") return answer.kind === "approval";
 	// A rule runs an agent or a program, never both and never neither.
 	if (request.kind === "automation") return answer.kind === "automation" && (answer.rule.agent === undefined) !== (answer.rule.run === undefined);
+	if (request.kind === "magic-action") return answer.kind === "magic-action" && normalizeMagicAction(answer.action) !== null;
 	if (answer.kind !== "question" || answer.answers.length !== request.questions.length) return false;
 	return request.questions.every((question, index) => fitsQuestion(question, answer.answers[index] ?? null));
 }

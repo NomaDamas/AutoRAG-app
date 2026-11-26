@@ -64,7 +64,10 @@ export function wrapSave(execute: PatchableTool["execute"], current: () => RunIn
 		const signal = rest.find((value): value is AbortSignal => typeof AbortSignal !== "undefined" && value instanceof AbortSignal);
 		const answer = await run.open({ kind: "automation", ruleId: params.id ?? "", rule: draftOf(params.automation) }, signal);
 		if (answer.kind !== "automation") {
-			return { content: [{ type: "text", text: SKIPPED }], details: { action: "save", ...(params.id === undefined ? {} : { id: params.id }) } };
+			return {
+				content: [{ type: "text", text: SKIPPED }],
+				details: { action: "save", saved: false, cancelledByUser: true, ...(params.id === undefined ? {} : { id: params.id }) },
+			};
 		}
 		return execute(toolCallId, { ...params, automation: mergeDraft(params.automation, answer.rule) }, ...rest);
 	};

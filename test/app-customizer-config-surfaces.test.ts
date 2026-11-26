@@ -144,9 +144,9 @@ describe("the app customizer service routes each Settings section to its own pi 
 		expect(seenPrompt).toContain('[Active Settings datasource page: "work-notes"]');
 	});
 
-	it("ltr / account / about / remote: unified settings profile edits settings across domains from any tab", async () => {
+	it("ltr / account / plan / remote: unified settings profile edits settings across domains from any tab", async () => {
 		await run(
-			"about",
+			"remote",
 			[
 				["update_general_settings", { appearance: "dark" }],
 				["update_ltr_settings", { rankingLog: false }],

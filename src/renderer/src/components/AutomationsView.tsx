@@ -1469,35 +1469,49 @@ export function AutomationSuggestionCard({
  */
 export function AutomationDraftCard({
 	initial,
+	initialMagicAction = null,
 	onCreate,
 	onCreateMagicAction,
 	onCancel,
 	rightClickOnly = false,
+	submitLabel,
 }: {
 	/** The rule to show filled in; null for an empty card (새 자동화) where every chip still asks. */
 	readonly initial: AutomationDraft | null;
+	/** A prefilled right-click automation (from the agent's confirmation request); locks the card to right-click mode. */
+	readonly initialMagicAction?: MagicAction | null;
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
 	/** Where a right-click action can be made from here; without it the change chip has no 우클릭하면. */
 	readonly onCreateMagicAction?: ((action: MagicAction) => Promise<boolean>) | undefined;
 	readonly onCancel: () => void;
 	/** Only a right-click action can be made here: the card opens on 우클릭하면 and the trigger cannot change. */
 	readonly rightClickOnly?: boolean;
+	/** Optional override for the primary button text (defaults to 추가하기). */
+	readonly submitLabel?: string;
 }): ReactElement {
 	const { t } = useTranslation();
 	const locations = useLocations();
 	const blank = initial === null;
+	const lockedRightClick = rightClickOnly || initialMagicAction !== null;
+	const initialClick = initialMagicAction === null ? null : rightClickKindOf(initialMagicAction.targetKind, initialMagicAction.extensions);
 	const rule: AutomationDraft = initial ?? { paths: [], events: [], include: [], agent: { profile: PROFILES.read, task: "" } };
 	const first = rule.paths[0] ?? null;
 	const [folder, setFolder] = useState<string | null>(first);
 	const [kind, setKind] = useState<KindId | null>(blank ? null : kindOf(rule.include));
-	const [event, setEvent] = useState<EventId | "rightClick" | null>(rightClickOnly ? "rightClick" : blank ? null : eventOf(rule.events));
-	const [task, setTask] = useState(rule.agent?.task ?? "");
+	const [event, setEvent] = useState<EventId | "rightClick" | null>(lockedRightClick ? "rightClick" : blank ? null : eventOf(rule.events));
+	const [task, setTask] = useState(
+		initialMagicAction !== null
+			? initialMagicAction.execution.kind === "agent"
+				? initialMagicAction.execution.prompt
+				: ""
+			: (rule.agent?.task ?? ""),
+	);
 	const [busy, setBusy] = useState(false);
-	// 우클릭하면: its own file kinds (folders too), how many items, a typed extension list, and AI or a command.
+	// 우클릭하면: its own file kinds (folders too), how many items, and a typed extension list.
 	const rightClick = event === "rightClick";
-	const [clickKind, setClickKind] = useState<RightClickKind>("pdf");
-	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(null);
-	const [selection, setSelection] = useState<MagicActionSelectionRule>("single");
+	const [clickKind, setClickKind] = useState<RightClickKind>(initialClick?.kind ?? "pdf");
+	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(initialClick?.custom ?? null);
+	const [selection, setSelection] = useState<MagicActionSelectionRule>(initialMagicAction?.selection ?? "single");
 	const standard = standardFolders(locations);
 	const folders = folder === null || standard.some((option) => option.value === folder) ? standard : [...standard, { value: folder, label: folderLabel(folder), icon: <FolderGlyph size={13} /> }];
 	const draft: AutomationDraft | null =
@@ -1522,26 +1536,52 @@ export function AutomationDraftCard({
 		event: <ChipSelect value={event} options={events} label={event === null && !blank ? t("automations.create.event.other") : t("automations.create.eventLabel")} testId="automation-request-event" onChange={setEvent} />,
 	};
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
-	const canSubmit = (rightClick ? task.trim().length > 0 : draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0)) && !busy;
+	const scriptCommand = initialMagicAction?.execution.kind === "script" ? initialMagicAction.execution.command : null;
+	const showsCommand = rightClick ? scriptCommand !== null : rule.agent === undefined;
+	const commandText = rightClick ? (scriptCommand ?? "") : (rule.run ?? []).join(" ");
+	const canSubmit =
+		(rightClick
+			? scriptCommand !== null
+				? scriptCommand.trim().length > 0
+				: task.trim().length > 0
+			: draft !== null && (rule.agent === undefined ? (rule.run?.length ?? 0) > 0 : task.trim().length > 0)) && !busy;
 	/** 우클릭하면: the card as the right-click menu action it makes, named from what it does. */
 	const magicAction = (): MagicAction | null =>
-		normalizeMagicAction({
-			label: autoMagicLabel(task),
-			enabled: true,
-			selection,
-			...rightClickTarget(clickKind, customExtensions),
-			// The card always asks the agent; a script action is made by asking the assistant, which decides.
-			execution: { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
-		});
+		initialMagicAction !== null
+			? normalizeMagicAction({
+					id: initialMagicAction.id,
+					label: initialMagicAction.label.trim() || autoMagicLabel(task),
+					...(initialMagicAction.description === undefined ? {} : { description: initialMagicAction.description }),
+					enabled: initialMagicAction.enabled,
+					selection,
+					...rightClickTarget(clickKind, customExtensions),
+					execution:
+						initialMagicAction.execution.kind === "script"
+							? initialMagicAction.execution
+							: { ...initialMagicAction.execution, prompt: task },
+				})
+			: normalizeMagicAction({
+					label: autoMagicLabel(task),
+					enabled: true,
+					selection,
+					...rightClickTarget(clickKind, customExtensions),
+					// The card always asks the agent; a script action is made by asking the assistant, which decides.
+					execution: { kind: "agent", mode: rule.agent?.profile === PROFILES.write ? "organize" : "read", prompt: task },
+				});
 	return (
 		<div className="flex flex-col gap-8 rounded-12 border border-divider bg-window p-12" data-automation-request>
+			{initialMagicAction !== null && initialMagicAction.label.trim().length > 0 ? (
+				<strong className="text-meta font-semibold leading-[18px] text-ink" data-testid="automation-request-label">
+					{initialMagicAction.label}
+				</strong>
+			) : null}
 			<span className="text-badge leading-[15px] text-ink-muted">{t("automations.create.when")}</span>
 			{rightClick ? (
 				<RightClickWhen
 					kind={clickKind}
 					custom={customExtensions}
 					selection={selection}
-					event={rightClickOnly ? undefined : chips.event}
+					event={lockedRightClick ? undefined : chips.event}
 					className="flex flex-wrap items-center gap-6"
 					testId="automation-request-rc"
 					onKind={(next) => {
@@ -1558,10 +1598,10 @@ export function AutomationDraftCard({
 					)}
 				</div>
 			)}
-			<span className="text-badge leading-[15px] text-ink-muted">{rule.agent === undefined ? t("automations.request.command") : t("automations.create.task")}</span>
-			{rule.agent === undefined ? (
+			<span className="text-badge leading-[15px] text-ink-muted">{showsCommand ? t("automations.request.command") : t("automations.create.task")}</span>
+			{showsCommand ? (
 				<code className="block rounded-6 bg-subtle-alt px-8 py-6 font-mono text-badge leading-[16px] text-ink [overflow-wrap:anywhere]" data-testid="automation-request-command">
-					{(rule.run ?? []).join(" ")}
+					{commandText}
 				</code>
 			) : (
 				<textarea
@@ -1596,7 +1636,7 @@ export function AutomationDraftCard({
 						void onCreate(draft).finally(() => setBusy(false));
 					}}
 				>
-					{t("automations.recs.add")}
+					{submitLabel ?? t("automations.recs.add")}
 				</button>
 			</div>
 		</div>

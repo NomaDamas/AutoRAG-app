@@ -11,7 +11,12 @@ import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shar
 import type { InteractionHub } from "./interaction-hub";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerPromptAnswer, isAppCustomizerRequest } from "../shared/app-customizer-contract";
-import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import {
+	isMagicActionRunRequest,
+	isMagicActionSaveRequest,
+	isMagicActionVerifyRequest,
+	MAGIC_ACTION_CHANNELS,
+} from "../shared/magic-actions-contract";
 import type { MagicActionRunLog } from "./magic-action-runs";
 import type { ChatStore } from "./chat-store";
 import { saveMagicActionToHistory } from "./magic-action-history";
@@ -226,6 +231,12 @@ export function registerMagicActionIpcHandlers(service: MagicActionService, chat
 	ipcMain.handle(MAGIC_ACTION_CHANNELS.cancel, (_event, runId: unknown) =>
 		typeof runId === "string" ? service.cancel(runId) : undefined,
 	);
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.verify, (_event, request: unknown) => {
+		if (!isMagicActionVerifyRequest(request)) {
+			throw new TypeError("magicAction:verify expects { action }");
+		}
+		return service.verify(request);
+	});
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {

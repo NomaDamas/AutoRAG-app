@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { confirmAutomationSaves, draftOf, mergeDraft, wrapSave } from "../src/main/automation-confirm";
+import { runAutomationToolOnNode } from "../src/main/automation-runtime";
+import { createAutomationVerificationTracker, type AutomationSandboxTestResult } from "../src/main/automation-sandbox";
 import { createInteractionHub } from "../src/main/interaction-hub";
 import type { RunInteraction } from "../src/main/host-ui";
 import type { InteractionAnswer, InteractionRequest } from "../src/shared/interaction-contract";
@@ -87,5 +89,154 @@ describe("automation saves wait for the person", () => {
 		const rule = { paths: ["/a"], events: ["create" as const], include: [], agent: { profile: "p", task: "t" } };
 		expect(hub.answer("r1", { kind: "automation", rule })).toBe(true);
 		await expect(answered).resolves.toEqual({ kind: "automation", rule });
+	});
+
+	it("validates right-click automation (magic-action) confirmation answers through the hub", async () => {
+		const requests: InteractionRequest[] = [];
+		const hub = createInteractionHub({ emitRequest: (request) => requests.push(request), emitClosed: () => undefined, newId: () => "m1" });
+		const sampleAction = {
+			id: "pdf-summary",
+			label: "PDF 요약",
+			enabled: true,
+			selection: "single" as const,
+			targetKind: "file" as const,
+			extensions: ["pdf"],
+			execution: { kind: "agent" as const, mode: "read" as const, prompt: "요약해 줘", useSkills: true, useMcp: true },
+		};
+		const answered = hub.open("run-1", { kind: "magic-action", action: sampleAction, isUpdate: false });
+		expect(hub.answer("m1", { kind: "approval", choice: "allow-once" })).toBe(false);
+		expect(hub.answer("m1", { kind: "magic-action", action: { ...sampleAction, label: "" } })).toBe(false);
+		const edited = { ...sampleAction, selection: "any" as const };
+		expect(hub.answer("m1", { kind: "magic-action", action: edited })).toBe(true);
+		await expect(answered).resolves.toEqual({ kind: "magic-action", action: edited });
+	});
+
+	describe("verify-first, user-confirm-second ordering with runAutomationToolOnNode", () => {
+		const sandboxPass: AutomationSandboxTestResult = {
+			ok: true,
+			executionKind: "agent",
+			exitCode: 0,
+			timedOut: false,
+			durationMs: 42,
+			output: "ok",
+			stdout: "ok",
+			stderr: "",
+			matchedFiles: ["sample.pdf"],
+			retriggerWarnings: [],
+			diff: { created: [], modified: [], deleted: [], unchanged: ["sample.pdf"] },
+		};
+		const sandboxFail: AutomationSandboxTestResult = {
+			...sandboxPass,
+			ok: false,
+			exitCode: 1,
+			error: "command failed in sandbox",
+		};
+
+		it("never pops the confirmation card when sandbox verification fails", async () => {
+			const events: string[] = [];
+			const rawExecute = vi.fn(async () => {
+				events.push("persist");
+				return { content: [{ type: "text", text: "saved" }], details: { action: "save" } };
+			});
+			const agent = { tools: [{ name: "manage_automations", execute: rawExecute }] };
+			const run: RunInteraction = {
+				open: vi.fn(async () => {
+					events.push("confirm");
+					return { kind: "cancel" as const };
+				}),
+			};
+			// Wrap confirmAutomationSaves FIRST (inner), runAutomationToolOnNode SECOND (outer) — matching search-service.ts.
+			confirmAutomationSaves(agent, () => run);
+			runAutomationToolOnNode(agent, () => process.execPath, {
+				tracker: createAutomationVerificationTracker(),
+				verifyRule: async () => {
+					events.push("verify");
+					return sandboxFail;
+				},
+			});
+
+			const res = (await agent.tools[0]!.execute("c1", { action: "save", id: "broken-rule", automation: body })) as {
+				content: { text: string }[];
+				details: { saved?: boolean; verified?: boolean };
+			};
+			expect(events).toEqual(["verify"]);
+			expect(run.open).not.toHaveBeenCalled();
+			expect(rawExecute).not.toHaveBeenCalled();
+			expect(res.details.saved).toBe(false);
+			expect(res.details.verified).toBe(false);
+		});
+
+		it("runs sandbox verification first, pops confirmation second, and skips persist when the user cancels", async () => {
+			const events: string[] = [];
+			const rawExecute = vi.fn(async () => {
+				events.push("persist");
+				return { content: [{ type: "text", text: "saved" }], details: { action: "save" } };
+			});
+			const agent = { tools: [{ name: "manage_automations", execute: rawExecute }] };
+			const run: RunInteraction = {
+				open: vi.fn(async () => {
+					events.push("confirm");
+					return { kind: "cancel" as const };
+				}),
+			};
+			confirmAutomationSaves(agent, () => run);
+			runAutomationToolOnNode(agent, () => process.execPath, {
+				tracker: createAutomationVerificationTracker(),
+				verifyRule: async () => {
+					events.push("verify");
+					return sandboxPass;
+				},
+			});
+
+			const res = (await agent.tools[0]!.execute("c2", { action: "save", id: "ok-rule", automation: body })) as {
+				content: { text: string }[];
+				details: { saved?: boolean; cancelledByUser?: boolean };
+			};
+			expect(events).toEqual(["verify", "confirm"]);
+			expect(rawExecute).not.toHaveBeenCalled();
+			expect(res.details.saved).toBe(false);
+			expect(res.details.cancelledByUser).toBe(true);
+			expect(res.content[0]?.text).toMatch(/did not add this automation/);
+		});
+
+		it("runs verify -> confirm -> persist in order and writes the user's edited rule on approve", async () => {
+			const events: string[] = [];
+			const rawExecute = vi.fn(async (_id: string, params: unknown) => {
+				events.push("persist");
+				return { content: [{ type: "text", text: "saved" }], details: { action: "save", params } };
+			});
+			const agent = { tools: [{ name: "manage_automations", execute: rawExecute }] };
+			const edited = {
+				paths: ["C:/Users/me/Downloads"],
+				events: ["create" as const],
+				include: ["**/*.pdf"],
+				agent: { profile: "file-triage", task: "핵심 3줄 요약" },
+			};
+			const run: RunInteraction = {
+				open: vi.fn(async () => {
+					events.push("confirm");
+					return { kind: "automation" as const, rule: edited };
+				}),
+			};
+			confirmAutomationSaves(agent, () => run);
+			runAutomationToolOnNode(agent, () => process.execPath, {
+				tracker: createAutomationVerificationTracker(),
+				verifyRule: async () => {
+					events.push("verify");
+					return sandboxPass;
+				},
+			});
+
+			const res = (await agent.tools[0]!.execute("c3", { action: "save", id: "ok-rule", automation: body })) as {
+				content: { text: string }[];
+			};
+			expect(events).toEqual(["verify", "confirm", "persist"]);
+			expect(rawExecute).toHaveBeenCalledWith("c3", {
+				action: "save",
+				id: "ok-rule",
+				automation: mergeDraft(body, edited),
+			});
+			expect(res.content[0]?.text).toContain("Verified in temporary sandbox");
+		});
 	});
 });

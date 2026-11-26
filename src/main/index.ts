@@ -690,7 +690,15 @@ app.whenReady().then(async () => {
 			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
 			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
 		}),
-		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
+		agentFactory: createDefaultAgentFactory({
+			sessionDir: chatSessionsDirectory,
+			// The settings service is built further down; an agent is only built long after startup.
+			settings: {
+				get: () => settingsService.get(),
+				set: (patch) => settingsService.set(patch),
+			},
+			language: () => currentLanguage,
+		}),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		pastedImages: createPastedImageStore({ directory: join(app.getPath("userData"), "pasted-images") }),

@@ -24,6 +24,7 @@ import type { ConfigCustomizerProfileInput, CustomizerToolkit } from "./agents/p
 import type { ReplyLanguage } from "./agents/profiles/app-customizer";
 import { subscribeProfileProgress } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
+import { verifyMagicActionInSandbox } from "./magic-action-sandbox";
 
 const MAX_OPEN_SESSIONS = 8;
 
@@ -211,6 +212,15 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					...platformDep,
 					language,
 					cancelled,
+					testMagicAction: (verifyInput) =>
+						verifyMagicActionInSandbox(verifyInput, {
+							resolveModel: deps.resolveModel,
+							agentDir: deps.agentDir,
+							env: deps.env,
+							...platformDep,
+							language,
+							cancelled,
+						}),
 					secrets,
 					...(deps.importCustomProvider === undefined ? {} : { importCustomProvider: deps.importCustomProvider }),
 					...shellOption,

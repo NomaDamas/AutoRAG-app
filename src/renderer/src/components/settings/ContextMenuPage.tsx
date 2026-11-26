@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Eye, FilePen, Info, Lock, Pencil, Plus, Sparkles, Terminal, X } from "lucide-react";
+import { Eye, FilePen, Info, Lock, Pencil, Play, Plus, Sparkles, Terminal, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
+import type { MagicActionBridge, MagicActionVerifyResult } from "../../../../shared/magic-actions-contract";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	contextMenuPresetLayout,
@@ -33,11 +34,16 @@ import { useReorder, useSlideAnimation } from "./reorder";
 type ContextMenuBridgeWindow = Window & {
 	readonly autorag?: {
 		readonly settings?: Pick<SettingsBridge, "set">;
+		readonly magicAction?: Pick<MagicActionBridge, "verify">;
 	};
 };
 
 function getSettingsWriter(): Pick<SettingsBridge, "set"> | undefined {
 	return (window as ContextMenuBridgeWindow).autorag?.settings;
+}
+
+function getMagicActionVerifier(): Pick<MagicActionBridge, "verify"> | undefined {
+	return (window as ContextMenuBridgeWindow).autorag?.magicAction;
 }
 
 interface BuiltinRowSpec {
@@ -135,13 +141,14 @@ function MagicActionEditorModal({
 	const [selection, setSelection] = useState<MagicActionSelectionRule>(initial === null ? "single" : initial.selection);
 	const [kind, setKind] = useState<RightClickKind>(start.kind);
 	const [customExtensions, setCustomExtensions] = useState<readonly string[] | null>(start.custom);
+	const [verifying, setVerifying] = useState(false);
+	const [verifyResult, setVerifyResult] = useState<MagicActionVerifyResult | null>(null);
 
 	const task = runKind === "agent" ? prompt : command;
 	const name = label.trim().length > 0 ? label.trim() : autoMagicLabel(task);
 	const canSave = name.length > 0 && task.trim().length > 0;
 
-	const submit = (): void => {
-		if (!canSave) return;
+	const buildCandidate = (): MagicAction | null => {
 		const execution: MagicActionExecution =
 			runKind === "script"
 				? { kind: "script", command }
@@ -152,7 +159,7 @@ function MagicActionEditorModal({
 						useSkills: initial?.execution.kind === "agent" ? initial.execution.useSkills !== false : true,
 						useMcp: initial?.execution.kind === "agent" ? initial.execution.useMcp !== false : true,
 					};
-		const normalized = normalizeMagicAction({
+		return normalizeMagicAction({
 			id: initial?.id ?? newMagicActionId(name, takenIds),
 			label: name,
 			...(initial?.description === undefined ? {} : { description: initial.description }),
@@ -161,6 +168,37 @@ function MagicActionEditorModal({
 			...rightClickTarget(kind, customExtensions),
 			execution,
 		});
+	};
+
+	const runSandboxTest = async (): Promise<void> => {
+		if (!canSave || verifying) return;
+		const candidate = buildCandidate();
+		const verifier = getMagicActionVerifier();
+		if (candidate === null || verifier === undefined) return;
+		setVerifying(true);
+		setVerifyResult(null);
+		try {
+			const res = await verifier.verify({ action: candidate });
+			setVerifyResult(res);
+		} catch (cause) {
+			setVerifyResult({
+				ok: false,
+				executionKind: candidate.execution.kind,
+				timedOut: false,
+				durationMs: 0,
+				output: "",
+				error: cause instanceof Error ? cause.message : String(cause),
+				targetPaths: [],
+				diff: { created: [], modified: [], deleted: [], unchanged: [] },
+			});
+		} finally {
+			setVerifying(false);
+		}
+	};
+
+	const submit = (): void => {
+		if (!canSave) return;
+		const normalized = buildCandidate();
 		if (normalized !== null) onSave(normalized);
 	};
 
@@ -231,11 +269,75 @@ function MagicActionEditorModal({
 					) : null}
 				</div>
 
+				{verifyResult !== null ? (
+					<div
+						className={cn("magic-editor-verify-result", verifyResult.ok ? "is-ok" : "is-fail")}
+						data-testid="magic-editor-verify-result"
+						data-verify-ok={verifyResult.ok ? "true" : "false"}
+					>
+						<div className="magic-editor-verify-head">
+							<span>
+								{verifyResult.ok
+									? t("settingsCore.contextMenu.editor.testPassed")
+									: t("settingsCore.contextMenu.editor.testFailed")}
+							</span>
+							<span>{`${verifyResult.durationMs}ms`}</span>
+						</div>
+						{verifyResult.error ? (
+							<pre className="magic-editor-verify-pre">{verifyResult.error}</pre>
+						) : null}
+						{verifyResult.output ? (
+							<pre className="magic-editor-verify-pre">{verifyResult.output}</pre>
+						) : null}
+						{verifyResult.diff.created.length > 0 ? (
+							<div className="magic-editor-verify-diff">
+								{t("settingsCore.contextMenu.editor.testCreated", {
+									files: verifyResult.diff.created.map((f) => f.path).join(", "),
+								})}
+							</div>
+						) : null}
+						{verifyResult.diff.modified.length > 0 ? (
+							<div className="magic-editor-verify-diff">
+								{t("settingsCore.contextMenu.editor.testModified", {
+									files: verifyResult.diff.modified.map((f) => f.path).join(", "),
+								})}
+							</div>
+						) : null}
+						{verifyResult.diff.deleted.length > 0 ? (
+							<div className="magic-editor-verify-diff">
+								{t("settingsCore.contextMenu.editor.testDeleted", {
+									files: verifyResult.diff.deleted.join(", "),
+								})}
+							</div>
+						) : null}
+					</div>
+				) : null}
+
 				<ModalActions>
+					{getMagicActionVerifier() !== undefined ? (
+						<button
+							type="button"
+							className="linear-btn magic-editor-test-btn"
+							data-action="test-magic-editor"
+							disabled={!canSave || verifying}
+							onClick={() => void runSandboxTest()}
+						>
+							<Play size={12} aria-hidden="true" />
+							{verifying
+								? t("settingsCore.contextMenu.editor.testing")
+								: t("settingsCore.contextMenu.editor.test")}
+						</button>
+					) : null}
 					<button type="button" className="linear-btn" data-action="cancel-magic-editor" onClick={onCancel}>
 						{t("common.cancel")}
 					</button>
-					<button type="button" className="linear-btn settings-btn-primary" data-action="save-magic-editor" disabled={!canSave} onClick={submit}>
+					<button
+						type="button"
+						className="linear-btn settings-btn-primary"
+						data-action="save-magic-editor"
+						disabled={!canSave || verifying}
+						onClick={submit}
+					>
 						{t("settingsCore.contextMenu.editor.save")}
 					</button>
 				</ModalActions>

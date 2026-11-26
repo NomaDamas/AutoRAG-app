@@ -34,13 +34,14 @@ import {
 	isLockedContextMenuItemId,
 	normalizeContextMenuItemId,
 	normalizeContextMenuSettings,
-	normalizeMagicAction,
 	type BuiltinContextMenuItemId,
 	type ContextMenuSectionId,
 	type ContextMenuSettings,
 	type HideableContextMenuSectionId,
 	type MagicAction,
 } from "../../../shared/context-menu-contract";
+import type { MagicActionVerificationResult, VerifyMagicActionInput } from "../../magic-action-sandbox";
+import { createMagicActionTools } from "../../magic-action-tools";
 import type { ReplyLanguage } from "../profile-progress";
 
 export type { ReplyLanguage };
@@ -53,6 +54,8 @@ export interface AppCustomizerToolkitDeps {
 	readonly platform?: NodeJS.Platform;
 	readonly language?: () => ReplyLanguage;
 	readonly cancelled?: () => boolean;
+	/** Runs a candidate Magic Action inside a temporary sandbox folder and returns its execution result and filesystem diff. */
+	readonly testMagicAction?: (input: VerifyMagicActionInput) => Promise<MagicActionVerificationResult>;
 }
 
 export interface AppCustomizerToolkit {
@@ -849,157 +852,29 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		}),
 	});
 
-	const stringEnum = <const T extends readonly string[]>(values: T, description: string) =>
-		Type.Unsafe<T[number]>({ type: "string", enum: [...values], description });
-	const upsertMagicAction = defineTool({
-		name: "upsert_magic_action",
-		label: "Upsert Right-Click Automation",
-		description: isWindows
-			? "Create or update a custom right-click automation button on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
-			: "Create or update a custom right-click automation button on files/folders. A right-click automation can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
-		parameters: Type.Object({
-			id: Type.Optional(Type.String({ description: "Stable slug ID (optional on create; derived from label if omitted; pass existing id to update)." })),
-			label: Type.String({ description: "Menu button label shown on right-click (e.g. 'PDF 3줄 요약', '이미지 용량 정리', 'SHA-256 해시 복사')." }),
-			description: Type.Optional(Type.String({ description: "Short description shown in Settings." })),
-			enabled: Type.Optional(Type.Boolean({ description: "Whether this right-click automation is enabled (default true)." })),
-			selection: Type.Optional(
-				stringEnum(["any", "single", "multiple"], "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items)."),
-			),
-			targetKind: Type.Optional(
-				stringEnum(["any", "file", "folder"], "Target type filter: 'file', 'folder', or 'any'."),
-			),
-			extensions: Type.Optional(
-				Type.Array(Type.String(), {
-					description: "File extensions filter (e.g. ['pdf', 'docx'] or ['png', 'jpg']). Omit or pass [] to match all extensions.",
-				}),
-			),
-			executionKind: stringEnum(["script", "agent"], "'script' runs a shell command/code; 'agent' runs a pi AI agent loop on the target files."),
-			command: Type.Optional(
-				Type.String({
-					description: isWindows
-						? "Required when executionKind='script'. Windows PowerShell script/command to execute in powershell.exe. Selected file paths are passed in PowerShell's $args array (e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args) and in env vars $env:DAZZI_FILES_JSON (JSON string array), $env:DAZZI_FILE (first path), $env:DAZZI_FILE_COUNT. Do NOT use POSIX \"$@\" or $VAR syntax."
-						: "Required when executionKind='script'. Shell command to execute in /bin/sh. Selected file paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON (JSON string array), DAZZI_FILE (first path), DAZZI_FILE_COUNT.",
-				}),
-			),
-			agentMode: Type.Optional(
-				stringEnum(["read", "organize"], "Used when executionKind='agent': 'read' for read-only analysis/summary/Q&A; 'organize' when the agent may create, edit, convert, rename, move, or run tools on files."),
-			),
-			prompt: Type.Optional(
-				Type.String({
-					description: "Required when executionKind='agent'. Instruction telling the agent what to do with the selected file(s).",
-				}),
-			),
-			useSkills: Type.Optional(
-				Type.Boolean({
-					description:
-						"Used when executionKind='agent'. Share installed Skills with the AutoRAG Agent (default: true; set false to disable skills for this action).",
-				}),
-			),
-			useMcp: Type.Optional(
-				Type.Boolean({
-					description:
-						"Used when executionKind='agent'. Share connected MCP servers (such as Aside MCP in mcp.json) with the AutoRAG Agent (default: true; set false to disable MCP servers for this action).",
-				}),
-			),
-		}),
-		execute: (_callId, params) => serialized(async () => {
-			ensureLive();
-			const execution =
-				params.executionKind === "script"
-					? { kind: "script" as const, command: params.command ?? "" }
-					: {
-							kind: "agent" as const,
-							mode: params.agentMode === "organize" ? ("organize" as const) : ("read" as const),
-							prompt: params.prompt ?? "",
-							useSkills: params.useSkills ?? true,
-							useMcp: params.useMcp ?? true,
-						};
-			const normalized = normalizeMagicAction({
-				id: params.id,
-				label: params.label,
-				description: params.description,
-				enabled: params.enabled ?? true,
-				selection: params.selection ?? "any",
-				targetKind: params.targetKind ?? "file",
-				extensions: params.extensions ?? [],
-				execution,
-			});
-			if (normalized === null) {
-				return textResult({
-					ok: false,
-					error: "Invalid right-click automation: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
-				});
-			}
-			const currentApp = await deps.settings.get();
-			const current = normalizeContextMenuSettings(currentApp.contextMenu);
-			const existingIdx = current.magicActions.findIndex((item) => item.id === normalized.id);
-			const nextActions = [...current.magicActions];
-			if (existingIdx >= 0) nextActions[existingIdx] = normalized;
-			else nextActions.push(normalized);
-
-			const nextContextMenu = normalizeContextMenuSettings({
-				...current,
-				magicActions: nextActions,
-			});
-			ensureLive();
-			await deps.settings.set({ contextMenu: nextContextMenu });
-
-			const change: AppCustomizerChange = {
-				kind: "contextMenu",
-				summary: summarizeContextMenuChange(lang(), ["contextMenu.magicActions"], { upsertedLabel: normalized.label }),
-				fields: ["contextMenu.magicActions"],
-			};
-			changes.push(change);
-			return textResult({
-				ok: true,
-				magicAction: normalized,
-				contextMenu: nextContextMenu,
-			});
-		}),
-	});
-
-	const deleteMagicAction = defineTool({
-		name: "delete_magic_action",
-		label: "Delete Right-Click Automation",
-		description: "Remove a custom right-click automation by its ID or display label.",
-		parameters: Type.Object({
-			idOrLabel: Type.String({ description: "The ID or exact label of the right-click automation to delete." }),
-		}),
-		execute: (_callId, params) => serialized(async () => {
-			ensureLive();
-			const needle = params.idOrLabel.trim().toLowerCase();
-			const currentApp = await deps.settings.get();
-			const current = normalizeContextMenuSettings(currentApp.contextMenu);
-			const target = current.magicActions.find(
-				(action) => action.id.toLowerCase() === needle || action.label.toLowerCase() === needle,
-			);
-			if (target === undefined) {
-				return textResult({
-					ok: false,
-					error: `No right-click automation found matching '${params.idOrLabel}'.`,
-				});
-			}
-			const nextContextMenu = normalizeContextMenuSettings({
-				...current,
-				magicActions: current.magicActions.filter((action) => action.id !== target.id),
-			});
-			ensureLive();
-			await deps.settings.set({ contextMenu: nextContextMenu });
+	const magicActionTools = createMagicActionTools({
+		settings: deps.settings,
+		includeListTool: false,
+		platform,
+		language: lang,
+		cancelled: isCancelled,
+		serialize: serialized,
+		...(deps.testMagicAction !== undefined ? { testMagicAction: deps.testMagicAction } : {}),
+		onChange: (change) => {
 			changes.push({
 				kind: "contextMenu",
-				summary: summarizeContextMenuChange(lang(), ["contextMenu.magicActions"], { deletedLabel: target.label }),
+				summary: summarizeContextMenuChange(
+					lang(),
+					["contextMenu.magicActions"],
+					change.kind === "deleted" ? { deletedLabel: change.label } : { upsertedLabel: change.label },
+				),
 				fields: ["contextMenu.magicActions"],
 			});
-			return textResult({
-				ok: true,
-				deleted: target,
-				contextMenu: nextContextMenu,
-			});
-		}),
+		},
 	});
 
 	return {
-		tools: [getAppSettings, updateSidebar, updateContextMenu, upsertMagicAction, deleteMagicAction],
+		tools: [getAppSettings, updateSidebar, updateContextMenu, ...magicActionTools.tools],
 		takeChanges: () => changes.splice(0),
 		peekChanges: () => [...changes],
 	};

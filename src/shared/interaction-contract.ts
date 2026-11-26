@@ -21,6 +21,7 @@
  */
 
 import type { AutomationDraft } from "./automation-contract";
+import type { MagicAction } from "./context-menu-contract";
 
 export type ApprovalMode = "readonly" | "full";
 
@@ -119,7 +120,14 @@ export interface AutomationRequest extends RequestBase {
 	readonly rule: AutomationDraft;
 }
 
-export type InteractionRequest = QuestionRequest | ApprovalRequest | AutomationRequest;
+/** `upsert_magic_action`: the verified right-click automation the agent built, held until the person adds it or cancels. */
+export interface MagicActionRequest extends RequestBase {
+	readonly kind: "magic-action";
+	readonly action: MagicAction;
+	readonly isUpdate: boolean;
+}
+
+export type InteractionRequest = QuestionRequest | ApprovalRequest | AutomationRequest | MagicActionRequest;
 
 export type ApprovalChoice = "allow-once" | "allow-session" | "deny" | "deny-with-note";
 
@@ -135,6 +143,8 @@ export type InteractionAnswer =
 	| { readonly kind: "question"; readonly answers: readonly (QuestionAnswer | null)[] }
 	/** 추가하기 on an automation request: the rule to save, as the person left it. */
 	| { readonly kind: "automation"; readonly rule: AutomationDraft }
+	/** 추가하기 on a right-click automation request: the verified action to save, as the person left it. */
+	| { readonly kind: "magic-action"; readonly action: MagicAction }
 	/** The person dismissed the request (Esc, Skip). The model is told nothing was answered. */
 	| { readonly kind: "cancel" };
 

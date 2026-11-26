@@ -266,7 +266,7 @@ describe("settings-customizer unified profile & toolkit", () => {
 			platform: "darwin",
 			language: () => "en",
 		});
-		const profile = settingsCustomizerProfile({ language: "en", surface: "about", toolkit: kit, platform: "darwin" });
+		const profile = settingsCustomizerProfile({ language: "en", surface: "remote", toolkit: kit, platform: "darwin" });
 		const session = await createProfileSession({
 			profile,
 			cwd: root,
@@ -287,5 +287,74 @@ describe("settings-customizer unified profile & toolkit", () => {
 		await session.prompt("Turn on dark mode and disable ranking log");
 		expect((await settings.get()).appearance).toBe("dark");
 		expect((await readConfig()).rankingLog).toBe(false);
+	});
+
+	it("wires testMagicAction into settings-customizer, enforces temp-folder verification before saving, and avoids Magic Action user-facing copy", async () => {
+		const { settings } = createHarness();
+		let allowPass = false;
+		const verifySpy = vi.fn(async () => ({
+			ok: allowPass,
+			executionKind: "script" as const,
+			exitCode: allowPass ? 0 : 1,
+			timedOut: false,
+			durationMs: 10,
+			output: allowPass ? "VERIFIED" : "",
+			stderr: allowPass ? "" : "command not found",
+			...(allowPass ? {} : { error: "command not found" }),
+			targetPaths: ["sample.txt"],
+			diff: { created: [], modified: [], deleted: [], unchanged: ["sample.txt"] },
+		}));
+
+		const kit = createSettingsCustomizerToolkit({
+			settings,
+			listLocations: async () => [],
+			listTags: async () => [],
+			homeDir: root,
+			platform: "darwin",
+			language: () => "en",
+			testMagicAction: verifySpy,
+		});
+
+		const profile = settingsCustomizerProfile({ language: "en", surface: "contextMenu", toolkit: kit, platform: "darwin" });
+		expect(profile.systemPrompt).toContain("test_magic_action");
+		expect(profile.systemPrompt).toMatch(/temporary (?:sandbox )?folder/i);
+		expect(profile.systemPrompt).toMatch(/never as 'Magic Action'/i);
+
+		const upsertTool = kit.tools.find((t) => t.name === "upsert_magic_action")! as unknown as {
+			execute: (id: string, params: Record<string, unknown>) => Promise<{ content: [{ type: "text"; text: string }] }>;
+		};
+
+		// Broken script is blocked before saving
+		const blocked = JSON.parse(
+			(
+				await upsertTool.execute("sc-1", {
+					id: "bad-script",
+					label: "Bad Script",
+					executionKind: "script",
+					command: "nonexistent_cmd",
+				})
+			).content[0].text,
+		);
+		expect(blocked.ok).toBe(false);
+		expect(blocked.saved).toBe(false);
+		expect(verifySpy).toHaveBeenCalledTimes(1);
+		expect((await settings.get()).contextMenu.magicActions).toHaveLength(0);
+
+		// Passing script is saved once verification passes
+		allowPass = true;
+		const saved = JSON.parse(
+			(
+				await upsertTool.execute("sc-2", {
+					id: "good-script",
+					label: "Good Script",
+					executionKind: "script",
+					command: 'echo "VERIFIED"',
+				})
+			).content[0].text,
+		);
+		expect(saved.ok).toBe(true);
+		expect(saved.saved).toBe(true);
+		expect(verifySpy).toHaveBeenCalledTimes(2);
+		expect((await settings.get()).contextMenu.magicActions).toHaveLength(1);
 	});
 });
