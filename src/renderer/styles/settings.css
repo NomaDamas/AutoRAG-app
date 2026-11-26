@@ -1577,7 +1577,7 @@
 	padding: var(--space-8) var(--space-10);
 	border: 0.5px solid var(--border-divider);
 	border-radius: var(--radius-10);
-	background: var(--bg-window);
+	background: var(--bg-subtle-alt);
 	font-size: 13px;
 	line-height: 20px;
 	resize: none;

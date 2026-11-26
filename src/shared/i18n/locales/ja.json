@@ -377,8 +377,6 @@
     "reviewing": "質問を確認中…",
     "stopped": "回答の生成を中止しました。",
     "dropHere": "ここにファイルをドロップ",
-    "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
-    "steerSend": "検索を修正",
     "voiceStart": "音声で入力",
     "voiceStop": "録音を終了して文字起こし",
     "voiceCancel": "録音をキャンセル",
@@ -398,14 +396,19 @@
       "waiting": "設定でマイクをオンにして Dazzi に戻ると、すぐに録音を始めます。",
       "stillDenied": "マイクはまだオフです。設定でオンにしてから Dazzi に戻ってください。"
     },
-    "steerHintLead": "検索中も入力できます。",
-    "steerHintEnter": "修正",
-    "steerHintAltEnter": "次の質問",
     "steerPending": "反映待ち · 次のステップで渡されます",
     "steerDelivered": "検索に反映済み",
     "steerDropped": "反映される前に検索が終了しました",
+    "followUp": {
+      "postpone": "次の質問に回す",
+      "cancel": "キャンセル",
+      "now": "今すぐ反映",
+      "edit": "編集",
+      "remove": "削除",
+      "copy": "コピー",
+      "copied": "コピーしました"
+    },
     "queuedLabel": "次の質問",
-    "queuedRemove": "次の質問を取り消す",
     "historyGroups": {
       "today": "今日",
       "yesterday": "昨日",
@@ -3871,7 +3874,7 @@
   },
   "rightClickWhen": {
     "when": "いつ",
-    "task": "Dazziがすること",
+    "task": "やること",
     "kindLabel": "ファイルの種類",
     "kind": {
       "all": "ファイル",

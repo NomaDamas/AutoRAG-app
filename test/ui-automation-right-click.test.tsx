@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { AutomationDraftCard, AutomationsView } from "../src/renderer/src/components/AutomationsView";
+import { AutomationDraftCard, AutomationsView, INITIAL_AUTOMATIONS_PLACE, type AutomationsPlace } from "../src/renderer/src/components/AutomationsView";
 import type { MagicAction } from "../src/shared/context-menu-contract";
 import type { FsLocation } from "../src/shared/fs-contract";
 import { setAppLanguage } from "../src/shared/i18n";
@@ -215,6 +215,55 @@ describe("전체 기록 with right-click runs", () => {
 		expect(host.querySelector('[data-magic-action-detail="minutes"]')).not.toBeNull();
 		// On the action's page the run reads its time as a clock time and opens its folder.
 		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run]')?.textContent).toContain(t("automations.time.todayAt", { time: "" }).trim());
+	});
+});
+
+describe("the 자동화 tab's place", () => {
+	it("is found again after the tab was left: 전체 기록, then a right-click action's page", async () => {
+		const action: MagicAction = { id: "keep", label: "남는 페이지", enabled: true, selection: "single", targetKind: "file", extensions: [], execution: { kind: "agent", mode: "read", prompt: "x" } };
+		Reflect.set(globalThis, "autorag", { ...(Reflect.get(globalThis, "autorag") as object), magicAction: { history: async () => [] } });
+		let place: AutomationsPlace = INITIAL_AUTOMATIONS_PLACE;
+		const show = async (): Promise<void> => {
+			await act(async () => {
+				root.render(
+					<AutomationsView
+						state={{ ready: true, rules: [], daemon: null, configPath: "", configError: null, error: null }}
+						daemonBusy={false}
+						selectedId={null}
+						onSelect={vi.fn()}
+						onEdit={vi.fn()}
+						onAdd={vi.fn()}
+						onCreate={vi.fn(async () => true)}
+						onPreview={vi.fn()}
+						onAskDelete={vi.fn()}
+						onSetDaemon={vi.fn()}
+						onContextMenu={vi.fn()}
+						onOpenFolder={vi.fn()}
+						magicActions={[action]}
+						place={place}
+						onPlaceChange={(next) => {
+							place = next;
+							void show();
+						}}
+					/>,
+				);
+			});
+		};
+		const leaveAndComeBack = async (): Promise<void> => {
+			await act(async () => root.render(<div />));
+			await show();
+		};
+		await show();
+		await act(async () => host.querySelector<HTMLElement>('[data-action="automation-all-runs"]')?.click());
+		expect(host.querySelector("[data-automation-all-runs]")).not.toBeNull();
+		await leaveAndComeBack();
+		expect(host.querySelector("[data-automation-all-runs]")).not.toBeNull();
+
+		await act(async () => host.querySelector<HTMLElement>('[data-action="automation-back"]')?.click());
+		await act(async () => host.querySelector<HTMLElement>('[data-magic-action-row="keep"]')?.click());
+		expect(host.querySelector('[data-magic-action-detail="keep"]')).not.toBeNull();
+		await leaveAndComeBack();
+		expect(host.querySelector('[data-magic-action-detail="keep"]')).not.toBeNull();
 	});
 });
 

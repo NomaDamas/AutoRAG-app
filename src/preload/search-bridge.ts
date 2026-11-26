@@ -6,6 +6,7 @@ export function createSearchBridge(ipcRenderer: IpcRenderer): SearchBridge {
 		start: (searchId, chatId, query, attachments, viewingFolder) =>
 			ipcRenderer.invoke(SEARCH_CHANNELS.start, searchId, chatId, query, attachments, viewingFolder),
 		steer: (searchId, text) => ipcRenderer.invoke(SEARCH_CHANNELS.steer, searchId, text),
+		classifyFollowUp: (searchId, text) => ipcRenderer.invoke(SEARCH_CHANNELS.classifyFollowUp, searchId, text),
 		cancel: (searchId) => ipcRenderer.invoke(SEARCH_CHANNELS.cancel, searchId),
 		pasteImage: (mimeType, base64) => ipcRenderer.invoke(SEARCH_CHANNELS.pasteImage, mimeType, base64),
 		historyList: () => ipcRenderer.invoke(SEARCH_CHANNELS.historyList),

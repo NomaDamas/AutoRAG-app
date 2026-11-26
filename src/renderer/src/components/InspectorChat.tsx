@@ -29,7 +29,8 @@ import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorCh
 import { drawQuickAnswer } from "../state/answer-revisions";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
-import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
+import { ProseBlocks, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
+import { QueuedBubble, SentActions, SteerBubble } from "./FollowUpBubbles";
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
@@ -196,6 +197,7 @@ function Composer({
 	onQueue,
 	onStop,
 	onDismiss,
+	returned = null,
 }: {
 	/** The cards above the input, each with its ×; empty for the Info view's composer, which only types. */
 	readonly pending: readonly ChatAttachment[];
@@ -212,9 +214,14 @@ function Composer({
 	readonly onQueue?: (text: string) => void;
 	readonly onStop: () => void;
 	readonly onDismiss: (id: string) => void;
+	/** A waiting question taken back to be edited; a new `key` adds its text to the draft once. */
+	readonly returned?: { readonly key: number; readonly text: string } | null;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
+	useEffect(() => {
+		if (returned !== null) setDraft((current) => [current.trim(), returned.text].filter((part) => part !== "").join(" "));
+	}, [returned?.key]);
 	/** Images pasted into the field: cards of their own, sent with the next question. */
 	const [pasted, setPasted] = useState<readonly ChatAttachment[]>([]);
 	const [busyNotice, setBusyNotice] = useState(false);
@@ -288,8 +295,8 @@ function Composer({
 							<button
 								type="submit"
 								className={composerButton}
-								aria-label={t("aiSearch.steerSend")}
-								title={t("aiSearch.steerSend")}
+								aria-label={t("inspector.chat.send")}
+								title={t("inspector.chat.send")}
 							>
 								<ArrowUpIcon size={12} />
 							</button>
@@ -573,7 +580,8 @@ function PhaseAnswer({
 function TurnView({
 	turn,
 	live,
-	steerLabels,
+	onPostpone,
+	onCancelSteer,
 	imageActions,
 	onReveal,
 	onPreview,
@@ -581,7 +589,8 @@ function TurnView({
 	readonly turn: InspectorTurn;
 	/** The turn's run is still streaming. */
 	readonly live: boolean;
-	readonly steerLabels: Readonly<Record<SteerItem["status"], string>>;
+	readonly onPostpone?: ((id: string) => void) | undefined;
+	readonly onCancelSteer?: ((id: string) => void) | undefined;
 	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
@@ -592,16 +601,17 @@ function TurnView({
 	const quickDraw = drawQuickAnswer(turn.quick, turn.deep, turn.revisions);
 	return (
 		<>
-			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
+			<div className="group/bubble flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
 				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+				<SentActions text={turn.question} className="-mt-2" />
 			</div>
 			{turn.steers
 				.filter((steer) => steer.timing === "before-quick")
 				.map((steer) => (
-					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+					<SteerBubble key={steer.id} steer={steer} compact onPostpone={onPostpone} onCancel={onCancelSteer} />
 				))}
 			<div className="flex min-w-0 flex-col gap-8">
 				{quickText === "" ? null : (
@@ -617,7 +627,7 @@ function TurnView({
 				{turn.steers
 					.filter((steer) => steer.timing === "after-quick")
 					.map((steer) => (
-						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+						<SteerBubble key={steer.id} steer={steer} compact onPostpone={onPostpone} onCancel={onCancelSteer} />
 					))}
 				{deepText === "" ? null : (
 					<div className="flex min-w-0 flex-col gap-6">
@@ -786,6 +796,11 @@ export interface InspectorChatViewProps {
 	readonly onQueue: (text: string) => void;
 	/** Cancel the queued question at `index`. */
 	readonly onUnqueue: (index: number) => void;
+	/** A held correction waits as the next question instead. */
+	readonly onPostpone?: (id: string) => void;
+	readonly onCancelSteer?: (id: string) => void;
+	/** Work the queued question at `index` into the answer in flight. */
+	readonly onSendNow?: (index: number) => void;
 	readonly onStop: () => void;
 	/** × : back to the Info view (the sidebar stays). */
 	readonly onBack: () => void;
@@ -893,6 +908,9 @@ export function InspectorChatView({
 	onSteer,
 	onQueue,
 	onUnqueue,
+	onPostpone,
+	onCancelSteer,
+	onSendNow,
 	onStop,
 	onBack,
 	onNewChat,
@@ -906,6 +924,7 @@ export function InspectorChatView({
 	onNewAutomationDone,
 }: InspectorChatViewProps): ReactElement {
 	const { t } = useTranslation();
+	const [returned, setReturned] = useState<{ readonly key: number; readonly text: string } | null>(null);
 	const turns = tab.chat?.turns ?? [];
 	// The chat follows its newest line only while the person is at the bottom; scrolling up lets go and shows the floating button.
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -983,11 +1002,6 @@ export function InspectorChatView({
 		if (newAutomation !== null) setStarterAt({ key: newAutomation, at: turns.length });
 	}, [newAutomation]);
 	const starterIndex = starterAt !== null && starterAt.key === newAutomation ? Math.min(starterAt.at, turns.length) : turns.length;
-	const steerLabels = {
-		pending: t("aiSearch.steerPending"),
-		delivered: t("aiSearch.steerDelivered"),
-		dropped: t("aiSearch.steerDropped"),
-	};
 	/** A chat picked from history carries its own title; a chat started here is titled by the selection it is about. */
 	const title = tab.chat?.title ?? targetName;
 	return (
@@ -1010,7 +1024,8 @@ export function InspectorChatView({
 						<TurnView
 							turn={turn}
 							live={running && index === turns.length - 1}
-							steerLabels={steerLabels}
+							onPostpone={onPostpone}
+							onCancelSteer={onCancelSteer}
 							imageActions={imageActions}
 							onReveal={onReveal}
 							onPreview={onPreview}
@@ -1032,21 +1047,19 @@ export function InspectorChatView({
 					/>
 				) : null}
 				{tab.queued.length === 0 ? null : (
-					<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
+					<div className="queued-questions flex flex-col items-end gap-12" aria-label={t("aiSearch.queuedLabel")}>
 						{tab.queued.map((text, index) => (
-							<div key={`${index}:${text}`} className="queued-question flex max-w-[90%] items-center gap-8 rounded-10 border border-dashed border-border-strong px-12 py-6 text-meta text-ink-muted">
-								<span className="flex-none font-medium">{t("aiSearch.queuedLabel")}</span>
-								<span className="min-w-0 truncate text-ink-body">{text}</span>
-								<button
-									type="button"
-									className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
-									aria-label={t("aiSearch.queuedRemove")}
-									title={t("aiSearch.queuedRemove")}
-									onClick={() => onUnqueue(index)}
-								>
-									<CloseIcon size={10} />
-								</button>
-							</div>
+							<QueuedBubble
+								key={`${index}:${text}`}
+								text={text}
+								compact
+								onSendNow={running && onSendNow !== undefined ? () => onSendNow(index) : undefined}
+								onEdit={() => {
+									setReturned((current) => ({ key: (current?.key ?? 0) + 1, text }));
+									onUnqueue(index);
+								}}
+								onRemove={() => onUnqueue(index)}
+							/>
 						))}
 					</div>
 				)}
@@ -1057,7 +1070,8 @@ export function InspectorChatView({
 				{request === null ? (
 					<Composer
 						pending={pending}
-						placeholder={running ? t("aiSearch.steerPlaceholder") : t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
+						placeholder={t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
+						returned={returned}
 						running={running}
 						onSend={onAsk}
 						onSteer={onSteer}

@@ -229,6 +229,9 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
 	);
+	ipcMain.handle(SEARCH_CHANNELS.classifyFollowUp, (_event, searchId: unknown, text: unknown) =>
+		typeof searchId === "string" && typeof text === "string" ? (service.classifyFollowUp?.(searchId, text) ?? "next") : "next",
+	);
 	ipcMain.handle(SEARCH_CHANNELS.cancel, (_event, searchId: string) => service.cancel(searchId));
 	ipcMain.handle(SEARCH_CHANNELS.pasteImage, (_event, mimeType: unknown, base64: unknown) =>
 		typeof mimeType === "string" && typeof base64 === "string" ? service.pasteImage(mimeType, base64) : null,

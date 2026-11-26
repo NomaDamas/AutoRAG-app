@@ -377,8 +377,6 @@
     "reviewing": "Reviewing the query.",
     "stopped": "Generation stopped.",
     "dropHere": "Drop files here",
-    "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
-    "steerSend": "Correct the search",
     "voiceStart": "Dictate with your voice",
     "voiceStop": "Stop recording and transcribe",
     "voiceCancel": "Cancel recording",
@@ -398,14 +396,19 @@
       "waiting": "Turn on the microphone in Settings and come back to Dazzi: recording starts right away.",
       "stillDenied": "The microphone is still off. Turn it on in Settings, then come back to Dazzi."
     },
-    "steerHintLead": "You can type while it searches.",
-    "steerHintEnter": "correct",
-    "steerHintAltEnter": "next question",
     "steerPending": "Waiting · goes in at the next step",
     "steerDelivered": "Applied to the search",
     "steerDropped": "The search ended before this was applied",
+    "followUp": {
+      "postpone": "Ask it next instead",
+      "cancel": "Cancel",
+      "now": "Apply now",
+      "edit": "Edit",
+      "remove": "Delete",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
     "queuedLabel": "Next question",
-    "queuedRemove": "Cancel next question",
     "historyGroups": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -3871,7 +3874,7 @@
   },
   "rightClickWhen": {
     "when": "When",
-    "task": "What Dazzi does",
+    "task": "Task",
     "kindLabel": "File type",
     "kind": {
       "all": "any files",
