@@ -1432,13 +1432,15 @@
 
 /* -------------------------------------------- 중요 알림 (Figma 580:15140) -- */
 
-/* A short yes/no question: a small card, title and close on one line, the actions at 32px. */
+/* A short yes/no question (delete, disconnect): a small card, title and close on one line, the actions at 32px.
+   Spaced as the app's other confirms (ConfirmDialog, e.g. deleting an automation): 16 all round, 6 under the title,
+   16 above the actions. */
 .settings-view .settings-modal.settings-alert {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-12);
+	gap: var(--space-6);
 	width: min(416px, calc(100% - 32px));
-	padding: var(--space-14) var(--space-16);
+	padding: var(--space-16);
 	border-radius: var(--radius-modal-md);
 	box-shadow: var(--shadow-notice);
 }
@@ -1457,7 +1459,7 @@
 }
 
 .settings-view .settings-alert .settings-modal-close {
-	top: var(--space-14);
+	top: var(--space-16);
 }
 
 .settings-view .magic-editor-modal .settings-modal-close {
@@ -1466,7 +1468,7 @@
 }
 
 .settings-view .settings-alert .settings-modal-actions {
-	margin-top: 0;
+	margin-top: var(--space-10);
 }
 
 .settings-view .settings-alert .settings-modal-actions .linear-btn {
@@ -1539,6 +1541,71 @@
 	font-size: var(--font-size-badge);
 	line-height: 16px;
 	color: var(--text-muted);
+}
+
+/*
+ * The 매직 액션 modal is the 자동화 card's form (언제 / Dazzi가 할 일), so its body matches that card: a 12px muted
+ * label over each part, the right-click sentence of chips, and a bordered 할 일 field. The name above clears the X.
+ */
+.settings-view .magic-editor > .magic-editor-name {
+	padding-right: 32px;
+}
+
+.settings-view .magic-editor-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding-top: 20px;
+}
+
+.settings-view .magic-editor-label {
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: var(--space-4);
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea {
+	height: 72px;
+	min-height: 72px;
+	margin: 0;
+	padding: var(--space-8) var(--space-10);
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-10);
+	background: var(--bg-subtle-alt);
+	font-size: 13px;
+	line-height: 20px;
+	resize: none;
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea:focus {
+	border-color: var(--accent);
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-body > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .settings-modal .magic-editor-body > p.magic-editor-card-hint {
+	margin: 0;
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
 }
 
 /* 처리 방식: a full-width segmented control, the picked half a white chip. */
@@ -3154,6 +3221,39 @@
 	border-color: var(--accent-pending-border);
 	background: var(--accent-drop-hover);
 	color: var(--text-primary);
+}
+
+/* 우클릭 메뉴: opening the tab lifts the assistant's welcome in like chat messages arriving — the mark,
+   the title, the line and the first suggestion together, then each next suggestion in order — so the eye lands on the assistant first. The panel is
+   only hidden on other tabs, and display:none restarts the animation, so it plays on every visit. */
+.customizer-panel[data-surface="contextMenu"] .customizer-rise {
+	animation: customizer-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	animation-delay: calc(120ms + var(--rise-i, 0) * 110ms);
+}
+
+@keyframes customizer-rise {
+	from {
+		opacity: 0;
+		transform: translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.customizer-panel[data-surface="contextMenu"] .customizer-rise {
+		animation-name: customizer-fade;
+	}
+	@keyframes customizer-fade {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 }
 
 .customizer-panel__turns {

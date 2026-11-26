@@ -281,12 +281,15 @@ export function SettingsPageContent({
 	onNavigate,
 	customizerOpen = true,
 	onOpenCustomizer = () => undefined,
+	onStartMagicAction,
 }: {
 	readonly data: SettingsData;
 	readonly category: SettingsCategory;
 	readonly onNavigate: (category: SettingsCategory) => void;
 	readonly customizerOpen?: boolean;
 	readonly onOpenCustomizer?: () => void;
+	/** 우클릭 메뉴's 매직 액션 만들기: open the new-action card in the assistant beside the page. Without it, the modal makes it. */
+	readonly onStartMagicAction?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const { appSettings, snapshot, sources, sourcesReady, saveSnapshot, setSources, setError, changeAppSettings } = data;
@@ -306,7 +309,7 @@ export function SettingsPageContent({
 		case "sidebar":
 			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "contextMenu":
-			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
+			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} onStartMagicAction={onStartMagicAction} />;
 		case "shortcuts":
 			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "remote":
@@ -393,6 +396,12 @@ export function SettingsView({
 		setCustomizerFocus((count) => count + 1);
 	}, [showAssistant]);
 	const openAiSettings = useCallback((): void => setCategory("ai"), []);
+	// 매직 액션 만들기 opens a new-action card in the 우클릭 메뉴 assistant, as 새 자동화 does in the AI column.
+	const [magicStarter, setMagicStarter] = useState(0);
+	const startMagicAction = useCallback((): void => {
+		showAssistant?.();
+		setMagicStarter((count) => count + 1);
+	}, [showAssistant]);
 
 	const applyNavigationRequest = useCallback(
 		(request: { readonly category: SettingsCategory; readonly assistantPrompt?: string }): void => {
@@ -484,6 +493,7 @@ export function SettingsView({
 			onNavigate={setCategory}
 			customizerOpen={customizerShown}
 			onOpenCustomizer={openCustomizer}
+			onStartMagicAction={assistant === null ? undefined : startMagicAction}
 		/>
 	);
 
@@ -606,6 +616,7 @@ export function SettingsView({
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
 						prefill={assistantPrefill !== null && assistantPrefill.surface === surface ? assistantPrefill : null}
+						starterRequest={surface === "contextMenu" ? magicStarter : 0}
 						onSettingsUpdated={changeAppSettings}
 						onChangesApplied={data.reloadAfterAssistant}
 						onOpenAiSettings={openAiSettings}

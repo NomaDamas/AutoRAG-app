@@ -114,15 +114,15 @@ describe("Settings → MCP → servers in Dazzi", () => {
 		await settle();
 	};
 
-	it("asks before removing in the small alert card, with 삭제 as the blue answer (Figma 580:15140)", async () => {
+	it("asks before removing in the small alert card, with 삭제 as the solid red answer (Figma 580:15140)", async () => {
 		await render(SNAPSHOT);
 		await press(host.querySelector('[data-action="remove-mcp-filesystem"]'));
 		const alert = host.querySelector<HTMLElement>(".settings-modal.settings-alert");
 		expect(alert?.querySelector("h2")?.textContent).toBe('Remove ‘filesystem’?');
 		const actions = [...(alert?.querySelectorAll(".settings-modal-actions button") ?? [])];
 		expect(actions.map((button) => button.textContent)).toEqual(["Cancel", "Remove"]);
-		expect(actions[1]?.classList.contains("settings-btn-primary")).toBe(true);
-		expect(actions[1]?.classList.contains("is-danger")).toBe(false);
+		expect(actions[1]?.classList.contains("is-danger-solid")).toBe(true);
+		expect(actions[1]?.classList.contains("settings-btn-primary")).toBe(false);
 	});
 
 	it("adds a server in the 매직 액션 만들기 format: name as title, 연결 방식 tabs, rows closed (Figma 598:3131)", async () => {
