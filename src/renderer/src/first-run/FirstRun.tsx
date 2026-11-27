@@ -739,14 +739,16 @@ function Tour({
 					</div>
 				</div>
 			)}
-			{step === null ? null : (
+			{/* While the question types nothing covers the screen: the spotlight, the card, the sunflower and the ring come
+			    at once when it is all there, the sunflower already on 보내기, so nothing travels into place. */}
+			{step === null || (step === "ask" && !askReady) ? null : (
 				<Coach
 					step={step}
 					selector={anchorFor(step, citeReady)}
 					clickSelector={clickTargetFor(step, clickReady)}
 					last={last}
 					index={index}
-					count={steps.length}
+					count={noCite ? index + 1 : steps.length}
 					title={title}
 					body={body}
 					waiting={waiting}
@@ -834,7 +836,8 @@ function Coach({
 		setSize((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
 	});
 
-	const place = placeBubble(rect, viewport, size, step === "cite" ? "below" : undefined);
+	// While the answer is written the card waits at the window's right middle; the answer itself puts it below.
+	const place = placeBubble(rect, viewport, size, step === "cite" ? (waiting ? "right-middle" : "below") : undefined);
 	const pad = 6;
 	const spot: CSSProperties =
 		rect === null
@@ -842,15 +845,25 @@ function Coach({
 			: { left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
 	return (
 		<div className="fr-tour">
-			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
+			{/* Drawn anew when it first finds its target, so it opens out from that target's centre (first-run.css). */}
+			<div key={rect === null ? "none" : "spot"} className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
 			<CoachMarker target={clickRect} spot={clickRect === null ? rect : null} data={{ "data-target-step": step }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
 			<div ref={bubbleRef} className="fr-coach" data-step={step} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={title}>
-				<CoachCard key={step} title={title} body={body} index={index} count={count} waiting={waiting}>
-					{last && showNext ? null : (
-						<button type="button" className="fr-coach-link" data-action="tour-skip" onClick={onSkip}>
-							{t("firstRun.tour.skip")}
-						</button>
-					)}
+				<CoachCard
+					key={step}
+					title={title}
+					body={body}
+					index={index}
+					count={count}
+					waiting={waiting}
+					skip={
+						last && showNext ? null : (
+							<button type="button" className="fr-coach-link" data-action="tour-skip" onClick={onSkip}>
+								{t("firstRun.tour.skip")}
+							</button>
+						)
+					}
+				>
 					{showNext ? (
 						<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tour-next" disabled={nextDisabled} onClick={onNext}>
 							{nextLabel}

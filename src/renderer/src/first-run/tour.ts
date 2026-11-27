@@ -107,6 +107,8 @@ export type BubbleSide = "left" | "right" | "above" | "below" | "center";
 /** Gap between the anchor and the bubble, and the margin the bubble keeps from the window edge. */
 const GAP = 16;
 const MARGIN = 14;
+/** How far a right-middle card keeps from the window's right edge. */
+const RIGHT_INSET = 28;
 
 /**
  * Where a coach bubble of `size` goes next to `anchor`: beside it on the side
@@ -117,10 +119,14 @@ export function placeBubble(
 	anchor: Rect | null,
 	viewport: { readonly width: number; readonly height: number },
 	size: { readonly width: number; readonly height: number },
-	prefer?: "bottom-right" | "below",
+	prefer?: "bottom-right" | "below" | "right-middle",
 ): { readonly left: number; readonly top: number; readonly side: BubbleSide } {
 	const clampX = (x: number): number => Math.min(Math.max(x, MARGIN), Math.max(MARGIN, viewport.width - size.width - MARGIN));
 	const clampY = (y: number): number => Math.min(Math.max(y, MARGIN), Math.max(MARGIN, viewport.height - size.height - MARGIN));
+	// A card that waits (an answer being written) sits at the window's right middle, whatever it frames.
+	if (prefer === "right-middle") {
+		return { left: clampX(viewport.width - size.width - RIGHT_INSET), top: clampY((viewport.height - size.height) / 2), side: "center" };
+	}
 	if (prefer === "bottom-right" && anchor !== null) {
 		return {
 			left: clampX(anchor.left + anchor.width - size.width - 18),

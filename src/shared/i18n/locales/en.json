@@ -3645,22 +3645,22 @@
       "clickHint": "Click it to try",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "Ask about your files",
+        "title": "Ask Dazzi anything",
         "body": "We drafted something to ask from your own documents.\nClick send to try it.",
         "fallbackTitle": "Try a default question",
         "fallbackBody": "There weren't enough files yet to craft a custom question. Try sending this example, or edit it to ask your own."
       },
       "cite": {
         "title": "Answers show their sources",
-        "body": "Click a number to see, in the info pane on the right, which file that sentence came from.",
+        "body": "Click a source number. The info panel on the right shows which file the sentence came from.",
         "waitingTitle": "Finding the answer",
-        "waitingBody": "Reading what's inside your files.",
-        "noCiteTitle": "Here's your answer",
-        "noCiteBody": "Every answer is grounded in your files only."
+        "waitingBody": "Reading what's inside your files. Just a moment.",
+        "noCiteTitle": "Here's what Dazzi found",
+        "noCiteBody": "Dazzi reads the files on this computer to find its answers. When an answer has sources, you can check them in the panel on the right."
       },
       "evidence": {
-        "title": "Jump to the original file",
-        "body": "Click the source title. The folder holding that file opens in a new tab."
+        "title": "Shall we check the source?",
+        "body": "Click the file to open the folder it's in, in a new tab."
       }
     },
     "signin": {
