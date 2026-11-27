@@ -23,7 +23,7 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 			return () => ipcRenderer.removeListener(ONBOARDING_CHANNELS.progress, handler);
 		},
 		pickPaths: (kind) => ipcRenderer.invoke(ONBOARDING_CHANNELS.pickPaths, kind),
-		setRevealBackdrop: (opacity) => ipcRenderer.send(ONBOARDING_CHANNELS.revealBackdrop, opacity),
+		setRevealBackdrop: (frame) => ipcRenderer.send(ONBOARDING_CHANNELS.revealBackdrop, frame),
 		complete: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.complete),
 	};
 }

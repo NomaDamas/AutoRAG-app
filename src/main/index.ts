@@ -1462,7 +1462,7 @@ app.whenReady().then(async () => {
 		},
 	});
 	const revealBackdrop = createElectronRevealBackdrop(() => mainWindow);
-	registerOnboardingIpcHandlers(firstRun, (opacity) => revealBackdrop.setOpacity(opacity));
+	registerOnboardingIpcHandlers(firstRun, (frame) => revealBackdrop.setFrame(frame));
 	app.on("before-quit", () => revealBackdrop.clear());
 	let quittingApp = false;
 	let quittingForUpdate = false;

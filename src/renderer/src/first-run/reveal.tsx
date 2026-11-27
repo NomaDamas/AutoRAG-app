@@ -1,22 +1,20 @@
 /**
- * The Ready → Finder hand-off, modeled after Arc & Dia Browser's onboarding intro
- * anchored on the Dazzi sunflower mark:
+ * The Ready → Finder hand-off (design: design-mockups/onboarding-intro-desktop-v3-fullscreen.html):
  *
- * 1. Ready copy softens away while the Dazzi sunflower glides to center and the stage
- *    dims into obsidian night.
- * 2. A WebGL liquid-glass orb (warm sunlight gold + crystal ice-blue Fresnel rim, matching
- *    Dazzi's glass icon tile) blooms and breathes behind the sunflower.
- * 3. "Dazzi" cascades in letter-by-letter with a 3D spring tilt & blur settle, followed by
- *    a silk specular sweep across the sunflower.
- * 4. An organic noise-warped aperture melts outward from behind the Dazzi mark with a
- *    golden-ice optical dispersion rim, revealing the real Finder pulling into crisp focus
- *    (sidebar, toolbar, left pane, right pane + inspector) before handing off to the tour.
+ * 1. The ready copy fades while the Dazzi sunflower glides to the centre and the whole desktop dims into dusk.
+ * 2. A breathing field of sunflower yellow, cream and sky blue wells up behind the mark and spreads across the
+ *    desktop (drawn here and, behind the window, by the desktop windows of `src/main/reveal-backdrop.ts`), and
+ *    "Dazzi" springs in letter by letter.
+ * 3. The word and the mark leave, the mark turning as it fades, and the real Finder rises out of the light: the
+ *    light parts exactly along the window's outline, which reads as clear glass and then clears.
+ * 4. The rest of the light and the dusk lift and the tour takes over.
  */
 
 import { useEffect, useRef, type ReactElement } from "react";
 import { APP_NAME } from "../../../shared/app-info";
-import { computeArcRevealState, computeGlyphStates, createArcShaderRenderer } from "./reveal-shader";
-import { REVEAL_SPEED, REVEAL_T, easeOut, progressIn } from "./reveal-timing";
+import { REVEAL_LIGHT_IDLE, type RevealLightFrame, type RevealLightScene } from "../../../shared/reveal-light";
+import { WINDOW_DUSK_MAX, computeGlyphStates, computeRevealState, createRevealLightRenderer } from "./reveal-shader";
+import { REVEAL_SPEED, REVEAL_T } from "./reveal-timing";
 
 /** The Finder's parts in arrival order: sidebar, toolbar, left pane, right pane + inspector. */
 const DESK_ITEMS: readonly string[] = [
@@ -56,8 +54,8 @@ export function prewarmReveal(): void {
 	setStyle(document.querySelector<HTMLElement>(".desk"), {
 		"will-change": LAYER,
 		opacity: "0",
-		transform: `scale(${1 + REVEAL_T.finScale})`,
-		filter: `blur(${REVEAL_T.finBlur}px)`,
+		transform: `translateY(${REVEAL_T.riseOffset}px) scale(${1 - REVEAL_T.riseScale})`,
+		filter: `blur(${REVEAL_T.focusBlur}px)`,
 		"transform-origin": "50% 50%",
 	});
 }
@@ -68,8 +66,8 @@ export function cancelPrewarm(): void {
 }
 
 /**
- * Plays the Arc/Dia × Dazzi hand-off once. `onTour` fires at `REVEAL_T.dim[0]`;
- * `onEnd` fires once the clock reaches `end`.
+ * Plays the hand-off once. `onTour` fires once the light and the dusk have lifted, `onEnd` once the clock reaches
+ * `end` (the same moment: whichever runs first ends the reveal).
  */
 export function Reveal({
 	playing,
@@ -127,85 +125,73 @@ export function Reveal({
 
 		const box = logo?.getBoundingClientRect();
 		const targetX = window.innerWidth / 2;
-		const targetY = window.innerHeight / 2 - 16;
+		const targetY = window.innerHeight / 2;
 		const dx = box === undefined ? 0 : targetX - (box.left + box.width / 2);
 		const dy = box === undefined ? 0 : targetY - (box.top + box.height / 2);
-		setStyle(word, { top: `${targetY + 86}px` });
+		setStyle(word, { top: `${targetY + 78}px` });
 
 		const layered = { animation: "none", transition: "none", "will-change": LAYER };
 		for (const element of [...texts, badge, logo, sweep, ...glyphEls]) setStyle(element ?? null, layered);
 		setStyle(desk, { ...layered, "transform-origin": "50% 50%" });
 
-		const shaderRenderer = shaderCanvas !== null ? createArcShaderRenderer(shaderCanvas) : null;
-		if (shaderRenderer !== null) {
-			layer.setAttribute("data-backend", shaderRenderer.backend);
-		}
+		// Where this window sits on screen; the light is drawn in screen coordinates so it meets the desktop's.
+		const scene: RevealLightScene = {
+			originX: window.screenX,
+			originY: window.screenY,
+			windowX: window.screenX,
+			windowY: window.screenY,
+			windowWidth: window.innerWidth,
+			windowHeight: window.innerHeight,
+			unit: window.screen.height || window.innerHeight,
+			duskMax: WINDOW_DUSK_MAX,
+		};
+		const lightRenderer = shaderCanvas !== null ? createRevealLightRenderer(shaderCanvas) : null;
+		if (lightRenderer !== null) layer.setAttribute("data-backend", lightRenderer.backend);
 		const setBackdrop = window.autorag?.onboarding?.setRevealBackdrop;
-		let lastBackdrop = -1;
-		const pushBackdrop = (opacity: number): void => {
-			if (setBackdrop === undefined) return;
-			const rounded = Math.round(opacity * 200) / 200;
-			if (rounded === lastBackdrop) return;
-			lastBackdrop = rounded;
-			setBackdrop(rounded);
+		const pushBackdrop = (frame: RevealLightFrame | null): void => {
+			setBackdrop?.(frame);
 		};
 
 		let items: Styled[][] = [];
 		let toured = false;
 		let frame = 0;
 		const started = performance.now();
-		const T = REVEAL_T;
 
 		const render = (t: number): void => {
-			const s = computeArcRevealState(t);
+			const s = computeRevealState(t);
 			layer.setAttribute("data-phase", s.phase);
-			pushBackdrop(s.desktopBackdrop);
-			// Ready screen copy dissolves upward with soft focus pull
+			pushBackdrop(s.light);
+
+			// The ready copy and its check badge fade away.
 			texts.forEach((element, index) => {
-				const p = progressIn(t, [T.textOut[0] + index * 0.07, T.textOut[1] + index * 0.07], easeOut);
+				const p = s.textOut[index] ?? 1;
 				setStyle(element ?? null, {
 					opacity: String(1 - p),
-					filter: p > 0.01 ? `blur(${(10 * p).toFixed(2)}px)` : "none",
-					transform: `translateY(${(-10 * p).toFixed(2)}px)`,
+					filter: p > 0.01 ? `blur(${(6 * p).toFixed(2)}px)` : "none",
+					transform: `translateY(${(-8 * p).toFixed(2)}px)`,
 				});
-				if (index === 0) setStyle(badge, { opacity: String(1 - p), transform: `scale(${(1 - 0.35 * p).toFixed(3)})` });
 			});
+			const badgeOut = s.textOut[0] ?? 1;
+			setStyle(badge, { opacity: String(1 - badgeOut), transform: `scale(${(1 - 0.35 * badgeOut).toFixed(3)})` });
+			setStyle(sweep, { opacity: "0" });
 
-			// Original ready backdrop hands over seamlessly to the WebGL shader canvas
-			setStyle(base, { opacity: String(s.readyBgOpacity) });
-			setStyle(bgw, { opacity: String(s.readyBgOpacity) });
+			// The ready screen's background gives way to the dusk.
+			setStyle(base, { opacity: String(s.readyBg) });
+			setStyle(bgw, { opacity: String(s.readyBg) });
 
-			// WebGL liquid-glass orb + organic melt mask
-			if (shaderRenderer !== null) {
-				const dpr = Math.min(2, window.devicePixelRatio || 1);
-				shaderRenderer.render(window.innerWidth, window.innerHeight, dpr, s, t);
-			}
+			lightRenderer?.render(scene, s.light);
 
-			// Centered Dazzi sunflower mark with warm optical glow
-			const logoFilters: string[] = [];
-			if (s.logo.blur > 0.05) logoFilters.push(`blur(${s.logo.blur.toFixed(2)}px)`);
-			if (s.logo.halo > 0.05) {
-				logoFilters.push(
-					`drop-shadow(0 0 ${(20 * s.logo.halo).toFixed(1)}px rgba(255, 224, 148, 0.72)) drop-shadow(0 0 ${(44 * s.logo.halo).toFixed(1)}px rgba(112, 180, 255, 0.38))`,
-				);
-			}
+			// The sunflower stays crisp: it glides to the centre, then fades while it turns.
 			setStyle(logo, {
-				transform: `translate(${(dx * s.logo.move).toFixed(2)}px, ${(dy * s.logo.move).toFixed(2)}px) scale(${s.logo.scale.toFixed(4)})`,
-				filter: logoFilters.length > 0 ? logoFilters.join(" ") : "none",
+				transform: `translate(${(dx * s.logo.move).toFixed(2)}px, ${(dy * s.logo.move).toFixed(2)}px) rotate(${s.logo.rotate.toFixed(2)}deg)`,
+				filter: "none",
 				opacity: String(s.logo.opacity),
 			});
 
-			// Silk specular light sweep masked to the sunflower silhouette
-			setStyle(sweep, {
-				opacity: s.sweep > 0 && s.sweep < 1 ? "1" : "0",
-				transform: `translateX(${(-90 + 230 * s.sweep).toFixed(2)}px) skewX(-18deg)`,
-			});
-
-			// Arc/Dia per-letter 3D spring cascade for "Dazzi", lifted softly as the melt opens
+			// "Dazzi" springs in letter by letter, then fades.
 			setStyle(word, {
-				opacity: String(s.wordLift.opacity),
-				filter: s.wordLift.blur > 0.05 ? `blur(${s.wordLift.blur.toFixed(2)}px)` : "none",
-				transform: `translateY(${s.wordLift.y.toFixed(2)}px) scale(${s.wordLift.scale.toFixed(4)})`,
+				opacity: String(s.word.opacity),
+				filter: s.word.blur > 0.05 ? `blur(${s.word.blur.toFixed(2)}px)` : "none",
 			});
 			const glyphs = computeGlyphStates(APP_NAME, t);
 			glyphEls.forEach((el, index) => {
@@ -214,28 +200,26 @@ export function Reveal({
 				setStyle(el, {
 					opacity: String(g.opacity),
 					filter: g.blur > 0.05 ? `blur(${g.blur.toFixed(2)}px)` : "none",
-					transform: `translateY(${g.y.toFixed(2)}px) rotate(${g.rotateZ.toFixed(2)}deg) scale(${g.scale.toFixed(4)})`,
+					transform: `translateY(${g.y.toFixed(2)}px)`,
 				});
 			});
 
-			// Live Finder emerges crisp through the organic melt aperture
+			// The Finder rises out of the light, in step with the outline the shader cuts.
 			setStyle(desk, {
-				opacity: String(s.finder.opacity),
-				transform: `scale(${s.finder.scale.toFixed(4)})`,
+				opacity: s.finder.visible ? "1" : "0",
+				transform: `translateY(${s.finder.y.toFixed(2)}px) scale(${s.finder.scale.toFixed(4)})`,
 				filter: s.finder.blur > 0.05 ? `blur(${s.finder.blur.toFixed(2)}px)` : "none",
 			});
-			if (items.length === 0 && t >= T.fin[0]) {
+			if (items.length === 0 && s.finder.visible) {
 				items = DESK_ITEMS.map(all);
 				for (const group of items) for (const element of group) setStyle(element, { "will-change": LAYER, transition: "none" });
 			}
 			items.forEach((group, index) => {
 				const p = s.finder.itemProgress[index] ?? 1;
-				const vis = 0.25 + 0.75 * p;
 				for (const element of group) {
 					setStyle(element, {
-						opacity: String(vis),
+						opacity: String(0.25 + 0.75 * p),
 						transform: `translateY(${(10 * (1 - p)).toFixed(2)}px)`,
-						filter: p < 0.995 ? `blur(${(4.5 * (1 - p)).toFixed(2)}px)` : "none",
 					});
 				}
 			});
@@ -247,8 +231,8 @@ export function Reveal({
 
 		const tick = (now: number): void => {
 			const t = ((now - started) / 1000) * REVEAL_SPEED;
-			if (t >= T.end) {
-				render(T.end);
+			if (t >= REVEAL_T.end) {
+				render(REVEAL_T.end);
 				endRef.current();
 				return;
 			}
@@ -261,8 +245,9 @@ export function Reveal({
 
 		return () => {
 			window.cancelAnimationFrame(frame);
-			pushBackdrop(0);
-			shaderRenderer?.dispose();
+			pushBackdrop(null);
+			lightRenderer?.render(scene, REVEAL_LIGHT_IDLE);
+			lightRenderer?.dispose();
 			for (const element of [...texts, badge, logo, sweep, ...glyphEls]) clearStyle(element ?? null);
 			const finder = [desk, ...items.flat()];
 			for (const element of finder) setStyle(element ?? null, { opacity: "1", transform: "none", filter: "none" });

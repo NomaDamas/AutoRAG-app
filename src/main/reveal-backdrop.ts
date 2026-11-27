@@ -1,25 +1,29 @@
 /**
- * Arc / Dia-style desktop spotlight backdrop for the Ready → Finder reveal.
+ * The desktop half of the Ready → Finder reveal.
  *
- * When the user presses "시작하기", spawns one borderless click-through dark
- * `BrowserWindow` per connected display (zero OS permissions required) and
- * elevates the Dazzi window directly above it so the user's desktop and other
- * apps fade into cinema darkness while Dazzi floats in the spotlight.
+ * When the user presses "시작하기", spawns one borderless, transparent, click-through `BrowserWindow` per connected
+ * display (no OS permissions needed) and keeps the Dazzi window directly above them. Each of those windows draws the
+ * reveal's light (`src/shared/reveal-light.ts`) in screen coordinates from the frames the renderer sends, so the dusk
+ * and the light run across the whole desktop and continue seamlessly into the Dazzi window.
  *
  * Safety invariants:
  * - Never spawns if the main window is fullscreen, minimized, or destroyed.
  * - Click-through (`setIgnoreMouseEvents(true)`) and non-focusable (`focusable: false`).
- * - Destroys all backdrop windows and restores normal window level on opacity → 0,
- *   main window close, explicit dispose, or a hard safety timeout (`BACKDROP_SAFETY_TIMEOUT_MS`).
+ * - Destroys all backdrop windows and restores the normal window level when a frame has nothing left to draw, the
+ *   main window closes, on explicit `clear()`, or after a hard safety timeout (`BACKDROP_SAFETY_TIMEOUT_MS`).
  */
 
 import { BrowserWindow, screen, type Rectangle } from "electron";
+import { type RevealLightFrame, type RevealLightScene, revealBackdropPageHtml } from "../shared/reveal-light";
 
-/** Maximum opacity of the desktop dimmer (matches Arc's ~0.88 cinema dim without pure blackout). */
-export const BACKDROP_MAX_OPACITY = 0.88;
+/** The strongest the dusk gets on the desktop: dark, with a hint of the desktop still showing through. */
+export const BACKDROP_DUSK_MAX = 0.86;
 
-/** Hard upper bound so a crashed renderer can never strand a dark overlay over the user's desktop. */
+/** Hard upper bound so a crashed renderer can never strand an overlay over the user's desktop. */
 export const BACKDROP_SAFETY_TIMEOUT_MS = 12_000;
+
+/** Below this, a frame draws nothing visible and the backdrop is torn down. */
+const BACKDROP_VISIBLE_EPSILON = 0.002;
 
 export interface BackdropDisplay {
 	readonly id: number;
@@ -29,26 +33,28 @@ export interface BackdropDisplay {
 
 export interface BackdropWindowLike {
 	isDestroyed(): boolean;
-	setOpacity(opacity: number): void;
 	setAlwaysOnTop(flag: boolean, level?: "normal" | "floating" | "torn-off-menu" | "modal-panel" | "main-menu" | "status" | "pop-up-menu" | "screen-saver"): void;
 	setIgnoreMouseEvents(ignore: boolean): void;
 	setVisibleOnAllWorkspaces?(visible: boolean, options?: { visibleOnFullScreen?: boolean }): void;
 	showInactive(): void;
 	destroy(): void;
+	/** Draws one frame of the light. */
+	drawFrame(frame: RevealLightFrame): void;
 }
 
 export interface TargetWindowLike {
 	isDestroyed(): boolean;
 	isFullScreen(): boolean;
 	isMinimized(): boolean;
+	getContentBounds(): Rectangle;
 	setAlwaysOnTop(flag: boolean, level?: "normal" | "floating" | "torn-off-menu" | "modal-panel" | "main-menu" | "status" | "pop-up-menu" | "screen-saver"): void;
 	moveTop(): void;
 	once(event: "closed", listener: () => void): void;
 }
 
 export interface RevealBackdropController {
-	/** Set desktop dimmer opacity in `[0, BACKDROP_MAX_OPACITY]`. `<= 0.002` tears down all backdrops cleanly. */
-	setOpacity(opacity: number): void;
+	/** Draws one frame on every display; a frame with no dusk and no light (or `null`) tears the backdrop down. */
+	setFrame(frame: RevealLightFrame | null): void;
 	/** Immediately destroys all backdrop windows and restores normal z-order. */
 	clear(): void;
 	/** Number of live backdrop windows (primarily for diagnostics & tests). */
@@ -59,7 +65,17 @@ export interface RevealBackdropDeps {
 	readonly platform: NodeJS.Platform;
 	readonly getDisplays: () => readonly BackdropDisplay[];
 	readonly getTargetWindow: () => TargetWindowLike | null;
-	readonly createBackdropWindow: (bounds: Rectangle) => BackdropWindowLike;
+	readonly createBackdropWindow: (bounds: Rectangle, scene: RevealLightScene) => BackdropWindowLike;
+}
+
+/** The display that holds the centre of `rect`, or the first display. */
+function displayHolding(displays: readonly BackdropDisplay[], rect: Rectangle): BackdropDisplay {
+	const cx = rect.x + rect.width / 2;
+	const cy = rect.y + rect.height / 2;
+	return (
+		displays.find((d) => cx >= d.bounds.x && cx < d.bounds.x + d.bounds.width && cy >= d.bounds.y && cy < d.bounds.y + d.bounds.height) ??
+		displays[0]!
+	);
 }
 
 /** Pure factory with injectable Electron primitives so unit tests exercise every lifecycle path. */
@@ -111,13 +127,24 @@ export function createRevealBackdropController(deps: RevealBackdropDeps): Reveal
 		const displays = deps.getDisplays();
 		if (displays.length === 0) return false;
 
+		const content = target.getContentBounds();
+		const unit = displayHolding(displays, content).bounds.height;
 		const created: BackdropWindowLike[] = [];
 		for (const display of displays) {
 			// On macOS keep the menu bar clear (workArea); on Windows/Linux cover the full display bounds.
 			const rect = deps.platform === "darwin" ? display.workArea : display.bounds;
-			const win = deps.createBackdropWindow(rect);
+			const scene: RevealLightScene = {
+				originX: rect.x,
+				originY: rect.y,
+				windowX: content.x,
+				windowY: content.y,
+				windowWidth: content.width,
+				windowHeight: content.height,
+				unit,
+				duskMax: BACKDROP_DUSK_MAX,
+			};
+			const win = deps.createBackdropWindow(rect, scene);
 			win.setIgnoreMouseEvents(true);
-			win.setOpacity(0);
 			win.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: false });
 			win.setAlwaysOnTop(true, "floating");
 			win.showInactive();
@@ -125,7 +152,7 @@ export function createRevealBackdropController(deps: RevealBackdropDeps): Reveal
 		}
 		backdrops = created;
 
-		// Elevate the Dazzi window directly above the floating dimmer windows so it glows in the spotlight
+		// Keep the Dazzi window directly above the light so Finder rises out of it.
 		elevatedTarget = target;
 		target.setAlwaysOnTop(true, "floating");
 		target.moveTop();
@@ -133,9 +160,8 @@ export function createRevealBackdropController(deps: RevealBackdropDeps): Reveal
 		return true;
 	};
 
-	const setOpacity = (rawOpacity: number): void => {
-		const clamped = Number.isFinite(rawOpacity) ? Math.max(0, Math.min(BACKDROP_MAX_OPACITY, rawOpacity)) : 0;
-		if (clamped <= 0.002) {
+	const setFrame = (frame: RevealLightFrame | null): void => {
+		if (frame === null || (frame.dusk <= BACKDROP_VISIBLE_EPSILON && frame.light <= BACKDROP_VISIBLE_EPSILON)) {
 			clear();
 			return;
 		}
@@ -148,7 +174,7 @@ export function createRevealBackdropController(deps: RevealBackdropDeps): Reveal
 
 		armSafetyTimer();
 		for (const win of backdrops) {
-			if (!win.isDestroyed()) win.setOpacity(clamped);
+			if (!win.isDestroyed()) win.drawFrame(frame);
 		}
 		if (!target.isDestroyed()) {
 			target.moveTop();
@@ -156,7 +182,7 @@ export function createRevealBackdropController(deps: RevealBackdropDeps): Reveal
 	};
 
 	return {
-		setOpacity,
+		setFrame,
 		clear,
 		activeCount: () => backdrops.filter((win) => !win.isDestroyed()).length,
 	};
@@ -168,15 +194,15 @@ export function createElectronRevealBackdrop(getMainWindow: () => BrowserWindow 
 		platform: process.platform,
 		getDisplays: () => screen.getAllDisplays(),
 		getTargetWindow: getMainWindow,
-		createBackdropWindow: (rect) => {
+		createBackdropWindow: (rect, scene) => {
 			const win = new BrowserWindow({
 				x: rect.x,
 				y: rect.y,
 				width: rect.width,
 				height: rect.height,
 				frame: false,
-				transparent: false,
-				backgroundColor: "#06070d",
+				transparent: true,
+				backgroundColor: "#00000000",
 				hasShadow: false,
 				resizable: false,
 				movable: false,
@@ -193,9 +219,22 @@ export function createElectronRevealBackdrop(getMainWindow: () => BrowserWindow 
 					sandbox: true,
 					contextIsolation: true,
 					nodeIntegration: false,
+					backgroundThrottling: false,
 				},
 			});
-			return win;
+			void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(revealBackdropPageHtml(scene))}`).catch(() => {});
+			return {
+				isDestroyed: () => win.isDestroyed(),
+				setAlwaysOnTop: (flag, level) => win.setAlwaysOnTop(flag, level),
+				setIgnoreMouseEvents: (ignore) => win.setIgnoreMouseEvents(ignore),
+				setVisibleOnAllWorkspaces: (visible, options) => win.setVisibleOnAllWorkspaces(visible, options),
+				showInactive: () => win.showInactive(),
+				destroy: () => win.destroy(),
+				drawFrame: (frame) => {
+					if (win.isDestroyed() || win.webContents.isLoading()) return;
+					void win.webContents.executeJavaScript(`window.__revealFrame&&window.__revealFrame(${JSON.stringify(frame)})`).catch(() => {});
+				},
+			};
 		},
 	});
 }

@@ -1,241 +1,116 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-	REVEAL_SPEED,
-	REVEAL_T,
-	bezier,
-	easeInOut,
-	easeOut,
-	easeSpring,
-	glyphProgress,
-	progressIn,
-	revealMs,
-	revealPhaseAt,
-} from "../src/renderer/src/first-run/reveal-timing";
-import {
-	ARC_FRAGMENT_SHADER,
-	ARC_VERTEX_SHADER,
-	computeArcRevealState,
-	computeGlyphStates,
-	createArcShaderRenderer,
-	drawFallbackReveal,
-} from "../src/renderer/src/first-run/reveal-shader";
+import { describe, expect, it } from "vitest";
+import { REVEAL_LIGHT_FRAGMENT, isRevealLightFrame, revealBackdropPageHtml } from "../src/shared/reveal-light";
+import { REVEAL_SPEED, REVEAL_T, bezier, easeInOut, easeOut, progressIn, revealMs, revealPhaseAt, spring } from "../src/renderer/src/first-run/reveal-timing";
+import { computeGlyphStates, computeRevealState } from "../src/renderer/src/first-run/reveal-shader";
 
-describe("Arc/Dia × Dazzi reveal timing & choreography clock", () => {
-	it("runs in a tight ~4.7 s Arc/Dia cinematic arc well under the tour timeout", () => {
-		const totalMs = revealMs(REVEAL_T.end);
-		const tourMs = revealMs(REVEAL_T.dim[0]);
+describe("reveal clock", () => {
+	it("runs about 5.6 s and hands off to the tour at its end", () => {
 		expect(REVEAL_SPEED).toBeGreaterThan(0);
-		expect(totalMs).toBeGreaterThanOrEqual(4200);
-		expect(totalMs).toBeLessThanOrEqual(5200);
-		expect(tourMs).toBeGreaterThanOrEqual(3800);
-		expect(tourMs).toBeLessThan(totalMs);
+		expect(revealMs(REVEAL_T.end)).toBeGreaterThanOrEqual(5000);
+		expect(revealMs(REVEAL_T.end)).toBeLessThanOrEqual(6200);
 	});
 
-	it("orders every Arc/Dia beat: darken & gather → luminous orb & letter cascade → organic melt → Finder settle before dim", () => {
-		expect(REVEAL_T.orbIn[0]).toBeGreaterThan(REVEAL_T.textOut[0]);
-		expect(REVEAL_T.word[0]).toBeGreaterThan(REVEAL_T.orbIn[0]);
-		expect(REVEAL_T.sweep[0]).toBeGreaterThanOrEqual(REVEAL_T.word[0]);
-		expect(REVEAL_T.melt[0]).toBeGreaterThan(REVEAL_T.word[1]);
-		expect(REVEAL_T.fin[0]).toBeGreaterThanOrEqual(REVEAL_T.melt[0]);
-		expect(REVEAL_T.fin[1]).toBeLessThanOrEqual(REVEAL_T.dim[0]);
-		expect(REVEAL_T.items + 3 * REVEAL_T.itemStep + 0.65).toBeLessThanOrEqual(REVEAL_T.dim[0]);
+	it("orders the beats: dusk → light and word → the window opens and rises → the light lifts", () => {
+		expect(REVEAL_T.lightIn[0]).toBeGreaterThanOrEqual(REVEAL_T.dusk[1]);
+		expect(REVEAL_T.word).toBeGreaterThan(REVEAL_T.lightIn[0]);
+		expect(REVEAL_T.spread[1]).toBeLessThanOrEqual(REVEAL_T.open);
+		expect(REVEAL_T.open).toBeLessThanOrEqual(REVEAL_T.rise[0]);
+		expect(REVEAL_T.markOut[0]).toBeGreaterThanOrEqual(REVEAL_T.rise[0]);
+		expect(REVEAL_T.lightOut[0]).toBeGreaterThan(REVEAL_T.rise[0]);
+		expect(REVEAL_T.lightOut[1]).toBeLessThanOrEqual(REVEAL_T.end);
+		expect(REVEAL_T.duskOut[1]).toBeLessThanOrEqual(REVEAL_T.end);
 	});
 
-	it("transitions monotonically through gather → orb → melt → settle → done", () => {
-		expect(revealPhaseAt(0)).toBe("gather");
-		expect(revealPhaseAt(REVEAL_T.word[0] + 0.2)).toBe("orb");
-		expect(revealPhaseAt((REVEAL_T.melt[0] + REVEAL_T.melt[1]) / 2)).toBe("melt");
-		expect(revealPhaseAt(REVEAL_T.dim[0] + 0.05)).toBe("settle");
+	it("names its phases in order", () => {
+		expect(revealPhaseAt(0)).toBe("dusk");
+		expect(revealPhaseAt(2.5)).toBe("light");
+		expect(revealPhaseAt(4.2)).toBe("rise");
+		expect(revealPhaseAt(5.3)).toBe("clear");
 		expect(revealPhaseAt(REVEAL_T.end)).toBe("done");
 	});
 
-	it("staggers per-glyph progress cleanly from first letter to last letter", () => {
-		const mid = REVEAL_T.word[0] + 0.24;
-		const p0 = glyphProgress(mid, 0, REVEAL_T.word[0], 0.055, 0.55);
-		const p2 = glyphProgress(mid, 2, REVEAL_T.word[0], 0.055, 0.55);
-		const p4 = glyphProgress(mid, 4, REVEAL_T.word[0], 0.055, 0.55);
-		expect(p0).toBeGreaterThan(p2);
-		expect(p2).toBeGreaterThan(p4);
-		expect(glyphProgress(0, 0, REVEAL_T.word[0], 0.055, 0.55)).toBe(0);
-		expect(glyphProgress(REVEAL_T.word[1] + 0.5, 4, REVEAL_T.word[0], 0.055, 0.55)).toBe(1);
+	it("eases with exact endpoints and clamps progress", () => {
+		const curve = bezier(0.2, 0.8, 0.2, 1);
+		expect(curve(0)).toBe(0);
+		expect(curve(1)).toBe(1);
+		expect(easeOut(0.5)).toBeGreaterThan(0.5);
+		expect(easeInOut(0.5)).toBeGreaterThan(0.3);
+		expect(progressIn(-1, [0, 1])).toBe(0);
+		expect(progressIn(2, [0, 1])).toBe(1);
 	});
 
-	it("solves cubic-bezier endpoints cleanly and provides a gentle spring curve", () => {
-		const linear = bezier(0, 0, 1, 1);
-		expect(linear(0)).toBe(0);
-		expect(linear(1)).toBe(1);
-		expect(linear(0.5)).toBeCloseTo(0.5, 3);
-		expect(progressIn(0, [0.5, 1.5], easeOut)).toBe(0);
-		expect(progressIn(9, [0.5, 1.5], easeInOut)).toBe(1);
-		expect(easeSpring(0)).toBe(0);
-		expect(easeSpring(1)).toBe(1);
-		expect(easeSpring(0.55)).toBeGreaterThan(1.0);
+	it("springs past 1 once and settles", () => {
+		expect(spring(0)).toBe(0);
+		const peak = Math.max(...Array.from({ length: 60 }, (_, i) => spring(i * 0.01)));
+		expect(peak).toBeGreaterThan(1);
+		expect(peak).toBeLessThan(1.2);
+		expect(spring(2)).toBeCloseTo(1, 3);
 	});
 });
 
-describe("Arc/Dia × Dazzi frame choreography & per-letter 3D cascade", () => {
-	it("matches the exact idle ready screen at t = 0 with zero jump", () => {
-		const s = computeArcRevealState(0);
-		expect(s.phase).toBe("gather");
-		expect(s.readyBgOpacity).toBe(1);
-		expect(s.desktopBackdrop).toBe(0);
-		expect(s.shader.alpha).toBe(0);
-		expect(s.shader.meltProgress).toBe(0);
-		expect(s.logo.move).toBe(0);
-		expect(s.logo.scale).toBe(1);
-		expect(s.logo.opacity).toBe(1);
-		expect(s.logo.blur).toBe(0);
-		expect(s.finder.opacity).toBe(0);
-		expect(s.finder.blur).toBeCloseTo(REVEAL_T.finBlur, 4);
-		expect(s.finder.scale).toBeCloseTo(1 + REVEAL_T.finScale, 4);
-		expect(s.tourTriggered).toBe(false);
+describe("reveal state", () => {
+	it("dims, lights and spreads, then opens the window and lifts everything", () => {
+		const start = computeRevealState(0);
+		expect(start.light.dusk).toBe(0);
+		expect(start.light.light).toBe(0);
+		expect(start.finder.visible).toBe(false);
+
+		const lit = computeRevealState(3.4);
+		expect(lit.light.dusk).toBeGreaterThan(0.95);
+		expect(lit.light.light).toBeGreaterThan(0.9);
+		expect(lit.light.spread).toBe(1);
+		expect(lit.light.open).toBe(0);
+		expect(lit.readyBg).toBe(0);
+
+		const rising = computeRevealState(4.3);
+		expect(rising.light.open).toBe(1);
+		expect(rising.finder.visible).toBe(true);
+		expect(rising.finder.y).toBeGreaterThan(0);
+		expect(rising.finder.scale).toBeLessThan(1);
+		expect(rising.logo.opacity).toBeLessThan(0.05);
+		expect(rising.logo.rotate).toBeCloseTo(REVEAL_T.markTurn, 0);
+
+		const end = computeRevealState(REVEAL_T.end);
+		expect(end.light.dusk).toBe(0);
+		expect(end.light.light).toBe(0);
+		expect(end.finder.y).toBe(0);
+		expect(end.finder.scale).toBe(1);
+		expect(end.finder.blur).toBe(0);
+		expect(end.finder.itemProgress.every((p) => p === 1)).toBe(true);
+		expect(end.tourTriggered).toBe(true);
 	});
 
-	it("darkens the stage, breathes the luminous glass orb around the centered Dazzi logo, and reveals letters in a 3D blur cascade", () => {
-		const orbMid = computeArcRevealState(REVEAL_T.word[0] + 0.25);
-		expect(orbMid.phase).toBe("orb");
-		expect(orbMid.desktopBackdrop).toBeGreaterThan(0.75);
-		expect(orbMid.shader.alpha).toBeGreaterThan(0.95);
-		expect(orbMid.shader.darkness).toBeGreaterThan(0.85);
-		expect(orbMid.shader.orbRadius).toBeGreaterThan(0.18);
-		expect(orbMid.shader.orbIntensity).toBeGreaterThan(0.7);
-		expect(orbMid.logo.move).toBeGreaterThan(0.95);
-		expect(orbMid.logo.scale).toBeGreaterThan(1.0);
-		expect(orbMid.logo.opacity).toBe(1);
+	it("keeps the sunflower crisp: it turns and fades, never blurs or scales", () => {
+		const state = computeRevealState(4.0);
+		expect(state.logo.opacity).toBeGreaterThan(0);
+		expect(state.logo.opacity).toBeLessThan(1);
+		expect(state.logo.rotate).toBeGreaterThan(0);
+		expect(Object.keys(state.logo).sort()).toEqual(["move", "opacity", "rotate"]);
+	});
 
-		const glyphs = computeGlyphStates("Dazzi", REVEAL_T.word[0] + 0.22);
+	it("staggers the letters from first to last", () => {
+		const glyphs = computeGlyphStates("Dazzi", REVEAL_T.word + 0.1);
 		expect(glyphs).toHaveLength(5);
-		// Earlier letters are more revealed, crisper, and less tilted than trailing letters
 		expect(glyphs[0]!.opacity).toBeGreaterThan(glyphs[4]!.opacity);
-		expect(glyphs[0]!.blur).toBeLessThan(glyphs[4]!.blur);
-		expect(Math.abs(glyphs[0]!.rotateZ)).toBeLessThan(Math.abs(glyphs[4]!.rotateZ));
-
-		// Once landed, all letters are crisp and upright
-		const settledGlyphs = computeGlyphStates("Dazzi", REVEAL_T.word[1] + 0.2);
-		for (const g of settledGlyphs) {
-			expect(g.opacity).toBeGreaterThan(0.98);
-			expect(g.blur).toBeLessThan(0.1);
-			expect(Math.abs(g.rotateZ)).toBeLessThan(0.2);
-		}
-	});
-
-	it("melts open via an organic aperture and settles the real Finder crisp before handing off to the tour", () => {
-		const midMelt = computeArcRevealState((REVEAL_T.melt[0] + REVEAL_T.melt[1]) / 2);
-		expect(midMelt.phase).toBe("melt");
-		expect(midMelt.shader.meltProgress).toBeGreaterThan(0.2);
-		expect(midMelt.shader.meltProgress).toBeLessThan(0.95);
-		expect(midMelt.shader.rimGlow).toBeGreaterThan(0.35);
-		expect(midMelt.finder.opacity).toBeGreaterThan(0.25);
-
-		const handoff = computeArcRevealState(REVEAL_T.dim[0]);
-		expect(handoff.tourTriggered).toBe(true);
-		expect(handoff.desktopBackdrop).toBe(0);
-		expect(handoff.shader.alpha).toBe(0);
-		expect(handoff.readyBgOpacity).toBe(0);
-		expect(handoff.logo.opacity).toBe(0);
-		expect(handoff.finder.opacity).toBe(1);
-		expect(handoff.finder.blur).toBe(0);
-		expect(handoff.finder.scale).toBe(1);
-		expect(handoff.finder.itemProgress).toEqual([1, 1, 1, 1]);
-	});
-
-	it("stays finite and bounded across all negative, active, and post-end timestamps", () => {
-		for (let i = 0; i <= 120; i += 1) {
-			const t = -0.3 + (i / 120) * (REVEAL_T.end + 1.0);
-			const s = computeArcRevealState(t);
-			const vals = [
-				s.readyBgOpacity,
-				s.desktopBackdrop,
-				s.shader.alpha,
-				s.shader.darkness,
-				s.shader.orbRadius,
-				s.shader.orbIntensity,
-				s.shader.meltProgress,
-				s.shader.rimGlow,
-				s.shader.prismShift,
-				s.logo.move,
-				s.logo.scale,
-				s.logo.opacity,
-				s.logo.blur,
-				s.logo.halo,
-				s.sweep,
-				s.wordLift.opacity,
-				s.wordLift.blur,
-				s.wordLift.scale,
-				s.finder.opacity,
-				s.finder.scale,
-				s.finder.blur,
-				...s.finder.itemProgress,
-			];
-			for (const v of vals) {
-				expect(Number.isFinite(v), `non-finite value at t=${t}`).toBe(true);
-			}
-			for (const a of [s.readyBgOpacity, s.shader.alpha, s.shader.meltProgress, s.logo.opacity, s.finder.opacity, ...s.finder.itemProgress]) {
-				expect(a).toBeGreaterThanOrEqual(0);
-				expect(a).toBeLessThanOrEqual(1);
-			}
-		}
+		expect(computeGlyphStates("Dazzi", 0).every((g) => g.opacity === 0)).toBe(true);
+		expect(computeGlyphStates("Dazzi", REVEAL_T.word + 2).every((g) => g.opacity === 1 && Math.abs(g.y) < 0.01)).toBe(true);
 	});
 });
 
-describe("WebGL GLSL shader & fallback renderer", () => {
-	it("defines valid GLSL shaders with domain-warped organic melt aperture, liquid-glass Fresnel rim, and film grain", () => {
-		expect(ARC_VERTEX_SHADER).toContain("gl_Position");
-		expect(ARC_FRAGMENT_SHADER).toContain("u_melt");
-		expect(ARC_FRAGMENT_SHADER).toContain("u_orbRadius");
-		expect(ARC_FRAGMENT_SHADER).toContain("u_rimGlow");
-		expect(ARC_FRAGMENT_SHADER).toContain("fbm");
-		expect(ARC_FRAGMENT_SHADER).toContain("gl_FragColor");
+describe("shared reveal light", () => {
+	it("validates frames sent over IPC", () => {
+		expect(isRevealLightFrame(computeRevealState(2).light)).toBe(true);
+		expect(isRevealLightFrame({ time: 1 })).toBe(false);
+		expect(isRevealLightFrame({ time: 0, dusk: Number.NaN, light: 0, spread: 0, glow: 0, rise: 0, open: 0 })).toBe(false);
+		expect(isRevealLightFrame(null)).toBe(false);
 	});
 
-	it("renders cleanly via the 2D fallback when WebGL is unavailable and balances canvas save/restore", () => {
-		const ops: string[] = [];
-		const compositeModes: string[] = [];
-		const grad = { addColorStop: vi.fn() };
-		const ctx2d = {
-			save: vi.fn(() => ops.push("save")),
-			restore: vi.fn(() => ops.push("restore")),
-			clearRect: vi.fn(),
-			fillRect: vi.fn(),
-			beginPath: vi.fn(),
-			closePath: vi.fn(),
-			moveTo: vi.fn(),
-			lineTo: vi.fn(),
-			arc: vi.fn(),
-			fill: vi.fn(),
-			stroke: vi.fn(),
-			setTransform: vi.fn(),
-			createRadialGradient: vi.fn(() => grad),
-			set globalCompositeOperation(mode: string) {
-				compositeModes.push(mode);
-			},
-			get globalCompositeOperation() {
-				return compositeModes.at(-1) ?? "source-over";
-			},
-			globalAlpha: 1,
-			fillStyle: "#000",
-			strokeStyle: "#000",
-			lineWidth: 1,
-			filter: "none",
-		} as unknown as CanvasRenderingContext2D;
-
-		const fakeCanvas = {
-			width: 1280,
-			height: 800,
-			getContext: vi.fn((kind: string) => (kind === "2d" ? ctx2d : null)),
-		} as unknown as HTMLCanvasElement;
-
-		const renderer = createArcShaderRenderer(fakeCanvas);
-		expect(renderer.backend).toBe("canvas2d");
-
-		for (const t of [0.4, 1.5, 2.9, 3.6, REVEAL_T.dim[0]]) {
-			const state = computeArcRevealState(t);
-			expect(() => renderer.render(1280, 800, 1, state, t)).not.toThrow();
-			expect(() => drawFallbackReveal(ctx2d, 1280, 800, state, t)).not.toThrow();
-		}
-
-		expect(compositeModes).toContain("destination-out");
-		expect(ops.filter((o) => o === "save").length).toBe(ops.filter((o) => o === "restore").length);
-		expect(() => renderer.dispose()).not.toThrow();
+	it("builds a self-contained desktop page that carries the shader and the scene", () => {
+		const html = revealBackdropPageHtml({ originX: 0, originY: 25, windowX: 100, windowY: 80, windowWidth: 1200, windowHeight: 760, unit: 900, duskMax: 0.9 });
+		expect(html).toContain("__revealFrame");
+		expect(html).toContain('"windowWidth":1200');
+		expect(html).toContain("sdRoundBox");
+		expect(html).not.toMatch(/<script[^>]+src=/);
+		expect(REVEAL_LIGHT_FRAGMENT).toContain("u_open");
 	});
 });
