@@ -129,7 +129,15 @@
       "reset": "重置列"
     },
     "versionBanner": {
-      "retry": "重新检查"
+      "retry": "重新检查",
+      "missingTitle": "缺少重复文件检查工具",
+      "missingHint": "要查看版本分组，请用下面的命令安装 dupey。",
+      "scanFailedTitle": "重复文件检查未能完成",
+      "scanFailedHint": "文件夹较大时检查可能耗时过长而中断。请稍后再检查。",
+      "checkingLine": "正在重新检查重复文件。可在左下角查看进度。",
+      "taskHeadline": "正在重新检查重复文件",
+      "taskDone": "重复文件检查已完成",
+      "taskFailed": "重复文件检查未能完成"
     },
     "pathBar": {
       "edit": "前往路径",
