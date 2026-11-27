@@ -21,6 +21,7 @@ import {
 	type QuickLookWindowBridge,
 } from "../shared/contract";
 import { isDocumentEditEvent } from "../shared/annotation";
+import type { SheetPreview } from "../shared/sheet";
 import type { VideoAudioPlan } from "../shared/video-audio";
 import { isVideoPlaybackProgress, type VideoPlaybackPlan } from "../shared/video-playback";
 
@@ -108,6 +109,8 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 				if (isVideoPlaybackProgress(progress)) listener(progress);
 			}),
 		dataPreview: (path, table): Promise<DataPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.data, path, table),
+		sheetPreview: (path, sheetIndex): Promise<SheetPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.sheet, path, sheetIndex),
+		pdfAnchorPages: (path, excerpts): Promise<readonly number[]> => ipcRenderer.invoke(PREVIEW_CHANNELS.pdfAnchorPages, path, [...excerpts]),
 		archivePreview: (path): Promise<ArchivePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.archive, path),
 		certificatePreview: (path): Promise<CertificatePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.certificate, path),
 		share: async (anchor) => {

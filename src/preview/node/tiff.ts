@@ -1,5 +1,6 @@
+import { loadDazziNativeCore } from "../../main/dazzi-native-core";
 import type { PreviewDocument } from "../shared/contract";
-import { datalessQuickLookPng, isDatalessFile } from "./provider-access";
+import { datalessQuickLookPng, isDatalessFile, withReadableFile } from "./provider-access";
 import { readPreviewFile } from "./read-file";
 import { convertWithSips, pixelSize, type PixelSize, type SipsConversion } from "./sips";
 /** The MIME type the converted bytes carry; the viewer keys on it to skip its own decoder. */
@@ -39,6 +40,21 @@ export async function readTiffPreview(path: string, deps: TiffDeps = {}): Promis
 	if (deps.run === undefined && (await isDatalessFile(path))) {
 		const thumb = await (deps.datalessThumbnail ?? datalessQuickLookPng)(path);
 		if (thumb !== null) return { ...info, mime: TIFF_PREVIEW_MIME, bytes: thumb };
+	}
+	// Primary path: decode + box-downscale + encode PNG natively on the libuv thread pool.
+	// Skipped when a test injects custom sips deps (`deps.run` / `deps.size`) so sips contract tests remain exact.
+	if (deps.run === undefined && deps.size === undefined && deps.decodeCap === undefined) {
+		const native = loadDazziNativeCore();
+		if (native !== null) {
+			try {
+				const png = await withReadableFile(path, (localPath) => native.decodeTiffPreviewNative(localPath, TIFF_DECODE_MAX_SIDE));
+				if (png !== null && png.byteLength > 0) {
+					return { ...info, mime: TIFF_PREVIEW_MIME, bytes: new Uint8Array(png.buffer, png.byteOffset, png.byteLength) };
+				}
+			} catch (error) {
+				console.warn(`[dazzi-core] decodeTiffPreviewNative failed for ${path}, falling back:`, error instanceof Error ? error.message : error);
+			}
+		}
 	}
 	const size = (deps.platform ?? process.platform) === "darwin" ? await (deps.size ?? pixelSize)(path) : null;
 	const shrink = size !== null && Math.max(size.width, size.height) > TIFF_DECODE_MAX_SIDE;

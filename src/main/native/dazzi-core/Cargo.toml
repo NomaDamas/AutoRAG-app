@@ -13,6 +13,14 @@ crate-type = ["cdylib"]
 napi = { version = "3", features = ["serde-json"] }
 napi-derive = "3"
 unicode-normalization = "0.1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+quick-xml = "0.37"
+encoding_rs = "0.8"
+png = "0.17"
+tiff = "0.9"
+tar = "0.4"
+flate2 = "1"
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
 
 [build-dependencies]
 napi-build = "2"

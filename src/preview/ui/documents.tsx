@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { renderAsync } from "docx-preview";
 import type { PreviewDocument } from "../shared/contract";
-import { readSheetPreview } from "../shared/sheet";
+import { readSheetPreview, type SheetPreview } from "../shared/sheet";
 import { rtfToText } from "../shared/rtf";
 import { decodeUtf8 } from "../shared/text-sample";
+import { useChrome } from "./chrome";
 import { FallbackView, Status } from "./fallback";
 
 function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -41,23 +42,82 @@ export function DocxView({ file }: { readonly file: PreviewDocument }): ReactEle
 	return <iframe className="ql__frame flex-1 self-stretch w-full h-full border-0 bg-window" sandbox="" title={file.name} srcDoc={srcdoc} />;
 }
 
+type SheetLoad =
+	| { readonly key: string; readonly ok: true; readonly preview: SheetPreview }
+	| { readonly key: string; readonly ok: false; readonly message: string };
+
 export function SheetView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const { t } = useTranslation();
+	const { bridge } = useChrome();
 	const bytes = file.bytes;
 	const [sheet, setSheet] = useState(0);
-	// Parsed once per file and sheet: a re-render must not read the workbook again.
-	const read = useMemo(() => {
+	const [queried, setQueried] = useState<SheetLoad | null>(null);
+
+	// Reset to the first sheet whenever a different file opens.
+	useEffect(() => {
+		setSheet(0);
+	}, [file.path]);
+
+	const useMainQuery = bytes === null && bridge.sheetPreview !== undefined;
+	const queryKey = `${file.path}:${file.modifiedAt}:${sheet}`;
+
+	useEffect(() => {
+		if (!useMainQuery || bridge.sheetPreview === undefined) return;
+		let cancelled = false;
+		bridge
+			.sheetPreview(file.path, sheet)
+			.then(
+				(preview) => {
+					if (!cancelled) setQueried({ key: queryKey, ok: true, preview });
+				},
+				(caught: unknown) => {
+					if (!cancelled) {
+						setQueried({
+							key: queryKey,
+							ok: false,
+							message: caught instanceof Error ? caught.message : t("quickLook.documents.sheetOpenFailed"),
+						});
+					}
+				},
+			);
+		return () => {
+			cancelled = true;
+		};
+	}, [useMainQuery, bridge, file.path, sheet, queryKey, t]);
+
+	// In-page bytes fallback (unit tests or callers supplying raw bytes directly).
+	const localRead = useMemo<SheetLoad | null>(() => {
 		if (bytes === null) return null;
 		try {
-			return { ok: true as const, preview: readSheetPreview(bytes, sheet) };
+			return { key: queryKey, ok: true, preview: readSheetPreview(bytes, sheet) };
 		} catch (caught) {
-			return { ok: false as const, message: caught instanceof Error ? caught.message : t("quickLook.documents.sheetOpenFailed") };
+			return { key: queryKey, ok: false, message: caught instanceof Error ? caught.message : t("quickLook.documents.sheetOpenFailed") };
 		}
-	}, [bytes, sheet, t]);
-	if (read === null) return <FallbackView file={file} note={t("quickLook.documents.sheetReadFailed")} />;
-	if (!read.ok) return <FallbackView file={file} note={read.message} />;
-	const { names, rows } = read.preview;
+	}, [bytes, sheet, queryKey, t]);
+
+	if (useMainQuery) {
+		if (queried === null || queried.key !== queryKey) return <Status>{t("quickLook.status.loading")}</Status>;
+		if (!queried.ok) return <FallbackView file={file} note={queried.message} />;
+		const { names, rows } = queried.preview;
+		if (names.length === 0) return <FallbackView file={file} note={t("quickLook.documents.sheetMissing")} />;
+		return renderSheetTable(names, rows, sheet, setSheet, t("quickLook.documents.previous"), t("quickLook.documents.next"));
+	}
+
+	if (localRead === null) return <FallbackView file={file} note={t("quickLook.documents.sheetReadFailed")} />;
+	if (!localRead.ok) return <FallbackView file={file} note={localRead.message} />;
+	const { names, rows } = localRead.preview;
 	if (names.length === 0) return <FallbackView file={file} note={t("quickLook.documents.sheetMissing")} />;
+	return renderSheetTable(names, rows, sheet, setSheet, t("quickLook.documents.previous"), t("quickLook.documents.next"));
+}
+
+function renderSheetTable(
+	names: readonly string[],
+	rows: readonly (readonly string[])[],
+	sheet: number,
+	setSheet: (update: (current: number) => number) => void,
+	prevLabel: string,
+	nextLabel: string,
+): ReactElement {
 	return (
 		<>
 			<div className="ql__tablewrap box-border self-stretch w-full h-auto m-0 p-16">
@@ -76,11 +136,11 @@ export function SheetView({ file }: { readonly file: PreviewDocument }): ReactEl
 			{names.length > 1 ? (
 				<div className="ql__pager flex flex-none self-stretch items-center justify-center gap-12 h-[40px] border-t border-divider bg-ql-sunk text-ink-muted text-meta [&_button]:h-icon-sm [&_button]:px-10 [&_button]:border [&_button]:border-border [&_button]:rounded-6 [&_button]:bg-window [&_button]:text-ink [&_button]:disabled:text-ink-faint">
 					<button type="button" disabled={sheet <= 0} onClick={() => setSheet((current) => current - 1)}>
-						{t("quickLook.documents.previous")}
+						{prevLabel}
 					</button>
 					<span>{names[sheet] ?? ""}</span>
 					<button type="button" disabled={sheet >= names.length - 1} onClick={() => setSheet((current) => current + 1)}>
-						{t("quickLook.documents.next")}
+						{nextLabel}
 					</button>
 				</div>
 			) : null}

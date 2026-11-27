@@ -47,6 +47,8 @@ import {
 	type QuickLookZoom,
 } from "../shared/contract";
 import { focusTextEntry as focusPreviewTextEntry } from "./text-entry-focus";
+import { previewSheetFile } from "./sheet";
+import { findPdfAnchorPages } from "./pdf-anchor";
 import { looksLikeText } from "../shared/text-sample";
 import { needsPlaybackCopy, type VideoPlaybackPlan } from "../shared/video-playback";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
@@ -920,6 +922,18 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
 		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
 		return previewData(shownPath(event, path).path, table);
+	});
+	ipc.handle(PREVIEW_CHANNELS.sheet, (event, path: unknown, sheetIndex: unknown) => {
+		if (typeof sheetIndex !== "number" || !Number.isInteger(sheetIndex) || sheetIndex < 0) {
+			throw new Error(t("quickLook.errors.invalidTarget"));
+		}
+		return previewSheetFile(shownPath(event, path).path, sheetIndex);
+	});
+	ipc.handle(PREVIEW_CHANNELS.pdfAnchorPages, (event, path: unknown, excerpts: unknown) => {
+		if (!Array.isArray(excerpts) || !excerpts.every((item): item is string => typeof item === "string")) {
+			throw new Error(t("quickLook.errors.invalidTarget"));
+		}
+		return findPdfAnchorPages(shownPath(event, path).path, excerpts);
 	});
 	ipc.handle(PREVIEW_CHANNELS.archive, (event, path: unknown) => {
 		const shown = shownPath(event, path);
