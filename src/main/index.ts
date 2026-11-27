@@ -43,7 +43,7 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
+import { attachQuickLook, hideQuickLookOf, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
 import { PREVIEW_CHANNELS } from "../preview/shared/contract";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
@@ -1513,6 +1513,7 @@ app.whenReady().then(async () => {
 		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
 		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
 		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
+		hidePreview: (owner) => hideQuickLookOf(owner),
 	});
 	quickSearchShortcut = createQuickSearchShortcut({
 		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),

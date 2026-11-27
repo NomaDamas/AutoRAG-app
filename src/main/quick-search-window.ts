@@ -38,6 +38,8 @@ export interface QuickSearchWindowDeps {
 	readonly setRecording: (recording: boolean) => void;
 	/** Pre-creates the hidden Quick Look panel owned by the launcher window; returns the panel's window. */
 	readonly attachPreview: (owner: BrowserWindow) => BrowserWindow;
+	/** Closes the launcher's Quick Look panel, if it is open. */
+	readonly hidePreview: (owner: BrowserWindow) => void;
 }
 
 /** How long focus may take to land on the other window before a blur counts as leaving Dazzi. */
@@ -140,6 +142,9 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 		// person summoned the launcher over; the next summon restores the window before showing it. On macOS the
 		// launcher is a non-activating `panel`, so hiding only this window hands key focus back without calling
 		// `app.hide()` (which would hide every other open Dazzi window too).
+		// The preview closes first, while the launcher is still up: on Windows it is an owned window, and one the system
+		// hides along with its minimizing owner stayed drawn on screen as a blank box over every app after it was gone.
+		deps.hidePreview(current);
 		if (mode === "restore" && process.platform === "win32") current.minimize();
 		current.hide();
 	};

@@ -103,7 +103,7 @@ vi.mock("electron", () => electron);
 
 import { createQuickSearchWindow } from "../src/main/quick-search-window";
 import { QUICK_SEARCH_CHANNELS } from "../src/shared/quick-search-contract";
-function launcher() {
+function launcher(hidePreview: (owner: unknown) => void = () => undefined) {
 	electron.BrowserWindow.all.length = 0;
 	const controller = createQuickSearchWindow({
 		preload: "preload.js",
@@ -116,6 +116,7 @@ function launcher() {
 		status: () => ({}) as never,
 		setRecording: () => undefined,
 		attachPreview: () => new electron.BrowserWindow() as never,
+		hidePreview,
 	});
 	const window = electron.BrowserWindow.all[0];
 	if (window === undefined) throw new Error("the launcher window was not created");
@@ -192,5 +193,28 @@ describe("quick-search launcher dismiss", () => {
 		expect(window.requestClose()).toBe(false);
 		expect(window.isVisible()).toBe(false);
 		expect(electron.app.hides).toBe(0);
+	});
+});
+
+describe("quick-search launcher preview", () => {
+	it("closes the Quick Look panel before the launcher minimizes, so Windows never hides it along with its owner", () => {
+		const platform = Object.getOwnPropertyDescriptor(process, "platform");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		try {
+			const order: string[] = [];
+			const { window, controller } = launcher((owner) => order.push(`preview:minimized=${(owner as { minimized: boolean }).minimized}:visible=${(owner as { visible: boolean }).visible}`));
+			window.visible = false;
+			controller.toggle();
+			const minimize = window.minimize.bind(window);
+			window.minimize = () => {
+				order.push("minimize");
+				minimize();
+			};
+			electron.ipcMain.emit(QUICK_SEARCH_CHANNELS.hide, { sender: window.webContents }, "restore");
+			expect(order).toEqual(["preview:minimized=false:visible=true", "minimize"]);
+			expect(window.isVisible()).toBe(false);
+		} finally {
+			if (platform !== undefined) Object.defineProperty(process, "platform", platform);
+		}
 	});
 });
