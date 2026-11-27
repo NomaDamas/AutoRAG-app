@@ -186,6 +186,7 @@ import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv, type
 import { DEFAULT_FILE_MANAGER_CHANNELS } from "../shared/default-file-manager-contract";
 import { createDefaultFileManagerService, parseExternalOpenArgv } from "./default-file-manager";
 import { installMacRevealHook } from "./mac-reveal-hook";
+import { createMacFinderWatcher, type MacFinderWatcher } from "./mac-finder-watcher";
 import { createWindowsExplorerWatcher, type WindowsExplorerWatcher } from "./windows-explorer-watcher";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
@@ -576,8 +577,16 @@ app.whenReady().then(async () => {
 		env: process.env,
 	});
 	await credentials.load();
-	// Windows Explorer watcher (`SHOpenFolderAndSelectItems` interceptor); created before fsWorker so intentional
-	// "Show in Explorer" calls from inside Dazzi can briefly suppress interception.
+	// OS file-manager window watchers; created before fsWorker so intentional
+	// "Reveal in Finder / Show in Explorer" calls from inside Dazzi can briefly suppress interception.
+	const macFinderWatcher: MacFinderWatcher = createMacFinderWatcher({
+		platform: process.platform,
+		onIntercept: (event) => {
+			const request = normalizeOsLaunchRequest({ action: event.action, paths: [event.path] });
+			if (request !== null) void osRequests.push(request);
+		},
+		onError: (message) => console.warn("[default-file-manager] finder watcher:", message),
+	});
 	const windowsExplorerWatcher: WindowsExplorerWatcher = createWindowsExplorerWatcher({
 		platform: process.platform,
 		onIntercept: (event) => {
@@ -591,11 +600,12 @@ app.whenReady().then(async () => {
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
 	// pieces it lends the worker: thumbnails, the shell, the clipboard.
 	const workerShell =
-		process.platform === "win32"
+		process.platform === "win32" || process.platform === "darwin"
 			? {
 					trashItem: (target: string) => shell.trashItem(target),
 					showItemInFolder: (target: string) => {
-						// Dazzi intentionally asked Windows Explorer to reveal this item; do not intercept it back.
+						// Dazzi intentionally asked Finder/Explorer to reveal this item; do not intercept it back.
+						macFinderWatcher.suppressFor(2500);
 						windowsExplorerWatcher.suppressFor(2500);
 						shell.showItemInFolder(target);
 					},
@@ -774,6 +784,7 @@ app.whenReady().then(async () => {
 		execPath: process.execPath,
 		appArgs: [...(app.isPackaged ? [] : [app.getAppPath()]), `--user-data-dir=${app.getPath("userData")}`],
 		macRevealHookLoaded: macRevealHook.loaded,
+		macWatcher: macFinderWatcher,
 		windowsWatcher: windowsExplorerWatcher,
 		run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
 	});

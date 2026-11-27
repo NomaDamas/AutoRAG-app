@@ -2056,6 +2056,8 @@
       "defaultFileManagerHintWin": "폴더 열기와 Win+E 단축키가 기본 탐색기 대신 Dazzi에서 열립니다. 제어판 등 시스템 가상 폴더는 안전하게 탐색기로 연결됩니다.",
       "defaultFileManagerInterceptReveal": "다른 앱의 ‘폴더에서 보기’까지 가로채기",
       "defaultFileManagerInterceptRevealHint": "Chrome·VS Code 등에서 파일 위치 열기를 누르면 열리는 탐색기 창을 감지해 Dazzi에서 해당 파일을 바로 선택해 엽니다.",
+      "defaultFileManagerInterceptMac": "바탕화면 폴더·새 Finder 창도 Dazzi로 열기",
+      "defaultFileManagerInterceptMacHint": "바탕화면에서 폴더를 더블클릭하거나 새 Finder 창을 열면 Finder 창을 닫고 Dazzi에서 바로 엽니다. macOS 자동화(Finder) 권한이 필요합니다.",
       "defaultFileManagerError": "기본 파일 관리자 설정을 변경하지 못했습니다: {{error}}",
       "autoUpdates": "업데이트 자동 설치",
       "autoUpdatesHint": "새 버전을 백그라운드에서 내려받고, 앱을 종료할 때 설치합니다.",

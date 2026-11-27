@@ -121,7 +121,7 @@ describe("NotificationCenter default file manager prompt", () => {
 			await flush();
 		});
 
-		expect(applyMock).toHaveBeenCalledWith({ enabled: true, interceptReveal: false });
+		expect(applyMock).toHaveBeenCalledWith({ enabled: true, interceptReveal: true });
 		// Prompt disappears once enabled.
 		expect(document.body.querySelector(".notification-center")?.textContent).not.toContain("Dazzi를 기본 파일 관리자로 설정할까요?");
 	});

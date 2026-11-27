@@ -93,7 +93,7 @@ export interface AppSettings {
 	readonly osMenuIntegration: boolean;
 	/** Dazzi is registered as the OS default file manager (macOS NSFileViewer + public.folder; Windows Folder/Directory/Win+E). */
 	readonly defaultFileManager: boolean;
-	/** Windows only: run the lightweight Explorer window watcher to intercept `SHOpenFolderAndSelectItems` ("Show in folder") calls. */
+	/** Run the lightweight OS window watcher (macOS Finder windows incl. Desktop folders; Windows Explorer `SHOpenFolderAndSelectItems`). */
 	readonly defaultFileManagerInterceptReveal: boolean;
 	/**
 	 * Disk permission mode for the AI Search agent (librarian v2.15):
