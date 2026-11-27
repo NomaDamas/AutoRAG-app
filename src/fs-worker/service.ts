@@ -11,7 +11,7 @@
 
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
-import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
+import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange, FsVersionHistoryMemberInput } from "../shared/fs-contract";
 import { CONTENT_SEARCH_MAX_HITS, type ContentSearchResult } from "../shared/content-search-contract";
 import { SOURCE_SEARCH_MAX_HITS } from "../shared/source-search-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
@@ -349,6 +349,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		copyPathsToClipboard: (args) => fsService.copyPathsToClipboard(stringsArg(args, 0, "paths")),
 		versionFamilies: () => versionFamilies.result(),
 		refreshVersionFamilies: () => versionFamilies.refresh(),
+		versionHistory: (args) => {
+			if (!Array.isArray(args[0])) throw new TypeError("members must be an array");
+			return librarian.versionHistory(args[0] as readonly FsVersionHistoryMemberInput[]);
+		},
 		setScanInterval: (args) => {
 			if (typeof args[0] !== "number" || !Number.isFinite(args[0])) throw new TypeError("interval must be a number of minutes");
 			scanIntervalMinutes = args[0];

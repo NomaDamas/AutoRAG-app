@@ -97,6 +97,14 @@ const config = {
 			NSRemovableVolumesUsageDescription: "Dazzi reads connected disks so you can browse and search your files.",
 			NSNetworkVolumesUsageDescription: "Dazzi reads connected network volumes so you can browse and search your files.",
 			NSMicrophoneUsageDescription: "Dazzi listens only while you press the microphone button, to turn your voice into a question.",
+			CFBundleDocumentTypes: [
+				{
+					CFBundleTypeName: "Folder",
+					CFBundleTypeRole: "Viewer",
+					LSHandlerRank: "Alternate",
+					LSItemContentTypes: ["public.folder"],
+				},
+			],
 		},
 		// Without a Developer ID the bundle is ad-hoc signed ("-"): Apple Silicon refuses to run unsigned code.
 		...(hasMacSigning ? {} : { identity: "-" }),

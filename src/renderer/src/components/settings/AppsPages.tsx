@@ -204,8 +204,12 @@ export function IndexingPage({
 				if (live) setSchedule(status);
 			})
 			.catch(() => undefined);
+		const unsubscribe = settings.onRefreshScheduleChanged?.((status) => {
+			if (live) setSchedule(status);
+		});
 		return () => {
 			live = false;
+			unsubscribe?.();
 		};
 	}, [sources]);
 

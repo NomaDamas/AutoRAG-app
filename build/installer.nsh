@@ -20,3 +20,15 @@
     Delete "$INSTDIR\resources\payload.tar"
   donePayload:
 !macroend
+
+; Restore Windows File Explorer as the default folder and Win+E handler when Dazzi is uninstalled,
+; so removing Dazzi never leaves broken HKCU\Software\Classes commands behind.
+!macro customUnInstall
+  DeleteRegKey HKCU "Software\Classes\Folder\shell\open"
+  DeleteRegKey HKCU "Software\Classes\Directory\shell\open"
+  DeleteRegKey HKCU "Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}"
+  DeleteRegKey HKCU "Software\Classes\*\shell\AutoRAG.ask"
+  DeleteRegKey HKCU "Software\Classes\*\shell\AutoRAG.reveal"
+  DeleteRegKey HKCU "Software\Classes\Directory\shell\AutoRAG.ask"
+  DeleteRegKey HKCU "Software\Classes\Directory\shell\AutoRAG.reveal"
+!macroend

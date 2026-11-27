@@ -14,14 +14,13 @@ import {
 	startingBatchSize,
 } from "./embedding-batch";
 import { ensureEmbeddingForConfig, localModelMissing } from "./embedding-daemon";
-import { createMinSyncWatchdog, EMBEDDING_STALL_RETRIES, runWithStallRetry } from "./minsync-watchdog";
 import { ensureMessengerConfigsFor } from "./messenger-config";
 import { takeSharedParseFailures } from "./parse-isolation";
 import { runWithRecovery } from "./refresh-recovery";
 import { findUnavailableRoots } from "./search-roots";
 import { runWithoutSemanticIndexing } from "./semantic-policy";
 import { t } from "../shared/i18n/core";
-import { embedderStallReport, refreshFailureReport, reportError } from "./error-report-core";
+import { refreshFailureReport, reportError } from "./error-report-core";
 
 /**
  * The single AutoRAG index-refresh path shared by Settings (manual refresh) and
@@ -184,26 +183,17 @@ async function runRefresh(
 			recovered = { retries: recovered.retries + outcome.retries, quarantined: [...new Set([...recovered.quarantined, ...outcome.quarantined])], code: outcome.code ?? recovered.code };
 			return outcome.value;
 		};
-		// A hung embedder never returns on its own: the watchdog kills it and the sync is retried
-		// (parsing is incremental, so a retry repeats only the embedding).
-		const stallRetried = (): Promise<{ value: AutoRAGRefreshResult; retries: number }> =>
-			runWithStallRetry(refreshOnce, (outcome) => outcome.minsync?.ok !== false, createMinSyncWatchdog(), EMBEDDING_STALL_RETRIES);
 		// Keyword-only mode also turns the datasources' own embedding steps off for the duration of the run.
-		const { value: result, retries } = await (semantic ? stallRetried() : runWithoutSemanticIndexing(stallRetried));
+		// MinSync manages its own per-batch embedding deadlines (exit 7) and durable stage/sync resumption;
+		// the app must not kill MinSync children on CPU idle (both `minsync stage` and HTTP-backed `minsync sync`
+		// legitimately sit at ~0 CPU while waiting on parsing or the embedding daemon).
+		const result = await (semantic ? refreshOnce() : runWithoutSemanticIndexing(refreshOnce));
 		if (recovered.retries > 0 || recovered.quarantined.length > 0) {
 			diagnostics.push({
 				code: recovered.quarantined.length > 0 ? "files-left-out" : "refresh-retried",
 				severity: "warning",
 				...(recovered.quarantined.length > 0 ? { count: recovered.quarantined.length } : {}),
 				message: t(recovered.quarantined.length > 0 ? "main.refresh.filesLeftOut" : "main.refresh.retried", { files: recovered.quarantined.length, retries: recovered.retries, code: recovered.code ?? "" }),
-			});
-		}
-		if (retries > 0) {
-			reportError(embedderStallReport(retries));
-			diagnostics.push({
-				code: "minsync-stalled-retried",
-				severity: "warning",
-				message: `The embedder stopped making progress and was restarted ${retries} time(s).`,
 			});
 		}
 		// The librarian reports every failed parse with one generic message; what killed the file is only known here.
@@ -238,12 +228,7 @@ async function runRefresh(
 				const next = smallerBatchSize(batch);
 				if (next === null) break;
 				batch = next;
-				const { value: retry } = await runWithStallRetry(
-					() => new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync(),
-					(outcome) => outcome?.ok !== false,
-					createMinSyncWatchdog(),
-					EMBEDDING_STALL_RETRIES,
-				);
+				const retry = await new AutoRAGLite({ ...effective, minSync: { ...effective.minSync, embedder: { ...embedder, batchSize: batch } } }).syncMinSync();
 				minsyncOk = retry?.ok;
 				minsyncReason = retry?.reason;
 				const baseDiagnostics: ConfigRefreshDiagnostic[] =

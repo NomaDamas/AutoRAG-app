@@ -73,6 +73,7 @@ import { createIndexReadiness } from "./index-readiness";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import type { RefreshLockHolder } from "./refresh-lock";
 import { schedulePaths } from "./refresh-schedule";
+import { createRefreshScheduleMonitor } from "./refresh-schedule-monitor";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
@@ -165,11 +166,14 @@ import {
 	registerModelDownloadIpcHandlers,
 	registerOnboardingIpcHandlers,
 	registerOsRequestIpcHandlers,
+	registerDefaultFileManagerIpcHandlers,
 	registerSearchIpcHandlers,
 	registerServicesIpcHandlers,
 	registerSettingsIpcHandlers,
+	registerVersionDiffSummaryIpcHandlers,
 	registerVoiceIpcHandlers,
 } from "./ipc";
+import { createVersionDiffSummaryService } from "./version-diff-summary";
 import { createActionService } from "./action-service";
 import { createVoiceService, systemMicrophoneAccess } from "./voice-service";
 import { readDazziPlanCredential } from "./dazzi-plan-credential";
@@ -177,9 +181,13 @@ import { createFileeConversionService, readFileeSettings } from "./conversion-se
 import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
+import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv, type OsLaunchRequest } from "../shared/os-request-contract";
+import { DEFAULT_FILE_MANAGER_CHANNELS } from "../shared/default-file-manager-contract";
+import { createDefaultFileManagerService, parseExternalOpenArgv } from "./default-file-manager";
+import { installMacRevealHook } from "./mac-reveal-hook";
+import { createWindowsExplorerWatcher, type WindowsExplorerWatcher } from "./windows-explorer-watcher";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createQuickSearchShortcut, type QuickSearchShortcut } from "./quick-search-shortcut";
@@ -421,22 +429,58 @@ async function listMacDatalessPaths(root: string): Promise<ReadonlySet<string>> 
 app.commandLine.appendSwitch("enable-features", [app.commandLine.getSwitchValue("enable-features"), "JXLImageFormat"].filter((value) => value !== "").join(","));
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
-// A menu request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.
-if (parseOsRequestArgv(process.argv) !== null) app.dock?.hide();
+// A menu/default-manager request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.
+const externalLaunch = parseExternalOpenArgv(process.argv, {
+	isPackaged: app.isPackaged,
+	platform: process.platform,
+	appPath: app.getAppPath(),
+});
+if (parseOsRequestArgv(process.argv) !== null || externalLaunch !== null) app.dock?.hide();
 let onOsRequestQueued: () => void = () => undefined;
+/** macOS `open-file` / AppleEvent `misc`/`mvis` arrivals before `osRequests` is ready wait here. */
+const earlyExternalRequests: OsLaunchRequest[] = [];
+let pushExternalRequest: (request: OsLaunchRequest) => void = (request) => {
+	earlyExternalRequests.push(request);
+};
+
+// macOS sends `open-file` when Dazzi is the default handler for `public.folder` (e.g. `open /some/dir`).
+app.on("open-file", (event, filePath) => {
+	event.preventDefault();
+	const request = normalizeOsLaunchRequest({ action: "open", paths: [filePath] });
+	if (request !== null) pushExternalRequest(request);
+});
 
 app.whenReady().then(async () => {
+	// Windows virtual shell targets (`::{CLSID}`, Control Panel, Network, etc.) must hand back to explorer.exe.
+	if (process.platform === "win32" && externalLaunch?.kind === "fallback-explorer") {
+		const child = spawn("explorer.exe", [externalLaunch.rawTarget], { detached: true, stdio: "ignore", windowsHide: false });
+		child.unref();
+		app.exit(0);
+		return;
+	}
 	nativeTheme.on("updated", () => {
 		sendToAllWindows(APPEARANCE_CHANNELS.changed, nativeTheme.shouldUseDarkColors ? "dark" : "light");
 	});
-	// A menu request goes to the app that is already running: the request process hands it over and exits.
-	const launchRequest = parseOsRequestArgv(process.argv);
+	// A menu or default-file-manager request goes to the app that is already running: the helper process hands it over and exits.
+	const externalOsRequest: OsLaunchRequest | null =
+		externalLaunch?.kind === "paths"
+			? normalizeOsLaunchRequest({ action: "open", paths: externalLaunch.paths })
+			: externalLaunch?.kind === "new-window"
+				? { action: "focus", paths: [] }
+				: null;
+	const launchRequest = parseOsRequestArgv(process.argv) ?? externalOsRequest;
 	const endpoint = osRequestEndpoint(app.getPath("userData"));
 	if (launchRequest !== null && (await sendOsRequest(endpoint, launchRequest))) {
 		app.exit(0);
 		return;
 	}
 	const osRequests = createOsRequestService({ kindOf: diskKindOf, onQueued: () => onOsRequestQueued() });
+	pushExternalRequest = (request) => void osRequests.push(request);
+	const macRevealHook = installMacRevealHook((paths) => {
+		const request = normalizeOsLaunchRequest({ action: "reveal", paths });
+		if (request !== null) void osRequests.push(request);
+	});
+	app.once("will-quit", () => macRevealHook.uninstall());
 	const listener = await listenForOsRequests(endpoint, (request) => void osRequests.push(request));
 	// Explorer starts one process per selected file; the ones that lost the race for the socket hand over to the winner.
 	if (listener === null && launchRequest !== null && (await sendOsRequest(endpoint, launchRequest))) {
@@ -516,10 +560,33 @@ app.whenReady().then(async () => {
 		env: process.env,
 	});
 	await credentials.load();
+	// Windows Explorer watcher (`SHOpenFolderAndSelectItems` interceptor); created before fsWorker so intentional
+	// "Show in Explorer" calls from inside Dazzi can briefly suppress interception.
+	const windowsExplorerWatcher: WindowsExplorerWatcher = createWindowsExplorerWatcher({
+		platform: process.platform,
+		onIntercept: (event) => {
+			const request = normalizeOsLaunchRequest({ action: event.action, paths: [event.path] });
+			if (request !== null) void osRequests.push(request);
+		},
+		onError: (message) => console.warn("[default-file-manager] explorer watcher:", message),
+	});
 	// Listings, watches, Finder metadata, places, dupey scans, and the index
 	// badges run in the fs worker, off this event loop; a native fault there
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
 	// pieces it lends the worker: thumbnails, the shell, the clipboard.
+	const workerShell =
+		process.platform === "win32"
+			? {
+					trashItem: (target: string) => shell.trashItem(target),
+					showItemInFolder: (target: string) => {
+						// Dazzi intentionally asked Windows Explorer to reveal this item; do not intercept it back.
+						windowsExplorerWatcher.suppressFor(2500);
+						shell.showItemInFolder(target);
+					},
+					openPath: (target: string) => shell.openPath(target),
+					openExternal: (url: string) => shell.openExternal(url),
+				}
+			: shell;
 	const workerHost = createFsWorkerHost({
 		config: {
 			userDataDir: app.getPath("userData"),
@@ -527,7 +594,7 @@ app.whenReady().then(async () => {
 			...(fixtureHome === null ? {} : { homeDir: fixtureHome }),
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
-		shell,
+		shell: workerShell,
 		clipboard: createOsClipboard({ clipboard, ClipboardItem }),
 		icons: iconProvider,
 		// A fresh worker starts in Korean; give it the current Interface language.
@@ -692,6 +759,15 @@ app.whenReady().then(async () => {
 			await execFileAsync(command, [...args], { windowsHide: true });
 		},
 	});
+	const defaultFileManager = createDefaultFileManagerService({
+		platform: process.platform,
+		isPackaged: app.isPackaged,
+		execPath: process.execPath,
+		appArgs: [...(app.isPackaged ? [] : [app.getAppPath()]), `--user-data-dir=${app.getPath("userData")}`],
+		macRevealHookLoaded: macRevealHook.loaded,
+		windowsWatcher: windowsExplorerWatcher,
+		run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
+	});
 	const autoRagConfig = createAutoRagConfigService({ env: process.env, cwd: process.cwd() });
 	const providerAuth = createProviderAuthService({
 		send: (event) => sendToMainWindow(SETTINGS_CHANNELS.providerLoginEvent, event),
@@ -818,6 +894,15 @@ app.whenReady().then(async () => {
 		jobPath: join(import.meta.dirname, "refresh-job.js"),
 		configPath: autoragConfigPath,
 	});
+	const refreshScheduleMonitor = createRefreshScheduleMonitor({
+		scheduler: refreshScheduler,
+		onStatus: (status) => sendToAllWindows(SETTINGS_CHANNELS.refreshScheduleChanged, status),
+	});
+	const monitoredRefreshScheduler = {
+		status: () => refreshScheduleMonitor.status(),
+		reconcile: () => refreshScheduleMonitor.apply(),
+		remove: () => refreshScheduler.remove(),
+	};
 	const settingsService = createSettingsService({
 		directory: join(app.getPath("userData"), "settings"),
 		// A first run (no stored choice) follows the OS language; onboarding shows it before the user could set one.
@@ -832,7 +917,7 @@ app.whenReady().then(async () => {
 		models: createModelStatusService({ env: process.env, cwd: process.cwd() }),
 		config: autoRagConfig,
 		refreshConfig: (methods) => runLocalIndex("manual-refresh", methods, busyResult(methods), recordLocalRun),
-		refreshScheduler,
+		refreshScheduler: monitoredRefreshScheduler,
 		credentials,
 		providers: providerAuth,
 		embedding: embeddingService,
@@ -843,6 +928,18 @@ app.whenReady().then(async () => {
 				if (!previous.osMenuIntegration || next.language !== previous.language) await osMenu.install(menuLabels(next.language));
 			} else if (previous.osMenuIntegration) {
 				await osMenu.uninstall();
+			}
+		},
+		applyDefaultFileManager: async (next, previous) => {
+			if (
+				next.defaultFileManager !== previous.defaultFileManager ||
+				next.defaultFileManagerInterceptReveal !== previous.defaultFileManagerInterceptReveal
+			) {
+				const status = await defaultFileManager.apply({
+					enabled: next.defaultFileManager,
+					interceptReveal: next.defaultFileManagerInterceptReveal,
+				});
+				sendToAllWindows(DEFAULT_FILE_MANAGER_CHANNELS.changed, status);
 			}
 		},
 		onSettingsChanged: (settings) => {
@@ -875,6 +972,30 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
+	registerDefaultFileManagerIpcHandlers({
+		status: async () => {
+			const current = await settingsService.get();
+			return defaultFileManager.status({
+				enabled: current.defaultFileManager,
+				interceptReveal: current.defaultFileManagerInterceptReveal,
+			});
+		},
+		apply: async (request) => {
+			const current = await settingsService.get();
+			const nextIntercept = request.interceptReveal ?? current.defaultFileManagerInterceptReveal;
+			// Persist via settingsService (which calls applyDefaultFileManager and emits DEFAULT_FILE_MANAGER_CHANNELS.changed).
+			const updated = await settingsService.set({
+				defaultFileManager: request.enabled,
+				defaultFileManagerInterceptReveal: nextIntercept,
+			});
+			const status = await defaultFileManager.status({
+				enabled: updated.defaultFileManager,
+				interceptReveal: updated.defaultFileManagerInterceptReveal,
+			});
+			sendToAllWindows(DEFAULT_FILE_MANAGER_CHANNELS.changed, status);
+			return status;
+		},
+	});
 	registerAnalyticsIpcHandlers(analytics);
 	void settingsService.get().then((settings) => {
 		previousSettings ??= settings;
@@ -934,11 +1055,17 @@ app.whenReady().then(async () => {
 	registerOsRequestIpcHandlers(osRequests);
 	// The in-app right-click → 서비스 submenu: what macOS offers for the selection, and performing one.
 	registerServicesIpcHandlers(createServicesService());
+	registerVersionDiffSummaryIpcHandlers(
+		createVersionDiffSummaryService({
+			defaultLanguage: () => currentLanguage,
+		}),
+	);
 	// Renaming a file to another format's extension converts it (Filee); the settings are the shared AutoRAG config's `filee` block.
 	registerConversionIpcHandlers(createFileeConversionService(() => readFileeSettings(autoragConfigPath())));
 	// Remote access: the same Finder UI served to a browser when the setting is
 	// on, each session with its own fs-worker client and its own watches.
 	const remoteTargets = {
+		fs: { summarizeVersionDiff: FS_CHANNELS.summarizeVersionDiff },
 		settings: SETTINGS_CHANNELS,
 		search: SEARCH_CHANNELS,
 		interaction: INTERACTION_CHANNELS,
@@ -1376,6 +1503,7 @@ app.whenReady().then(async () => {
 		sendToMainWindow(OS_REQUEST_CHANNELS.available, null);
 	};
 	if (launchRequest !== null) void osRequests.push(launchRequest);
+	for (const early of earlyExternalRequests.splice(0)) void osRequests.push(early);
 	// The quick-search launcher: a system-wide shortcut summons it over any app (Settings → General).
 	const launcher: QuickSearchWindow = createQuickSearchWindow({
 		preload: join(import.meta.dirname, "../preload/quick-search.mjs"),
@@ -1414,14 +1542,20 @@ app.whenReady().then(async () => {
 		// Refresh on every start: the executable path or interface language may have changed.
 		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));
 	}
+	if (settings.defaultFileManager) {
+		defaultFileManager
+			.syncOnStartup({
+				enabled: settings.defaultFileManager,
+				interceptReveal: settings.defaultFileManagerInterceptReveal,
+			})
+			.catch((error: unknown) => console.error("[default-file-manager] startup sync failed:", error));
+	}
+	app.once("will-quit", () => defaultFileManager.dispose());
 	app.once("will-quit", () => void providerAuthService?.dispose());
-	// Re-time or remove an OS refresh job the user already enabled. Installing one is only ever the result of the user choosing a cadence.
-	void refreshScheduler
-		.status()
-		.then((status) => (status.installed ? refreshScheduler.reconcile() : status))
-		.then((status) => {
-			if (status.error !== null) console.error("AutoRAG background refresh scheduling failed", status.error);
-		});
+	// Audit the OS refresh job on startup and periodically: self-heal a missing/outdated job when the config wants one,
+	// and broadcast schedule status changes so the Notification Center surfaces stalled/failing/conflicting routines.
+	const stopRefreshScheduleMonitor = refreshScheduleMonitor.start();
+	app.once("will-quit", stopRefreshScheduleMonitor);
 	app.once("will-quit", () => void listener?.close());
 	// The worker's native watcher must finish unsubscribing before its Node
 	// environment is torn down (an unsubscribe completing inside

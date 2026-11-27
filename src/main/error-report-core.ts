@@ -222,13 +222,3 @@ export function datasourceFailureReport(type: string, error: string, durationMs:
 		extra: { error: text, durationMs },
 	};
 }
-
-/** The embedder used no CPU for minutes; the watchdog killed it and the sync was started again `retries` times. */
-export function embedderStallReport(retries: number): ErrorReport {
-	return {
-		title: "Embedder hung and was restarted",
-		fingerprint: ["embedder-stalled"],
-		tags: { "index.step": "minsync" },
-		extra: { retries },
-	};
-}

@@ -20,11 +20,12 @@ import { t } from "../shared/i18n/core";
  */
 
 /**
- * Searches the log needs before a model can be fitted. The librarian's `MIN_TRAINING_RUNS`; `status` does not report it,
- * so the window's progress bar reads it here. The reason a training attempt returns is the librarian's own sentence and
- * always has the last word.
+ * Searches the log needs before a model can be fitted. Matches the librarian's `MIN_TRAINING_RUNS`
+ * (raised to 300 in librarian v2.15 / AutoRAG#2224); `status` does not report it, so the window's
+ * progress bar reads it here. The reason a training attempt returns is the librarian's own sentence
+ * and always has the last word.
  */
-export const MIN_TRAINING_RUNS = 100;
+export const MIN_TRAINING_RUNS = 300;
 
 /** Fitting a model on a large log is far slower than reading a status, so it gets a leash of its own. */
 const TRAIN_TIMEOUT_MS = 10 * 60_000;
@@ -78,7 +79,15 @@ function holdoutOf(value: unknown): LtrHoldout | null {
 	const baseline = scores(value.baseline);
 	const model = scores(value.model);
 	const interval = numberPair(value.deltaMrrCi95);
-	return baseline === null || model === null || interval === null ? null : { queries: value.queries, baseline, model, deltaMrrCi95: interval };
+	if (baseline === null || model === null || interval === null) return null;
+	const ndcgInterval = numberPair(value.deltaNdcg10Ci95);
+	return {
+		queries: value.queries,
+		baseline,
+		model,
+		deltaMrrCi95: interval,
+		...(ndcgInterval === null ? {} : { deltaNdcg10Ci95: ndcgInterval }),
+	};
 }
 
 /** A model the window can show; null for an entry the librarian wrote in a shape this app does not know. */

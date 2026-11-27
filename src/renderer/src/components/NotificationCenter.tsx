@@ -7,11 +7,19 @@ import { Bell, Clock, Info, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import type { DataSourceRow } from "../../../shared/settings-contract";
+import type { DataSourceRow, RefreshScheduleStatus } from "../../../shared/settings-contract";
+import type { DefaultFileManagerStatus } from "../../../shared/default-file-manager-contract";
+import { evaluateRefreshScheduleHealth, type RefreshScheduleHealthIssue } from "../../../shared/refresh-schedule-health";
 import type { SettingsCategory } from "./SettingsView";
+import type { SettingsNavigationOptions } from "../state/settings-navigation";
 import { startErrorFix } from "../hooks/useErrorFix";
 import { retryIndexProblem, useIndexProblem } from "../hooks/useIndexProblem";
 import { cn } from "../lib/cn";
+import {
+	DEFAULT_FILE_MANAGER_NOTICE_ID,
+	DEFAULT_FILE_MANAGER_NOTICE_SIGNATURE,
+	shouldPromptDefaultFileManager,
+} from "../state/default-file-manager-notice";
 import { describeIndexProblem } from "../state/index-problem";
 import {
 	clearPastNotices,
@@ -135,37 +143,111 @@ const BELL_DOT_CUTOUT = {
 export function NotificationCenter({
 	onOpenAiSettings,
 	onOpenSettingsPage,
+	onboardingPending = false,
 }: {
 	/** The index problem that wants another embedding opens Settings → AI. */
 	readonly onOpenAiSettings?: (() => void) | undefined;
-	/** Opens one Settings page by its category (`general`, `source:<alias>`, …). */
-	readonly onOpenSettingsPage?: ((category: SettingsCategory) => void) | undefined;
+	/** Opens one Settings page by its category (`general`, `indexing`, `source:<alias>`, …), optionally pre-filling its AI assistant. */
+	readonly onOpenSettingsPage?: ((category: SettingsCategory, options?: SettingsNavigationOptions) => void) | undefined;
+	/** True while first-run onboarding has not finished yet. */
+	readonly onboardingPending?: boolean | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const notifications = useNotifications();
 	const problem = useIndexProblem();
 	const [sources, setSources] = useState<readonly DataSourceRow[]>([]);
+	const [allSources, setAllSources] = useState<readonly DataSourceRow[]>([]);
+	const [schedule, setSchedule] = useState<RefreshScheduleStatus | null>(null);
+	const [signedIn, setSignedIn] = useState(false);
+	const [dfmStatus, setDfmStatus] = useState<DefaultFileManagerStatus | null>(null);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 	const [anchor, setAnchor] = useState<{ readonly left: number; readonly bottom: number } | null>(null);
 	const open = notifications.open;
 	const close = (): void => setNotificationCenterOpen(false);
 
-	// Connections that need attention: read on start and every time the panel opens.
+	// Track account sign-in state and default-file-manager registration so the prompt appears once onboarding + login finish.
 	useEffect(() => {
 		let live = true;
-		const settings = window.autorag?.settings;
-		if (settings === undefined) return;
-		settings
-			.sourcesList()
-			.then((snapshot) => {
-				if (live) setSources(snapshot.sources.filter((row) => row.enabled && row.status === "attention"));
+		const account = window.autorag?.account;
+		if (account !== undefined) {
+			void account
+				.status()
+				.then((snapshot) => {
+					if (live) setSignedIn(snapshot.state === "signedIn");
+				})
+				.catch(() => undefined);
+			const offAccount = account.onChanged((snapshot) => {
+				if (live) setSignedIn(snapshot.state === "signedIn");
+			});
+			const dfm = window.autorag?.defaultFileManager;
+			let offDfm: (() => void) | undefined;
+			if (dfm !== undefined) {
+				void dfm
+					.status()
+					.then((next) => {
+						if (live) setDfmStatus(next);
+					})
+					.catch(() => undefined);
+				offDfm = dfm.onChange((next) => {
+					if (live) setDfmStatus(next);
+				});
+			}
+			return () => {
+				live = false;
+				offAccount();
+				offDfm?.();
+			};
+		}
+		return () => {
+			live = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		if (!open) return;
+		let live = true;
+		void window.autorag?.defaultFileManager
+			?.status()
+			.then((next) => {
+				if (live) setDfmStatus(next);
 			})
 			.catch(() => undefined);
 		return () => {
 			live = false;
 		};
 	}, [open]);
+
+	// Connections that need attention + schedule health: read on start and every time the panel opens.
+	useEffect(() => {
+		let live = true;
+		const settings = window.autorag?.settings;
+		if (settings === undefined) return;
+		settings
+			.sourcesList?.()
+			.then((snapshot) => {
+				if (!live) return;
+				setAllSources(snapshot.sources);
+				setSources(snapshot.sources.filter((row) => row.enabled && row.status === "attention"));
+			})
+			.catch(() => undefined);
+		settings
+			.refreshScheduleGet?.()
+			.then((status) => {
+				if (live && status !== null && status !== undefined) setSchedule(status);
+			})
+			.catch(() => undefined);
+		return () => {
+			live = false;
+		};
+	}, [open]);
+
+	// Subscribe to periodic background schedule health pushes from the main process.
+	useEffect(() => {
+		const settings = window.autorag?.settings;
+		if (settings?.onRefreshScheduleChanged === undefined) return;
+		return settings.onRefreshScheduleChanged((status) => setSchedule(status));
+	}, []);
 
 	useLayoutEffect(() => {
 		if (!open) return;
@@ -219,6 +301,69 @@ export function NotificationCenter({
 		}
 		active.push({ id: "index", signature: problem.at, tone: view.cardTone === "error" ? "error" : "warning", title: view.title, body: view.sideDetail, at: Date.parse(problem.at), actions });
 	}
+	const sourceLabelById = new Map(allSources.map((row) => [row.id, sourceTitle(row)]));
+	const scheduleIssueItem = (issue: RefreshScheduleHealthIssue): ActiveItem => {
+		const id = `refresh-schedule:${issue.kind}`;
+		const hide: ItemAction = { label: t("notifications.hide"), kind: "text", run: () => hideActiveNotice(id, issue.signature) };
+		const fixWithAi = (assistantPrompt: string): ItemAction => ({
+			label: t("appError.fixAction"),
+			kind: "primary",
+			run: () => {
+				onOpenSettingsPage?.("indexing", { assistantPrompt });
+				close();
+			},
+		});
+		if (issue.kind === "not-registered") {
+			return {
+				id,
+				signature: issue.signature,
+				tone: issue.tone,
+				title: t("notifications.scheduleNotRegisteredTitle"),
+				body: t("notifications.scheduleNotRegisteredBody"),
+				at: issue.at,
+				actions: [hide, fixWithAi(t("notifications.scheduleNotRegisteredPrompt"))],
+			};
+		}
+		if (issue.kind === "overdue") {
+			return {
+				id,
+				signature: issue.signature,
+				tone: issue.tone,
+				title: t("notifications.scheduleOverdueTitle"),
+				body: t("notifications.scheduleOverdueBody"),
+				at: issue.at,
+				actions: [hide, fixWithAi(t("notifications.scheduleOverduePrompt"))],
+			};
+		}
+		if (issue.kind === "failing") {
+			const items = (issue.failing ?? [])
+				.map((item) => (item.kind === "local" ? t("settingsSources.indexing.localFolder") : (sourceLabelById.get(item.id) ?? item.id)))
+				.join(", ");
+			return {
+				id,
+				signature: issue.signature,
+				tone: issue.tone,
+				title: t("notifications.scheduleFailingTitle"),
+				body: t("notifications.scheduleFailingBody", { items }),
+				at: issue.at,
+				actions: [hide, fixWithAi(t("notifications.scheduleFailingPrompt", { items }))],
+			};
+		}
+		const list = (issue.conflicts ?? []).join(", ");
+		return {
+			id,
+			signature: issue.signature,
+			tone: issue.tone,
+			title: t("notifications.scheduleConflictsTitle"),
+			body: t("notifications.scheduleConflictsBody"),
+			at: issue.at,
+			actions: [hide, fixWithAi(t("notifications.scheduleConflictsPrompt", { list }))],
+		};
+	};
+	const now = Date.now();
+	for (const issue of evaluateRefreshScheduleHealth(schedule, now)) {
+		active.push(scheduleIssueItem(issue));
+	}
 	for (const row of sources) {
 		const body = sourceDetail(row);
 		active.push({
@@ -234,9 +379,44 @@ export function NotificationCenter({
 			],
 		});
 	}
+	if (shouldPromptDefaultFileManager({ onboardingPending, signedIn, status: dfmStatus }) && dfmStatus !== null) {
+		const body = dfmStatus.platform === "win32" ? t("notifications.defaultFileManagerBodyWin") : t("notifications.defaultFileManagerBodyMac");
+		active.push({
+			id: DEFAULT_FILE_MANAGER_NOTICE_ID,
+			signature: DEFAULT_FILE_MANAGER_NOTICE_SIGNATURE,
+			tone: "warning",
+			title: t("notifications.defaultFileManagerTitle"),
+			body,
+			at: null,
+			actions: [
+				{
+					label: t("notifications.hide"),
+					kind: "text",
+					run: () => hideActiveNotice(DEFAULT_FILE_MANAGER_NOTICE_ID, DEFAULT_FILE_MANAGER_NOTICE_SIGNATURE),
+				},
+				{
+					label: t("notifications.defaultFileManagerOpenSettings"),
+					kind: "secondary",
+					run: () => {
+						onOpenSettingsPage?.("general");
+						close();
+					},
+				},
+				{
+					label: t("notifications.defaultFileManagerEnable"),
+					kind: "primary",
+					run: () => {
+						void window.autorag?.defaultFileManager
+							?.apply({ enabled: true, interceptReveal: dfmStatus.platform === "win32" })
+							.then((next) => setDfmStatus(next))
+							.catch(() => undefined);
+					},
+				},
+			],
+		});
+	}
 	const shown = active.filter((item) => !isActiveHidden(notifications.hidden, item.id, item.signature));
 	const dot = shown.length > 0 || hasUnseenNotice(notifications);
-	const now = Date.now();
 
 	return (
 		<>

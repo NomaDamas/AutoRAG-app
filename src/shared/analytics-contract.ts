@@ -30,6 +30,8 @@ export const TRACKED_SETTINGS = [
 	"usageAnalytics",
 	"showHiddenFiles",
 	"osMenuIntegration",
+	"defaultFileManager",
+	"defaultFileManagerInterceptReveal",
 ] as const;
 const SETTING_VALUES = ["on", "off", "light", "dark", "ko", "en", "ja", "zh"] as const;
 const DURATIONS = ["lt_1s", "1_10s", "10_60s", "1_10m", "gt_10m"] as const;

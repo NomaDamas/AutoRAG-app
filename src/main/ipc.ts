@@ -33,6 +33,12 @@ import type { ToolVersionsService } from "./tool-versions";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
+import {
+	DEFAULT_FILE_MANAGER_CHANNELS,
+	isDefaultFileManagerApplyRequest,
+	type DefaultFileManagerApplyRequest,
+	type DefaultFileManagerStatus,
+} from "../shared/default-file-manager-contract";
 import { VOICE_CHANNELS, isVoiceClip } from "../shared/voice-contract";
 import type { VoiceService } from "./voice-service";
 import type { Analytics } from "./analytics-core";
@@ -51,6 +57,7 @@ import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
 import type { DocumentEditService } from "./document-edit-service";
+import { isVersionDiffSummaryRequest, type VersionDiffSummaryService } from "./version-diff-summary";
 import { openDocumentForEditor, saveDocumentText } from "./document-editor-io";
 import type { PdfEditorIo } from "./pdf-editor-io";
 import { isDocumentEditRequest, type DocumentEditEvent } from "../preview/shared/annotation";
@@ -87,6 +94,14 @@ export function registerDragOutIpcHandlers(): void {
 		const valid = dragOutPaths(paths);
 		if (valid === null) return;
 		void startNativeDrag(event.sender, valid);
+	});
+}
+
+/** Concise sLLM summary for version history diffs (reuses the query-decomposition sLLM). */
+export function registerVersionDiffSummaryIpcHandlers(service: VersionDiffSummaryService): void {
+	ipcMain.handle(FS_CHANNELS.summarizeVersionDiff, (_event, request: unknown) => {
+		if (!isVersionDiffSummaryRequest(request)) return { summary: null };
+		return service.summarize(request);
 	});
 }
 
@@ -460,6 +475,18 @@ export function registerOnboardingIpcHandlers(service: FirstRunService, setRevea
 /** The renderer drains requests that came from the OS file menu. */
 export function registerOsRequestIpcHandlers(service: OsRequestService): void {
 	ipcMain.handle(OS_REQUEST_CHANNELS.take, () => service.take());
+}
+
+/** Default file manager registration (macOS NSFileViewer/public.folder; Windows HKCU + Explorer watcher). */
+export function registerDefaultFileManagerIpcHandlers(service: {
+	status(): Promise<DefaultFileManagerStatus>;
+	apply(request: DefaultFileManagerApplyRequest): Promise<DefaultFileManagerStatus>;
+}): void {
+	ipcMain.handle(DEFAULT_FILE_MANAGER_CHANNELS.status, () => service.status());
+	ipcMain.handle(DEFAULT_FILE_MANAGER_CHANNELS.apply, (_event, request: unknown) => {
+		if (!isDefaultFileManagerApplyRequest(request)) throw new TypeError("defaultFileManager:apply expects { enabled: boolean, interceptReveal?: boolean }");
+		return service.apply(request);
+	});
 }
 
 /** The renderer's one read of what is indexing right now; changes are pushed by the main process. */

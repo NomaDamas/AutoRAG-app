@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultRun } from "../src/main/action-service";
 import { createDupeyProbe } from "../src/main/dupey";
 import { createOsKindResolver } from "../src/main/file-kind";
-import { sampleMinSyncProcesses } from "../src/main/minsync-watchdog";
 import { runCommand } from "../src/main/refresh-scheduler";
 
 /**
@@ -64,17 +63,6 @@ describe("helper processes on Windows start without a console window", () => {
 	it("hides the scheduled-task commands", async () => {
 		await runCommand("schtasks", ["/Query"]);
 		expect(hidden("schtasks")).toBe(true);
-	});
-
-	it("hides the tasklist poll the stall watchdog repeats", async () => {
-		const platform = Object.getOwnPropertyDescriptor(process, "platform");
-		Object.defineProperty(process, "platform", { value: "win32" });
-		try {
-			await sampleMinSyncProcesses();
-		} finally {
-			if (platform !== undefined) Object.defineProperty(process, "platform", platform);
-		}
-		expect(hidden("tasklist")).toBe(true);
 	});
 
 	it("hides the commands behind file actions (archives, conversions)", async () => {

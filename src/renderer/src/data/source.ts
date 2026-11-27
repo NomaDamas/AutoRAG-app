@@ -10,7 +10,7 @@
 import { NO_CAPABILITIES, type ActionsBridge } from "../../../shared/actions-contract";
 import { NO_SERVICES, type ServicesBridge } from "../../../shared/services-contract";
 import { NO_CONVERSION, type ConversionBridge } from "../../../shared/conversion-contract";
-import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsTagCatalog, type FsTagChange, type FsUndoOutcome, type FsVersionFamiliesResult } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsBatchResult, type FsBridge, type FsClipboard, type FsEnrichmentTarget, type FsEntryEnrichment, type FsFinderEnrichment, type FsHistoryOperation, type FsLocation, type FsLocationIcon, type FsOpError, type FsRecordedOperation, type FsSearchOptions, type FsTagCatalog, type FsTagChange, type FsUndoOutcome, type FsVersionFamiliesResult, type FsVersionHistoryMemberInput, type FsVersionHistoryResult } from "../../../shared/fs-contract";
 import { newFileFormat, type NewFileFormatId } from "../../../shared/new-file-contract";
 import { t } from "../../../shared/i18n/core";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -158,6 +158,8 @@ export interface FinderSource {
 	versionFamilies(): Promise<VersionFamiliesResult>;
 	/** Forces a dupey scan now and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<VersionFamiliesResult>;
+	/** Chronological version history and immediate-predecessor diffs for a dupey family. */
+	versionHistory?(members: readonly FsVersionHistoryMemberInput[]): Promise<FsVersionHistoryResult>;
 	/** Real AutoRAG local-index state and config-backed exclusion toggle. */
 	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -285,6 +287,7 @@ export function createBridgeSource(
 		async refreshVersionFamilies() {
 			return mapVersionFamiliesResult(await fs.refreshVersionFamilies());
 		},
+		versionHistory: (members) => fs.versionHistory(members),
 		indexStatus: (paths) => fs.indexStatus(paths),
 		setIndexExcluded: (path, excluded) => fs.setIndexExcluded(path, excluded),
 		onIndexRefreshed: (listener) => fs.onIndexRefreshed?.(listener) ?? (() => {}),

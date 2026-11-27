@@ -57,12 +57,18 @@ import {
 	type FileActionTarget,
 } from "../state/file-actions";
 import { dirname } from "../state/paths";
-import { VERSION_TAG_KEYS } from "../state/version-family";
 import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
 import type { ImageActions } from "./AnswerImage";
 import { AutomationRulesSection } from "./AutomationRulesSection";
 import { EvidenceExcerpt } from "./EvidenceBlocks";
+import {
+	VersionHistorySection,
+	type InspectorFamily,
+	type InspectorFamilyMember,
+	type VersionDiffSummarizer,
+	type VersionHistoryLoader,
+} from "./VersionHistorySection";
 import {
 	CloseIcon,
 	ZipIcon,
@@ -91,18 +97,7 @@ import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
 import dazziMark from "../assets/dazzi-mark.png";
 
-export interface InspectorFamilyMember {
-	readonly path: string;
-	readonly name: string;
-	readonly relation: "exact" | "near" | "contains";
-	readonly where: string;
-}
-
-export interface InspectorFamily {
-	readonly headPath: string;
-	readonly headName: string;
-	readonly members: readonly InspectorFamilyMember[];
-}
+export type { InspectorFamily, InspectorFamilyMember, VersionHistoryLoader };
 
 export interface InspectorProps {
 	/** Focused/selected entry; null renders the empty-state placeholder. */
@@ -123,6 +118,10 @@ export interface InspectorProps {
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
+	/** Optional override for loading version history diffs (defaults to `window.autorag.fs.versionHistory`). */
+	readonly loadVersionHistory?: VersionHistoryLoader | undefined;
+	/** Optional override for sLLM diff summarization (defaults to `window.autorag.fs.summarizeVersionDiff`). */
+	readonly summarizeVersionDiff?: VersionDiffSummarizer | undefined;
 	/** "evidence" while an AI Search tab is focused: the whole panel is the cited sources. */
 	readonly view: "info" | "evidence";
 	readonly evidence: readonly CitationEvidence[];
@@ -229,6 +228,8 @@ export function Inspector({
 	loadOpenWithApplications,
 	family,
 	onOpenMember,
+	loadVersionHistory,
+	summarizeVersionDiff,
 	view,
 	evidence,
 	freshEvidence = NO_FRESH_EVIDENCE,
@@ -292,6 +293,8 @@ export function Inspector({
 					indexStatus={indexStatus}
 					family={family}
 					onOpenMember={onOpenMember}
+					loadVersionHistory={loadVersionHistory}
+					summarizeVersionDiff={summarizeVersionDiff}
 					onToggleIndex={onToggleIndex}
 					onTrash={onTrash}
 					onCopyPath={onCopyPath}
@@ -313,6 +316,8 @@ function InfoHalf({
 	indexStatus,
 	family,
 	onOpenMember,
+	loadVersionHistory,
+	summarizeVersionDiff,
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
@@ -328,6 +333,8 @@ function InfoHalf({
 	readonly indexStatus: IndexStatus | null;
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
+	readonly loadVersionHistory?: VersionHistoryLoader | undefined;
+	readonly summarizeVersionDiff?: VersionDiffSummarizer | undefined;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
@@ -429,7 +436,15 @@ function InfoHalf({
 							/>
 						) : null}
 
-						{family === null ? null : <VersionsSection family={family} entry={entry} onOpenMember={onOpenMember} />}
+						{family === null ? null : (
+							<VersionHistorySection
+								family={family}
+								entry={entry}
+								onOpenMember={onOpenMember}
+								loadVersionHistory={loadVersionHistory}
+								summarizeVersionDiff={summarizeVersionDiff}
+							/>
+						)}
 
 						<InfoSectionCard title={t("inspector.generalInfo")} rows={sectionOf("general")} brief={brief.general} onToggle={() => toggle("general")} onCopy={onCopyValue} />
 						<InfoSectionCard title={t("inspector.imageInfo")} rows={sectionOf("image")} brief={brief.image} onToggle={() => toggle("image")} onCopy={onCopyValue} />
@@ -1072,65 +1087,6 @@ function InfoRow({ label, value, onCopy }: { readonly label: string; readonly va
 				</dd>
 			)}
 		</div>
-	);
-}
-
-function VersionsSection({
-	family,
-	entry,
-	onOpenMember,
-}: {
-	readonly family: InspectorFamily;
-	readonly entry: FinderEntry;
-	readonly onOpenMember: (path: string) => void;
-}): ReactElement {
-	const { t } = useTranslation();
-	const rows = [
-		{ path: family.headPath, name: family.headName, relation: "latest" as const, where: dirname(family.headPath) },
-		...family.members.map((member) => ({ path: member.path, name: member.name, relation: member.relation, where: member.where })),
-	];
-	return (
-		<div className="versions-section flex flex-col gap-8 border-t border-divider pt-8" data-section="versions">
-			<div className="section-title flex h-22 items-center justify-between">
-				<span className="text-meta font-medium leading-[16px] text-ink">{t("inspector.versions")}</span>
-				<span className="inline-flex items-center rounded-8 border border-divider bg-window px-6 py-1 text-badge font-medium leading-[14px] text-ink">{rows.length}</span>
-			</div>
-			<div className="flex flex-col gap-2">
-				{rows.map((row) => (
-					<button
-						type="button"
-						key={row.path}
-						className={cn(
-							"ver-row w-full min-h-39 flex items-center gap-8 px-7 py-5 rounded-8 border-0 bg-transparent text-left cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
-							row.path === entry.path && "bg-input hover:bg-input",
-						)}
-						onClick={() => onOpenMember(row.path)}
-					>
-						<VersionTag relation={row.relation} />
-						<span className="flex min-w-0 flex-1 flex-col gap-1">
-							<span className="ver-name truncate text-meta font-medium leading-[16px] text-ink">{row.name}</span>
-							<span className="vwhere truncate text-badge font-medium leading-[14px] text-ink-faint">{row.where}</span>
-						</span>
-					</button>
-				))}
-			</div>
-		</div>
-	);
-}
-
-function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "near" | "contains" }): ReactElement {
-	const { t } = useTranslation();
-	// Figma 577:6705: the same tones as the list's tags (576:6699), at the inspector's smaller size.
-	const tone =
-		relation === "latest"
-			? "bg-vtag-latest-bg text-vtag-latest-text"
-			: relation === "near"
-				? "bg-vtag-near-bg text-vtag-near-text"
-				: "bg-vtag-exact-bg text-vtag-exact-text";
-	return (
-		<span className={cn("vtag flex-none inline-flex items-center px-6 py-2 rounded-7 text-tile-xs font-bold whitespace-nowrap leading-[12px]", tone)}>
-			{t(VERSION_TAG_KEYS[relation])}
-		</span>
 	);
 }
 

@@ -249,6 +249,7 @@ export function AppCustomizerPanel({
 	surface,
 	hidden,
 	focusRequest,
+	prefill,
 	onSettingsUpdated,
 	onChangesApplied,
 	onOpenAiSettings,
@@ -257,6 +258,8 @@ export function AppCustomizerPanel({
 	readonly hidden: boolean;
 	/** Bumped when the user explicitly opens the panel; the composer takes focus then, never on a plain page visit. */
 	readonly focusRequest: number;
+	/** Optional prompt pre-filled into the composer (e.g. from Notification Center "Fix with AI"). */
+	readonly prefill?: { readonly text: string; readonly nonce: number } | null | undefined;
 	readonly onSettingsUpdated: (settings: AppSettings) => void;
 	/** A turn ended with settings changed (even one the person stopped or that failed half way): the page beside the sidebar reads them again. */
 	readonly onChangesApplied: () => void;
@@ -274,10 +277,30 @@ export function AppCustomizerPanel({
 	activeRunIdRef.current = activeRunId;
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const appliedPrefillNonce = useRef(0);
 
 	useEffect(() => {
-		if (focusRequest > 0 && !hidden) textareaRef.current?.focus();
-	}, [focusRequest, hidden]);
+		if (prefill === null || prefill === undefined || prefill.nonce === appliedPrefillNonce.current) return;
+		appliedPrefillNonce.current = prefill.nonce;
+		setInput(prefill.text);
+	}, [prefill]);
+
+	useEffect(() => {
+		const el = textareaRef.current;
+		if (el === null) return;
+		el.style.height = "auto";
+		if (input.length > 0) el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
+	}, [input, hidden]);
+
+	useEffect(() => {
+		if (focusRequest > 0 && !hidden) {
+			const el = textareaRef.current;
+			if (el !== null) {
+				el.focus();
+				el.setSelectionRange(el.value.length, el.value.length);
+			}
+		}
+	}, [focusRequest, hidden, prefill]);
 
 	useEffect(() => {
 		const container = scrollRef.current;

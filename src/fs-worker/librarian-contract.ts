@@ -20,6 +20,7 @@ export const LIBRARIAN_OP = {
 	fileNameEnsureDaemon: "fileNameEnsureDaemon",
 	fileNameStop: "fileNameStop",
 	scanDuplicates: "scanDuplicates",
+	versionHistory: "versionHistory",
 	indexStatus: "indexStatus",
 	setIndexExcluded: "setIndexExcluded",
 	indexMap: "indexMap",

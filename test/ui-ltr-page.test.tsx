@@ -81,7 +81,7 @@ describe("LtrPage: what the log holds", () => {
 	it("shows how many searches are logged against the number training needs", async () => {
 		await render(snapshotOf({ loggedRuns: 47 }));
 
-		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 47, missing: 53 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 47, missing: 253 }));
 	});
 
 	it("says training needs the reranker, and offers the way to turn it on, when it is off", async () => {
@@ -244,7 +244,7 @@ describe("LtrPage: training", () => {
 
 		const train = button(t("settingsLtr.train.button"));
 		expect(train.disabled).toBe(true);
-		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 12, missing: 88 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 12, missing: 288 }));
 		await act(async () => train.click());
 		expect(bridge.ltr.train).not.toHaveBeenCalled();
 	});
@@ -272,12 +272,12 @@ describe("LtrPage: training", () => {
 	});
 
 	it("shows the librarian's reason when there is too little usable data", async () => {
-		bridge.ltr.train.mockResolvedValue(outcome({ status: "insufficient-data", reason: "12 usable search runs in the log; at least 100 are needed", model: null, snapshot: snapshotOf({ loggedRuns: 200 }) }));
-		await render(snapshotOf({ loggedRuns: 200 }));
+		bridge.ltr.train.mockResolvedValue(outcome({ status: "insufficient-data", reason: "12 usable search runs in the log; at least 300 are needed", model: null, snapshot: snapshotOf({ loggedRuns: 350 }) }));
+		await render(snapshotOf({ loggedRuns: 350 }));
 
 		await act(async () => button(t("settingsLtr.train.button")).click());
 
-		expect(text()).toContain("12 usable search runs in the log; at least 100 are needed");
+		expect(text()).toContain("12 usable search runs in the log; at least 300 are needed");
 	});
 
 	it("shows a crashed attempt as an error the person can read", async () => {
@@ -386,11 +386,11 @@ describe("LtrPage: answers that arrive out of order", () => {
 
 		// A write made while the first read is still running reads again, and that read answers first.
 		await act(async () => byLabel(t("settingsLtr.log.name")).click());
-		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 77, missing: 23 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 77, missing: 223 }));
 		await act(async () => older.resolve(snapshotOf({ loggedRuns: 11 })));
 
-		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 77, missing: 23 }));
-		expect(text()).not.toContain(t("settingsLtr.train.needMore", { count: 11, missing: 89 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 77, missing: 223 }));
+		expect(text()).not.toContain(t("settingsLtr.train.needMore", { count: 11, missing: 289 }));
 	});
 
 	it("does not let a read that started before a training run overwrite the models it made", async () => {
