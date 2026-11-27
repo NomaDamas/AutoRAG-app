@@ -3734,27 +3734,27 @@
       },
       "add": {
         "title": "Shall we add one?",
-        "body": "This one sums up a document in three lines when you right-click it. Click Add."
+        "body": "One of the automations that runs when you right-click a file. Click Add."
       },
       "made": {
         "title": "Automation added",
-        "body": "Click the row to change its settings or see its run history. The switch turns it on and off."
+        "body": "Click the item to change its settings or see its run history."
       },
       "sample": {
         "title": "Want to see how it works?",
         "body": "Right-click the practice file."
       },
       "pick": {
-        "title": "Click the automation you just added",
-        "body": "It's the new item in the menu."
+        "title": "Click the automation",
+        "body": "It's the automation you just added."
       },
       "result": {
         "title": "Ta-da! Summed up in three lines",
         "body": "You can use it every time you right-click a document."
       },
       "chat": {
-        "title": "Now try automations yourself",
-        "body": "Whenever you want AI to take care of file work, set it up as an automation."
+        "title": "Now you can make your own automations",
+        "body": "Whenever you want AI to handle file work, set it up as an automation."
       }
     },
     "contextMenu": {
