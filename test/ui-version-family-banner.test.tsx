@@ -34,6 +34,27 @@ describe("the duplicate-check notice over a Finder list", () => {
 		expect(host.querySelector("strong")?.textContent).not.toContain("dupey scan failed");
 	});
 
+	it("says it is checking while 다시 확인 runs the scan again, and cannot be pressed twice", async () => {
+		let finish: () => void = () => undefined;
+		const onRetry = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+		act(() => root.render(<VersionFamilyBanner error={{ code: "scan-failed", message: "dupey timed out.", installCommand: null }} onRetry={onRetry} />));
+		// The last button in the actions row; 자세히 보기 comes first.
+		const button = (): HTMLButtonElement | null => [...host.querySelectorAll<HTMLButtonElement>(".notice-card__actions button")].at(-1) ?? null;
+		expect(button()?.textContent).toBe("다시 확인");
+		act(() => button()?.click());
+		expect(button()?.textContent).toBe("확인하는 중…");
+		expect(button()?.disabled).toBe(true);
+		expect(host.querySelector('[role="status"]')?.textContent).toContain("몇 분 걸릴 수 있습니다");
+		act(() => button()?.click());
+		expect(onRetry).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			finish();
+			await Promise.resolve();
+		});
+		expect(button()?.textContent).toBe("다시 확인");
+		expect(button()?.disabled).toBe(false);
+	});
+
 	it("is cut by the pane under 400px instead of wrapping into a tall column", () => {
 		act(() => root.render(<VersionFamilyBanner error={{ code: "dupey-missing", message: "dupey CLI is required", installCommand: "brew install dupey" }} onRetry={vi.fn()} />));
 		const clip = host.querySelector<HTMLElement>("[data-notice-clip]");

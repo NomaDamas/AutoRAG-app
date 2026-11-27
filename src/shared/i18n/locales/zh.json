@@ -130,6 +130,8 @@
     },
     "versionBanner": {
       "retry": "重新检查",
+      "checking": "正在检查…",
+      "checkingHint": "正在重新检查重复文件。文件夹较大时可能需要几分钟。",
       "missingTitle": "缺少重复文件检查工具",
       "missingHint": "要查看版本分组，请用下面的命令安装 dupey。",
       "scanFailedTitle": "重复文件检查未能完成",
