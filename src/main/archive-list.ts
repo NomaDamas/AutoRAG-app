@@ -14,6 +14,7 @@ import { Worker } from "node:worker_threads";
 import { collapseToTopLevel, type ArchiveEntry } from "../preview/shared/archive-items";
 import type { ArchivePreview, ArchiveUnreadable } from "../preview/shared/contract";
 import { withReadableFile } from "../preview/node/provider-access";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 
 /** What bounds one listing. */
 export interface ArchiveListLimits {
@@ -97,10 +98,32 @@ function runArchiveWorker(sourcePath: string, limits: ArchiveListLimits, options
 export async function listArchive(sourcePath: string, options: ArchiveListOptions = {}): Promise<ArchivePreview> {
 	const limits = { ...ARCHIVE_LIST_LIMITS, ...options.limits };
 	if ((await stat(sourcePath)).size > limits.maxInputBytes) return { kind: "unreadable", reason: "tooLarge" };
+	if (options.stopped?.() === true) throw new Error("Archive listing cancelled");
 	try {
 		return await withReadableFile(
 			sourcePath,
 			async (localPath) => {
+				// Primary streaming path for ZIP, TAR, and TAR.GZ on the libuv thread pool —
+				// avoids spawning a libarchive-wasm worker thread or hitting WASM memory bounds on 15k+ entry tars.
+				// Unsupported containers (7z, RAR, ISO, deb, rpm, CAB, bz2, xz, zst) return "unsupported" and continue to the worker.
+				const native = loadDazziNativeCore();
+				if (native !== null) {
+					try {
+						const res = await native.listArchiveNative(localPath, limits.maxOutputBytes, limits.maxEntries);
+						if (options.stopped?.() === true) throw new Error("Archive listing cancelled");
+						if (res.status === "ok") {
+							return { kind: "entries", entries: res.entries };
+						}
+						if (res.status !== "unsupported") {
+							const preview: ArchivePreview = { kind: "unreadable", reason: res.status };
+							if (res.status === "corrupt") throw new CorruptArchivePreviewError(preview);
+							return preview;
+						}
+					} catch (error) {
+						if (error instanceof CorruptArchivePreviewError || (error instanceof Error && /cancel/i.test(error.message))) throw error;
+						console.warn(`[dazzi-core] listArchiveNative failed for ${sourcePath}, falling back to worker:`, error instanceof Error ? error.message : error);
+					}
+				}
 				const preview = await runArchiveWorker(localPath, limits, options);
 				if (preview.kind === "unreadable" && preview.reason === "corrupt") {
 					throw new CorruptArchivePreviewError(preview);

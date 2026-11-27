@@ -22,7 +22,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CRATE_DIR = join(ROOT, "src", "main", "native", "dazzi-core");
 const MANIFEST = join(CRATE_DIR, "Cargo.toml");
-const SOURCE_FILES = [MANIFEST, join(CRATE_DIR, "build.rs"), join(CRATE_DIR, "src", "lib.rs")];
+const SOURCE_FILES = [
+	MANIFEST,
+	join(CRATE_DIR, "build.rs"),
+	join(CRATE_DIR, "src", "lib.rs"),
+	join(CRATE_DIR, "src", "preview.rs"),
+];
 const OUT_DIR = join(ROOT, "src", "main", "vendor");
 
 const force = process.argv.includes("--force");

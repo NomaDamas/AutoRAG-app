@@ -146,6 +146,26 @@ export interface NativeSearchHit {
 	readonly location: string;
 }
 
+export interface NativeSheetPreview {
+	readonly names: readonly string[];
+	readonly rows: readonly (readonly string[])[];
+	readonly sheetsRead: readonly string[];
+	readonly scannedRows: number;
+	readonly namesPass: boolean;
+	readonly handled: boolean;
+}
+
+export interface NativeArchiveEntry {
+	readonly name: string;
+	readonly size: number;
+	readonly modified: number | null;
+}
+
+export interface NativeArchiveListResult {
+	readonly status: "ok" | "encrypted" | "corrupt" | "tooLarge" | "tooManyEntries" | "unsupported";
+	readonly entries: readonly NativeArchiveEntry[];
+}
+
 export interface DazziNativeCore {
 	canHandleExclusionsNatively(exclusions: readonly string[]): boolean;
 	findExclusionBatch(exclusions: readonly string[], paths: readonly string[]): (NativeExclusionMatch | null)[];
@@ -188,6 +208,18 @@ export interface DazziNativeCore {
 		discordRoots: readonly string[],
 		control: NativeWalkControl,
 	): Promise<NativeSearchHit[]>;
+	previewSheetNative(
+		path: string,
+		sheetIndex: number,
+		maxScanRows: number,
+		maxRows: number,
+		maxCols: number,
+	): Promise<NativeSheetPreview>;
+	downscaleAndEncodePngNative(rgba: Uint8Array, width: number, height: number, maxSide: number): Buffer;
+	decodeTiffPreviewNative(path: string, maxSide: number): Promise<Buffer | null>;
+	findPdfAnchorPagesNative(path: string, excerpts: readonly string[], maxCandidates: number): Promise<number[]>;
+	listArchiveNative(path: string, maxOutputBytes: number, maxEntries: number): Promise<NativeArchiveListResult>;
+	listTarBytesNative(bytes: Uint8Array, maxEntries: number): NativeArchiveListResult;
 }
 
 let cachedAddon: DazziNativeCore | null | undefined;
