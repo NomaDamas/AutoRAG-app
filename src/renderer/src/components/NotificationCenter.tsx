@@ -407,7 +407,7 @@ export function NotificationCenter({
 					kind: "primary",
 					run: () => {
 						void window.autorag?.defaultFileManager
-							?.apply({ enabled: true, interceptReveal: dfmStatus.platform === "win32" })
+							?.apply({ enabled: true, interceptReveal: true })
 							.then((next) => setDfmStatus(next))
 							.catch(() => undefined);
 					},

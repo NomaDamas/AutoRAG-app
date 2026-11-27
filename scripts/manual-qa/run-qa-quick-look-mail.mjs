@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as CFB from "cfb";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? "/tmp/autorag-quicklook-mail";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -164,18 +164,18 @@ async function poll(read, accept, timeoutMs = 10_000) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "ko" });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((page) => page.url().includes("quick-look.html")),
-		(page) => page !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
 	const requests = [];
-	preview.on("request", (request) => requests.push(request.url()));
-	preview.on("dialog", (dialog) => {
-		check("no dialog from mail content", false, dialog.message());
-		void dialog.dismiss();
-	});
+	let preview;
+	const ensurePreview = async () => {
+		if (preview !== undefined) return preview;
+		preview = await waitForQuickLookPage(app, { timeoutMs: 30_000 });
+		preview.on("request", (request) => requests.push(request.url()));
+		preview.on("dialog", (dialog) => {
+			check("no dialog from mail content", false, dialog.message());
+			void dialog.dismiss();
+		});
+		return preview;
+	};
 	const windowState = () =>
 		app.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
@@ -187,6 +187,7 @@ try {
 		await row.click();
 		await main.keyboard.press("Space");
 		const started = Date.now();
+		await ensurePreview();
 		await poll(() => preview.evaluate(ready).catch(() => false), Boolean, 15_000);
 		const elapsed = Date.now() - started;
 		await poll(async () => (await windowState())?.visible === true, Boolean);

@@ -294,6 +294,28 @@
       "near": "類似",
       "contains": "包含"
     },
+    "versionHistory": {
+      "title": "バージョン履歴",
+      "count": "{{count}}件のバージョン",
+      "loading": "変更点を比較中…",
+      "identical": "前のバージョンと同一内容",
+      "baseVersion": "基準バージョン",
+      "unsupported": "テキスト比較に未対応の形式",
+      "error": "変更点を読み込めませんでした",
+      "vsPrevious": "直前({{name}})との比較",
+      "addedLines": "+{{count}}行",
+      "removedLines": "-{{count}}行",
+      "viewDetail": "詳しく比較",
+      "openFile": "ファイルを表示",
+      "previousLabel": "前のバージョン",
+      "currentLabel": "現在のバージョン",
+      "viewModeUnified": "インライン",
+      "viewModeSplit": "左右で比較",
+      "viewModeGroup": "比較表示形式",
+      "summarizing": "AI 要約中…",
+      "truncatedNotice": "文書が長いため主要な変更箇所のみ表示しています。",
+      "close": "閉じる"
+    },
     "evidencePanel": {
       "emptyTitle": "回答の出典が\nここに表示されます。",
       "excerpts": "根拠の抜粋",
@@ -1370,7 +1392,8 @@
     "onboarding": {
       "indexingFailed": "インデックス作成に失敗しました。",
       "modelDownloadFailed": "このコンピューター用の埋め込みモデルをダウンロードできなかったため、インデックス作成を開始できませんでした: {{error}}",
-      "noQuestion": "準備を終えられませんでした。もう一度試すと、読み込み済みのファイルは飛ばして続きから進めます。"
+      "noQuestion": "準備を終えられませんでした。もう一度試すと、読み込み済みのファイルは飛ばして続きから進めます。",
+      "fallbackQuestion": "最近保存したファイルをまとめて要約して"
     },
     "lock": {
       "scheduledBusy": "バックグラウンド更新を実行中です。終了後に再試行してください。",
@@ -2239,6 +2262,8 @@
       "defaultFileManagerHintWin": "フォルダを開く操作や Win+E をエクスプローラーの代わりに Dazzi で開きます。コントロールパネルなどの仮想フォルダは安全にエクスプローラーへ戻ります。",
       "defaultFileManagerInterceptReveal": "他アプリの「フォルダに表示」も引き継ぐ",
       "defaultFileManagerInterceptRevealHint": "Chrome や VS Code などが開くエクスプローラーウィンドウを検出し、Dazzi で対象ファイルを選択して開きます。",
+      "defaultFileManagerInterceptMac": "デスクトップのフォルダや新しい Finder ウィンドウも Dazzi で開く",
+      "defaultFileManagerInterceptMacHint": "デスクトップのフォルダをダブルクリックしたり新しい Finder ウィンドウを開いたときに、そのウィンドウを閉じて Dazzi で開きます。macOS のオートメーション（Finder）権限が必要です。",
       "defaultFileManagerError": "既定のファイルマネージャー設定を変更できませんでした：{{error}}",
       "autoUpdates": "更新を自動インストール",
       "autoUpdatesHint": "新しいバージョンをバックグラウンドでダウンロードし、アプリの終了時にインストールします。",
@@ -3606,7 +3631,9 @@
       "progress": "{{index}} / {{count}}",
       "ask": {
         "title": "自分のファイルに聞いてみましょう",
-        "body": "あなたの書類から聞いてみたいことを用意しました。\n送信を押してみてください。"
+        "body": "あなたの書類から聞いてみたいことを用意しました。\n送信を押してみてください。",
+        "fallbackTitle": "まずは例の質問で試してみましょう",
+        "fallbackBody": "ファイルが少なくて専用の質問は作れませんでした。まずはこの例の質問を送るか、聞きたい内容に書き換えて試してみてください。"
       },
       "cite": {
         "title": "答えには根拠を表示します",

@@ -64,6 +64,17 @@ function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLoca
 			calls.scanned.push(dir);
 			return { ...SCAN, dir };
 		},
+		versionHistory: async (members) => ({
+			versions: members.map((member, index) => ({
+				path: member.path,
+				name: member.path.split("/").at(-1) ?? member.path,
+				mtimeMs: member.mtimeMs ?? 0,
+				relation: index === 0 ? "latest" : (member.relation ?? "near"),
+				isLatest: index === 0,
+				previousPath: members[index + 1]?.path ?? null,
+				diff: null,
+			})),
+		}),
 		indexStatus: {
 			indexStatus: async (paths) => paths.map((path) => ({ ...STATUS, path })),
 			setIndexExcluded: async (path, excluded) => {
@@ -302,6 +313,44 @@ describe("createLibrarianClient", () => {
 		expect(h.terminated()).toBe(0);
 	});
 
+	it("terminates an idle thread after idleTimeoutMs and transparently respawns on the next call", async () => {
+		let spawned = 0;
+		let terminated = 0;
+		const client = createLibrarianClient({
+			idleTimeoutMs: 40,
+			spawn: (): LibrarianThread => {
+				spawned += 1;
+				const { port1, port2 } = new MessageChannel();
+				port2.on("message", (message: { id?: number }) => {
+					if (message.id !== undefined) port2.postMessage({ id: message.id, ok: true, value: { dir: "/d", families: [] } });
+				});
+				closers.push(() => {
+					port1.close();
+					port2.close();
+				});
+				return {
+					port: adaptNodePort(port1),
+					onExit: () => {},
+					terminate: async () => {
+						terminated += 1;
+						port1.close();
+					},
+				};
+			},
+			locations: async () => [],
+			onIndexRefreshed: () => {},
+			onReport: () => {},
+		});
+
+		await client.scanDuplicates("/d");
+		expect(spawned).toBe(1);
+		await expect.poll(() => terminated, { timeout: 1000 }).toBe(1);
+		// Next call transparently respawns a fresh thread.
+		await client.scanDuplicates("/d");
+		expect(spawned).toBe(2);
+		await client.dispose();
+	});
+
 	it("does not start a thread just to shut down", async () => {
 		const h = harness();
 
@@ -310,5 +359,15 @@ describe("createLibrarianClient", () => {
 
 		expect(h.spawned()).toBe(0);
 		expect(h.terminated()).toBe(0);
+	});
+
+	it("forwards versionHistory requests across the thread boundary", async () => {
+		const h = harness();
+		const history = await h.client.versionHistory([
+			{ path: "/d/plan_v2.md", relation: "latest", mtimeMs: 2000 },
+			{ path: "/d/plan_v1.md", relation: "near", mtimeMs: 1000 },
+		]);
+		expect(history.versions.map((v) => v.path)).toEqual(["/d/plan_v2.md", "/d/plan_v1.md"]);
+		expect(history.versions[0]?.previousPath).toBe("/d/plan_v1.md");
 	});
 });

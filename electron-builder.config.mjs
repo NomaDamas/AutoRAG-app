@@ -97,6 +97,7 @@ const config = {
 			NSRemovableVolumesUsageDescription: "Dazzi reads connected disks so you can browse and search your files.",
 			NSNetworkVolumesUsageDescription: "Dazzi reads connected network volumes so you can browse and search your files.",
 			NSMicrophoneUsageDescription: "Dazzi listens only while you press the microphone button, to turn your voice into a question.",
+			NSAppleEventsUsageDescription: "Dazzi talks to Finder so folders opened from the Desktop or Finder can open in Dazzi instead.",
 			CFBundleDocumentTypes: [
 				{
 					CFBundleTypeName: "Folder",

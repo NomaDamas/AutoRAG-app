@@ -294,6 +294,28 @@
       "near": "유사본",
       "contains": "포함본"
     },
+    "versionHistory": {
+      "title": "버전 히스토리",
+      "count": "{{count}}개 버전",
+      "loading": "변경 내용 비교 중…",
+      "identical": "이전 버전과 내용 동일",
+      "baseVersion": "기준 버전",
+      "unsupported": "텍스트 비교 미지원 형식",
+      "error": "변경 내용을 불러오지 못했습니다",
+      "vsPrevious": "직전 버전({{name}}) 대비",
+      "addedLines": "+{{count}}줄",
+      "removedLines": "-{{count}}줄",
+      "viewDetail": "자세히 비교",
+      "openFile": "파일로 이동",
+      "previousLabel": "이전 버전",
+      "currentLabel": "현재 버전",
+      "viewModeUnified": "한 줄로 보기",
+      "viewModeSplit": "나란히 비교",
+      "viewModeGroup": "비교 보기 방식",
+      "summarizing": "AI 요약 중…",
+      "truncatedNotice": "문서가 길어 변경된 핵심 구간만 표시합니다.",
+      "close": "닫기"
+    },
     "evidencePanel": {
       "emptyTitle": "답변의 출처가\n여기에 표시됩니다.",
       "excerpts": "근거 문장",
@@ -1370,7 +1392,8 @@
     "onboarding": {
       "indexingFailed": "인덱싱하지 못했습니다.",
       "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 인덱싱을 시작하지 못했습니다: {{error}}",
-      "noQuestion": "준비를 마치지 못했어요. 다시 시도하면 이미 읽은 파일은 건너뛰고 이어서 해요."
+      "noQuestion": "준비를 마치지 못했어요. 다시 시도하면 이미 읽은 파일은 건너뛰고 이어서 해요.",
+      "fallbackQuestion": "최근에 저장한 파일들을 정리해서 요약해 줘"
     },
     "lock": {
       "scheduledBusy": "백그라운드 최신화가 실행 중입니다. 끝난 뒤 다시 시도하세요.",
@@ -2239,6 +2262,8 @@
       "defaultFileManagerHintWin": "폴더 열기와 Win+E 단축키가 기본 탐색기 대신 Dazzi에서 열립니다. 제어판 등 시스템 가상 폴더는 안전하게 탐색기로 연결됩니다.",
       "defaultFileManagerInterceptReveal": "다른 앱의 ‘폴더에서 보기’까지 가로채기",
       "defaultFileManagerInterceptRevealHint": "Chrome·VS Code 등에서 파일 위치 열기를 누르면 열리는 탐색기 창을 감지해 Dazzi에서 해당 파일을 바로 선택해 엽니다.",
+      "defaultFileManagerInterceptMac": "바탕화면 폴더·새 Finder 창도 Dazzi로 열기",
+      "defaultFileManagerInterceptMacHint": "바탕화면에서 폴더를 더블클릭하거나 새 Finder 창을 열면 Finder 창을 닫고 Dazzi에서 바로 엽니다. macOS 자동화(Finder) 권한이 필요합니다.",
       "defaultFileManagerError": "기본 파일 관리자 설정을 변경하지 못했습니다: {{error}}",
       "autoUpdates": "업데이트 자동 설치",
       "autoUpdatesHint": "새 버전을 백그라운드에서 내려받고, 앱을 종료할 때 설치합니다.",
@@ -3606,7 +3631,9 @@
       "progress": "{{index}} / {{count}}",
       "ask": {
         "title": "내 파일에 물어보세요",
-        "body": "내 문서를 읽고 물어볼 거리를 준비해 뒀어요.\n보내기를 눌러 보세요."
+        "body": "내 문서를 읽고 물어볼 거리를 준비해 뒀어요.\n보내기를 눌러 보세요.",
+        "fallbackTitle": "기본 질문으로 시작해 볼까요",
+        "fallbackBody": "파일이 적어서 맞춤 질문은 만들지 못했어요. 우선 기본 예시 질문으로 보내 보거나, 원하는 내용을 직접 물어보세요."
       },
       "cite": {
         "title": "답에는 근거를 표시해요",

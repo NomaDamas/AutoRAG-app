@@ -27,7 +27,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zipSync } from "fflate";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 if (process.platform !== "darwin") {
 	console.log("SKIP  the fixtures are built with the system sips; the embedded readers are unit-tested on every platform");
@@ -173,20 +173,23 @@ const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPE
 try {
 	const main = await finderWindow(app, 30_000);
 	let preview;
-	for (let i = 0; i < 600 && preview === undefined; i += 1) {
-		preview = (await app.windows()).find((page) => page.url().includes("quick-look.html"));
-		if (preview === undefined) await sleep(50);
-	}
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
-	await preview.evaluate(() => {
-		window.__block = 0;
-		let last = performance.now();
-		setInterval(() => {
-			const now = performance.now();
-			window.__block = Math.max(window.__block, now - last - 8);
-			last = now;
-		}, 8);
-	});
+	// The Quick Look window is created lazily on the first Space press, so the
+	// event-loop stall probe is installed right after the page first appears
+	// (on every subsequent open it is already running before Space).
+	const ensurePreview = async () => {
+		if (preview !== undefined) return preview;
+		preview = await waitForQuickLookPage(app, { timeoutMs: 30_000 });
+		await preview.evaluate(() => {
+			window.__block = 0;
+			let last = performance.now();
+			setInterval(() => {
+				const now = performance.now();
+				window.__block = Math.max(window.__block, now - last - 8);
+				last = now;
+			}, 8);
+		});
+		return preview;
+	};
 	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("quick-look.html"))?.isVisible() ?? false);
 
 	/** Natural size and, where the canvas is not tainted (a picture streamed from the preview protocol is), the colour at the left/right and top/bottom quarter of an image element in `page`. */
@@ -246,11 +249,14 @@ try {
 
 	async function openSpace(name, ready) {
 		await selectRow(name);
-		await preview.evaluate(() => {
-			window.__block = 0;
-		});
+		if (preview !== undefined) {
+			await preview.evaluate(() => {
+				window.__block = 0;
+			});
+		}
 		const started = Date.now();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		for (let i = 0; i < 6000 && !(await ready().catch(() => false)); i += 1) await sleep(10);
 		const elapsed = Date.now() - started;
 		await sleep(400);

@@ -287,9 +287,9 @@ function IconTile({
 	const { entry } = useEntrySidecar(useDirectoryData().sidecar, listed);
 	const { colors: tagColors } = useTagCatalog();
 	// Virtualized: only tiles near the viewport mount, so reporting them fills
-	// thumbnails in on scroll for folders larger than the per-call icon cap.
+	// thumbnails, Finder metadata, and index status on scroll for folders larger than one screenful.
 	useEffect(() => {
-		if (entry.kind === "file" && entry.iconUrl === undefined) {
+		if (entry.kind === "file") {
 			callbacks.onVisible(entry);
 		}
 	}, [callbacks.onVisible, entry]);

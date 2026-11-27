@@ -703,6 +703,7 @@ function Tour({
 	const index = step === null ? 0 : steps.indexOf(step);
 	const waiting = step === "cite" && (answer === "idle" || answer === "running");
 	const noCite = step === "cite" && answer === "done" && !cited;
+	const isFallbackDemo = demo?.fallback === true;
 	const title =
 		step === null
 			? ""
@@ -710,7 +711,9 @@ function Tour({
 				? t("firstRun.tour.cite.waitingTitle")
 				: noCite
 						? t("firstRun.tour.cite.noCiteTitle")
-						: t(`firstRun.tour.${step}.title`);
+						: step === "ask" && isFallbackDemo
+							? t("firstRun.tour.ask.fallbackTitle")
+							: t(`firstRun.tour.${step}.title`);
 	const body =
 		step === null
 			? ""
@@ -718,7 +721,9 @@ function Tour({
 				? t("firstRun.tour.cite.waitingBody")
 				: noCite
 						? t("firstRun.tour.cite.noCiteBody")
-						: t(`firstRun.tour.${step}.body`);
+						: step === "ask" && isFallbackDemo
+							? t("firstRun.tour.ask.fallbackBody")
+							: t(`firstRun.tour.${step}.body`);
 	const last = step !== null && nextStep(steps, step, { cited }) === null;
 	const clickReady = step === "ask" ? askReady : step === "cite" ? citeReady : false;
 

@@ -467,4 +467,73 @@ describe("directory store", () => {
 		expect(resolved50.osKind).toBe("JPEG image");
 		expect(resolved50.iconUrl).toBeUndefined();
 	});
+
+	it("fetches Finder metadata eagerly only for the first screenful and loads off-screen rows on demand via requestMetadata", async () => {
+		vi.useFakeTimers();
+		try {
+			const h = harness();
+			const store = createDirectoryStore({ source: h.source, sidecar: h.sidecar, iconFlushMs: 40 });
+			store.retain("/large");
+			void store.load("/large", "navigate");
+			const rows = Array.from({ length: 60 }, (_, i) => entry(`/large/doc-${i}.md`));
+			h.lists[0]?.answer.resolve(rows);
+			await settle();
+
+			// Only the first 24 rows ask for Finder metadata eagerly; off-screen rows 24..59 do not trigger background helper spawns.
+			expect(h.metadata).toHaveLength(1);
+			expect(h.metadata[0]?.entries).toHaveLength(24);
+			h.metadata[0]?.answer.resolve([]);
+			await settle();
+			expect(h.metadata).toHaveLength(1);
+
+			// Mounting or focusing off-screen row 50 fetches its Finder metadata on demand, coalesced and deduplicated.
+			store.requestMetadata(rows[50]!);
+			store.requestMetadata(rows[50]!);
+			store.requestMetadata(rows[51]!);
+			expect(h.metadata).toHaveLength(1);
+			await vi.advanceTimersByTimeAsync(40);
+			expect(h.metadata).toHaveLength(2);
+			expect(h.metadata[1]?.entries.map((r) => r.path)).toEqual(["/large/doc-50.md", "/large/doc-51.md"]);
+			h.metadata[1]?.answer.resolve([
+				{
+					path: "/large/doc-50.md",
+					mtimeMs: STAMP,
+					finder: { createdAt: null, addedAt: null, lastOpenedAt: null, tags: ["Blue"], comments: null, width: null, height: null, rating: null, application: "TextEdit" },
+				},
+			]);
+			await settle();
+			expect(tagsTextOf(h.sidecar.resolve(rows[50]!))).toBe("Blue");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("stops background enrichment waves as soon as a retained folder is navigated away from, even while kept in the LRU cache", async () => {
+		const h = harness();
+		const enrichKindsCalls: { entries: readonly FinderEntry[]; answer: Deferred<readonly FsEntryEnrichment[]> }[] = [];
+		const sourceWithKinds: DirectorySource = {
+			...h.source,
+			enrichKinds: (entries) => {
+				const answer = Promise.withResolvers<readonly FsEntryEnrichment[]>();
+				enrichKindsCalls.push({ entries, answer });
+				return answer.promise;
+			},
+		};
+		// Default capacity (32): leaving the folder keeps its record cached (refs === 0), does NOT evict it.
+		const store = createDirectoryStore({ source: sourceWithKinds, sidecar: h.sidecar, capacity: 32 });
+		const release = store.retain("/cached-big");
+		void store.load("/cached-big", "navigate");
+		const rows = Array.from({ length: 80 }, (_, i) => entry(`/cached-big/file-${i}.txt`));
+		h.lists[0]?.answer.resolve(rows);
+		await settle();
+
+		// Wave 1 is in flight; user navigates away (`release()`). Record stays cached (`store.get` still defined).
+		expect(h.enrich).toHaveLength(1);
+		release();
+		expect(store.get("/cached-big")?.loaded).toBe(true);
+		h.enrich[0]?.answer.resolve(h.enrich[0].entries.map((r) => ({ path: r.path, mtimeMs: STAMP, osKind: "Plain text", iconUrl: null })));
+		await settle();
+		// No further waves run for the unretained folder.
+		expect(enrichKindsCalls).toHaveLength(0);
+	});
 });

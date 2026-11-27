@@ -130,8 +130,8 @@ try {
 	// ── 2. The real global shortcut over another app ──
 	const registered = await app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered("Alt+Space"));
 	check("⌥Space is registered system-wide at launch", registered === true);
-	const page = await waitFor(launcherPage, 10_000);
-	check("the launcher window is pre-created hidden", page !== null && !(await launcherVisible()));
+	const preExistingWindow = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.getTitle() === "Quick Search"));
+	check("no quick-search window exists before the shortcut", (await launcherPage()) === null && !preExistingWindow);
 	let outsider = "";
 	if (isMac) {
 		sh(`open -a TextEdit`);
@@ -143,6 +143,8 @@ try {
 		sh(`powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).SendKeys('% ')"`);
 	}
 	check("the OS-level press summoned the launcher", Boolean(await waitFor(launcherVisible, 8000)), `frontmost before: ${outsider}`);
+	const page = await waitFor(launcherPage, 10_000);
+	if (page === null) throw new Error("Quick Search window did not appear after the shortcut");
 	await page.bringToFront();
 	await page.locator(".qs__input").waitFor();
 	check("the query field has the keyboard focus", await page.evaluate(() => document.activeElement?.classList.contains("qs__input") === true));

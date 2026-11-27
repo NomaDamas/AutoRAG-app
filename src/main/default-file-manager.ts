@@ -16,7 +16,11 @@ import { OS_REQUEST_FLAG } from "../shared/os-request-contract";
  *   - Sets LaunchServices default role handler for `public.folder` to Dazzi's
  *     bundle ID so `open /path/to/dir` and folder-open actions route to Dazzi
  *     (received via Electron `app.on("open-file")`).
- *   - Restores Finder (`com.apple.finder`) and deletes `NSFileViewer` on disable.
+ *   - Optional `interceptReveal` toggles the background Finder window watcher
+ *     (`mac-finder-watcher.ts`) so folders double-clicked on the Desktop or
+ *     opened in Finder are closed and handed over to Dazzi.
+ *   - Restores Finder (`com.apple.finder`), stops the watcher, and deletes
+ *     `NSFileViewer` on disable.
  *
  * Windows:
  *   - Registers per-user (no UAC) `HKCU\Software\Classes\Folder\shell\open\command`
@@ -181,6 +185,7 @@ export interface DefaultFileManagerServiceDeps {
 	readonly macRevealHookLoaded?: boolean;
 	/** Runs one OS command with argv (never a shell) and resolves its stdout. */
 	readonly run: (command: string, args: readonly string[]) => Promise<string>;
+	readonly macWatcher?: DefaultFileManagerWatcherControl;
 	readonly windowsWatcher?: DefaultFileManagerWatcherControl;
 }
 
@@ -234,29 +239,42 @@ export function createDefaultFileManagerService(deps: DefaultFileManagerServiceD
 		return false;
 	}
 
+	function activeWatcher(): DefaultFileManagerWatcherControl | undefined {
+		if (platform === "darwin") return deps.macWatcher;
+		if (platform === "win32") return deps.windowsWatcher;
+		return undefined;
+	}
+
 	async function buildStatus(
 		stored: { readonly enabled: boolean; readonly interceptReveal: boolean },
 		error: string | null = null,
 	): Promise<DefaultFileManagerStatus> {
 		const osRegistered = supported ? await probeOsRegistered() : false;
+		const watcher = activeWatcher();
 		return {
 			supported,
 			platform,
 			enabled: stored.enabled,
 			osRegistered,
-			interceptReveal: platform === "win32" ? stored.interceptReveal : false,
-			interceptRevealActive: platform === "win32" ? (deps.windowsWatcher?.isRunning() ?? false) : false,
+			interceptReveal: supported ? stored.interceptReveal : false,
+			interceptRevealActive: supported ? (watcher?.isRunning() ?? false) : false,
 			macRevealHookLoaded: platform === "darwin" ? macRevealHookLoaded : false,
 			requiresPackagedApp: platform === "darwin" && !deps.isPackaged,
 			error,
 		};
 	}
 
-	async function applyMac(enabled: boolean): Promise<void> {
+	async function applyMac(enabled: boolean, interceptReveal: boolean): Promise<void> {
 		if (enabled) {
 			await deps.run(DEFAULTS_BIN, ["write", "-g", "NSFileViewer", "-string", bundleId]);
 			await deps.run(OSASCRIPT_BIN, ["-l", "JavaScript", "-e", MAC_SET_FOLDER_HANDLER_JXA, bundleId]);
+			if (interceptReveal) {
+				deps.macWatcher?.start();
+			} else {
+				deps.macWatcher?.stop();
+			}
 		} else {
+			deps.macWatcher?.stop();
 			await deps.run(DEFAULTS_BIN, ["delete", "-g", "NSFileViewer"]).catch(() => undefined);
 			await deps.run(OSASCRIPT_BIN, ["-l", "JavaScript", "-e", MAC_SET_FOLDER_HANDLER_JXA, MAC_FINDER_BUNDLE_ID]);
 		}
@@ -284,12 +302,12 @@ export function createDefaultFileManagerService(deps: DefaultFileManagerServiceD
 		supported,
 		status: (stored) => buildStatus(stored),
 		async apply(request) {
-			const interceptReveal = platform === "win32" ? (request.interceptReveal ?? false) : false;
+			const interceptReveal = supported ? (request.interceptReveal ?? false) : false;
 			if (!supported) {
 				return buildStatus({ enabled: false, interceptReveal: false }, "Unsupported operating system");
 			}
 			if (platform === "darwin") {
-				await applyMac(request.enabled);
+				await applyMac(request.enabled, interceptReveal);
 			} else if (platform === "win32") {
 				await applyWin(request.enabled, interceptReveal);
 			}
@@ -298,7 +316,7 @@ export function createDefaultFileManagerService(deps: DefaultFileManagerServiceD
 		async syncOnStartup(stored) {
 			if (!supported) return;
 			if (!stored.enabled) {
-				deps.windowsWatcher?.stop();
+				activeWatcher()?.stop();
 				return;
 			}
 			// Never mutate the developer's host OS defaults on unpackaged `electron .` runs unless the user explicitly toggled it.
@@ -314,11 +332,14 @@ export function createDefaultFileManagerService(deps: DefaultFileManagerServiceD
 			} else if (platform === "darwin") {
 				// Ensure NSFileViewer and public.folder stay bound to Dazzi by default.
 				if (!(await readMacRegistered())) {
-					await applyMac(true);
+					await applyMac(true, stored.interceptReveal);
+				} else if (stored.interceptReveal) {
+					deps.macWatcher?.start();
 				}
 			}
 		},
 		dispose() {
+			deps.macWatcher?.stop();
 			deps.windowsWatcher?.stop();
 		},
 	};

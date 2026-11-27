@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
@@ -14,7 +14,6 @@ import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
-import { DocumentEditorAiSidebar } from "./components/DocumentEditorAiSidebar";
 import { DocumentEditorSidebarProvider } from "./components/DocumentEditorSidebarContext";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
@@ -32,8 +31,12 @@ import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
-import { SettingsView } from "./components/SettingsView";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
+
+const SettingsView = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
+const DocumentEditorAiSidebar = lazy(() =>
+	import("./components/DocumentEditorAiSidebar").then((m) => ({ default: m.DocumentEditorAiSidebar })),
+);
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
 import type { DirectoryData } from "./hooks/useDirectoryData";
@@ -692,19 +695,24 @@ export function App(): ReactElement {
 	/** The toolbar Share item: shown where the OS has a share sheet, enabled with a focused row. */
 	const shareControl = toolbarShareControl(focused !== null, finder?.actionCapabilities ?? NO_CAPABILITIES);
 	const familyEntries = focused !== null && finder !== undefined ? finder.familyEntriesFor(focused.path) : null;
-	const inspectorFamily: InspectorFamily | null =
-		familyEntries === null
-			? null
-			: {
-					headPath: familyEntries.head.path,
-					headName: familyEntries.head.name,
-					members: familyEntries.members.map((member) => ({
-						path: member.entry.path,
-						name: member.entry.name,
-						relation: member.relation,
-						where: dirname(member.entry.path),
-					})),
-				};
+	const inspectorFamily: InspectorFamily | null = useMemo(
+		() =>
+			familyEntries === null
+				? null
+				: {
+						headPath: familyEntries.head.path,
+						headName: familyEntries.head.name,
+						headMtimeMs: familyEntries.head.mtimeMs,
+						members: familyEntries.members.map((member) => ({
+							path: member.entry.path,
+							name: member.entry.name,
+							relation: member.relation,
+							where: dirname(member.entry.path),
+							mtimeMs: member.entry.mtimeMs,
+						})),
+					},
+		[familyEntries],
+	);
 	const openMemberEntry = useCallback(
 		(path: string) => {
 			const entry =
@@ -1030,17 +1038,19 @@ export function App(): ReactElement {
 					/></div></div>
 				{settingsOpen ? (
 					<div className="flex min-w-0 min-h-0" style={{ gridColumn: "1 / span 2", gridRow: 1 }}>
-						<SettingsView
-							onSettingsChanged={onSettingsChanged}
-							navWidth={sidebarWidth}
-							onBack={() => setWorkspace((current) => closeSettingsInWorkspace(current))}
-							inspectorHidden={!inspectorVisible}
-							onShowInspector={() => setInspectorVisible(true)}
-							sidebarHidden={!sidebarVisible}
-							onHideSidebar={() => setSidebarVisible(false)}
-							onShowSidebar={() => setSidebarVisible(true)}
-							searchRef={settingsSearchRef}
-						/>
+						<Suspense fallback={<div className="flex-1 bg-window" />}>
+							<SettingsView
+								onSettingsChanged={onSettingsChanged}
+								navWidth={sidebarWidth}
+								onBack={() => setWorkspace((current) => closeSettingsInWorkspace(current))}
+								inspectorHidden={!inspectorVisible}
+								onShowInspector={() => setInspectorVisible(true)}
+								sidebarHidden={!sidebarVisible}
+								onHideSidebar={() => setSidebarVisible(false)}
+								onShowSidebar={() => setSidebarVisible(true)}
+								searchRef={settingsSearchRef}
+							/>
+						</Suspense>
 					</div>
 				) : null}
 				<div className="flex min-w-0 min-h-0 flex-col" style={settingsOpen ? HIDDEN_STYLE : undefined}>
@@ -1218,7 +1228,9 @@ export function App(): ReactElement {
 								}
 							/>
 						) : editedDocPath !== null ? (
-							<DocumentEditorAiSidebar filePath={editedDocPath} />
+							<Suspense fallback={null}>
+								<DocumentEditorAiSidebar filePath={editedDocPath} />
+							</Suspense>
 						) : (
 							<Inspector
 								entry={inspectorEntry}

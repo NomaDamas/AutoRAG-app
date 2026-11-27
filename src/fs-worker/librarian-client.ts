@@ -14,7 +14,7 @@ import type { DupeyScanResult } from "@autorag/librarian";
 import { createWorkerClient, serveWorkerPort, type WorkerClient } from "../shared/fs-worker-protocol";
 import { t } from "../shared/i18n/core";
 import type { AppLanguage } from "../shared/i18n/core";
-import type { FsLocation } from "../shared/fs-contract";
+import type { FsLocation, FsVersionHistoryMemberInput, FsVersionHistoryResult } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
 import type { IndexMap } from "../shared/index-map-contract";
 import type { ErrorReport } from "../main/error-report-core";
@@ -38,6 +38,12 @@ export interface LibrarianClientDeps {
 	 * index run still in flight and can take most of that, so a shorter bound ends the thread before the daemon is told to exit.
 	 */
 	readonly shutdownMs?: number;
+	/**
+	 * When set, terminate the worker thread after this many milliseconds with zero in-flight calls
+	 * to reclaim its ~150 MB `@autorag/librarian` footprint on low-RAM machines; the next call
+	 * transparently respawns it.
+	 */
+	readonly idleTimeoutMs?: number;
 }
 
 export interface LibrarianClient {
@@ -45,6 +51,7 @@ export interface LibrarianClient {
 	readonly contentSearch: ContentSearch;
 	readonly sourceSearch: SourceSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
+	versionHistory(members: readonly FsVersionHistoryMemberInput[]): Promise<FsVersionHistoryResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -71,6 +78,29 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 	let running: Running | null = null;
 	let disposed = false;
 	let language: AppLanguage | null = null;
+	let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function clearIdleTimer(): void {
+		if (idleTimer !== null) {
+			clearTimeout(idleTimer);
+			idleTimer = null;
+		}
+	}
+
+	function scheduleIdleReap(): void {
+		const idleMs = deps.idleTimeoutMs;
+		if (idleMs === undefined || idleMs <= 0 || disposed) return;
+		clearIdleTimer();
+		const target = running;
+		if (target === null || target.inFlight.size > 0) return;
+		idleTimer = setTimeout(() => {
+			idleTimer = null;
+			if (disposed || running !== target || target.inFlight.size > 0) return;
+			running = null;
+			void target.thread.terminate().catch(() => undefined);
+		}, idleMs);
+		idleTimer.unref();
+	}
 
 	function start(): Running {
 		const thread = deps.spawn();
@@ -100,6 +130,7 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 
 	async function call<T>(op: string, args: readonly unknown[] = [], signal?: AbortSignal): Promise<T> {
 		if (disposed) throw new Error(t("main.worker.librarianStopped"));
+		clearIdleTimer();
 		running ??= start();
 		const current = running;
 		const failed = Promise.withResolvers<never>();
@@ -109,6 +140,7 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 			return await Promise.race([current.ready.then(() => current.client.call<T>(op, args, signal === undefined ? {} : { signal })), failed.promise]);
 		} finally {
 			current.inFlight.delete(failed.reject);
+			if (current.inFlight.size === 0) scheduleIdleReap();
 		}
 	}
 
@@ -144,6 +176,7 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 				call(LIBRARIAN_OP.sourceSearch, limit === undefined ? [datasourceId, query] : [datasourceId, query, limit], signal),
 		},
 		scanDuplicates: (dir) => call(LIBRARIAN_OP.scanDuplicates, [dir]),
+		versionHistory: (members) => call(LIBRARIAN_OP.versionHistory, [members]),
 		indexStatus: {
 			indexStatus: (paths) => call(LIBRARIAN_OP.indexStatus, [paths]),
 			setIndexExcluded: (path, excluded) => call(LIBRARIAN_OP.setIndexExcluded, [path, excluded]),
@@ -155,6 +188,7 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 		},
 		async dispose() {
 			disposed = true;
+			clearIdleTimer();
 			const ending = running;
 			running = null;
 			if (ending === null) return;

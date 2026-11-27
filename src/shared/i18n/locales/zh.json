@@ -294,6 +294,28 @@
       "near": "相似版本",
       "contains": "包含版本"
     },
+    "versionHistory": {
+      "title": "版本历史",
+      "count": "{{count}} 个版本",
+      "loading": "正在比较变更…",
+      "identical": "与上一版本内容相同",
+      "baseVersion": "基准版本",
+      "unsupported": "不支持文本比较的格式",
+      "error": "无法加载变更内容",
+      "vsPrevious": "对比上一版本（{{name}}）",
+      "addedLines": "+{{count}}行",
+      "removedLines": "-{{count}}行",
+      "viewDetail": "详细对比",
+      "openFile": "定位文件",
+      "previousLabel": "上一版本",
+      "currentLabel": "当前版本",
+      "viewModeUnified": "单栏视图",
+      "viewModeSplit": "并排对比",
+      "viewModeGroup": "对比视图模式",
+      "summarizing": "AI 摘要中…",
+      "truncatedNotice": "文档较长，仅展示核心变更片段。",
+      "close": "关闭"
+    },
     "evidencePanel": {
       "emptyTitle": "回答的来源\n将显示在此处。",
       "excerpts": "依据摘录",
@@ -1370,7 +1392,8 @@
     "onboarding": {
       "indexingFailed": "建立索引失败。",
       "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}",
-      "noQuestion": "未能完成准备。重试时会跳过已读取的文件,从中断处继续。"
+      "noQuestion": "未能完成准备。重试时会跳过已读取的文件,从中断处继续。",
+      "fallbackQuestion": "帮我总结一下最近保存的文件"
     },
     "lock": {
       "scheduledBusy": "后台刷新正在运行。完成后请重试。",
@@ -2239,6 +2262,8 @@
       "defaultFileManagerHintWin": "打开文件夹和按下 Win+E 时，将改由 Dazzi 打开。控制面板等系统虚拟文件夹会安全回退至资源管理器。",
       "defaultFileManagerInterceptReveal": "同时接管其他应用的“在文件夹中显示”",
       "defaultFileManagerInterceptRevealHint": "检测 Chrome、VS Code 等应用打开的资源管理器窗口，并在 Dazzi 中直接定位并选中目标文件。",
+      "defaultFileManagerInterceptMac": "桌面文件夹与新建访达窗口也在 Dazzi 中打开",
+      "defaultFileManagerInterceptMacHint": "检测新打开的访达窗口（如双击桌面上的文件夹），自动关闭该窗口并在 Dazzi 中打开。需要 macOS 访达自动化权限。",
       "defaultFileManagerError": "无法更改默认文件管理器设置：{{error}}",
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在后台下载新版本，并在退出应用时安装。",
@@ -3606,7 +3631,9 @@
       "progress": "{{index}} / {{count}}",
       "ask": {
         "title": "向你的文件提问",
-        "body": "已根据你的文档准备好要问的内容。\n点击发送试试。"
+        "body": "已根据你的文档准备好要问的内容。\n点击发送试试。",
+        "fallbackTitle": "先用示例问题试试吧",
+        "fallbackBody": "文件较少,暂时没能生成专属问题。可以先发送这个默认示例,或改成你想问的内容再发送。"
       },
       "cite": {
         "title": "答案会标出依据",

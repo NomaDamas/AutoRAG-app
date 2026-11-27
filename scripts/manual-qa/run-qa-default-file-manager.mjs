@@ -1,16 +1,23 @@
 // Live E2E QA for Default File Manager integration (macOS & Windows).
 //
 // macOS checks (run inside Tart VM via `bun run qa script --vm scripts/manual-qa/run-qa-default-file-manager.mjs`):
-//   1. Settings → General renders the "Use as Default File Manager" switch;
-//      toggling ON writes `defaults read -g NSFileViewer == com.autorag.app` and
-//      registers LaunchServices `public.folder` handler; toggling OFF restores Finder.
+//   1. Settings → General renders both "Use as Default File Manager" and
+//      "Open Desktop folders and new Finder windows in Dazzi" switches;
+//      toggling ON writes `defaults read -g NSFileViewer == com.autorag.app`,
+//      registers LaunchServices `public.folder` handler, and starts the Finder
+//      window watcher (`interceptRevealActive === true`); toggling OFF restores
+//      Finder and stops the watcher.
 //   2. The native macOS AppleEvent `misc`/`mvis` reveal hook is loaded in the running
 //      Electron main process (`defaultFileManager.status().macRevealHookLoaded === true`).
 //   3. Sending a real macOS AppleEvent `misc`/`mvis` (`kAERevealSelection`) to the
 //      running Electron process reveals and selects the target file inside Dazzi!
-//   4. Launching with `--autorag-default-open <folder>` hands over to the running
+//   4. Opening a folder in real Finder.app (including a folder on ~/Desktop, simulating
+//      double-clicking a Desktop folder) is intercepted by the Finder window watcher:
+//      the Finder window is closed and Dazzi opens that folder!
+//   5. Launching with `--autorag-default-open <folder>` hands over to the running
 //      instance and opens that folder in Dazzi.
-//   5. Screenshots of Settings → General and revealed file are saved to `QA_OUT`.
+//   6. Screenshots of Settings → General, revealed file, intercepted Desktop folder,
+//      and disabled state are saved to `QA_OUT`.
 //
 // Windows checks (run on Windows via SSH `bun scripts/manual-qa/run-qa-default-file-manager.mjs`):
 //   1. Settings → General renders both "Use as Default File Manager" and
@@ -28,7 +35,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { isMac, isWindows } from "./platform.mjs";
@@ -42,10 +49,16 @@ const TARGET_DIR = join(WORK, "target-folder");
 const REVEAL_DIR = join(WORK, "reveal-folder");
 const REVEAL_FILE = join(REVEAL_DIR, "find-me-in-dazzi.txt");
 const EXTRA_FILE = join(TARGET_DIR, "opened-via-default-manager.txt");
+const DESKTOP_FOLDER = isMac ? join(homedir(), "Desktop", `dazzi-qa-desktop-${Date.now()}`) : null;
+const DESKTOP_FILE = DESKTOP_FOLDER ? join(DESKTOP_FOLDER, "opened-from-desktop.txt") : null;
 
 for (const dir of [USER_DATA, TARGET_DIR, REVEAL_DIR]) mkdirSync(dir, { recursive: true });
 writeFileSync(REVEAL_FILE, "reveal target\n");
 writeFileSync(EXTRA_FILE, "folder open target\n");
+if (DESKTOP_FOLDER && DESKTOP_FILE) {
+	mkdirSync(DESKTOP_FOLDER, { recursive: true });
+	writeFileSync(DESKTOP_FILE, "desktop folder intercept target\n");
+}
 
 let failures = 0;
 const check = (name, ok, detail = "") => {
@@ -109,6 +122,14 @@ try {
 		check("macOS NSFileViewer set to com.autorag.app", readMacNsFileViewer() === "com.autorag.app", readMacNsFileViewer());
 		check("macOS native AppleEvent misc/mvis hook loaded", initialStatus.macRevealHookLoaded === true);
 
+		const macInterceptSwitch = page.getByRole("switch", {
+			name: /Open Desktop folders and new Finder windows in Dazzi|바탕화면 폴더·새 Finder 창도 Dazzi로 열기/u,
+		});
+		await macInterceptSwitch.waitFor({ timeout: 10_000 });
+		check("macOS Finder window intercept sub-switch is ON by default when enabled", (await macInterceptSwitch.getAttribute("aria-checked")) === "true");
+		const macStatus = await page.evaluate(() => window.autorag.defaultFileManager.status());
+		check("macOS Finder window watcher is active", macStatus.interceptRevealActive === true, JSON.stringify(macStatus));
+
 		// Send real macOS AppleEvent `misc`/`mvis` (`kAERevealSelection`) to the running Electron PID!
 		const mainPid = app.process().pid;
 		const sendAeJxa = `
@@ -142,6 +163,36 @@ function run(argv) {
 		const revealed = await until(async () => (await revealedRow.count()) > 0, 15_000);
 		check("macOS AppleEvent misc/mvis reveals file in Dazzi", revealed !== false, REVEAL_FILE);
 		await page.screenshot({ path: join(OUT, "02-mac-revealed-via-appleevent.png") });
+
+		// Real Desktop folder open in Finder.app -> intercepted by mac-finder-watcher, Finder window closed, opened in Dazzi!
+		// Give the watcher one tick to finish its initial snapshot before opening the Desktop folder in Finder.
+		await sleep(600);
+		const openDesktopInFinderJxa = `
+const Finder = Application("Finder");
+function run(argv) {
+	Finder.open(Path(argv[0]));
+	return String(Finder.finderWindows().length);
+}
+`;
+		const finderOpenCount = execFileSync("/usr/bin/osascript", ["-l", "JavaScript", "-e", openDesktopInFinderJxa, DESKTOP_FOLDER], {
+			encoding: "utf8",
+		}).trim();
+		console.log("macOS Finder.open(Desktop folder) window count:", finderOpenCount);
+
+		const desktopRow = page.locator(`[data-path="${DESKTOP_FILE}"]`).first();
+		const desktopIntercepted = await until(async () => (await desktopRow.count()) > 0, 15_000);
+		check("macOS Finder window for Desktop folder intercepted and opened in Dazzi", desktopIntercepted !== false, DESKTOP_FILE);
+
+		const remainingFinderWindows = await until(async () => {
+			const count = Number(
+				execFileSync("/usr/bin/osascript", ["-l", "JavaScript", "-e", 'const F = Application("Finder"); String(F.finderWindows().length)'], {
+					encoding: "utf8",
+				}).trim(),
+			);
+			return count === 0;
+		}, 10_000);
+		check("macOS intercepted Finder window is closed automatically", remainingFinderWindows === true);
+		await page.screenshot({ path: join(OUT, "02b-mac-desktop-folder-intercepted.png") });
 	}
 
 	if (isWindows) {
@@ -216,6 +267,7 @@ function run(argv) {
 	check("toggling OFF restores OS default file manager", disabledStatus !== false, JSON.stringify(disabledStatus));
 	if (isMac) {
 		check("macOS NSFileViewer cleared on disable", readMacNsFileViewer() === "", readMacNsFileViewer());
+		check("macOS Finder window watcher stopped on disable", disabledStatus !== false && disabledStatus.interceptRevealActive === false);
 	}
 	if (isWindows) {
 		check("Windows HKCU Folder key removed on disable", readWinReg("HKCU\\Software\\Classes\\Folder\\shell\\open\\command") === "");
@@ -228,6 +280,7 @@ function run(argv) {
 } finally {
 	if (app !== undefined) await app.close().catch(() => {});
 	rmSync(WORK, { recursive: true, force: true });
+	if (DESKTOP_FOLDER) rmSync(DESKTOP_FOLDER, { recursive: true, force: true });
 }
 
 if (failures > 0) {

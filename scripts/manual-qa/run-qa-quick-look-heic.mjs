@@ -17,7 +17,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 if (process.platform !== "darwin") {
 	console.log("SKIP  HEIC decode through sips is macOS-only");
@@ -103,12 +103,8 @@ if (realDir === undefined) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	let preview;
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 
 	for (const name of names) {
 		const row = main.getByRole("row", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
@@ -116,6 +112,7 @@ try {
 		await row.click();
 		const started = Date.now();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		const size = await poll(
 			() =>
 				preview

@@ -209,18 +209,98 @@ describe("createDefaultFileManagerService (macOS)", () => {
 		expect(initial.supported).toBe(true);
 		expect(initial.osRegistered).toBe(false);
 		expect(initial.macRevealHookLoaded).toBe(true);
+		expect(initial.interceptReveal).toBe(false);
+		expect(initial.interceptRevealActive).toBe(false);
 
-		const enabled = await service.apply({ enabled: true });
+		const enabled = await service.apply({ enabled: true, interceptReveal: false });
 		expect(enabled.enabled).toBe(true);
 		expect(enabled.osRegistered).toBe(true);
 		expect(nsFileViewer).toBe(MAC_DAZZI_BUNDLE_ID);
 		expect(lsFolderHandler).toBe(MAC_DAZZI_BUNDLE_ID);
 
-		const disabled = await service.apply({ enabled: false });
+		const disabled = await service.apply({ enabled: false, interceptReveal: false });
 		expect(disabled.enabled).toBe(false);
 		expect(disabled.osRegistered).toBe(false);
 		expect(nsFileViewer).toBe("");
 		expect(lsFolderHandler).toBe(MAC_FINDER_BUNDLE_ID);
+	});
+
+	it("starts and stops the macOS Finder window watcher when interceptReveal is toggled", async () => {
+		let watcherRunning = false;
+		const watcherEvents: string[] = [];
+		let nsFileViewer = "";
+		let lsFolderHandler = MAC_FINDER_BUNDLE_ID;
+
+		const service = createDefaultFileManagerService({
+			platform: "darwin",
+			isPackaged: true,
+			execPath: "/Applications/Dazzi.app/Contents/MacOS/Dazzi",
+			appArgs: [],
+			bundleId: MAC_DAZZI_BUNDLE_ID,
+			macRevealHookLoaded: true,
+			macWatcher: {
+				isRunning: () => watcherRunning,
+				start: () => {
+					watcherRunning = true;
+					watcherEvents.push("start");
+				},
+				stop: () => {
+					watcherRunning = false;
+					watcherEvents.push("stop");
+				},
+			},
+			run: async (cmd, args) => {
+				if (cmd === "/usr/bin/defaults" && args[0] === "read") {
+					if (nsFileViewer === "") throw new Error("missing");
+					return `${nsFileViewer}\n`;
+				}
+				if (cmd === "/usr/bin/defaults" && args[0] === "write") {
+					nsFileViewer = args[4] ?? "";
+					return "";
+				}
+				if (cmd === "/usr/bin/defaults" && args[0] === "delete") {
+					nsFileViewer = "";
+					return "";
+				}
+				if (cmd === "/usr/bin/osascript") {
+					const script = args[3] ?? "";
+					if (script.includes("LSSetDefaultRoleHandlerForContentType")) {
+						lsFolderHandler = args[4] ?? lsFolderHandler;
+						return "0\n";
+					}
+					return `${lsFolderHandler}\n`;
+				}
+				return "";
+			},
+		});
+
+		const enabledWithIntercept = await service.apply({ enabled: true, interceptReveal: true });
+		expect(enabledWithIntercept.enabled).toBe(true);
+		expect(enabledWithIntercept.osRegistered).toBe(true);
+		expect(enabledWithIntercept.interceptReveal).toBe(true);
+		expect(enabledWithIntercept.interceptRevealActive).toBe(true);
+		expect(watcherEvents).toEqual(["start"]);
+
+		const interceptOff = await service.apply({ enabled: true, interceptReveal: false });
+		expect(interceptOff.interceptReveal).toBe(false);
+		expect(interceptOff.interceptRevealActive).toBe(false);
+		expect(watcherEvents).toEqual(["start", "stop"]);
+
+		const interceptBackOn = await service.apply({ enabled: true, interceptReveal: true });
+		expect(interceptBackOn.interceptRevealActive).toBe(true);
+
+		const allOff = await service.apply({ enabled: false, interceptReveal: true });
+		expect(allOff.enabled).toBe(false);
+		expect(allOff.interceptRevealActive).toBe(false);
+		expect(watcherEvents).toEqual(["start", "stop", "start", "stop"]);
+
+		// Startup sync starts the macOS watcher when packaged and both flags are enabled.
+		await service.syncOnStartup({ enabled: true, interceptReveal: true });
+		expect(watcherRunning).toBe(true);
+
+		// Dispose always stops the macOS watcher.
+		service.dispose();
+		expect(watcherRunning).toBe(false);
 	});
 });
 

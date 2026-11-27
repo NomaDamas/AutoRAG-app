@@ -294,6 +294,28 @@
       "near": "Similar",
       "contains": "Contains"
     },
+    "versionHistory": {
+      "title": "Version History",
+      "count": "{{count}} versions",
+      "loading": "Comparing changes…",
+      "identical": "Same content as previous",
+      "baseVersion": "Base version",
+      "unsupported": "Text comparison unavailable",
+      "error": "Could not load changes",
+      "vsPrevious": "vs. {{name}}",
+      "addedLines": "+{{count}}",
+      "removedLines": "-{{count}}",
+      "viewDetail": "View diff",
+      "openFile": "Reveal file",
+      "previousLabel": "Previous",
+      "currentLabel": "Current",
+      "viewModeUnified": "Unified",
+      "viewModeSplit": "Side by side",
+      "viewModeGroup": "Diff layout",
+      "summarizing": "Summarizing…",
+      "truncatedNotice": "Showing key changed sections for this long document.",
+      "close": "Close"
+    },
     "evidencePanel": {
       "emptyTitle": "Answer sources\nwill appear here.",
       "excerpts": "Evidence excerpts",
@@ -1370,7 +1392,8 @@
     "onboarding": {
       "indexingFailed": "Indexing failed.",
       "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}",
-      "noQuestion": "Couldn't finish getting ready. Trying again skips the files already read and carries on."
+      "noQuestion": "Couldn't finish getting ready. Trying again skips the files already read and carries on.",
+      "fallbackQuestion": "Summarize the files I saved recently"
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",
@@ -2239,6 +2262,8 @@
       "defaultFileManagerHintWin": "Open folders and Win+E in Dazzi instead of File Explorer. System virtual folders like Control Panel safely fall back to Explorer.",
       "defaultFileManagerInterceptReveal": "Also intercept ‘Show in folder’ from other apps",
       "defaultFileManagerInterceptRevealHint": "Detect File Explorer windows opened by apps like Chrome or VS Code and reveal the selected file in Dazzi instead.",
+      "defaultFileManagerInterceptMac": "Open Desktop folders and new Finder windows in Dazzi",
+      "defaultFileManagerInterceptMacHint": "Detect newly opened Finder windows (such as double-clicking a Desktop folder), close them, and open the folder in Dazzi. Requires macOS Automation permission for Finder.",
       "defaultFileManagerError": "Could not update the default file manager setting: {{error}}",
       "autoUpdates": "Install Updates Automatically",
       "autoUpdatesHint": "Download new versions in the background and install them when you quit the app.",
@@ -3606,7 +3631,9 @@
       "progress": "{{index}} / {{count}}",
       "ask": {
         "title": "Ask about your files",
-        "body": "We drafted something to ask from your own documents.\nClick send to try it."
+        "body": "We drafted something to ask from your own documents.\nClick send to try it.",
+        "fallbackTitle": "Try a default question",
+        "fallbackBody": "There weren't enough files yet to craft a custom question. Try sending this example, or edit it to ask your own."
       },
       "cite": {
         "title": "Answers show their sources",

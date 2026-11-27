@@ -20,6 +20,8 @@ import type { SearchDatasource, SourceSearchOutcome } from "./source-search-cont
 export const FS_CHANNELS = {
 	/** Renderer → main: hand a row drag to the OS as real files; fire and forget. */
 	startDrag: "fs:startDrag",
+	/** Renderer → main: summarize a version diff in 1–2 short sentences with the query-decomposition sLLM. */
+	summarizeVersionDiff: "fs:summarizeVersionDiff",
 } as const;
 
 /** Finder/Spotlight metadata used by Sort By and Group By. */
@@ -522,6 +524,18 @@ export interface FsVersionFamilyBridge {
 	versionFamilies(): Promise<FsVersionFamiliesResult>;
 	/** Forces a dupey scan now, persists it, and returns the fresh snapshot. */
 	refreshVersionFamilies(): Promise<FsVersionFamiliesResult>;
+	/**
+	 * Computes chronological version history (newest-first by mtime) for a dupey
+	 * family, including concise added/removed change summaries and structured line
+	 * diffs of each version against its immediate predecessor.
+	 */
+	versionHistory(members: readonly FsVersionHistoryMemberInput[]): Promise<FsVersionHistoryResult>;
+	/**
+	 * Summarizes one version diff into 1–2 short natural-language sentences using
+	 * the app's query-decomposition sLLM. Degrades to `{ summary: null }` when no
+	 * model/auth is available.
+	 */
+	summarizeVersionDiff?(request: FsVersionDiffSummaryRequest): Promise<FsVersionDiffSummaryResult>;
 }
 
 export interface FsIndexBridge {
@@ -570,4 +584,74 @@ export interface FsVersionFamiliesResult {
 	readonly families: readonly FsVersionFamily[];
 	readonly scannedAt: string | null;
 	readonly error: FsVersionFamilyError | null;
+}
+
+export interface FsVersionHistoryMemberInput {
+	readonly path: string;
+	readonly relation?: FsVersionRelation | "latest";
+	readonly mtimeMs?: number;
+}
+
+export type FsVersionDiffLineKind = "context" | "added" | "removed";
+
+export interface FsVersionDiffLine {
+	readonly kind: FsVersionDiffLineKind;
+	readonly text: string;
+	readonly previousLine: number | null;
+	readonly currentLine: number | null;
+}
+
+export interface FsVersionDiffHunk {
+	readonly previousStart: number;
+	readonly previousCount: number;
+	readonly currentStart: number;
+	readonly currentCount: number;
+	readonly lines: readonly FsVersionDiffLine[];
+}
+
+export interface FsVersionDiffSummary {
+	readonly addedCount: number;
+	readonly removedCount: number;
+	readonly addedHighlights: readonly string[];
+	readonly removedHighlights: readonly string[];
+}
+
+export type FsVersionDiffStatus = "changed" | "identical" | "unsupported" | "error";
+
+export interface FsDocumentVersionDiff {
+	readonly previousPath: string;
+	readonly currentPath: string;
+	readonly status: FsVersionDiffStatus;
+	readonly summary: FsVersionDiffSummary;
+	readonly hunks: readonly FsVersionDiffHunk[];
+	readonly truncated: boolean;
+	readonly error?: string;
+}
+
+export interface FsVersionHistoryEntry {
+	readonly path: string;
+	readonly name: string;
+	readonly mtimeMs: number;
+	readonly relation: FsVersionRelation | "latest";
+	readonly isLatest: boolean;
+	readonly previousPath: string | null;
+	readonly diff: FsDocumentVersionDiff | null;
+}
+
+export interface FsVersionHistoryResult {
+	readonly versions: readonly FsVersionHistoryEntry[];
+}
+
+export interface FsVersionDiffSummaryRequest {
+	readonly previousName: string;
+	readonly currentName: string;
+	readonly addedCount: number;
+	readonly removedCount: number;
+	readonly hunks: readonly FsVersionDiffHunk[];
+	readonly language?: string;
+}
+
+export interface FsVersionDiffSummaryResult {
+	readonly summary: string | null;
+	readonly modelId?: string;
 }
