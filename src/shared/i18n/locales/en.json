@@ -651,7 +651,8 @@
       "noMatches": "No files match right now",
       "notRun": "Not run yet",
       "runFiles": "Files: {{count}}",
-      "runFilesMore": "{{name}} and {{count}} more"
+      "runFilesMore": "{{name}} and {{count}} more",
+      "runFileMissing": "Can't find this file. It may have been moved or deleted."
     },
     "quickLook": {
       "when": "When",
@@ -662,20 +663,20 @@
       "ranFail": "Ran {{time}} · {{reason}}"
     },
     "confirm": {
-      "title": "Delete the rule “{{title}}”?",
-      "message": "Only the rule is removed; the folder and its files stay as they are.",
+      "title": "Delete the automation “{{title}}”?",
+      "message": "Only the automation is removed; the folder and its files stay as they are.",
       "magicMessage": "It only leaves the right-click menu; your files and folders stay as they are.",
       "action": "Delete"
     },
     "toast": {
-      "deleted": "Deleted the rule “{{title}}”.",
+      "deleted": "Deleted the automation “{{title}}”.",
       "creating": "Creating the automation…",
       "created": "Automation created.",
       "saving": "Saving your changes…",
       "saved": "Changes saved.",
-      "deleting": "Deleting the rule ‘{{title}}’…",
+      "deleting": "Deleting the automation ‘{{title}}’…",
       "undo": "Undo",
-      "restored": "Restored the rule “{{title}}”.",
+      "restored": "Restored the automation “{{title}}”.",
       "addingToMenu": "Adding to the right-click menu…",
       "addedToMenu": "Added ‘{{title}}’ to the right-click menu."
     },

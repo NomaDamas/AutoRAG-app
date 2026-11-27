@@ -172,7 +172,7 @@ describe("the 자동화 tab's right-click rows", () => {
 });
 
 describe("전체 기록 with right-click runs", () => {
-	it("names each run by its file, with the automation and how it ended under it, and opens the action's page", async () => {
+	it("names each run by its file, with the automation and how it ended under it; the row opens the file, the name the action's page", async () => {
 		const action: MagicAction = {
 			id: "minutes",
 			label: "세 줄 요약",
@@ -187,6 +187,7 @@ describe("전체 기록 with right-click runs", () => {
 			...(Reflect.get(globalThis, "autorag") as object),
 			magicAction: { history: async () => [run] },
 		});
+		const openFolder = vi.fn();
 		await act(async () => {
 			root.render(
 				<AutomationsView
@@ -201,7 +202,7 @@ describe("전체 기록 with right-click runs", () => {
 					onAskDelete={vi.fn()}
 					onSetDaemon={vi.fn()}
 					onContextMenu={vi.fn()}
-					onOpenFolder={vi.fn()}
+					onOpenFolder={openFolder}
 					magicActions={[action]}
 				/>,
 			);
@@ -217,7 +218,13 @@ describe("전체 기록 with right-click runs", () => {
 		expect(line?.querySelector("[data-run-title]")?.textContent).toBe(t("automations.inspector.runFilesMore", { name: "회의록.txt", count: 2 }));
 		expect(line?.querySelector("[data-run-caption]")?.textContent).toBe(`세 줄 요약 · ${t("automations.inspector.runDone")}`);
 		expect(line?.querySelector("[data-kind]")).toBeNull();
-		await act(async () => (line as HTMLElement | null)?.click());
+		// The row opens the file's folder, as a run on the action's own page does; it stays on 전체 기록.
+		await act(async () => line?.querySelector<HTMLElement>("[data-run-open]")?.click());
+		expect(openFolder).toHaveBeenCalledWith("C:/docs");
+		expect(host.querySelector("[data-automation-all-runs]")).not.toBeNull();
+		// The automation's name is the way to its page.
+		await act(async () => line?.querySelector<HTMLElement>('[data-action="run-open-automation"]')?.click());
+		expect(openFolder).toHaveBeenCalledTimes(1);
 		expect(host.querySelector('[data-magic-action-detail="minutes"]')).not.toBeNull();
 		// On the action's page the run reads its time as a clock time and opens its folder.
 		expect(host.querySelector('[data-magic-action-detail="minutes"] [data-run]')?.textContent).toContain(t("automations.time.todayAt", { time: "" }).trim());
@@ -227,6 +234,65 @@ describe("전체 기록 with right-click runs", () => {
 		await act(async () => host.querySelector<HTMLElement>('[data-action="automation-crumb-all"]')?.click());
 		expect(host.querySelector("[data-automation-all-runs]")).not.toBeNull();
 		expect(host.querySelector('[data-magic-action-detail="minutes"]')).toBeNull();
+	});
+
+	it("leaves › off a run that left no file, and fades it on one whose file is gone, saying why", async () => {
+		const action: MagicAction = {
+			id: "minutes",
+			label: "세 줄 요약",
+			enabled: true,
+			selection: "single",
+			targetKind: "file",
+			extensions: ["txt"],
+			execution: { kind: "agent", mode: "read", prompt: "세 줄로 요약해 줘" },
+		};
+		const gone = { startedAt: Date.now() - 60_000, durationMs: 900, eventCount: 1, exitCode: 0, signal: null, timedOut: false, files: ["C:/docs/지운파일.txt"] };
+		const none = { startedAt: Date.now() - 120_000, durationMs: 900, eventCount: 1, exitCode: 1, signal: null, timedOut: false };
+		const before = Reflect.get(globalThis, "autorag") as { fs: object };
+		Reflect.set(globalThis, "autorag", {
+			...before,
+			fs: { ...before.fs, exists: async (path: string) => path !== "C:/docs/지운파일.txt" },
+			magicAction: { history: async () => [gone, none] },
+		});
+		const openFolder = vi.fn();
+		await act(async () => {
+			root.render(
+				<AutomationsView
+					state={{ ready: true, rules: [], daemon: null, configPath: "", configError: null, error: null }}
+					daemonBusy={false}
+					selectedId={null}
+					onSelect={vi.fn()}
+					onEdit={vi.fn()}
+					onAdd={vi.fn()}
+					onCreate={vi.fn(async () => true)}
+					onPreview={vi.fn()}
+					onAskDelete={vi.fn()}
+					onSetDaemon={vi.fn()}
+					onContextMenu={vi.fn()}
+					onOpenFolder={openFolder}
+					magicActions={[action]}
+				/>,
+			);
+		});
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		await act(async () => host.querySelector<HTMLElement>('[data-action="automation-all-runs"]')?.click());
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const [missing, empty] = [...host.querySelectorAll<HTMLElement>("[data-automation-all-runs] [data-run]")];
+		expect(missing?.querySelector('[data-run-chevron="missing"]')).not.toBeNull();
+		expect(missing?.getAttribute("title")).toBe(t("automations.inspector.runFileMissing"));
+		expect(missing?.querySelector("[data-run-open]")).toBeNull();
+		expect(empty?.querySelector("[data-run-chevron]")).toBeNull();
+		expect(empty?.querySelector("[data-run-open]")).toBeNull();
+		// Both still lead to the automation by its name.
+		expect(missing?.querySelector('[data-action="run-open-automation"]')).not.toBeNull();
+		expect(empty?.querySelector('[data-action="run-open-automation"]')).not.toBeNull();
+		expect(openFolder).not.toHaveBeenCalled();
+		Reflect.set(globalThis, "autorag", before);
 	});
 });
 

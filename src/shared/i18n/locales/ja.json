@@ -651,7 +651,8 @@
       "noMatches": "今は条件に合うファイルがありません",
       "notRun": "まだ実行されていません",
       "runFiles": "ファイル {{count}}件",
-      "runFilesMore": "{{name}} ほか{{count}}件"
+      "runFilesMore": "{{name}} ほか{{count}}件",
+      "runFileMissing": "ファイルが見つかりません。移動または削除された可能性があります。"
     },
     "quickLook": {
       "when": "いつ",
@@ -662,20 +663,20 @@
       "ranFail": "{{time}}に実行 · {{reason}}"
     },
     "confirm": {
-      "title": "ルール「{{title}}」を削除しますか?",
-      "message": "ルールだけが削除され、フォルダとファイルはそのまま残ります。",
+      "title": "自動化「{{title}}」を削除しますか?",
+      "message": "自動化だけが削除され、フォルダとファイルはそのまま残ります。",
       "magicMessage": "右クリックメニューから外れるだけで、ファイルとフォルダはそのまま残ります。",
       "action": "削除"
     },
     "toast": {
-      "deleted": "ルール「{{title}}」を削除しました。",
+      "deleted": "自動化「{{title}}」を削除しました。",
       "creating": "自動化を作成しています…",
       "created": "自動化を作成しました。",
       "saving": "変更を保存しています…",
       "saved": "変更を保存しました。",
-      "deleting": "ルール「{{title}}」を削除しています…",
+      "deleting": "自動化「{{title}}」を削除しています…",
       "undo": "取り消す",
-      "restored": "ルール「{{title}}」を元に戻しました。",
+      "restored": "自動化「{{title}}」を元に戻しました。",
       "addingToMenu": "右クリックメニューに追加しています…",
       "addedToMenu": "右クリックメニューに「{{title}}」を追加しました。"
     },

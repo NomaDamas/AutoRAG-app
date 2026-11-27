@@ -651,7 +651,8 @@
       "noMatches": "目前没有符合条件的文件",
       "notRun": "尚未运行",
       "runFiles": "文件 {{count}} 个",
-      "runFilesMore": "{{name}} 等 {{count}} 个"
+      "runFilesMore": "{{name}} 等 {{count}} 个",
+      "runFileMissing": "找不到此文件，可能已被移动或删除。"
     },
     "quickLook": {
       "when": "何时",
@@ -662,20 +663,20 @@
       "ranFail": "{{time}}运行 · {{reason}}"
     },
     "confirm": {
-      "title": "要删除规则“{{title}}”吗？",
-      "message": "只会删除这条规则，文件夹和文件保持不变。",
+      "title": "要删除自动化“{{title}}”吗？",
+      "message": "只会删除这个自动化，文件夹和文件保持不变。",
       "magicMessage": "只会从右键菜单中移除，文件和文件夹保持不变。",
       "action": "删除"
     },
     "toast": {
-      "deleted": "已删除规则“{{title}}”。",
+      "deleted": "已删除自动化“{{title}}”。",
       "creating": "正在创建自动化…",
       "created": "已创建自动化。",
       "saving": "正在保存更改…",
       "saved": "已保存更改。",
-      "deleting": "正在删除规则“{{title}}”…",
+      "deleting": "正在删除自动化“{{title}}”…",
       "undo": "撤销",
-      "restored": "已恢复规则“{{title}}”。",
+      "restored": "已恢复自动化“{{title}}”。",
       "addingToMenu": "正在添加到右键菜单…",
       "addedToMenu": "已将“{{title}}”添加到右键菜单。"
     },

@@ -651,7 +651,8 @@
       "noMatches": "지금은 조건에 맞는 파일이 없습니다",
       "notRun": "아직 실행되지 않음",
       "runFiles": "파일 {{count}}개",
-      "runFilesMore": "{{name}} 외 {{count}}개"
+      "runFilesMore": "{{name}} 외 {{count}}개",
+      "runFileMissing": "파일을 찾을 수 없습니다. 옮겨졌거나 삭제되었을 수 있습니다."
     },
     "quickLook": {
       "when": "언제",
@@ -662,20 +663,20 @@
       "ranFail": "{{time}} 실행 · {{reason}}"
     },
     "confirm": {
-      "title": "‘{{title}}’ 규칙을 삭제할까요?",
-      "message": "규칙만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
+      "title": "‘{{title}}’ 자동화를 삭제할까요?",
+      "message": "자동화만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
       "magicMessage": "우클릭 메뉴에서만 빠지고 파일과 폴더는 그대로 유지됩니다.",
       "action": "삭제"
     },
     "toast": {
-      "deleted": "‘{{title}}’ 규칙을 삭제했습니다.",
+      "deleted": "‘{{title}}’ 자동화를 삭제했습니다.",
       "creating": "자동화를 만드는 중…",
       "created": "자동화를 만들었습니다.",
       "saving": "변경 사항을 저장하는 중…",
       "saved": "변경 사항을 저장했습니다.",
-      "deleting": "‘{{title}}’ 규칙을 삭제하는 중…",
+      "deleting": "‘{{title}}’ 자동화를 삭제하는 중…",
       "undo": "실행 취소",
-      "restored": "‘{{title}}’ 규칙을 되돌렸습니다.",
+      "restored": "‘{{title}}’ 자동화를 되돌렸습니다.",
       "addingToMenu": "우클릭 메뉴에 추가하는 중…",
       "addedToMenu": "‘{{title}}’ 항목을 우클릭 메뉴에 추가했습니다."
     },
