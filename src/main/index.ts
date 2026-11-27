@@ -1326,6 +1326,11 @@ app.whenReady().then(async () => {
 		resolveBackends: () =>
 			resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() }), process.env, process.cwd()),
 	});
+	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
+	const stopPdfChanged = pdfEditorIo.onChanged((event) => {
+		sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.pdfChanged, event);
+	});
+	app.once("will-quit", stopPdfChanged);
 	const documentEditService = createDocumentEditService({
 		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
 		agentDir: getAgentDir(),
@@ -1334,9 +1339,9 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		backupDir: join(app.getPath("userData"), "document-edit-backups"),
 		writeJudge: documentEditWriteJudge,
+		pdfIo: pdfEditorIo,
 	});
 	setQuickLookDocumentEdit(documentEditService);
-	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
 	registerDocumentEditorIpcHandlers(
 		documentEditService,
 		pdfEditorIo,

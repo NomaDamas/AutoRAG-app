@@ -44,10 +44,12 @@ describe("text probe", () => {
 });
 
 describe("documentEditMode", () => {
-	it("edits text formats in place and package formats through a scratch folder; nothing else is offered", () => {
+	it("edits text formats in place, package formats through a scratch folder, and PDFs through pdf tools; nothing else is offered", () => {
 		for (const ext of ["md", "txt", "html", "csv", "json", "py", "MD"]) expect(documentEditMode(ext)).toBe("text");
 		for (const ext of ["docx", "pptx", "xlsx", "hwp", "hwpx", "odt"]) expect(documentEditMode(ext)).toBe("package");
-		for (const ext of ["pdf", "png", "mp4", "zip", "doc", ""]) expect(documentEditMode(ext)).toBeNull();
+		expect(documentEditMode("pdf")).toBe("pdf");
+		expect(documentEditMode("PDF")).toBe("pdf");
+		for (const ext of ["png", "mp4", "zip", "doc", ""]) expect(documentEditMode(ext)).toBeNull();
 	});
 });
 

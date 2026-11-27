@@ -8,11 +8,13 @@ import type {
 	DocumentEditorBridge,
 	DocumentEditorPdfPayload,
 	PdfApplyRequest,
+	PdfChangedEvent,
 	PdfFormSaveRequest,
 	PdfSplitRequest,
 } from "../src/shared/document-editor-contract";
 import {
 	isPdfApplyRequest,
+	isPdfChangedEvent,
 	isPdfEditOperation,
 	isPdfFormSaveRequest,
 	isPdfSplitRequest,
@@ -52,6 +54,7 @@ function createMockBridge() {
 	const applied: PdfApplyRequest[] = [];
 	const splits: PdfSplitRequest[] = [];
 	const savedForms: PdfFormSaveRequest[] = [];
+	const changedListeners = new Set<(ev: PdfChangedEvent) => void>();
 	const bridge: DocumentEditorBridge = {
 		open: vi.fn(),
 		save: vi.fn(),
@@ -94,13 +97,25 @@ function createMockBridge() {
 				snapshotId: "snap-form",
 			};
 		}),
+		onPdfChanged: (listener) => {
+			changedListeners.add(listener);
+			return () => changedListeners.delete(listener);
+		},
 		aiStart: vi.fn(async () => ({ changed: false })),
 		aiCancel: vi.fn(async () => undefined),
 		aiUndo: vi.fn(async () => false),
 		onAiEvent: () => () => undefined,
 	};
 	(window as unknown as { autorag: { documentEditor: DocumentEditorBridge } }).autorag = { documentEditor: bridge };
-	return { bridge, applied, splits, savedForms };
+	return {
+		bridge,
+		applied,
+		splits,
+		savedForms,
+		emitPdfChanged: (ev: PdfChangedEvent) => {
+			for (const l of changedListeners) l(ev);
+		},
+	};
 }
 
 const BASE_PAYLOAD: DocumentEditorPdfPayload = {
@@ -155,19 +170,25 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-async function mountEditor(): Promise<{ applied: PdfApplyRequest[]; splits: PdfSplitRequest[]; savedForms: PdfFormSaveRequest[] }> {
+async function mountEditor(onPayloadChange = vi.fn()): Promise<{
+	applied: PdfApplyRequest[];
+	splits: PdfSplitRequest[];
+	savedForms: PdfFormSaveRequest[];
+	emitPdfChanged: (ev: PdfChangedEvent) => void;
+	onPayloadChange: ReturnType<typeof vi.fn>;
+}> {
 	const mock = createMockBridge();
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	root = createRoot(container);
 	await act(async () => {
-		root!.render(<PdfDocumentEditor payload={BASE_PAYLOAD} onPayloadChange={vi.fn()} />);
+		root!.render(<PdfDocumentEditor payload={BASE_PAYLOAD} onPayloadChange={onPayloadChange} />);
 	});
 	// Flush microtasks for getDocument().promise
 	await act(async () => {
 		await Promise.resolve();
 	});
-	return mock;
+	return { ...mock, onPayloadChange };
 }
 
 describe("PDF editor contract validators", () => {
@@ -189,7 +210,35 @@ describe("PDF editor contract validators", () => {
 		expect(isPdfApplyRequest({ path: "/tmp/a.pdf", operations: [{ kind: "duplicatePage", pageIndex: 0 }] })).toBe(true);
 		expect(isPdfSplitRequest({ path: "/tmp/a.pdf", mode: "everyN", chunkSize: 2 })).toBe(true);
 		expect(isPdfSplitRequest({ path: "/tmp/a.pdf", mode: "everyN", chunkSize: 0 })).toBe(false);
+		expect(isPdfEditOperation({ kind: "addText", pageIndex: 0, text: "Approved 2026", x: 0.1, y: 0.2 })).toBe(true);
+		expect(isPdfEditOperation({ kind: "addTextWatermark", text: "CONFIDENTIAL", opacity: 0.25, angleDegrees: 35 })).toBe(true);
+		expect(isPdfChangedEvent({ path: "/tmp/a.pdf", size: 500, modifiedAt: "2026-11-27T00:00:00Z", mtimeMs: 123, pageCount: 2, source: "ai", snapshotId: "s1" })).toBe(true);
 		expect(isPdfFormSaveRequest({ path: "/tmp/a.pdf", values: { name: "Bob", agree: true }, flatten: true })).toBe(true);
+	});
+});
+
+describe("PdfDocumentEditor live AI co-editing sync", () => {
+	it("live-updates payload and undo stack when onPdfChanged fires from concurrent AI edits", async () => {
+		const { emitPdfChanged, onPayloadChange } = await mountEditor();
+		await act(async () => {
+			emitPdfChanged({
+				path: "/tmp/sample.pdf",
+				size: 2048,
+				modifiedAt: "2026-11-27T01:00:00.000Z",
+				mtimeMs: 1764205200000,
+				pageCount: 4,
+				source: "ai",
+				snapshotId: "snap-ai-1",
+			});
+		});
+		expect(onPayloadChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				path: "/tmp/sample.pdf",
+				size: 2048,
+				pageCount: 4,
+				mtimeMs: 1764205200000,
+			}),
+		);
 	});
 });
 

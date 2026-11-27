@@ -45,6 +45,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"ltr.onTraining": LTR_CHANNELS.training,
 	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
 	"documentEditor.onAiEvent": DOCUMENT_EDITOR_CHANNELS.aiEvent,
+	"documentEditor.onPdfChanged": DOCUMENT_EDITOR_CHANNELS.pdfChanged,
 	"magicAction.onEvent": MAGIC_ACTION_CHANNELS.event,
 	"indexActivity.onChange": INDEX_ACTIVITY_CHANNELS.changed,
 	"indexProblem.onChange": INDEX_PROBLEM_CHANNELS.changed,

@@ -30,6 +30,7 @@ export const DOCUMENT_EDITOR_CHANNELS = {
 	pdfReadMetadata: "documentEditor:pdfReadMetadata",
 	pdfReadFormFields: "documentEditor:pdfReadFormFields",
 	pdfSaveFormFields: "documentEditor:pdfSaveFormFields",
+	pdfChanged: "documentEditor:pdfChanged",
 	aiStart: "documentEditor:aiStart",
 	aiCancel: "documentEditor:aiCancel",
 	aiUndo: "documentEditor:aiUndo",
@@ -256,6 +257,25 @@ export type PdfEditOperation =
 			readonly opacity?: number;
 	  }
 	| {
+			readonly kind: "addText";
+			readonly pageIndex: number;
+			readonly text: string;
+			/** Normalized top-left coordinates (0..1) on the target page. */
+			readonly x: number;
+			readonly y: number;
+			readonly fontSize?: number;
+			readonly color?: string;
+	  }
+	| {
+			readonly kind: "addTextWatermark";
+			readonly text: string;
+			readonly color?: string;
+			readonly opacity?: number;
+			readonly angleDegrees?: number;
+			readonly fontSize?: number;
+			readonly pageIndices?: readonly number[];
+	  }
+	| {
 			readonly kind: "addWatermark";
 			/** Pre-rendered transparent PNG (supports Korean/CJK/diagonal rotation cleanly). */
 			readonly pngDataUrl: string;
@@ -341,6 +361,16 @@ export interface PdfFormSaveRequest {
 	readonly force?: boolean;
 }
 
+export interface PdfChangedEvent {
+	readonly path: string;
+	readonly size: number;
+	readonly modifiedAt: string;
+	readonly mtimeMs: number;
+	readonly pageCount: number;
+	readonly source: "human" | "ai" | "undo";
+	readonly snapshotId?: string;
+}
+
 export interface PdfRestoreResult {
 	readonly ok: boolean;
 	readonly size?: number;
@@ -377,6 +407,7 @@ export interface DocumentEditorBridge {
 	pdfReadMetadata(path: string): Promise<PdfMetadata>;
 	pdfReadFormFields(path: string): Promise<readonly PdfFormField[]>;
 	pdfSaveFormFields(request: PdfFormSaveRequest): Promise<PdfApplyResult>;
+	onPdfChanged(listener: (event: PdfChangedEvent) => void): () => void;
 	aiStart(runId: string, request: DocumentEditRequest, capture?: DocumentEditorAiCapture): Promise<{ readonly changed: boolean }>;
 	aiCancel(runId: string): Promise<void>;
 	aiUndo(runId: string): Promise<boolean>;
@@ -570,6 +601,28 @@ export function isPdfEditOperation(value: unknown): value is PdfEditOperation {
 				op.strokeWidthPt <= 30 &&
 				(op.opacity === undefined || (isUnitFraction(op.opacity) && op.opacity > 0))
 			);
+		case "addText":
+			return (
+				isNonNegativeInt(op.pageIndex) &&
+				typeof op.text === "string" &&
+				op.text.trim().length > 0 &&
+				op.text.length <= 2000 &&
+				isUnitFraction(op.x) &&
+				isUnitFraction(op.y) &&
+				(op.fontSize === undefined || (typeof op.fontSize === "number" && Number.isFinite(op.fontSize) && op.fontSize >= 6 && op.fontSize <= 96)) &&
+				(op.color === undefined || isHexColor(op.color))
+			);
+		case "addTextWatermark":
+			return (
+				typeof op.text === "string" &&
+				op.text.trim().length > 0 &&
+				op.text.length <= 200 &&
+				(op.color === undefined || isHexColor(op.color)) &&
+				(op.opacity === undefined || (isUnitFraction(op.opacity) && op.opacity > 0)) &&
+				(op.angleDegrees === undefined || (typeof op.angleDegrees === "number" && Number.isFinite(op.angleDegrees) && op.angleDegrees >= -90 && op.angleDegrees <= 90)) &&
+				(op.fontSize === undefined || (typeof op.fontSize === "number" && Number.isFinite(op.fontSize) && op.fontSize >= 12 && op.fontSize <= 140)) &&
+				(op.pageIndices === undefined || isPageIndices(op.pageIndices))
+			);
 		case "addWatermark":
 			return (
 				typeof op.pngDataUrl === "string" &&
@@ -668,6 +721,25 @@ export function isPdfFormSaveRequest(value: unknown): value is PdfFormSaveReques
 	if (req.expectedMtimeMs !== undefined && (typeof req.expectedMtimeMs !== "number" || !Number.isFinite(req.expectedMtimeMs))) return false;
 	if (req.force !== undefined && typeof req.force !== "boolean") return false;
 	return true;
+}
+
+export function isPdfChangedEvent(value: unknown): value is PdfChangedEvent {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const ev = value as Record<string, unknown>;
+	return (
+		typeof ev.path === "string" &&
+		ev.path.length > 0 &&
+		typeof ev.size === "number" &&
+		Number.isFinite(ev.size) &&
+		typeof ev.modifiedAt === "string" &&
+		typeof ev.mtimeMs === "number" &&
+		Number.isFinite(ev.mtimeMs) &&
+		typeof ev.pageCount === "number" &&
+		Number.isInteger(ev.pageCount) &&
+		ev.pageCount >= 0 &&
+		(ev.source === "human" || ev.source === "ai" || ev.source === "undo") &&
+		(ev.snapshotId === undefined || typeof ev.snapshotId === "string")
+	);
 }
 
 /** Re-export for consumers that want editability checks without importing preview internals directly. */

@@ -53,6 +53,7 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 		pdfReadMetadata: vi.fn(async () => ({ title: "", author: "", subject: "", keywords: "" })),
 		pdfReadFormFields: vi.fn(async () => []),
 		pdfSaveFormFields: vi.fn(async () => ({ ok: true as const, size: 100, modifiedAt: new Date().toISOString(), mtimeMs: initial.mtimeMs + 25, pageCount: 1, snapshotId: "snap-form-1" })),
+		onPdfChanged: () => () => undefined,
 		aiStart: vi.fn(async (runId, request) => {
 			aiStarts.push({ runId, instruction: request.instruction, marksCount: request.marks.length });
 			return { changed: true };
@@ -315,5 +316,48 @@ describe("DocumentEditorTab UI", () => {
 		});
 		expect(host.bridge.aiUndo).toHaveBeenCalledWith(runId);
 		expect(el.querySelector('[data-edit-state="undone"]')).not.toBeNull();
+	});
+
+	it("enables right-sidebar AI chat composer and markup toggle for PDF tabs", async () => {
+		const pdfLoad: DocumentEditorLoad = {
+			kind: "pdf",
+			surface: "pdf",
+			path: "/tmp/contract.pdf",
+			name: "contract.pdf",
+			ext: "pdf",
+			size: 1024,
+			modifiedAt: "2026-11-27T00:00:00.000Z",
+			mtimeMs: 1000,
+			pageCount: 2,
+			encrypted: false,
+		};
+		const host = createMockHost(pdfLoad);
+		const el = mountEditor(host, "/tmp/contract.pdf");
+
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		expect(el.querySelector('button[title="Mark up for AI"]')).not.toBeNull();
+		const sidebarEl = el.querySelector<HTMLElement>("[data-document-editor-sidebar]");
+		expect(sidebarEl).not.toBeNull();
+		const aiInput = sidebarEl!.querySelector<HTMLTextAreaElement>("textarea");
+		expect(aiInput).not.toBeNull();
+
+		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+		act(() => {
+			nativeSetter.call(aiInput, "Add CONFIDENTIAL watermark and rotate page 2");
+			aiInput!.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+
+		const applyBtn = sidebarEl!.querySelector<HTMLButtonElement>('button[aria-label="Apply"]');
+		expect(applyBtn).not.toBeNull();
+		await act(async () => {
+			applyBtn!.click();
+			await Promise.resolve();
+		});
+
+		expect(host.aiStarts).toHaveLength(1);
+		expect(host.aiStarts[0]!.instruction).toBe("Add CONFIDENTIAL watermark and rotate page 2");
 	});
 });

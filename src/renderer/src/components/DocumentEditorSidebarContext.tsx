@@ -145,7 +145,7 @@ export function DocumentEditorSidebarProvider({
 			const api = window.autorag?.documentEditor;
 			const reg = tabsRef.current.get(filePath);
 			const trimmed = rawInstruction.trim();
-			if (api === undefined || reg === undefined || trimmed === "" || reg.surface === "pdf") return;
+			if (api === undefined || reg === undefined || trimmed === "") return;
 
 			const flushed = await reg.flushUnsaved();
 			if (!flushed) return;

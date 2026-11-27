@@ -60,9 +60,12 @@ export type DocumentEditEvent =
 /**
  * How the agent may change a file: `text` edits the file itself; `package`
  * (Office Open XML, HWP/HWPX, OpenDocument) also gets a shell in a scratch
- * folder to unpack, edit, and repack it. Null: no pen button.
+ * folder to unpack, edit, and repack it; `pdf` uses the shared `pdf-lib`
+ * editor tools (annotations, redaction, page ops, watermarks, page numbers,
+ * forms, metadata, split/extract) with serialized per-file locking so human
+ * and AI edits compose safely. Null: no pen button.
  */
-export type DocumentEditMode = "text" | "package";
+export type DocumentEditMode = "text" | "package" | "pdf";
 
 const PACKAGE_EXTENSIONS: Readonly<Record<string, true>> = Object.fromEntries(
 	["docx", "docm", "dotx", "pptx", "pptm", "potx", "ppsx", "xlsx", "xlsm", "hwp", "hwpx", "odt", "odp", "ods"].map((ext) => [ext, true]),
@@ -73,6 +76,7 @@ const TEXT_EXTENSIONS: Readonly<Record<string, true>> = { csv: true, tsv: true }
 export function documentEditMode(ext: string): DocumentEditMode | null {
 	const lower = ext.toLowerCase();
 	if (lower === "") return null;
+	if (lower === "pdf") return "pdf";
 	if (PACKAGE_EXTENSIONS[lower] === true) return "package";
 	if (TEXT_EXTENSIONS[lower] === true || TEXT_VIEWERS[viewerForExtension(lower)] === true) return "text";
 	return null;
