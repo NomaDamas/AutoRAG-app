@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, FileText, Highlighter, Loader2, PenLine, RotateCcw, Sparkles, Square, Trash2, X } from "lucide-react";
+import { ArrowUp, FileText, Highlighter, Loader2, PenLine, RotateCcw, Square, Trash2, X } from "lucide-react";
 import { MAX_INSTRUCTION } from "../../../preview/shared/annotation";
 import { cn } from "../lib/cn";
 import { useDocumentEditorSidebar } from "./DocumentEditorSidebarContext";
@@ -51,7 +51,6 @@ export function DocumentEditorAiSidebar({ filePath }: { readonly filePath: strin
 			{/* Sidebar Header */}
 			<div className="flex flex-none items-center justify-between gap-8 border-b border-divider px-14 py-10">
 				<div className="flex min-w-0 items-center gap-6">
-					<Sparkles size={14} className="flex-none text-accent" />
 					<div className="min-w-0">
 						<div className="truncate text-body font-semibold text-ink">{t("documentEditor.ai.title")}</div>
 						<div className="truncate text-badge text-ink-muted" title={filePath}>

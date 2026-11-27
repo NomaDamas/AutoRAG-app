@@ -1,23 +1,23 @@
 /**
- * Live end-to-end QA: Acrobat-class PDF Editor inside Dazzi's Document Editor tab.
+ * Live end-to-end & visual QA: Redesigned Acrobat-class PDF Editor inside Dazzi.
  *
- * Drives the real built Electron app with real Playwright mouse & keyboard input:
- *   1. Open a multi-page PDF with AcroForm fields (`contract.pdf`) via Alt/Option+click.
- *   2. Draw a Highlight rectangle on page 1 -> verify PDF bytes grew on disk.
- *   3. Draw a Black Redaction rectangle & Whiteout rectangle on page 1.
- *   4. Draw a Shape (arrow) and Freehand Pen stroke on page 1.
- *   5. Place a Preset Stamp (APPROVED) and a Sticky Note on page 1.
- *   6. Apply Watermark ("CONFIDENTIAL") across all pages via Watermark modal.
- *   7. Apply Page Numbers (1 / N) + header via Page Numbers modal.
- *   8. Duplicate page 1 and Insert Blank Page -> verify pageCount increments (3 -> 4 -> 5).
- *   9. Rotate CCW (-90°) via More Tools -> verify rotation on disk.
- *  10. Edit & Save Document Properties (title, author, subject, keywords) -> verify PDF metadata on disk.
- *  11. Fill & Flatten AcroForm fields via Forms modal -> verify fields saved and flattened on disk.
- *  12. Split PDF by custom ranges ("1-2, 3-5") -> verify sibling split PDFs created with exact page counts.
- *  13. Find text inside the PDF (Cmd/Ctrl+F) -> verify match count and page navigation.
- *  14. Undo restores previous PDF state cleanly.
+ * Verifies every UI/UX & functional invariant against the real built Electron app:
+ *   1. Landscape 16:9 PDF (`slides-landscape.pdf`, 960x540):
+ *      - Single-row non-wrapping native toolbar (height <= 44px, zero clipped buttons)
+ *      - No redundant DocumentEditorTab header bar or duplicate Edit / AI Edit buttons
+ *      - Right-side thumbnail rail (unified with Quick Look) where landscape thumbnails
+ *        fit strictly inside the rail with zero horizontal overflow or clipping
+ *   2. In-app Dazzi File Picker (never opens native OS Finder):
+ *      - Insert Image (`stamp-logo.png`) via DazziFilePickerModal -> stamped onto PDF
+ *      - Merge PDF (`addendum.pdf`) via DazziFilePickerModal -> pageCount grows on disk
+ *   3. Portrait PDF with AcroForm (`contract.pdf`):
+ *      - Highlight, Redact (blackout) & Whiteout (via contextual switcher),
+ *        Arrow Shape, Freehand Draw, Preset Stamp (APPROVED), Sticky Note,
+ *        Watermark, Page Numbers, Duplicate Page, Insert Blank Page,
+ *        Document Properties, AcroForm Fill & Flatten, Split by ranges,
+ *        Find-in-PDF (Cmd/Ctrl+F), and Undo snapshot restore.
  *
- *   bun run qa script scripts/manual-qa/run-qa-live-pdf-editor-acrobat.mjs
+ *   bun run qa script --host --skip-build scripts/manual-qa/run-qa-live-pdf-editor-acrobat.mjs
  */
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -56,7 +56,22 @@ for (const folder of ["Desktop", "Documents", "Downloads", "Music", "Movies", "P
 	mkdirSync(join(HOME_DIR, folder), { recursive: true });
 }
 
-// Create a 3-page PDF with real text (for Find) and AcroForm fields (for Forms)
+// 1. Landscape 16:9 slide deck PDF (960x540, like Korean government/presentation guides)
+const LANDSCAPE = join(DOCS_DIR, "slides-landscape.pdf");
+{
+	const pdf = await PDFDocument.create();
+	const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+	for (let i = 0; i < 2; i += 1) {
+		const page = pdf.addPage([960, 540]);
+		page.drawRectangle({ x: 0, y: 450, width: 960, height: 90, color: rgb(0.06, 0.2, 0.45) });
+		page.drawText(`5. Electronic Agreement Guide — Slide ${i + 1}`, { x: 40, y: 485, size: 26, font, color: rgb(1, 1, 1) });
+		page.drawRectangle({ x: 40, y: 70, width: 880, height: 340, borderColor: rgb(0.75, 0.78, 0.85), borderWidth: 2, color: rgb(0.97, 0.98, 1) });
+		page.drawText(`Landscape 16:9 content block (Page ${i + 1} of 2)`, { x: 70, y: 340, size: 18, font, color: rgb(0.15, 0.18, 0.24) });
+	}
+	writeFileSync(LANDSCAPE, await pdf.save());
+}
+
+// 2. Portrait 3-page PDF with real text (for Find) and AcroForm fields (for Forms)
 const CONTRACT = join(DOCS_DIR, "contract.pdf");
 {
 	const pdf = await PDFDocument.create();
@@ -79,14 +94,20 @@ const CONTRACT = join(DOCS_DIR, "contract.pdf");
 	writeFileSync(CONTRACT, await pdf.save());
 }
 
-// Create a second PDF for merge verification
+// 3. Second PDF for in-app Dazzi Merge picker + valid PNG image for in-app Dazzi Image picker
 const ADDENDUM = join(DOCS_DIR, "addendum.pdf");
 {
 	const pdf = await PDFDocument.create();
 	const page = pdf.addPage([595, 842]);
-	page.drawRectangle({ x: 60, y: 720, width: 200, height: 40, color: rgb(0.1, 0.6, 0.3) });
+	page.drawRectangle({ x: 60, y: 720, width: 220, height: 40, color: rgb(0.1, 0.6, 0.3) });
 	writeFileSync(ADDENDUM, await pdf.save());
 }
+const STAMP_LOGO = join(DOCS_DIR, "stamp-logo.png");
+// Valid 1x1 blue PNG
+writeFileSync(
+	STAMP_LOGO,
+	Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
+);
 
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
@@ -125,7 +146,7 @@ try {
 	main.setDefaultTimeout(45_000);
 
 	const shot = async (name) => {
-		await sleep(300);
+		await sleep(350);
 		await main.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 	};
 
@@ -136,14 +157,68 @@ try {
 			.first();
 
 	await main.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
-	await rowFor("contract.pdf").waitFor({ timeout: 30_000 });
+
+	// === PART A: Landscape PDF layout, right-side thumbnail rail, single-row toolbar ===
+	await rowFor("slides-landscape.pdf").waitFor({ timeout: 30_000 });
+	await rowFor("slides-landscape.pdf").click({ modifiers: ["Alt"] });
+
+	const landscapeEditor = main.locator(`[data-document-editor="${LANDSCAPE}"][data-editor-surface="pdf"]`);
+	await landscapeEditor.waitFor({ timeout: 15_000 });
+	await landscapeEditor.locator('[data-pdf-thumb="2"] canvas').waitFor({ timeout: 15_000 });
+	await sleep(400);
+	await shot("00-landscape-pdf-redesign");
+
+	// Verify single-row toolbar (no wrapping!)
+	const toolbarBox = await landscapeEditor.locator('[role="toolbar"][aria-label="PDF"]').boundingBox();
+	check("PDF toolbar stays on one clean row (height <= 44px)", toolbarBox !== null && toolbarBox.height <= 44, JSON.stringify(toolbarBox));
+
+	// Verify no redundant header bar above the PDF toolbar
+	check("No redundant DocumentEditorTab header above PDF toolbar", (await landscapeEditor.locator(".doc-editor__header").count()) === 0);
+
+	// Verify right-side thumbnail rail position & zero landscape thumbnail overflow/clipping
+	const rail = landscapeEditor.locator('[data-pdf-thumbnail-rail="right"]');
+	const stageBox = await landscapeEditor.locator('[data-pdf-page-stage="1"]').boundingBox();
+	const railBox = await rail.boundingBox();
+	const thumbCanvasBox = await landscapeEditor.locator('[data-pdf-thumb="1"] canvas').boundingBox();
+	check(
+		"Thumbnail rail sits on the RIGHT side of the PDF canvas",
+		railBox !== null && stageBox !== null && railBox.x >= stageBox.x + stageBox.width - 2,
+		`stageRight=${stageBox ? Math.round(stageBox.x + stageBox.width) : "?"} railX=${railBox ? Math.round(railBox.x) : "?"}`,
+	);
+	check(
+		"Landscape thumbnail fits cleanly inside right rail with zero clipping",
+		railBox !== null &&
+			thumbCanvasBox !== null &&
+			thumbCanvasBox.width <= 108 &&
+			thumbCanvasBox.height < thumbCanvasBox.width &&
+			thumbCanvasBox.x >= railBox.x + 8 &&
+			thumbCanvasBox.x + thumbCanvasBox.width <= railBox.x + railBox.width - 8,
+		`thumb=${JSON.stringify(thumbCanvasBox)} rail=${JSON.stringify(railBox)}`,
+	);
+
+	// === PART B: Portrait PDF with all Acrobat tools + In-App Dazzi File Pickers ===
+	await main.locator(".tabs .tab").first().click();
+	await rowFor("contract.pdf").waitFor({ timeout: 15_000 });
 	await rowFor("contract.pdf").click({ modifiers: ["Alt"] });
 
-	const pdfEditor = main.locator('[data-document-editor][data-editor-surface="pdf"]');
+	const pdfEditor = main.locator(`[data-document-editor="${CONTRACT}"][data-editor-surface="pdf"]`);
 	await pdfEditor.waitFor({ timeout: 15_000 });
-	await pdfEditor.locator('[data-pdf-thumb="1"]').waitFor({ timeout: 15_000 });
 	await pdfEditor.locator('[data-pdf-thumb="3"]').waitFor({ timeout: 15_000 });
-	await shot("01-pdf-opened");
+	await shot("01-portrait-pdf-opened");
+
+	// In-app Dazzi Image Picker (never opens native OS Finder!)
+	const sizeBeforeImg = readFileSync(CONTRACT).byteLength;
+	await pdfEditor.locator('button[data-pdf-action="insert-image"]').click();
+	const imgPicker = main.locator('[data-dazzi-file-picker="image"]');
+	await imgPicker.waitFor({ timeout: 10_000 });
+	await imgPicker.locator('button[data-picker-file="stamp-logo.png"]').waitFor({ timeout: 10_000 });
+	await shot("02-dazzi-in-app-image-picker");
+	await imgPicker.locator('button[data-picker-file="stamp-logo.png"]').click();
+	await imgPicker.locator('button[data-dazzi-picker-confirm="true"]').click();
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').waitFor({ timeout: 10_000 });
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("이미지를 PDF에 저장했습니다"), 10_000);
+	check("In-app Dazzi Image Picker stamped image onto PDF without opening OS Finder", readFileSync(CONTRACT).byteLength > sizeBeforeImg);
 
 	const stage = pdfEditor.locator('[data-pdf-page-stage="1"]');
 	await stage.waitFor({ timeout: 15_000 });
@@ -163,13 +238,13 @@ try {
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("형광펜을 PDF에 저장했습니다"), 10_000);
 	check("Highlight saved to PDF", readFileSync(CONTRACT).byteLength > size0);
 
-	// 2. Redact (blackout) & Whiteout
+	// 2. Redact (blackout) & Whiteout via contextual segmented toggle
 	await pdfEditor.locator('button[data-pdf-tool="redact"]').click();
 	await dragOnStage(0.08, 0.22, 0.45, 0.25);
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("가리기 영역을 PDF에 적용했습니다"), 10_000);
 	check("Black redaction applied to PDF", true);
 
-	await pdfEditor.locator('button[data-pdf-tool="whiteout"]').click();
+	await pdfEditor.locator('button[data-pdf-redact-mode="white"]').click();
 	await dragOnStage(0.5, 0.22, 0.72, 0.25);
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("화이트아웃을 PDF에 적용했습니다"), 10_000);
 	check("Whiteout applied to PDF", true);
@@ -190,12 +265,12 @@ try {
 	await pdfEditor.locator('button[data-pdf-stamp-menu="true"]').click();
 	await pdfEditor.locator('button[data-pdf-preset-stamp="approved"]').click();
 	await pdfEditor.locator('[data-pdf-stamp-box="true"]').waitFor({ timeout: 10_000 });
-	await shot("02-pdf-annotations-and-stamp");
+	await shot("03-pdf-annotations-and-stamp");
 	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("스탬프를 PDF에 저장했습니다"), 10_000);
 	check("Preset APPROVED stamp saved to PDF", true);
 
-	await pdfEditor.locator("button", { hasText: "메모" }).first().click();
+	await pdfEditor.locator('button[data-pdf-tool="note"]').click();
 	const noteInput = pdfEditor.locator('input[data-pdf-note-input="true"]');
 	await noteInput.fill("법무팀 검토 완료");
 	await main.keyboard.press("Enter");
@@ -203,7 +278,7 @@ try {
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("메모를 PDF에 저장했습니다"), 10_000);
 	check("Sticky note saved to PDF", true);
 
-	// 5. More Tools -> Watermark, Page Numbers, Duplicate, Insert Blank
+	// 5. Document Tools -> Watermark, Page Numbers, Duplicate, Insert Blank, In-app Merge PDF
 	const openMore = async () => {
 		await pdfEditor.locator('button[data-pdf-more-tools="true"]').click();
 	};
@@ -219,7 +294,6 @@ try {
 	await main.locator('button[data-pdf-page-numbers-apply="true"]').click();
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("페이지 번호를 적용했습니다"), 10_000);
 	check("Page numbers applied across pages", true);
-	await shot("03-pdf-watermark-and-numbers");
 
 	await openMore();
 	await pdfEditor.locator('button[data-pdf-action="duplicate"]').click();
@@ -230,6 +304,15 @@ try {
 	await pdfEditor.locator('button[data-pdf-action="insert-blank"]').click();
 	const countAfterBlank = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 5, 10_000);
 	check("Insert blank page increased pageCount (4 -> 5)", countAfterBlank === 5, `pages=${countAfterBlank}`);
+
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="merge"]').click();
+	const pdfPicker = main.locator('[data-dazzi-file-picker="pdf"]');
+	await pdfPicker.waitFor({ timeout: 10_000 });
+	await pdfPicker.locator('button[data-picker-file="addendum.pdf"]').click();
+	await pdfPicker.locator('button[data-dazzi-picker-confirm="true"]').click();
+	const countAfterMerge = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 6, 10_000);
+	check("In-app Dazzi PDF Merge picker merged addendum.pdf (5 -> 6 pages)", countAfterMerge === 6, `pages=${countAfterMerge}`);
 
 	// 6. Document Properties (metadata)
 	await openMore();
@@ -253,7 +336,6 @@ try {
 	await signerInput.fill("Jeffrey Kim");
 	await main.locator('input[data-pdf-form-field="agree_terms"]').check();
 	await main.locator('input[data-pdf-form-flatten="true"]').check();
-	await shot("04-pdf-forms-modal");
 	await main.locator('button[data-pdf-form-save="true"]').click();
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("PDF 양식을 저장하고 고정(병합)했습니다"), 10_000);
 	const afterFormDoc = await PDFDocument.load(readFileSync(CONTRACT));
@@ -263,17 +345,17 @@ try {
 	await openMore();
 	await pdfEditor.locator('button[data-pdf-action="split"]').click();
 	await main.locator("label", { hasText: "페이지 범위로 분할" }).click();
-	await main.locator('input[data-pdf-split-ranges="true"]').fill("1-2, 3-5");
+	await main.locator('input[data-pdf-split-ranges="true"]').fill("1-2, 3-6");
 	await main.locator('button[data-pdf-split-run="true"]').click();
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("2개 PDF 파일로 분할했습니다"), 10_000);
 	const part1 = join(DOCS_DIR, "contract-part1-p1-2.pdf");
-	const part2 = join(DOCS_DIR, "contract-part2-p3-5.pdf");
+	const part2 = join(DOCS_DIR, "contract-part2-p3-6.pdf");
 	check(
 		"Split PDF created expected range files",
 		existsSync(part1) &&
 			existsSync(part2) &&
 			(await PDFDocument.load(readFileSync(part1))).getPageCount() === 2 &&
-			(await PDFDocument.load(readFileSync(part2))).getPageCount() === 3,
+			(await PDFDocument.load(readFileSync(part2))).getPageCount() === 4,
 	);
 
 	// 9. Find text inside PDF (Cmd/Ctrl+F)
@@ -283,10 +365,10 @@ try {
 	await findInput.fill("Invoice Clause");
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("1 / 1"), 10_000);
 	check("Find-in-PDF located 'Invoice Clause' match", true);
-	await shot("05-pdf-final-with-find");
+	await shot("04-pdf-final-with-find-and-right-rail");
 
 	// 10. Undo restores pre-flatten form fields
-	await pdfEditor.locator("button", { hasText: "실행 취소" }).click();
+	await pdfEditor.locator('button[data-pdf-undo="true"]').click();
 	const fieldsRestored = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getForm().getFields().length, (n) => n >= 2, 10_000);
 	check("Undo restored pre-flatten PDF snapshot", fieldsRestored >= 2, `fields=${fieldsRestored}`);
 } catch (error) {

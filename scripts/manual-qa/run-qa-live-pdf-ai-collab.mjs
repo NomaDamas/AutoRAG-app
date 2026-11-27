@@ -270,11 +270,8 @@ try {
 	await pdfEditor.waitFor({ timeout: 15_000 });
 	await pdfEditor.locator('[data-pdf-thumb="3"]').waitFor({ timeout: 15_000 });
 
-	// Open the right-sidebar AI editing panel if not already open
+	// Right-sidebar AI editing panel is already docked beside the PDF editor
 	const sidebar = main.locator(`[data-document-editor-sidebar="${CONTRACT}"]`);
-	if ((await sidebar.count()) === 0) {
-		await pdfEditor.locator("button", { hasText: "AI 편집" }).click();
-	}
 	await sidebar.waitFor({ timeout: 10_000 });
 	const aiInput = sidebar.locator("textarea");
 	await aiInput.waitFor({ timeout: 10_000 });

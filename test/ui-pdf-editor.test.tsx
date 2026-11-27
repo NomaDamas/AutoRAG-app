@@ -106,7 +106,20 @@ function createMockBridge() {
 		aiUndo: vi.fn(async () => false),
 		onAiEvent: () => () => undefined,
 	};
-	(window as unknown as { autorag: { documentEditor: DocumentEditorBridge } }).autorag = { documentEditor: bridge };
+	const fsMock = {
+		locations: vi.fn(async () => [{ name: "Documents", path: "/tmp", section: "favorites", icon: "documents", available: true }]),
+		listDir: vi.fn(async (dir: string) => ({
+			path: dir,
+			entries: [
+				{ name: "extra.pdf", path: "/tmp/extra.pdf", kind: "file", ext: "pdf", size: 500, mtimeMs: 1, flags: 0 },
+				{ name: "logo.png", path: "/tmp/logo.png", kind: "file", ext: "png", size: 300, mtimeMs: 1, flags: 0 },
+			],
+		})),
+	};
+	(window as unknown as { autorag: { documentEditor: DocumentEditorBridge; fs: typeof fsMock } }).autorag = {
+		documentEditor: bridge,
+		fs: fsMock,
+	};
 	return {
 		bridge,
 		applied,
@@ -243,11 +256,15 @@ describe("PdfDocumentEditor live AI co-editing sync", () => {
 });
 
 describe("PdfDocumentEditor UI (Acrobat tools)", () => {
-	it("exposes annotation tools, preset stamps, and More Tools (merge, split, duplicate, blank, watermark, page numbers, forms, properties)", async () => {
+	it("places the thumbnail rail on the right, never renders native file inputs, and exposes all Acrobat tools + in-app Dazzi file picker", async () => {
 		const { applied, splits, savedForms } = await mountEditor();
 
-		// 1. Toggle Highlight, Draw, Shapes, Redact, Whiteout tools
-		for (const toolId of ["highlight", "draw", "shape", "redact", "whiteout"]) {
+		// 0. Right-side thumbnail rail (unified with Quick Look) & zero OS native file inputs
+		expect(container!.querySelector('[data-pdf-thumbnail-rail="right"]')).not.toBeNull();
+		expect(container!.querySelector('input[type="file"]')).toBeNull();
+
+		// 1. Toggle Highlight, Draw, Shapes, Redact (with Black/Whiteout contextual switcher)
+		for (const toolId of ["highlight", "draw", "shape", "redact"]) {
 			const btn = container!.querySelector(`button[data-pdf-tool="${toolId}"]`) as HTMLButtonElement | null;
 			expect(btn).not.toBeNull();
 			await act(async () => {
@@ -255,6 +272,21 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 			});
 			expect(btn!.getAttribute("aria-pressed")).toBe("true");
 		}
+		const whiteoutToggle = container!.querySelector('button[data-pdf-redact-mode="white"]') as HTMLButtonElement | null;
+		expect(whiteoutToggle).not.toBeNull();
+		await act(async () => whiteoutToggle!.click());
+		expect(whiteoutToggle!.getAttribute("aria-pressed")).toBe("true");
+
+		// 1b. Clicking Image opens in-app Dazzi file picker (never native OS Finder)
+		const imgBtn = container!.querySelector('button[data-pdf-action="insert-image"]') as HTMLButtonElement;
+		expect(imgBtn).not.toBeNull();
+		await act(async () => imgBtn.click());
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(container!.querySelector('[data-dazzi-file-picker="image"]')).not.toBeNull();
+		expect(container!.querySelector('button[data-picker-file="logo.png"]')).not.toBeNull();
+		await act(async () => (container!.querySelector('[data-dazzi-file-picker="image"] button[aria-label="Close"]') as HTMLButtonElement).click());
 
 		// 2. Preset stamp placement & apply
 		const stampMenuBtn = container!.querySelector('button[data-pdf-stamp-menu="true"]') as HTMLButtonElement;
@@ -267,7 +299,7 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		await act(async () => commitStamp.click());
 		expect(applied.at(-1)?.operations[0]?.kind).toBe("stampImage");
 
-		// 3. More Tools -> Duplicate page, Insert blank page, Merge PDFs
+		// 3. Document Tools menu -> Duplicate page, Insert blank page, Merge PDFs via in-app Dazzi picker
 		const openMore = async (): Promise<void> => {
 			const btn = container!.querySelector('button[data-pdf-more-tools="true"]') as HTMLButtonElement;
 			await act(async () => btn.click());
@@ -283,6 +315,12 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 
 		await openMore();
 		await act(async () => (container!.querySelector('button[data-pdf-action="merge"]') as HTMLButtonElement).click());
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(container!.querySelector('[data-dazzi-file-picker="pdf"]')).not.toBeNull();
+		await act(async () => (container!.querySelector('button[data-picker-file="extra.pdf"]') as HTMLButtonElement).click());
+		await act(async () => (container!.querySelector('button[data-dazzi-picker-confirm="true"]') as HTMLButtonElement).click());
 		expect(applied.at(-1)?.operations[0]).toEqual({ kind: "mergePdfs", sourcePaths: ["/tmp/extra.pdf"] });
 
 		// 4. Watermark modal

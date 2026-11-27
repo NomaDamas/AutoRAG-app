@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ExternalLink, FileCode2, FileText, Highlighter, Loader2, Save, Sparkles } from "lucide-react";
+import { Check, ExternalLink, FileCode2, FileText, Loader2, PanelRight, Save } from "lucide-react";
 import type { AnnotationMark } from "../../../preview/shared/annotation";
 import type { PreviewDocument, QuickLookWindowBridge } from "../../../preview/shared/contract";
 import { ChromeProvider, type QuickLookChrome } from "../../../preview/ui/chrome";
@@ -335,131 +335,108 @@ export function DocumentEditorTab({ filePath, onOpenExternal, onOpenEditorFile }
 			data-editor-surface={loaded?.surface ?? "loading"}
 			onKeyDown={onRootKeyDown}
 		>
-			{/* Top editor header bar */}
-			<header className="doc-editor__header flex h-38 flex-none items-center gap-8 border-b border-divider bg-chrome px-14">
-				<div className="flex min-w-0 items-center gap-6">
-					{loaded?.surface === "code" ? (
-						<FileCode2 size={15} className="flex-none text-ink-muted" />
-					) : (
-						<FileText size={15} className="flex-none text-accent" />
-					)}
-					<span className="truncate text-body font-semibold text-ink" title={filePath}>
-						{loaded?.name ?? filePath.split(/[\\/]/).at(-1) ?? filePath}
-					</span>
-					{isText && statusLabel !== null ? (
-						<span
-							className={cn(
-								"inline-flex flex-none items-center gap-4 rounded-full px-8 py-2 text-badge font-medium",
-								saveState === "saved" && "bg-subtle text-ink-muted",
-								saveState === "saving" && "bg-accent-soft text-accent",
-								saveState === "unsaved" && "bg-warning-soft text-warning",
-								(saveState === "error" || saveState === "conflict") && "bg-error-soft text-error",
-							)}
-							data-save-state={saveState}
-						>
-							{saveState === "saving" ? <Loader2 size={10} className="animate-spin" /> : null}
-							{saveState === "saved" ? <Check size={10} /> : null}
-							{statusLabel}
-						</span>
-					) : null}
-				</div>
-
-				<div className="flex-1" />
-
-				{/* Rich / Source segmented switch for WYSIWYG text files */}
-				{canRich ? (
-					<div
-						className="inline-flex h-24 items-center rounded-7 bg-input p-2"
-						role="group"
-						aria-label={t("quickLook.markdown.viewMode")}
-					>
-						<button
-							type="button"
-							aria-pressed={viewMode === "rich"}
-							className={cn(
-								"h-20 rounded-5 border-0 px-10 text-meta font-medium transition-colors",
-								viewMode === "rich" ? "bg-window text-ink shadow-xs" : "bg-transparent text-ink-muted hover:text-ink",
-							)}
-							onClick={() => setViewMode("rich")}
-						>
-							{t("documentEditor.modes.rich")}
-						</button>
-						<button
-							type="button"
-							aria-pressed={viewMode === "source"}
-							className={cn(
-								"h-20 rounded-5 border-0 px-10 text-meta font-medium transition-colors",
-								viewMode === "source" ? "bg-window text-ink shadow-xs" : "bg-transparent text-ink-muted hover:text-ink",
-							)}
-							onClick={() => setViewMode("source")}
-						>
-							{t("documentEditor.modes.source")}
-						</button>
-					</div>
-				) : null}
-
-				{/* Manual Save trigger (autosave is always on) */}
-				{isText ? (
-					<button
-						type="button"
-						disabled={textPayload?.truncated === true || (!dirty && saveState === "saved") || saveState === "saving"}
-						onClick={() => void saveNow(false)}
-						className="inline-flex h-26 items-center gap-5 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink hover:bg-hover-row disabled:opacity-45"
-						title={`${t("documentEditor.toolbar.save")} (${hostPlatform() === "darwin" ? "⌘S" : "Ctrl+S"})`}
-					>
-						<Save size={13} />
-						{t("documentEditor.toolbar.save")}
-					</button>
-				) : null}
-
-				{/* Markup toggle -> opens right-sidebar AI chat when activated */}
-				{loaded !== null ? (
-					<button
-						type="button"
-						aria-pressed={markupActive}
-						onClick={() => {
-							setMarkupActive((open) => {
-								const next = !open;
-								if (next) sidebar?.openRightSidebar();
-								return next;
-							});
-						}}
-						className={cn(
-							"inline-flex h-26 items-center gap-5 rounded-6 border px-10 text-meta font-medium transition-colors",
-							markupActive
-								? "border-accent bg-accent-soft text-accent"
-								: "border-border bg-window text-ink-body hover:bg-hover-row",
+			{/* Top editor header bar (omitted for PDF tabs, which provide a unified single-row toolbar) */}
+			{loaded?.kind !== "pdf" ? (
+				<header className="doc-editor__header flex h-36 flex-none items-center gap-8 border-b border-divider bg-chrome px-12">
+					<div className="flex min-w-0 items-center gap-6">
+						{loaded?.surface === "code" ? (
+							<FileCode2 size={15} className="flex-none text-ink-muted" />
+						) : (
+							<FileText size={15} className="flex-none text-ink-muted" />
 						)}
-						title={t("documentEditor.toolbar.markupToggle")}
-					>
-						<Highlighter size={13} />
-						{marks.length > 0 ? <span className="tabular-nums">{marks.length}</span> : null}
-					</button>
-				) : null}
+						<span className="truncate text-body font-medium text-ink" title={filePath}>
+							{loaded?.name ?? filePath.split(/[\\/]/).at(-1) ?? filePath}
+						</span>
+						{isText && statusLabel !== null ? (
+							<span
+								className={cn(
+									"inline-flex flex-none items-center gap-4 rounded-full px-8 py-2 text-badge font-medium",
+									saveState === "saved" && "bg-subtle text-ink-muted",
+									saveState === "saving" && "bg-accent-soft text-accent",
+									saveState === "unsaved" && "bg-warning-soft text-warning",
+									(saveState === "error" || saveState === "conflict") && "bg-error-soft text-error",
+								)}
+								data-save-state={saveState}
+							>
+								{saveState === "saving" ? <Loader2 size={10} className="animate-spin" /> : null}
+								{saveState === "saved" ? <Check size={10} /> : null}
+								{statusLabel}
+							</span>
+						) : null}
+					</div>
 
-				{loaded?.kind === "package" && onOpenExternal !== undefined ? (
-					<button
-						type="button"
-						onClick={() => onOpenExternal(filePath)}
-						className="inline-flex h-26 items-center gap-5 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink hover:bg-hover-row"
-					>
-						<ExternalLink size={13} />
-						{t("documentEditor.package.openExternal")}
-					</button>
-				) : null}
+					<div className="flex-1" />
 
-				{/* Right-sidebar AI chat button */}
-				{loaded !== null && sidebar !== null ? (
-					<button
-						type="button"
-						onClick={() => sidebar.openRightSidebar()}
-						className="inline-flex h-26 items-center gap-5 rounded-6 border border-accent bg-accent px-10 text-meta font-medium text-on-accent hover:opacity-90"
-					>
-						<Sparkles size={13} />
-						{t("documentEditor.toolbar.aiToggle")}
-					</button>
-				) : null}
-			</header>
+					{/* Rich / Source segmented switch for WYSIWYG text files */}
+					{canRich ? (
+						<div
+							className="inline-flex h-24 items-center rounded-6 bg-segment-track p-2"
+							role="group"
+							aria-label={t("quickLook.markdown.viewMode")}
+						>
+							<button
+								type="button"
+								aria-pressed={viewMode === "rich"}
+								className={cn(
+									"h-20 rounded-4 border-0 px-10 text-meta font-medium transition-colors",
+									viewMode === "rich" ? "bg-segment-thumb text-ink shadow-xs" : "bg-transparent text-ink-muted hover:text-ink",
+								)}
+								onClick={() => setViewMode("rich")}
+							>
+								{t("documentEditor.modes.rich")}
+							</button>
+							<button
+								type="button"
+								aria-pressed={viewMode === "source"}
+								className={cn(
+									"h-20 rounded-4 border-0 px-10 text-meta font-medium transition-colors",
+									viewMode === "source" ? "bg-segment-thumb text-ink shadow-xs" : "bg-transparent text-ink-muted hover:text-ink",
+								)}
+								onClick={() => setViewMode("source")}
+							>
+								{t("documentEditor.modes.source")}
+							</button>
+						</div>
+					) : null}
+
+					{/* Manual Save trigger (autosave is always on) */}
+					{isText ? (
+						<button
+							type="button"
+							disabled={textPayload?.truncated === true || (!dirty && saveState === "saved") || saveState === "saving"}
+							onClick={() => void saveNow(false)}
+							className="inline-flex h-26 items-center gap-5 rounded-6 border-0 bg-transparent px-8 text-meta font-medium text-ink hover:bg-hover disabled:opacity-40"
+							title={`${t("documentEditor.toolbar.save")} (${hostPlatform() === "darwin" ? "⌘S" : "Ctrl+S"})`}
+						>
+							<Save size={14} strokeWidth={1.65} />
+							{t("documentEditor.toolbar.save")}
+						</button>
+					) : null}
+
+					{loaded?.kind === "package" && onOpenExternal !== undefined ? (
+						<button
+							type="button"
+							onClick={() => onOpenExternal(filePath)}
+							className="inline-flex h-26 items-center gap-5 rounded-6 border-0 bg-transparent px-8 text-meta font-medium text-ink-body hover:bg-hover hover:text-ink"
+						>
+							<ExternalLink size={14} strokeWidth={1.65} />
+							{t("documentEditor.package.openExternal")}
+						</button>
+					) : null}
+
+					{/* Quiet right-sidebar AI panel trigger */}
+					{loaded !== null && sidebar !== null ? (
+						<button
+							type="button"
+							onClick={() => sidebar.openRightSidebar()}
+							className="inline-flex h-26 items-center gap-5 rounded-6 border-0 bg-transparent px-8 text-meta font-medium text-ink-body hover:bg-hover hover:text-ink"
+						>
+							<PanelRight size={14} strokeWidth={1.65} />
+							{t("documentEditor.toolbar.aiToggle")}
+						</button>
+					) : null}
+				</header>
+			) : null}
 
 			{/* Banners: truncation, conflict, save error */}
 			{textPayload?.truncated ? (

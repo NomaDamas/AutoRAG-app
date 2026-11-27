@@ -338,9 +338,11 @@ describe("DocumentEditorTab UI", () => {
 			await Promise.resolve();
 		});
 
-		expect(el.querySelector('button[title="Mark up for AI"]')).not.toBeNull();
+		// PDF tab omits the redundant DocumentEditorTab header bar and puts AI chat & markup cleanly in the right sidebar
+		expect(el.querySelector(".doc-editor__header")).toBeNull();
 		const sidebarEl = el.querySelector<HTMLElement>("[data-document-editor-sidebar]");
 		expect(sidebarEl).not.toBeNull();
+		expect(sidebarEl!.textContent).toContain("Mark up for AI");
 		const aiInput = sidebarEl!.querySelector<HTMLTextAreaElement>("textarea");
 		expect(aiInput).not.toBeNull();
 
