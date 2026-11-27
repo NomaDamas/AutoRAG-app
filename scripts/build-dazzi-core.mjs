@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
  * Compiles `src/main/native/dazzi-core` (Rust napi-rs crate) into
- * `src/main/vendor/dazzi-core.node` (or platform-suffixed cross builds).
+ * `src/main/vendor/dazzi-core.node` (or a cross-target `.node` file).
  *
  * Uses pure N-API (ABI-stable across Node and Electron versions without Electron
- * headers or node-gyp). If `cargo` is not installed on the host, prints a warning
- * and exits 0 so the app transparently falls back to its pure TypeScript paths.
+ * headers or node-gyp). Every release build (.dmg / .exe) bundles this binary
+ * inside `out/main/vendor/dazzi-core.node`, so Rust is the single primary
+ * implementation at runtime.
  *
  * Usage:
  *   node scripts/build-dazzi-core.mjs             # build for host platform (skip if up-to-date)
@@ -28,9 +29,7 @@ const force = process.argv.includes("--force");
 const targetIdx = process.argv.indexOf("--target");
 const target = targetIdx >= 0 ? process.argv[targetIdx + 1] : undefined;
 
-const outFile = target
-	? join(OUT_DIR, `dazzi-core.${target}.node`)
-	: join(OUT_DIR, "dazzi-core.node");
+const outFile = target ? join(OUT_DIR, `dazzi-core.${target}.node`) : join(OUT_DIR, "dazzi-core.node");
 
 if (!existsSync(MANIFEST)) {
 	console.error(`[dazzi-core] missing manifest: ${MANIFEST}`);
@@ -44,8 +43,16 @@ if (!force && existsSync(outFile) && statSync(outFile).mtimeMs >= newestSrcMtime
 
 const cargoCheck = spawnSync("cargo", ["--version"], { stdio: "ignore" });
 if (cargoCheck.status !== 0) {
-	console.warn("[dazzi-core] cargo not found; skipping native Rust core build (falling back to TypeScript)");
-	process.exit(0);
+	// If a prebuilt host binary is already staged in src/main/vendor/dazzi-core.node, keep it;
+	// otherwise fail loudly so a release/dev build never silently ships without the Rust core.
+	if (existsSync(outFile)) {
+		console.warn(`[dazzi-core] cargo not found; reusing existing ${outFile}`);
+		process.exit(0);
+	}
+	console.error(
+		"[dazzi-core] Rust toolchain (`cargo`) is required to build `dazzi-core.node`. Install rustup (https://rustup.rs) and retry.",
+	);
+	process.exit(1);
 }
 
 function resolveCargoTargetDir() {

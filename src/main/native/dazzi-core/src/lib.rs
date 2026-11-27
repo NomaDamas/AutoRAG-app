@@ -7,16 +7,21 @@
 //! 2. `scanFolderNative(...)` — async (libuv thread pool) BFS directory pre-scan (`src/main/onboarding-scan.ts`).
 //! 3. `measureFolderNative(...)` — async (libuv thread pool) folder survey (`src/main/folder-stats.ts`).
 //! 4. `listDirNative(dirPath, platform)` — fast native directory listing (`src/main/fs-service.ts`).
+//! 5. `scanIndexScopeNative(...)` — async (libuv thread pool) full index-map tree walk + exclusion + mirror
+//!    classification (`src/main/index-map.ts`).
+//! 6. `walkSearchNative(...)` — async (libuv thread pool) recursive filename search with Unicode NFC
+//!    normalization & system-folder filtering (`src/main/fs-service.ts`).
 
 use napi::bindgen_prelude::*;
 use napi::{Env, Task};
 use napi_derive::napi;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
+use unicode_normalization::UnicodeNormalization;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Path & Glob Exclusion Matching (`path-exclusion.ts`)
@@ -1151,3 +1156,538 @@ pub fn list_dir_native(dir_path: String, platform: String) -> Result<NativeDirLi
 
     Ok(NativeDirListing { entries, had_skips })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Async Native Index Scope Walk (`index-map.ts`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[napi(object)]
+pub struct NativeMirrorEntry {
+    pub source_path: String,
+    pub staged_path: String,
+    pub source_mtime_ns: f64,
+    pub source_size_bytes: f64,
+}
+
+#[napi(object)]
+pub struct NativeIndexMapCounts {
+    pub indexed: f64,
+    pub stale: f64,
+    pub unindexed: f64,
+    pub excluded: f64,
+    pub unindexable: f64,
+}
+
+#[napi(object)]
+pub struct NativeScanFile {
+    pub name: String,
+    pub path: String,
+    pub state: String,
+}
+
+#[napi(object)]
+pub struct NativeScanDir {
+    pub name: String,
+    pub path: String,
+    pub files: Vec<NativeScanFile>,
+    pub dirs: Vec<NativeScanDir>,
+    pub sealed: Option<NativeIndexMapCounts>,
+}
+
+#[napi(object)]
+pub struct NativeIndexScopeResult {
+    pub roots: Vec<NativeScanDir>,
+    pub truncated: bool,
+}
+
+const INDEX_MAP_SKIP_DIRS: &[&str] = &[
+    ".autorag",
+    ".git",
+    ".jikji",
+    ".cache",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    ".Trash",
+];
+const INDEX_MAP_MAX_DEPTH: usize = 64;
+
+struct MirrorEntryMeta {
+    staged_path: String,
+    source_mtime_ns: f64,
+    source_size_bytes: f64,
+}
+
+fn compile_rules(exclusions: Vec<String>) -> (Vec<CompiledRule>, bool, u8, bool) {
+    let sep: u8 = if cfg!(windows) { b'\\' } else { b'/' };
+    let nocase_wildcards = cfg!(any(target_os = "macos", target_os = "windows"));
+    let mut rules = Vec::with_capacity(exclusions.len());
+    let mut has_glob = false;
+    for entry in exclusions {
+        if is_glob_exclusion(&entry) {
+            has_glob = true;
+            let pattern = GlobPattern::compile(&entry);
+            rules.push(CompiledRule::Glob { entry, pattern });
+        } else {
+            rules.push(CompiledRule::Path(entry));
+        }
+    }
+    (rules, has_glob, sep, nocase_wildcards)
+}
+
+#[inline]
+fn rules_exclude(rules: &[CompiledRule], has_glob: bool, sep: u8, nocase_wildcards: bool, path: &str) -> bool {
+    let slashed_owned: String;
+    let slashed: &str = if has_glob && path.as_bytes().contains(&b'\\') {
+        slashed_owned = path.replace('\\', "/");
+        &slashed_owned
+    } else {
+        path
+    };
+    for rule in rules {
+        match rule {
+            CompiledRule::Path(entry) => {
+                if is_under(path, entry.as_str(), sep) {
+                    return true;
+                }
+            }
+            CompiledRule::Glob { pattern, .. } => {
+                if pattern.matches(slashed, nocase_wildcards) == Some(true) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+#[inline]
+fn system_time_ns(t: std::time::SystemTime) -> f64 {
+    match t.duration_since(UNIX_EPOCH) {
+        Ok(d) => (d.as_secs() as f64) * 1e9 + (d.subsec_nanos() as f64),
+        Err(e) => {
+            let d = e.duration();
+            -((d.as_secs() as f64) * 1e9 + (d.subsec_nanos() as f64))
+        }
+    }
+}
+
+pub struct ScanIndexScopeTask {
+    roots: Vec<String>,
+    rules: Vec<CompiledRule>,
+    has_glob: bool,
+    sep: u8,
+    nocase_wildcards: bool,
+    supported_exts: HashSet<String>,
+    product_artifacts: HashSet<String>,
+    entries: HashMap<String, MirrorEntryMeta>,
+    unindexable_paths: HashSet<String>,
+    max_entries: u64,
+}
+
+impl ScanIndexScopeTask {
+    #[inline]
+    fn is_indexable(&self, name: &str) -> bool {
+        if self.product_artifacts.contains(name) {
+            return false;
+        }
+        let ext = lower_extname(name);
+        !ext.is_empty() && self.supported_exts.contains(&ext)
+    }
+
+    #[inline]
+    fn is_excluded(&self, path: &str) -> bool {
+        rules_exclude(&self.rules, self.has_glob, self.sep, self.nocase_wildcards, path)
+    }
+
+    fn classify(&self, path: &str, meta_hint: Option<&fs::Metadata>) -> &'static str {
+        if self.is_excluded(path) {
+            return "excluded";
+        }
+        if let Some(entry) = self.entries.get(path) {
+            if !Path::new(&entry.staged_path).exists() {
+                return "stale";
+            }
+            let meta_owned;
+            let meta = match meta_hint {
+                Some(m) => Some(m),
+                None => {
+                    meta_owned = fs::metadata(path).ok();
+                    meta_owned.as_ref()
+                }
+            };
+            if let Some(m) = meta {
+                let mtime_ns = m.modified().ok().map(system_time_ns).unwrap_or(0.0);
+                let size = m.len() as f64;
+                if mtime_ns != entry.source_mtime_ns || size != entry.source_size_bytes {
+                    return "stale";
+                }
+            }
+            return "indexed";
+        }
+        if self.unindexable_paths.contains(path) {
+            return "unindexable";
+        }
+        "unindexed"
+    }
+
+    fn seal(&self, dir_path: &str) -> NativeIndexMapCounts {
+        let mut excluded: u64 = 0;
+        if let Ok(rd) = fs::read_dir(dir_path) {
+            for item in rd {
+                let Ok(entry) = item else { continue };
+                let Ok(ft) = entry.file_type() else { continue };
+                if !ft.is_file() {
+                    continue;
+                }
+                let os_name = entry.file_name();
+                let Some(name) = os_name.to_str() else { continue };
+                if self.is_indexable(name) {
+                    excluded += 1;
+                }
+            }
+        }
+        NativeIndexMapCounts {
+            indexed: 0.0,
+            stale: 0.0,
+            unindexed: 0.0,
+            excluded: excluded as f64,
+            unindexable: 0.0,
+        }
+    }
+
+    fn walk(&self, dir_name: String, dir_path: String, depth: usize, visited: &mut u64, truncated: &mut bool) -> NativeScanDir {
+        let mut files: Vec<NativeScanFile> = Vec::new();
+        let mut child_candidates: Vec<(String, String)> = Vec::new();
+
+        if let Ok(rd) = fs::read_dir(&dir_path) {
+            for item in rd {
+                if *visited >= self.max_entries {
+                    *truncated = true;
+                    break;
+                }
+                let Ok(entry) = item else { continue };
+                *visited += 1;
+                let Ok(ft) = entry.file_type() else { continue };
+                let os_name = entry.file_name();
+                let Some(name) = os_name.to_str() else { continue };
+                let full_path = entry.path();
+                let Some(full_str) = full_path.to_str() else { continue };
+                if ft.is_dir() {
+                    if depth + 1 > INDEX_MAP_MAX_DEPTH {
+                        continue;
+                    }
+                    child_candidates.push((name.to_string(), full_str.to_string()));
+                } else if ft.is_file() {
+                    if !self.is_indexable(name) {
+                        continue;
+                    }
+                    let meta = if self.entries.contains_key(full_str) {
+                        entry.metadata().ok()
+                    } else {
+                        None
+                    };
+                    let state = self.classify(full_str, meta.as_ref());
+                    files.push(NativeScanFile {
+                        name: name.to_string(),
+                        path: full_str.to_string(),
+                        state: state.to_string(),
+                    });
+                }
+            }
+        }
+
+        files.sort_by(|a, b| a.name.cmp(&b.name));
+        child_candidates.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut dirs: Vec<NativeScanDir> = Vec::with_capacity(child_candidates.len());
+        for (cname, cpath) in child_candidates {
+            if INDEX_MAP_SKIP_DIRS.contains(&cname.as_str()) || self.is_excluded(&cpath) {
+                let sealed = self.seal(&cpath);
+                dirs.push(NativeScanDir {
+                    name: cname,
+                    path: cpath,
+                    files: Vec::new(),
+                    dirs: Vec::new(),
+                    sealed: Some(sealed),
+                });
+            } else if !*truncated {
+                dirs.push(self.walk(cname, cpath, depth + 1, visited, truncated));
+            } else {
+                dirs.push(NativeScanDir {
+                    name: cname,
+                    path: cpath,
+                    files: Vec::new(),
+                    dirs: Vec::new(),
+                    sealed: None,
+                });
+            }
+        }
+
+        NativeScanDir {
+            name: dir_name,
+            path: dir_path,
+            files,
+            dirs,
+            sealed: None,
+        }
+    }
+}
+
+impl Task for ScanIndexScopeTask {
+    type Output = NativeIndexScopeResult;
+    type JsValue = NativeIndexScopeResult;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let mut visited: u64 = 0;
+        let mut truncated = false;
+        let mut out_roots = Vec::with_capacity(self.roots.len());
+        for root in self.roots.clone() {
+            if self.is_excluded(&root) {
+                let sealed = self.seal(&root);
+                out_roots.push(NativeScanDir {
+                    name: root.clone(),
+                    path: root,
+                    files: Vec::new(),
+                    dirs: Vec::new(),
+                    sealed: Some(sealed),
+                });
+            } else {
+                out_roots.push(self.walk(root.clone(), root, 0, &mut visited, &mut truncated));
+            }
+        }
+        Ok(NativeIndexScopeResult {
+            roots: out_roots,
+            truncated,
+        })
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+/// Full native index-scope walk + exclusion + mirror classification on the libuv thread pool.
+#[napi(js_name = "scanIndexScopeNative", catch_unwind)]
+pub fn scan_index_scope_native(
+    roots: Vec<String>,
+    exclusions: Vec<String>,
+    supported_extensions: Vec<String>,
+    product_artifacts: Vec<String>,
+    mirror_entries: Vec<NativeMirrorEntry>,
+    unindexable_paths: Vec<String>,
+    max_entries: f64,
+) -> AsyncTask<ScanIndexScopeTask> {
+    let (rules, has_glob, sep, nocase_wildcards) = compile_rules(exclusions);
+    let mut entries = HashMap::with_capacity(mirror_entries.len());
+    for e in mirror_entries {
+        entries.insert(
+            e.source_path,
+            MirrorEntryMeta {
+                staged_path: e.staged_path,
+                source_mtime_ns: e.source_mtime_ns,
+                source_size_bytes: e.source_size_bytes,
+            },
+        );
+    }
+    AsyncTask::new(ScanIndexScopeTask {
+        roots,
+        rules,
+        has_glob,
+        sep,
+        nocase_wildcards,
+        supported_exts: supported_extensions.into_iter().collect(),
+        product_artifacts: product_artifacts.into_iter().collect(),
+        entries,
+        unindexable_paths: unindexable_paths.into_iter().collect(),
+        max_entries: max_entries.max(0.0) as u64,
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Async Native Recursive Filename Search (`fs-service.ts` walkSearch)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SYSTEM_FOLDER_NAMES: &[&str] = &[
+    ".trash",
+    ".trashes",
+    ".spotlight-v100",
+    ".documentrevisions-v100",
+    ".fseventsd",
+    ".temporaryitems",
+    ".mobilebackups",
+    ".pkinstallsandboxmanager",
+    ".pkinstallsandboxmanager-sip",
+    "$recycle.bin",
+    "system volume information",
+    "$winreagent",
+    ".tmp",
+    ".tmp.drivedownload",
+    ".tmp.driveupload",
+    ".shortcut-targets-by-id",
+    ".file-revisions-by-id",
+    ".encrypted",
+    ".dropbox.cache",
+];
+
+#[napi(object)]
+pub struct NativeSearchRoot {
+    pub path: String,
+    pub location: String,
+}
+
+#[napi(object)]
+pub struct NativeSearchHit {
+    pub entry: NativeDirEntry,
+    pub location: String,
+}
+
+pub struct WalkSearchTask {
+    roots: Vec<NativeSearchRoot>,
+    needle: String,
+    platform: String,
+    max_depth: usize,
+    max_results: usize,
+    discord_roots: Vec<String>,
+    shared: Arc<WalkShared>,
+}
+
+impl WalkSearchTask {
+    #[inline]
+    fn is_discord_internal(&self, dir: &str, name: &str) -> bool {
+        if name != "download-status.json" && name != ".discrawl" && name != ".lock" {
+            return false;
+        }
+        self.discord_roots.iter().any(|r| r == dir)
+    }
+
+    fn build_entry(&self, name: &str, full_path: &Path, full_str: &str, link_meta: fs::Metadata) -> Option<NativeDirEntry> {
+        let is_darwin = self.platform == "darwin";
+        let is_symlink = link_meta.file_type().is_symlink();
+        let effective = if is_symlink {
+            match fs::metadata(full_path) {
+                Ok(m) => m,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => link_meta,
+                Err(_) => return None,
+            }
+        } else {
+            link_meta
+        };
+        let is_dir = effective.is_dir();
+        let ext_raw = extension_without_dot(name);
+        let is_pkg = is_package_directory(name, is_dir, is_darwin, &ext_raw);
+        let is_folder = is_dir && !is_pkg;
+        let mtime = mtime_ms(&effective).unwrap_or(0.0);
+        let birthtime = effective
+            .created()
+            .ok()
+            .map(system_time_ms)
+            .filter(|&ms| ms > 0.0);
+        Some(NativeDirEntry {
+            name: name.to_string(),
+            path: full_str.to_string(),
+            kind: if is_folder { "folder".to_string() } else { "file".to_string() },
+            ext: if is_folder { String::new() } else { ext_raw },
+            size: if is_dir { Either::B(Null) } else { Either::A(effective.len() as f64) },
+            mtime_ms: mtime,
+            birthtime_ms: birthtime,
+            flags: if is_symlink { 1 } else { 0 },
+        })
+    }
+
+    fn walk(&self, dir: &str, depth: usize, location: &str, results: &mut Vec<NativeSearchHit>) {
+        if self.shared.cancelled.load(Ordering::Relaxed)
+            || depth > self.max_depth
+            || results.len() >= self.max_results
+        {
+            return;
+        }
+        let Ok(rd) = fs::read_dir(dir) else {
+            return;
+        };
+        for item in rd {
+            if self.shared.cancelled.load(Ordering::Relaxed) || results.len() >= self.max_results {
+                return;
+            }
+            let Ok(dirent) = item else { continue };
+            let Ok(ft) = dirent.file_type() else { continue };
+            let os_name = dirent.file_name();
+            let Some(name) = os_name.to_str() else { continue };
+            let is_dir = ft.is_dir();
+            if is_dir && SYSTEM_FOLDER_NAMES.contains(&name.to_lowercase().as_str()) {
+                continue;
+            }
+            if self.is_discord_internal(dir, name) {
+                continue;
+            }
+            let full_path = dirent.path();
+            let Some(full_str) = full_path.to_str() else { continue };
+
+            // Fast ASCII lowercase match; Unicode NFC fallback for decomposed Hangul on macOS.
+            let matched = if name.is_ascii() && self.needle.is_ascii() {
+                name.to_ascii_lowercase().contains(&self.needle)
+            } else {
+                let nfc: String = name.nfc().collect();
+                nfc.to_lowercase().contains(&self.needle)
+            };
+            if matched {
+                if let Ok(meta) = dirent.metadata() {
+                    if let Some(entry) = self.build_entry(name, &full_path, full_str, meta) {
+                        results.push(NativeSearchHit {
+                            entry,
+                            location: location.to_string(),
+                        });
+                    }
+                }
+            }
+            if is_dir && !ft.is_symlink() {
+                self.walk(full_str, depth + 1, location, results);
+            }
+        }
+    }
+}
+
+impl Task for WalkSearchTask {
+    type Output = Vec<NativeSearchHit>;
+    type JsValue = Vec<NativeSearchHit>;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let mut results = Vec::new();
+        for root in &self.roots {
+            if self.shared.cancelled.load(Ordering::Relaxed) || results.len() >= self.max_results {
+                break;
+            }
+            self.walk(&root.path, 0, &root.location, &mut results);
+        }
+        Ok(results)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+#[napi(js_name = "walkSearchNative", catch_unwind)]
+pub fn walk_search_native(
+    roots: Vec<NativeSearchRoot>,
+    needle: String,
+    platform: String,
+    max_depth: u32,
+    max_results: u32,
+    discord_roots: Vec<String>,
+    control: &WalkControl,
+) -> AsyncTask<WalkSearchTask> {
+    AsyncTask::new(WalkSearchTask {
+        roots,
+        needle,
+        platform,
+        max_depth: max_depth as usize,
+        max_results: max_results as usize,
+        discord_roots,
+        shared: Arc::clone(&control.inner),
+    })
+}
+

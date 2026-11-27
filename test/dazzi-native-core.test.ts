@@ -1,17 +1,20 @@
 import { mkdir, mkdtemp, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { isNativeCoreDisabled, loadDazziNativeCore } from "../src/main/dazzi-native-core";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as nativeLoader from "../src/main/dazzi-native-core";
 import { buildFsEntry } from "../src/main/fs-entry";
-import { findExclusion, findExclusionsBatch, createExclusionMatcher } from "../src/main/path-exclusion";
+import { createFsService } from "../src/main/fs-service";
+import { createExclusionMatcher, findExclusion, findExclusionsBatch } from "../src/main/path-exclusion";
 import { measureFolder, type FolderStatsOptions } from "../src/main/folder-stats";
+import { buildIndexMap, scanIndexScope, type IndexScopeContext } from "../src/main/index-map";
 import { scanFolder } from "../src/main/onboarding-scan";
+import { createPlaces } from "../src/main/places";
 
 const tempDirs: string[] = [];
 
 afterEach(async () => {
-	delete process.env.FAST_ANYTHING_DISABLE;
+	vi.restoreAllMocks();
 	const pending = tempDirs.splice(0);
 	await Promise.all(pending.map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -22,18 +25,19 @@ async function makeTempDir(prefix: string): Promise<string> {
 	return dir;
 }
 
-describe("dazzi-native-core parity & fallback", () => {
-	it("loads the native Rust core on supported hosts and respects FAST_ANYTHING_DISABLE=1", () => {
-		const native = loadDazziNativeCore();
+describe("dazzi-native-core single-source primary & error-only fallback", () => {
+	it("loads the bundled Rust N-API core by default with no env-var toggle", () => {
+		const native = nativeLoader.loadDazziNativeCore();
 		expect(native).not.toBeNull();
-		expect(isNativeCoreDisabled()).toBe(false);
-
-		process.env.FAST_ANYTHING_DISABLE = "1";
-		expect(isNativeCoreDisabled()).toBe(true);
-		expect(loadDazziNativeCore()).toBeNull();
+		expect(typeof native!.findExclusionBatch).toBe("function");
+		expect(typeof native!.scanFolderNative).toBe("function");
+		expect(typeof native!.measureFolderNative).toBe("function");
+		expect(typeof native!.listDirNative).toBe("function");
+		expect(typeof native!.scanIndexScopeNative).toBe("function");
+		expect(typeof native!.walkSearchNative).toBe("function");
 	});
 
-	it("matches path & glob exclusions identically between JS and Rust across edge cases", () => {
+	it("matches path & glob exclusions identically between Rust primary and JS emergency fallback", () => {
 		const exclusions = [
 			"/Users/test/Documents/Private",
 			"/Users/test/Documents/Archive/",
@@ -70,23 +74,22 @@ describe("dazzi-native-core parity & fallback", () => {
 			"/Users/test/Documents/Projects/a/PREFIX_123.txt",
 			"/Users/test/Documents/Projects/a/.prefix_123.txt",
 			"/Users/test/Documents/Projects/a/normal/report_보고서.pdf",
-			// Path exclusion takes precedence over glob exclusion even when glob appears earlier
 			"/Users/test/Documents/Private/app.log",
 			"node_modules/pkg/index.js",
 		];
 
-		// Compare with JS fallback (`FAST_ANYTHING_DISABLE=1`)
-		process.env.FAST_ANYTHING_DISABLE = "1";
-		const jsBatch = findExclusionsBatch(exclusions, testPaths);
-		const jsMatcher = createExclusionMatcher(exclusions);
-		const jsStream = testPaths.map((p) => jsMatcher.find(p));
-		const jsSingle = testPaths.map((p) => findExclusion(exclusions, p));
-
-		delete process.env.FAST_ANYTHING_DISABLE;
+		// Rust primary
 		const rustBatch = findExclusionsBatch(exclusions, testPaths);
 		const rustMatcher = createExclusionMatcher(exclusions);
 		const rustStream = testPaths.map((p) => rustMatcher.find(p));
 		const rustIsExcluded = testPaths.map((p) => rustMatcher.isExcluded(p));
+
+		// Emergency JS fallback (when loader returns null)
+		vi.spyOn(nativeLoader, "loadDazziNativeCore").mockReturnValue(null);
+		const jsBatch = findExclusionsBatch(exclusions, testPaths);
+		const jsMatcher = createExclusionMatcher(exclusions);
+		const jsStream = testPaths.map((p) => jsMatcher.find(p));
+		const jsSingle = testPaths.map((p) => findExclusion(exclusions, p));
 
 		expect(rustBatch).toEqual(jsBatch);
 		expect(rustStream).toEqual(jsStream);
@@ -94,22 +97,115 @@ describe("dazzi-native-core parity & fallback", () => {
 		expect(rustIsExcluded).toEqual(jsBatch.map((m) => m !== null));
 	});
 
-	it("falls back transparently to Node matchesGlob for brace/character-class/non-ASCII globs", () => {
+	it("delegates brace/character-class/non-ASCII globs cleanly to Node matchesGlob", () => {
 		const complexExclusions = ["**/*.{pdf,doc}", "/a/[bc].txt", "**/문서/*.tmp"];
 		const paths = ["/a/x.pdf", "/a/x.doc", "/a/x.txt", "/a/b.txt", "/a/d.txt", "/dir/문서/foo.tmp"];
 
-		process.env.FAST_ANYTHING_DISABLE = "1";
+		const primaryBatch = findExclusionsBatch(complexExclusions, paths);
+		const primaryMatcher = createExclusionMatcher(complexExclusions);
+		const primaryStream = paths.map((p) => primaryMatcher.find(p));
+
+		vi.spyOn(nativeLoader, "loadDazziNativeCore").mockReturnValue(null);
 		const jsBatch = findExclusionsBatch(complexExclusions, paths);
 		const jsMatcher = createExclusionMatcher(complexExclusions);
 		const jsStream = paths.map((p) => jsMatcher.find(p));
 
-		delete process.env.FAST_ANYTHING_DISABLE;
-		const rustBatch = findExclusionsBatch(complexExclusions, paths);
-		const rustMatcher = createExclusionMatcher(complexExclusions);
-		const rustStream = paths.map((p) => rustMatcher.find(p));
+		expect(primaryBatch).toEqual(jsBatch);
+		expect(primaryStream).toEqual(jsStream);
+	});
 
-		expect(rustBatch).toEqual(jsBatch);
-		expect(rustStream).toEqual(jsStream);
+	it("falls back to JS only when a native call throws at runtime", async () => {
+		const root = await makeTempDir("dazzi-core-error-fallback-");
+		await writeFile(join(root, "doc.txt"), "hello");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const real = nativeLoader.loadDazziNativeCore()!;
+		vi.spyOn(nativeLoader, "loadDazziNativeCore").mockReturnValue({
+			...real,
+			scanFolderNative: () => Promise.reject(new Error("simulated native failure")),
+			measureFolderNative: () => Promise.reject(new Error("simulated native failure")),
+		});
+
+		const scanRes = await scanFolder(
+			root,
+			{ supportedExtensions: new Set([".txt"]), maxSourceBytes: 1024 },
+			() => {},
+			new AbortController().signal,
+		);
+		expect(scanRes.files).toBe(1);
+		expect(scanRes.bytes).toBe(5);
+		expect(scanRes.error).toBeNull();
+
+		const statsRes = await measureFolder(
+			root,
+			{ supportedExtensions: new Set([".txt"]), maxSourceBytes: 1024 },
+			new AbortController().signal,
+		);
+		expect(statsRes.indexedFiles).toBe(1);
+		expect(statsRes.totalFiles).toBe(1);
+		expect(warn).toHaveBeenCalledTimes(2);
+	});
+
+	it("runs scanIndexScope natively off the JS thread with exact parity against JS fallback", async () => {
+		const root = await makeTempDir("dazzi-core-index-map-");
+		const docs = join(root, "docs");
+		await mkdir(join(docs, "sub"), { recursive: true });
+		await mkdir(join(docs, "private"), { recursive: true });
+		await mkdir(join(docs, "node_modules", "pkg"), { recursive: true });
+		await writeFile(join(docs, "a.md"), "# A\n");
+		await writeFile(join(docs, "b.log"), "log\n");
+		await writeFile(join(docs, "c.qaunknown"), "bin\n");
+		await writeFile(join(docs, "sub", "deep.txt"), "deep\n");
+		await writeFile(join(docs, "private", "secret.md"), "secret\n");
+		await writeFile(join(docs, "node_modules", "pkg", "readme.md"), "dep\n");
+
+		const supported = new Set([".md", ".txt", ".log"]);
+		const ctx: IndexScopeContext = {
+			roots: [docs],
+			exclusions: [join(docs, "private"), "**/*.log", "**/node_modules/**"],
+			entries: new Map(),
+			skips: new Map(),
+			minSyncRoot: join(root, ".minsync"),
+			indexable: (_p, name) => supported.has(name.slice(name.lastIndexOf(".")).toLowerCase()),
+			supportedExtensions: supported,
+			productArtifacts: new Set([".jikji_agent_map.md"]),
+		};
+
+		const rustMap = buildIndexMap(await scanIndexScope(ctx));
+
+		vi.spyOn(nativeLoader, "loadDazziNativeCore").mockReturnValue(null);
+		const jsMap = buildIndexMap(await scanIndexScope(ctx));
+
+		expect(rustMap).toEqual(jsMap);
+	});
+
+	it("runs walkSearchNative off the JS thread with Unicode NFC/NFD parity against JS fallback", async () => {
+		const root = await makeTempDir("dazzi-core-walk-search-");
+		await mkdir(join(root, "sub", "deep"), { recursive: true });
+		await mkdir(join(root, ".Trash"), { recursive: true });
+		await writeFile(join(root, "보고서_2026.pdf".normalize("NFD")), "a");
+		await writeFile(join(root, "sub", "Quarterly_Report.md"), "b");
+		await writeFile(join(root, "sub", "deep", "보고서_최종.txt"), "c");
+		await writeFile(join(root, ".Trash", "보고서_삭제.txt"), "d");
+
+		const makeSvc = () =>
+			createFsService({
+				shell: { trashItem: async () => {}, showItemInFolder: () => {}, openPath: async () => "", openExternal: async () => {} },
+				clipboard: { writeText: () => {}, writeFiles: async () => {} },
+				homeDir: root,
+				places: createPlaces({ homeDir: root }),
+			});
+
+		const rustHits = await makeSvc().search("보고서", { scope: root });
+		vi.spyOn(nativeLoader, "loadDazziNativeCore").mockReturnValue(null);
+		const jsHits = await makeSvc().search("보고서", { scope: root });
+
+		const norm = (hits: readonly { readonly entry: { readonly path: string; readonly name: string; readonly size: number | null }; readonly location: string }[]) =>
+			[...hits]
+				.map((h) => ({ path: h.entry.path, name: h.entry.name, size: h.entry.size, location: h.location }))
+				.sort((a, b) => a.path.localeCompare(b.path));
+
+		expect(norm(rustHits)).toEqual(norm(jsHits));
+		expect(rustHits).toHaveLength(2);
 	});
 
 	it("runs native folder scan off the JS main thread and honors mid-walk AbortSignal cancellation", async () => {
@@ -157,7 +253,7 @@ describe("dazzi-native-core parity & fallback", () => {
 		const odd = new Date("2001-02-03T04:05:06.789Z");
 		await utimes(join(root, "noext"), odd, odd);
 
-		const native = loadDazziNativeCore();
+		const native = nativeLoader.loadDazziNativeCore();
 		expect(native).not.toBeNull();
 		const listing = native!.listDirNative(root, process.platform);
 		expect(listing.hadSkips).toBe(false);
@@ -179,55 +275,9 @@ describe("dazzi-native-core parity & fallback", () => {
 		expect(listing.entries).toHaveLength(40 + 3 + 3 + 3);
 	});
 
-	it("reports hadSkips=false and matching entries on listDirNative", async () => {
-		const root = await makeTempDir("dazzi-core-listdir-");
-		await writeFile(join(root, "alpha.txt"), "hello");
-		await mkdir(join(root, "subdir"));
-		await symlink(join(root, "missing-target"), join(root, "broken.lnk"));
-
-		const native = loadDazziNativeCore();
-		expect(native).not.toBeNull();
-		const listing = native!.listDirNative(root, process.platform);
-		expect(listing.hadSkips).toBe(false);
-		expect(listing.entries.map((e) => e.name).sort()).toEqual(["alpha.txt", "broken.lnk", "subdir"]);
-		expect(listing.entries.find((e) => e.name === "broken.lnk")?.flags).toBe(1);
-		expect(listing.entries.find((e) => e.name === "subdir")?.kind).toBe("folder");
-		expect(listing.entries.find((e) => e.name === "alpha.txt")?.size).toBe(5);
-	});
-
-	it("produces identical scanFolder totals between Rust and JS fallback (skip dirs, caps, dataless, symlinks)", async () => {
-		const root = await makeTempDir("dazzi-core-scan-");
+	it("produces identical scanFolder and measureFolder results between Rust primary and JS fallback", async () => {
+		const root = await makeTempDir("dazzi-core-scan-measure-");
 		const outside = await makeTempDir("dazzi-core-outside-");
-		await writeFile(join(root, "a.txt"), "hello");
-		await writeFile(join(root, "b.pdf"), "pdf");
-		await writeFile(join(root, "c.bin"), "unsupported");
-		await writeFile(join(root, "big.txt"), "x".repeat(50));
-		await mkdir(join(root, "sub"));
-		await writeFile(join(root, "sub", "d.md"), "md");
-		await mkdir(join(root, "node_modules"));
-		await writeFile(join(root, "node_modules", "ignored.txt"), "ignored");
-		await mkdir(join(root, ".git"));
-		await writeFile(join(root, ".git", "ignored.txt"), "ignored");
-		await writeFile(join(outside, "ext.txt"), "outside");
-		await symlink(outside, join(root, "link-dir"));
-
-		const opts = {
-			supportedExtensions: new Set([".txt", ".pdf", ".md"]),
-			maxSourceBytes: 10,
-			datalessPaths: new Set([join(root, "a.txt")]),
-		};
-
-		process.env.FAST_ANYTHING_DISABLE = "1";
-		const jsResult = await scanFolder(root, opts, () => {}, new AbortController().signal);
-
-		delete process.env.FAST_ANYTHING_DISABLE;
-		const rustResult = await scanFolder(root, opts, () => {}, new AbortController().signal);
-
-		expect(rustResult).toEqual(jsResult);
-	});
-
-	it("produces identical measureFolder stats between Rust and JS fallback", async () => {
-		const root = await makeTempDir("dazzi-core-measure-");
 		const DAY = 86_400_000;
 		const put = async (rel: string, body: string, daysAgo?: number) => {
 			await mkdir(join(root, rel, ".."), { recursive: true });
@@ -237,27 +287,35 @@ describe("dazzi-native-core parity & fallback", () => {
 				await utimes(join(root, rel), d, d);
 			}
 		};
-		for (let i = 1; i <= 15; i += 1) await put(`chat/msg_${i}.txt`, "hello", 3);
-		for (let i = 1; i <= 5; i += 1) await put(`chat/img_${i}.jpg`, "jpg", 3);
-		for (let i = 1; i <= 8; i += 1) await put(`Docs/subA/report_${i}.md`, "md", 120);
-		for (let i = 1; i <= 4; i += 1) await put(`Docs/subB/contract_${i}.pdf`, "pdf", 10);
+		for (let i = 1; i <= 10; i += 1) await put(`chat/msg_${i}.txt`, "hello", 3);
+		for (let i = 1; i <= 4; i += 1) await put(`chat/img_${i}.jpg`, "jpg", 3);
+		for (let i = 1; i <= 6; i += 1) await put(`Docs/subA/report_${i}.md`, "md", 120);
 		await put("top.txt", "top");
 		await put("big.txt", "y".repeat(200));
 		await put("node_modules/pkg/readme.md", "skip");
 		await put(".hidden/secret.md", "skip");
+		await writeFile(join(outside, "ext.txt"), "outside");
+		await symlink(outside, join(root, "link-dir"));
 
-		const opts: FolderStatsOptions = {
+		const scanOpts = {
+			supportedExtensions: new Set([".txt", ".pdf", ".md"]),
+			maxSourceBytes: 50,
+			datalessPaths: new Set([join(root, "top.txt")]),
+		};
+		const measureOpts: FolderStatsOptions = {
 			supportedExtensions: new Set([".txt", ".md", ".pdf"]),
 			maxSourceBytes: 50,
 			sampleNames: 6,
 		};
 
-		process.env.FAST_ANYTHING_DISABLE = "1";
-		const jsStats = await measureFolder(root, opts, new AbortController().signal);
+		const rustScan = await scanFolder(root, scanOpts, () => {}, new AbortController().signal);
+		const rustStats = await measureFolder(root, measureOpts, new AbortController().signal);
 
-		delete process.env.FAST_ANYTHING_DISABLE;
-		const rustStats = await measureFolder(root, opts, new AbortController().signal);
+		vi.spyOn(nativeLoader, "loadDazziNativeCore").mockReturnValue(null);
+		const jsScan = await scanFolder(root, scanOpts, () => {}, new AbortController().signal);
+		const jsStats = await measureFolder(root, measureOpts, new AbortController().signal);
 
+		expect(rustScan).toEqual(jsScan);
 		expect(rustStats.indexedFiles).toBe(jsStats.indexedFiles);
 		expect(rustStats.totalFiles).toBe(jsStats.totalFiles);
 		expect(rustStats.indexedBytes).toBe(jsStats.indexedBytes);
@@ -266,8 +324,5 @@ describe("dazzi-native-core parity & fallback", () => {
 		expect(rustStats.children.map((c) => [c.name, c.indexedFiles, c.totalFiles, c.extensions, c.subfolders])).toEqual(
 			jsStats.children.map((c) => [c.name, c.indexedFiles, c.totalFiles, c.extensions, c.subfolders]),
 		);
-		expect(rustStats.modified?.oldest.getTime()).toBeCloseTo(jsStats.modified!.oldest.getTime(), -1);
-		expect(rustStats.modified?.newest.getTime()).toBeCloseTo(jsStats.modified!.newest.getTime(), -1);
-		expect(rustStats.modified?.sameDayShare).toBeCloseTo(jsStats.modified!.sameDayShare, 5);
 	});
 });

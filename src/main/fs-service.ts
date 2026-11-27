@@ -511,6 +511,38 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		return entries;
 	}
 
+	function fromNativeEntry(item: {
+		readonly name: string;
+		readonly path: string;
+		readonly kind: "folder" | "file";
+		readonly ext: string;
+		readonly size: number | null;
+		readonly mtimeMs: number;
+		readonly birthtimeMs?: number | null;
+		readonly flags: number;
+	}): FsEntry {
+		return item.birthtimeMs != null && item.birthtimeMs > 0
+			? {
+					name: item.name,
+					path: item.path,
+					kind: item.kind,
+					ext: item.ext,
+					size: item.size,
+					mtimeMs: item.mtimeMs,
+					birthtimeMs: item.birthtimeMs,
+					flags: item.flags,
+				}
+			: {
+					name: item.name,
+					path: item.path,
+					kind: item.kind,
+					ext: item.ext,
+					size: item.size,
+					mtimeMs: item.mtimeMs,
+					flags: item.flags,
+				};
+	}
+
 	async function listDir(path: string, signal?: AbortSignal): Promise<DirListing> {
 		if (path === RECENTS_PATH) {
 			// The recents store already lists most-recent first; sorting by
@@ -526,38 +558,21 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		const native = visible.length >= 128 ? loadDazziNativeCore() : null;
 		if (native !== null) {
 			signal?.throwIfAborted();
-			const result = native.listDirNative(path, platform);
-			signal?.throwIfAborted();
-			// If any entry could not be read natively, fall through to JS so every skipped entry logs its verbatim warning.
-			if (!result.hadSkips) {
-				const entries: FsEntry[] = [];
-				for (const item of result.entries) {
-					if (discord.isInternalEntry(path, item.name)) continue;
-					entries.push(
-						item.birthtimeMs != null && item.birthtimeMs > 0
-							? {
-									name: item.name,
-									path: item.path,
-									kind: item.kind,
-									ext: item.ext,
-									size: item.size,
-									mtimeMs: item.mtimeMs,
-									birthtimeMs: item.birthtimeMs,
-									flags: item.flags,
-								}
-							: {
-									name: item.name,
-									path: item.path,
-									kind: item.kind,
-									ext: item.ext,
-									size: item.size,
-									mtimeMs: item.mtimeMs,
-									flags: item.flags,
-								},
-					);
+			try {
+				const result = native.listDirNative(path, platform);
+				signal?.throwIfAborted();
+				// If any entry could not be read natively, fall through to JS so every skipped entry logs its verbatim warning.
+				if (!result.hadSkips) {
+					const entries: FsEntry[] = [];
+					for (const item of result.entries) {
+						if (discord.isInternalEntry(path, item.name)) continue;
+						entries.push(fromNativeEntry(item));
+					}
+					entries.sort(compareEntries);
+					return { path, entries };
 				}
-				entries.sort(compareEntries);
-				return { path, entries };
+			} catch (error) {
+				console.warn(`[dazzi-core] listDirNative failed for ${path}, falling back to JS:`, errorMessage(error));
 			}
 		}
 		const entries = await buildListingEntries(visible, path, signal);
@@ -754,18 +769,52 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	}
 
 	async function walkSearch(needle: string, scope: string | undefined, signal: AbortSignal | undefined): Promise<readonly FsSearchResult[]> {
-		const results: FsSearchResult[] = [];
+		const searchRoots: { readonly path: string; readonly location: string }[] = [];
 		if (scope !== undefined) {
 			// The "파일 이름" chip scopes to the folder in view, which may sit
 			// outside the scanned places (e.g. inside a mounted disk).
 			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, discord, results, signal });
-			return results;
+			searchRoots.push({ path: scope, location: searchLocation(scope, known) });
+		} else {
+			for (const location of await locations()) {
+				// Recents is virtual and whole disks are too large to walk; only scanned places count.
+				if (!location.available || !location.scanned) continue;
+				searchRoots.push({ path: location.path, location: location.name });
+			}
 		}
-		for (const location of await locations()) {
-			// Recents is virtual and whole disks are too large to walk; only scanned places count.
-			if (!location.available || !location.scanned) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, platform, discord, results, signal });
+		if (searchRoots.length === 0) return [];
+		signal?.throwIfAborted();
+
+		const native = loadDazziNativeCore();
+		if (native !== null) {
+			const control = new native.WalkControl();
+			const onAbort = (): void => control.cancel();
+			signal?.addEventListener("abort", onAbort, { once: true });
+			try {
+				const hits = await native.walkSearchNative(
+					searchRoots,
+					needle,
+					platform,
+					SEARCH_MAX_DEPTH,
+					SEARCH_MAX_RESULTS,
+					[],
+					control,
+				);
+				signal?.throwIfAborted();
+				return hits
+					.filter((hit) => !discord.isInternalPath(hit.entry.path))
+					.map((hit) => ({ entry: fromNativeEntry(hit.entry), location: hit.location }));
+			} catch (error) {
+				if (signal?.aborted === true) throw error;
+				console.warn("[dazzi-core] walkSearchNative failed, falling back to JS:", errorMessage(error));
+			} finally {
+				signal?.removeEventListener("abort", onAbort);
+			}
+		}
+
+		const results: FsSearchResult[] = [];
+		for (const root of searchRoots) {
+			await walkForSearch(root.path, 0, { needle, location: root.location, platform, discord, results, signal });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
 		return results;

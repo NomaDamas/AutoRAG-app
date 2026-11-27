@@ -13,7 +13,7 @@
 		"predev": "node scripts/sync-librarian.mjs && node scripts/require-dupey.mjs && node scripts/ensure-electron.mjs && node scripts/build-mac-reveal-hook.mjs && node scripts/build-dazzi-core.mjs",
 		"prebuild": "node scripts/sync-librarian.mjs && node scripts/require-dupey.mjs && node scripts/build-mac-reveal-hook.mjs && node scripts/build-dazzi-core.mjs",
 		"build": "electron-vite build",
-		"pretest": "node scripts/sync-librarian.mjs",
+		"pretest": "node scripts/sync-librarian.mjs && node scripts/build-dazzi-core.mjs",
 		"test": "vitest run --exclude '**/.upstream/**'",
 		"pretypecheck": "node scripts/sync-librarian.mjs",
 		"typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",

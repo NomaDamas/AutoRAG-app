@@ -139,6 +139,7 @@ const expect = (ok, label, detail = "") => {
 
 try {
 	expect(existsSync(executable), "installed executable exists", executable);
+	expect(existsSync(join(resources, "app", "out", "main", "vendor", "dazzi-core.node")), "bundled Rust core addon installed");
 	expect(existsSync(join(resources, "tools", "bin")), "tools/bin installed");
 	// The model is downloaded on demand now, so the installer must not carry it.
 	expect(!existsSync(join(resources, "seed")), "installer does not carry the embedding model (resources/seed absent)");

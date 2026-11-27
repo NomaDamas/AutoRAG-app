@@ -131,15 +131,19 @@ export async function scanFolder(
 			files = result.files;
 			bytes = result.bytes;
 			onlineOnly = result.onlineOnly;
+			const final = snapshot(true);
+			emit(final);
+			return final;
 		} catch (caught) {
-			error = caught instanceof Error ? caught.message : String(caught);
+			console.warn(`[dazzi-core] scanFolderNative failed for ${root}, falling back to JS:`, caught instanceof Error ? caught.message : caught);
+			// Reset partial counters and fall through to emergency JS walk below.
+			files = 0;
+			bytes = 0;
+			onlineOnly = 0;
 		} finally {
 			if (poller !== null) clearInterval(poller);
 			signal.removeEventListener("abort", onAbort);
 		}
-		const final = snapshot(true);
-		emit(final);
-		return final;
 	}
 
 	const queue: string[] = [root];

@@ -2,7 +2,7 @@
 /**
  * Before (JS) vs After (Rust N-API core) benchmark for Dazzi's ported hot paths.
  *
- * Runs rotated A/B rounds (JS original via `FAST_ANYTHING_DISABLE=1` vs Rust
+ * Runs rotated A/B rounds (pure JS reference implementation vs bundled Rust
  * `dazzi-core.node`), verifies 100% output parity on every workload, and prints
  * a JSON + Markdown summary.
  *

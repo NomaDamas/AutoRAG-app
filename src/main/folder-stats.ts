@@ -179,6 +179,8 @@ export async function measureFolder(folder: string, options: FolderStatsOptions,
 				modified: toModifiedSpread(stats.modified),
 				truncated: stats.truncated,
 			};
+		} catch (caught) {
+			console.warn(`[dazzi-core] measureFolderNative failed for ${folder}, falling back to JS:`, caught instanceof Error ? caught.message : caught);
 		} finally {
 			signal.removeEventListener("abort", onAbort);
 		}

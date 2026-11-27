@@ -3,17 +3,18 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 /**
- * Lazy loader for the optional Rust N-API core (`vendor/dazzi-core.node`).
+ * Loader for Dazzi's bundled Rust N-API core (`vendor/dazzi-core.node`).
  *
- * The native module accelerates CPU- and walk-heavy Dazzi operations identified
- * and verified with `fast-anything`:
- *   - compiled path & glob exclusion matching (`path-exclusion.ts`, `index-map.ts`, `index-status.ts`)
- *   - async (libuv thread pool) BFS directory pre-scan (`onboarding-scan.ts`)
- *   - async (libuv thread pool) folder survey aggregation (`folder-stats.ts`)
- *   - fast directory listing (`fs-service.ts`)
+ * The compiled native binary ships inside every `.dmg` and `.exe` build as the
+ * single primary implementation of Dazzi's hot paths:
+ *   - compiled path & glob exclusion matching (`path-exclusion.ts`, `index-status.ts`)
+ *   - async libuv thread-pool index-map tree scan (`index-map.ts`)
+ *   - async libuv thread-pool directory pre-scan (`onboarding-scan.ts`)
+ *   - async libuv thread-pool folder survey (`folder-stats.ts`)
+ *   - fast directory listing & recursive filename walk (`fs-service.ts`)
  *
- * Set `FAST_ANYTHING_DISABLE=1` (or `DAZZI_NATIVE_CORE_DISABLE=1`) at any time
- * to force the pure TypeScript fallback for A/B benchmarking or diagnostics.
+ * There is no global env-var toggle; TypeScript fallbacks exist solely as a
+ * safety net when the native binary fails to load or throws a runtime error.
  */
 
 export interface NativeExclusionMatch {
@@ -101,6 +102,50 @@ export interface NativeDirListing {
 	readonly hadSkips: boolean;
 }
 
+export interface NativeMirrorEntry {
+	readonly sourcePath: string;
+	readonly stagedPath: string;
+	readonly sourceMtimeNs: number;
+	readonly sourceSizeBytes: number;
+}
+
+export interface NativeIndexMapCounts {
+	readonly indexed: number;
+	readonly stale: number;
+	readonly unindexed: number;
+	readonly excluded: number;
+	readonly unindexable: number;
+}
+
+export interface NativeScanFile {
+	readonly name: string;
+	readonly path: string;
+	readonly state: "indexed" | "stale" | "unindexed" | "excluded" | "unindexable";
+}
+
+export interface NativeScanDir {
+	readonly name: string;
+	readonly path: string;
+	readonly files: NativeScanFile[];
+	readonly dirs: NativeScanDir[];
+	readonly sealed?: NativeIndexMapCounts | null;
+}
+
+export interface NativeIndexScopeResult {
+	readonly roots: NativeScanDir[];
+	readonly truncated: boolean;
+}
+
+export interface NativeSearchRoot {
+	readonly path: string;
+	readonly location: string;
+}
+
+export interface NativeSearchHit {
+	readonly entry: NativeDirEntry;
+	readonly location: string;
+}
+
 export interface DazziNativeCore {
 	canHandleExclusionsNatively(exclusions: readonly string[]): boolean;
 	findExclusionBatch(exclusions: readonly string[], paths: readonly string[]): (NativeExclusionMatch | null)[];
@@ -125,13 +170,28 @@ export interface DazziNativeCore {
 		control: NativeWalkControl,
 	): Promise<NativeFolderStats>;
 	listDirNative(dirPath: string, platform: string): NativeDirListing;
+	scanIndexScopeNative(
+		roots: readonly string[],
+		exclusions: readonly string[],
+		supportedExtensions: readonly string[],
+		productArtifacts: readonly string[],
+		mirrorEntries: readonly NativeMirrorEntry[],
+		unindexablePaths: readonly string[],
+		maxEntries: number,
+	): Promise<NativeIndexScopeResult>;
+	walkSearchNative(
+		roots: readonly NativeSearchRoot[],
+		needle: string,
+		platform: string,
+		maxDepth: number,
+		maxResults: number,
+		discordRoots: readonly string[],
+		control: NativeWalkControl,
+	): Promise<NativeSearchHit[]>;
 }
 
 let cachedAddon: DazziNativeCore | null | undefined;
-
-export function isNativeCoreDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-	return env.FAST_ANYTHING_DISABLE === "1" || env.DAZZI_NATIVE_CORE_DISABLE === "1";
-}
+let loadErrorLogged = false;
 
 function resolveAddonPath(): string | null {
 	const baseDir = import.meta.dirname;
@@ -148,15 +208,18 @@ function resolveAddonPath(): string | null {
 }
 
 /**
- * Load the optional Rust N-API core, or `null` when disabled or not built for this host.
- * Always checks `FAST_ANYTHING_DISABLE` / `DAZZI_NATIVE_CORE_DISABLE` live so A/B tests
- * can toggle it without reloading the process.
+ * Load Dazzi's bundled Rust N-API core.
+ * Returns `null` only if loading the native binary fails (e.g. corrupt or incompatible binary),
+ * allowing callers to degrade safely to their emergency TypeScript fallback.
  */
 export function loadDazziNativeCore(): DazziNativeCore | null {
-	if (isNativeCoreDisabled()) return null;
 	if (cachedAddon !== undefined) return cachedAddon;
 	const addonPath = resolveAddonPath();
 	if (addonPath === null) {
+		if (!loadErrorLogged) {
+			loadErrorLogged = true;
+			console.error("[dazzi-core] native Rust binary not found; falling back to TypeScript");
+		}
 		cachedAddon = null;
 		return null;
 	}
@@ -165,7 +228,10 @@ export function loadDazziNativeCore(): DazziNativeCore | null {
 		cachedAddon = req(addonPath) as DazziNativeCore;
 		return cachedAddon;
 	} catch (error) {
-		console.warn("[dazzi-core] could not load native Rust core, falling back to JS:", error instanceof Error ? error.message : error);
+		if (!loadErrorLogged) {
+			loadErrorLogged = true;
+			console.error("[dazzi-core] failed to load native Rust binary, falling back to TypeScript:", error instanceof Error ? error.message : error);
+		}
 		cachedAddon = null;
 		return null;
 	}
