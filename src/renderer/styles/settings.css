@@ -4760,7 +4760,7 @@
 }
 
 .settings-view .ai-service-row + .ai-service-row {
-	border-top: 1px solid var(--border);
+	border-top: 1px solid var(--border-divider);
 }
 
 .settings-view .ai-service-name {
