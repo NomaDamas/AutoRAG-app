@@ -293,7 +293,7 @@ function TutorialCoach({
 				return;
 			}
 			const waiting = !isReady || until !== undefined || step.untilEvent !== undefined || step.watch !== undefined;
-			if (waiting && now - started > (step.watch !== undefined || step.untilEvent !== undefined ? LONG_WAIT_MS : WAIT_MS)) {
+			if (waiting && now - started > (step.watch !== undefined || step.untilEvent !== undefined || step.slow === true ? LONG_WAIT_MS : WAIT_MS)) {
 				latest.current.onEnd();
 				return;
 			}

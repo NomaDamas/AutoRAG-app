@@ -3750,35 +3750,34 @@
     "automations": {
       "askText": "When a new photo lands in {{folder}}, save a black-and-white copy of it in {{gray}}. Leave the original alone. Make it a command rule that uses file conversion (the grayscale preset of filee-cli). Turn on appendFiles so the new file paths arrive as command arguments, and exclude everything inside the black-and-white folder so the copies never trigger the rule again.",
       "intro": {
-        "title": "Automations are made by talking",
-        "body": "There's no settings form. Tell the AI what you want and it builds the rule. Let's ask for: \"when a photo lands in Downloads, make a black-and-white copy in a Black and White folder.\"",
-        "action": "Ask the AI"
+        "title": "Pick an automation, or just ask",
+        "body": "Above are suggestions picked from your files. If none fits, ask the AI in your own words. Let's ask now: \"when a photo lands in Downloads, make a black-and-white copy.\"",
+        "action": "Make one together"
       },
       "send": {
         "title": "Press send",
         "body": "We wrote the request for you. Edit it if you like, or send it as it is."
       },
       "asking": {
-        "title": "The AI is making the rule",
-        "body": "It's setting up a rule that watches the folder and saves black-and-white copies. If it asks for approval, allow it."
+        "title": "The AI is filling it in",
+        "body": "It's working out when to run and what to do. A card to check appears when it's done."
       },
       "rule": {
-        "title": "The rule is ready",
-        "body": "A new rule appeared in your automations. One line shows the folder it watches, when it runs, and what it does. It keeps watching in the background even when the app is closed.",
+        "title": "Your automation is on",
+        "body": "A new row appeared in My Automations. While its switch is on, it watches Downloads even when the app is closed. Click the row to see its settings and run history.",
         "action": "Next"
       },
-      "panes": {
-        "title": "Now let's see it work",
-        "body": "We'll split the window: Downloads on the left, a practice photos folder on the right. Move the photo to the left and watch.",
-        "action": "Split the window"
+      "confirm": {
+        "title": "Check it before you add it",
+        "body": "The AI filled in When and What Dazzi does. Click any part to change it. If it looks right, click Add."
       },
       "drag": {
         "title": "Drag the photo into Downloads",
-        "body": "Drag IMG_0001.jpg from the right into the Downloads folder on the left. Hold Option (Alt) while dragging to copy instead of move. The rule notices as soon as it lands."
+        "body": "Downloads is open on the left and a practice photos folder on the right. Drag IMG_0001.jpg from the right to the left. Hold Option (Alt) while dragging to copy instead of move."
       },
       "result": {
         "title": "A black-and-white photo appeared!",
-        "body": "A black-and-white copy is now in the Black and White folder inside Downloads. From now on every photo that lands in Downloads gets one. This rule is just for practice, so feel free to delete it."
+        "body": "A black-and-white copy is now in the Black and White folder inside Downloads. From now on every photo that lands there gets one. Next time, click New automation and say what you want. This one is just for practice, so feel free to delete it."
       }
     },
     "contextMenu": {

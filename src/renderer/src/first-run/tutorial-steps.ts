@@ -50,6 +50,8 @@ export interface TutorialStep {
 	readonly offer?: TutorialEffect;
 	/** Waits for something to happen on its own (a run finishing, a menu opening): moves on when this matches. */
 	readonly until?: Selector;
+	/** Waits on the AI (writing a rule can take minutes): gives up after the long wait, not the short one. */
+	readonly slow?: boolean;
 	/** Waits for the tutorial's own AI Search chat to finish answering (the rule is made by then). */
 	readonly untilEvent?: "aiDone";
 	/** Waits for a black-and-white copy of the practice photo to show up in the rule's output folder; moves on with what it learned. */
@@ -81,15 +83,22 @@ const resultRow = (facts: TutorialFacts): string => (facts.result === undefined 
 const aiHost = (facts: TutorialFacts): string => (facts.aiTab === undefined ? AI_HOST : `[data-ai-tab="${facts.aiTab}"]`);
 const aiComposer = (facts: TutorialFacts): string => `${aiHost(facts)} form.composer`;
 const sendButton = (facts: TutorialFacts): string => `${aiComposer(facts)} button.send[type="submit"]`;
+/** The recommendations a page with no automations opens on (Figma 672:3718). */
+const RECOMMENDATIONS = `${AUTOMATIONS_VIEW} [data-automation-recommendations]`;
+/** The card the chat shows the rule on before it is saved (Figma 672:3678), and its 추가하기. */
+const ruleCard = (facts: TutorialFacts): string => `${aiHost(facts)} [data-interaction="automation"] [data-automation-request]`;
+const addRule = (facts: TutorialFacts): string => `${ruleCard(facts)} [data-action="automation-request-add"]`;
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
+	// Figma 672:3637: an automation is picked from the recommendations or asked for in the chat, and the chat shows it
+	// filled in on a card that is saved only on 추가하기. The tutorial asks for one, has the person add it, and watches it work.
 	automations: [
-		{ key: "intro", anchors: [AUTOMATIONS_VIEW], offer: "askAiForRule" },
+		{ key: "intro", anchors: [RECOMMENDATIONS, AUTOMATIONS_VIEW], offer: "askAiForRule" },
 		{ key: "send", anchors: [aiComposer], waitFor: sendButton, tap: sendButton },
-		{ key: "asking", anchors: [(facts) => `${aiHost(facts)} [role="alertdialog"]`, (facts) => `${aiHost(facts)} .ai-body`], untilEvent: "aiDone" },
+		{ key: "asking", anchors: [(facts) => `${aiHost(facts)} .ai-body`], until: ruleCard, slow: true },
+		{ key: "confirm", anchors: [ruleCard], waitFor: ruleCard, tap: addRule },
 		{ key: "rule", anchors: [RULE_ROW], enter: "showAutomations", waitFor: RULE_ROW },
-		{ key: "panes", anchors: [RULE_ROW], offer: "arrangePhotoPanes" },
-		{ key: "drag", anchors: [photoRow], waitFor: photoRow, watch: "grayCopy", hint: "drag" },
+		{ key: "drag", anchors: [photoRow], enter: "arrangePhotoPanes", waitFor: photoRow, watch: "grayCopy", hint: "drag" },
 		{ key: "result", anchors: [resultRow], enter: "showGrayFolder", waitFor: resultRow },
 	],
 	contextMenu: [
