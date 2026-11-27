@@ -114,15 +114,16 @@ describe("automation saves wait for the person", () => {
 	describe("verify-first, user-confirm-second ordering with runAutomationToolOnNode", () => {
 		const sandboxPass: AutomationSandboxTestResult = {
 			ok: true,
-			executionKind: "agent",
 			exitCode: 0,
 			timedOut: false,
 			durationMs: 42,
 			output: "ok",
 			stdout: "ok",
 			stderr: "",
-			matchedFiles: ["sample.pdf"],
+			matchedEvents: [{ type: "create", path: "sample.pdf" }],
+			unmatchedEvents: [],
 			retriggerWarnings: [],
+			warnings: [],
 			diff: { created: [], modified: [], deleted: [], unchanged: ["sample.pdf"] },
 		};
 		const sandboxFail: AutomationSandboxTestResult = {
@@ -134,7 +135,7 @@ describe("automation saves wait for the person", () => {
 
 		it("never pops the confirmation card when sandbox verification fails", async () => {
 			const events: string[] = [];
-			const rawExecute = vi.fn(async () => {
+			const rawExecute = vi.fn(async (_id: string, _params: unknown) => {
 				events.push("persist");
 				return { content: [{ type: "text", text: "saved" }], details: { action: "save" } };
 			});
@@ -168,7 +169,7 @@ describe("automation saves wait for the person", () => {
 
 		it("runs sandbox verification first, pops confirmation second, and skips persist when the user cancels", async () => {
 			const events: string[] = [];
-			const rawExecute = vi.fn(async () => {
+			const rawExecute = vi.fn(async (_id: string, _params: unknown) => {
 				events.push("persist");
 				return { content: [{ type: "text", text: "saved" }], details: { action: "save" } };
 			});

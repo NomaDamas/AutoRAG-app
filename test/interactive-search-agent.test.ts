@@ -346,6 +346,6 @@ describe("explicit Turn-1 routeOverride", () => {
 		expect(response.answer).toContain("organized files");
 		// Jev route classification ("route") must NOT be called when routeOverride is explicit.
 		expect(askedQuestionIds).not.toContain("route");
-		expect(response.diagnostics.some((d) => d.code === "query-routed" && d.source === "route-override" && d.message.includes("organize"))).toBe(true);
+		expect(response.diagnostics?.some((d) => d.code === "query-routed" && d.source === "route-override" && d.message.includes("organize"))).toBe(true);
 	});
 });
