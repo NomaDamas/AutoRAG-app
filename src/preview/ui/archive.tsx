@@ -73,6 +73,19 @@ function ArchivePanel({ file, entries }: { readonly file: PreviewDocument; reado
 	);
 }
 
+/** Single-file gzip text fallback: reports its own clamped height so `archive` can stay SELF_SIZED. */
+function ArchiveTextView({ text }: { readonly text: string }): ReactElement {
+	const attach = usePanelHeight(CONTENTS_WIDTH);
+	return (
+		<pre
+			ref={attach}
+			className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text overflow-auto"
+		>
+			{text}
+		</pre>
+	);
+}
+
 /**
  * Archives read like folders: the same header (glyph, name, kind, "N items,
  * size", date) over the same "포함된 항목" strip of top-level children. A gzip
@@ -84,9 +97,7 @@ export function ArchiveView({ file }: { readonly file: PreviewDocument }): React
 	const listing = useMemo(() => (bytes === null ? null : read(file, bytes)), [file, bytes, i18n.language]);
 	if (listing === null) return <FallbackView file={file} note={t("quickLook.archive.readFailed")} />;
 	if (listing.kind === "failed") return <FallbackView file={file} note={listing.note} />;
-	if (listing.kind === "text") {
-		return <pre className="ql__pre box-border self-stretch w-full h-auto m-0 px-24 py-20 bg-window text-ink font-mono text-meta leading-[1.55] whitespace-pre-wrap [word-break:break-word] select-text">{listing.text}</pre>;
-	}
+	if (listing.kind === "text") return <ArchiveTextView text={listing.text} />;
 	return <ArchivePanel file={file} entries={listing.entries} />;
 }
 

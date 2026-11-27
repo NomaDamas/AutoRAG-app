@@ -60,6 +60,8 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	data: true,
 	jsonl: true,
 	plist: true,
+	archive: true,
+	archiveList: true,
 	mail: true,
 	msg: true,
 	contact: true,
