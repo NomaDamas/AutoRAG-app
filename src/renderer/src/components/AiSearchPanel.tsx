@@ -1165,7 +1165,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			{searching ? (
 				<button
 					type="button"
-					className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+					className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-window cursor-pointer"
 					title={t("aiSearch.stop")}
 					aria-label={t("aiSearch.stop")}
 					onClick={() => void stop()}

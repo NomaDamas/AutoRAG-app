@@ -22,7 +22,7 @@ import { AgentSegment } from "./AgentSegment";
 import { normalizeMagicAction, type MagicAction, type MagicActionSelectionRule } from "../../../shared/context-menu-contract";
 import { hostPlatform } from "../lib/shortcuts";
 import { DOCUMENT_EXTENSIONS, IMAGE_EXTENSIONS, autoMagicLabel, rightClickKindOf, rightClickTarget, type RightClickKind } from "../state/right-click-trigger";
-import { onMagicActionDone } from "../hooks/useMagicAction";
+import { useMagicRunHistory } from "../hooks/useMagicRunHistory";
 import { ConfirmDialog } from "./primitives/ConfirmDialog";
 import { ChipSelect, type ChipOption } from "./primitives/ChipSelect";
 import { RightClickWhen, rightClickSentence, type RunKind } from "./RightClickWhen";
@@ -91,6 +91,8 @@ export interface AutomationsViewProps {
 	/** Right click on a row (`id`) or on the empty space (`null`), at the pointer. */
 	readonly onContextMenu: (id: string | null, at: { readonly x: number; readonly y: number }) => void;
 	readonly onOpenFolder: (path: string) => void;
+	/** A run's file, from its row in a 실행 기록: its folder opens with the file selected, so its inspector shows. */
+	readonly onRevealFile?: ((path: string) => void) | undefined;
 	/** The 채팅 half of the AI 에이전트 tab's segment. */
 	readonly onShowChat?: (() => void) | undefined;
 	/** 새 자동화 and 말로 만들기: open the AI chat column to make a rule in words. */
@@ -579,31 +581,6 @@ function MagicActionRow({
 	);
 }
 
-/** Right-click actions' runs from their log, newest first, read again whenever a run finishes. */
-function useMagicRunHistory(ids: readonly string[]): Readonly<Record<string, readonly AutomationRun[]>> {
-	const [history, setHistory] = useState<Readonly<Record<string, readonly AutomationRun[]>>>({});
-	const [tick, setTick] = useState(0);
-	useEffect(() => onMagicActionDone(() => setTick((count) => count + 1)), []);
-	const key = ids.join("\n");
-	useEffect(() => {
-		const bridge = window.autorag?.magicAction;
-		if (bridge === undefined || typeof bridge.history !== "function") return;
-		let live = true;
-		// The log is written as the run ends; a moment later it has the run that just finished.
-		const read = (): void => {
-			void Promise.all(ids.map(async (id) => [id, await bridge.history(id).catch(() => [] as readonly AutomationRun[])] as const)).then((entries) => {
-				if (live) setHistory(Object.fromEntries(entries));
-			});
-		};
-		read();
-		const later = tick === 0 ? undefined : setTimeout(read, 400);
-		return () => {
-			live = false;
-			clearTimeout(later);
-		};
-	}, [key, tick]);
-	return history;
-}
 
 /** The name on a right-click action's page: the same field as a rule's — a click turns it into a field, Enter or leaving saves, Esc keeps it. */
 function MagicTitle({ action, onRename }: { readonly action: MagicAction; readonly onRename: (label: string) => void }): ReactElement {
@@ -783,6 +760,7 @@ function MagicActionDetail({
 	onToggle,
 	onDelete,
 	onOpenFolder,
+	onRevealFile,
 }: {
 	readonly action: MagicAction;
 	readonly runs: readonly AutomationRun[] | undefined;
@@ -791,6 +769,7 @@ function MagicActionDetail({
 	readonly onToggle?: ((id: string) => void) | undefined;
 	readonly onDelete: () => void;
 	readonly onOpenFolder?: ((path: string) => void) | undefined;
+	readonly onRevealFile?: ((path: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const list = runs ?? [];
@@ -812,11 +791,7 @@ function MagicActionDetail({
 				{list.length === 0 ? (
 					<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 				) : (
-					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
-						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
-						))}
-					</div>
+					<RunHistoryList key={action.id} runs={list} onOpenFolder={onOpenFolder} onRevealFile={onRevealFile} />
 				)}
 			</Section>
 			<div className="flex justify-end">
@@ -824,6 +799,46 @@ function MagicActionDetail({
 					{t("automations.detail.delete")}
 				</button>
 			</div>
+		</div>
+	);
+}
+
+/** How many runs a page shows before the rest fold away, so 삭제 below stays in reach however long the log grows. */
+const RUNS_SHOWN = 5;
+
+/** A page's 실행 기록: the newest runs, and the older ones behind 더 보기 once there are more than {@link RUNS_SHOWN}. */
+function RunHistoryList({
+	runs,
+	onOpenFolder,
+	onRevealFile,
+}: {
+	readonly runs: readonly AutomationRun[];
+	readonly onOpenFolder?: ((path: string) => void) | undefined;
+	readonly onRevealFile?: ((path: string) => void) | undefined;
+}): ReactElement {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+	const hidden = runs.length - RUNS_SHOWN;
+	const shown = open || hidden <= 0 ? runs : runs.slice(0, RUNS_SHOWN);
+	return (
+		<div className="flex flex-col">
+			<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
+				{shown.map((run) => (
+					<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFile(run, onRevealFile, onOpenFolder)} flat />
+				))}
+			</div>
+			{hidden <= 0 ? null : (
+				<button
+					type="button"
+					data-action="runs-more"
+					aria-expanded={open}
+					className="mt-8 flex items-center gap-4 self-center border-0 bg-transparent p-0 text-meta font-medium leading-[16px] text-ink-muted cursor-pointer hover:text-ink"
+					onClick={() => setOpen((value) => !value)}
+				>
+					{open ? t("automations.detail.showLess") : t("automations.detail.showMore", { count: hidden })}
+					<ChevronDownIcon size={12} className={cn("flex-none transition-transform duration-(--dur-color)", open && "rotate-180")} />
+				</button>
+			)}
 		</div>
 	);
 }
@@ -902,13 +917,15 @@ function runAt(at: number, t: TFunction, language: string, now: number = Date.no
 /**
  * One line of 실행 기록 / 전체 기록 (Figma 699:3562, 676:835): the dot, the file the run worked on,
  * and under it, in 전체 기록, the automation's name and how it ended ("핵심 요약 · 시간 초과"), or on the automation's own
- * page just how it ended. Then when, and › when the line opens something: its automation from 전체 기록, the file's folder
- * on a page. A failed run on its own page shows the error it left.
+ * page just how it ended. Then when, and › when the line opens the file it worked on — the same on both pages. In
+ * 전체 기록 the automation's name is its own link to that automation's page. A run that left no file has no ›; one whose
+ * file is gone keeps a faded › and says why. A failed run on its own page shows the error it left.
  */
 function RunLine({
 	run,
 	name,
 	onOpen,
+	onOpenName,
 	absoluteTime = false,
 	flat = false,
 }: {
@@ -916,6 +933,8 @@ function RunLine({
 	/** The automation's name, in 전체 기록, where runs of every automation are mixed. */
 	readonly name?: string;
 	readonly onOpen?: (() => void) | undefined;
+	/** In 전체 기록: the name opens the automation's page. */
+	readonly onOpenName?: (() => void) | undefined;
 	/** On an automation's own page the time reads 오늘 14:02, in 전체 기록 3분 전. */
 	readonly absoluteTime?: boolean;
 	readonly flat?: boolean;
@@ -925,7 +944,25 @@ function RunLine({
 	const result = runResult(run, t);
 	const files = runFilesTitle(run, t);
 	const first = files ?? (name ?? result);
-	const second = name !== undefined ? `${name} · ${result}` : files === null ? null : result;
+	// A file moved or deleted since the run leaves nothing to open.
+	const missing = useFileMissing(onOpen === undefined ? null : runFile(run));
+	const opens = onOpen !== undefined && !missing;
+	// The name reads one step stronger than the result beside it, and underlines under the pointer, so it reads as the
+	// way to the automation's page; the row's own hover gives way to it.
+	const nameLink =
+		name === undefined ? null : onOpenName === undefined ? (
+			name
+		) : (
+			<button
+				type="button"
+				data-action="run-open-automation"
+				className="relative z-1 border-0 bg-transparent p-0 font-[inherit] font-medium text-ink-body cursor-pointer hover:underline hover:underline-offset-2"
+				onClick={onOpenName}
+			>
+				{name}
+			</button>
+		);
+	const second = name !== undefined ? <>{nameLink} · {result}</> : files === null ? null : result;
 	const body = (
 		<>
 			<div className="flex w-full items-center gap-10">
@@ -935,7 +972,10 @@ function RunLine({
 					{second === null ? null : <span className="truncate text-[12px] leading-[18px] text-ink-muted" data-run-caption>{second}</span>}
 				</div>
 				<span className="flex-none text-meta leading-[18px] text-ink-muted">{absoluteTime ? runAt(run.startedAt, t, i18n.language) : relativeTime(run.startedAt)}</span>
-				{onOpen === undefined ? null : <ChevronRightIcon size={14} className="flex-none text-ink-faint" />}
+				{/* The › slot stays even when empty, so the times line up down the list. */}
+				<span className="flex w-14 flex-none justify-center" aria-hidden data-run-chevron={onOpen === undefined ? undefined : missing ? "missing" : "open"}>
+					{onOpen === undefined ? null : <ChevronRightIcon size={14} className={cn("flex-none text-ink-faint", missing && "opacity-40")} />}
+				</span>
 			</div>
 			{tone === "fail" && run.error !== undefined && name === undefined ? (
 				<p className="m-0 w-full rounded-8 bg-subtle-alt px-10 py-7 text-meta leading-[18px] text-ink-body [overflow-wrap:anywhere]">{run.error}</p>
@@ -944,21 +984,69 @@ function RunLine({
 	);
 	// On an automation's own page the runs are plain lines between hairlines (Figma 641:13600); in 전체 기록 they sit in the rounded list.
 	const row = cn("flex w-full flex-col items-start gap-6 border-0 py-10 text-left", flat ? "bg-transparent px-4" : "bg-window px-14");
-	return onOpen === undefined ? (
-		<div className={row} data-run={run.startedAt}>
+	const missingTitle = missing ? t("automations.inspector.runFileMissing") : undefined;
+	if (!opens) {
+		return (
+			<div className={row} data-run={run.startedAt} data-run-missing={missing || undefined} title={missingTitle}>
+				{body}
+			</div>
+		);
+	}
+	if (onOpenName === undefined) {
+		return (
+			<button type="button" className={cn(row, "cursor-pointer hover:bg-hover-row")} data-run={run.startedAt} onClick={onOpen}>
+				{body}
+			</button>
+		);
+	}
+	// Two ways out of one line: the whole line opens the file, the name opens the automation. A button cannot hold a
+	// button, so the file's button lies under the line's text and the name's sits above it.
+	return (
+		<div className={cn(row, "relative has-[>[data-run-open]:hover]:bg-hover-row")} data-run={run.startedAt}>
+			<button type="button" data-run-open aria-label={first} className="absolute inset-0 border-0 bg-transparent p-0 cursor-pointer" onClick={onOpen} />
 			{body}
 		</div>
-	) : (
-		<button type="button" className={cn(row, "cursor-pointer hover:bg-hover-row")} data-run={run.startedAt} onClick={onOpen}>
-			{body}
-		</button>
 	);
 }
 
-/** On an automation's own page a run that names its files opens their folder; one that only counts them opens nothing. */
+/** The file a run's line opens: the first it worked on, when it names one. */
+function runFile(run: AutomationRun): string | null {
+	return run.files?.[0] ?? null;
+}
+
+/** Whether a run's file is gone, so its line can say so before anyone clicks. Until the answer comes, and wherever the file system cannot say, the file counts as there. */
+function useFileMissing(path: string | null): boolean {
+	const [missing, setMissing] = useState(false);
+	useEffect(() => {
+		setMissing(false);
+		const exists = window.autorag?.fs?.exists;
+		if (exists === undefined || path === null) return;
+		let live = true;
+		exists(path).then(
+			(there) => {
+				if (live) setMissing(!there);
+			},
+			() => undefined,
+		);
+		return () => {
+			live = false;
+		};
+	}, [path]);
+	return missing;
+}
+
+/** In 전체 기록 a run that names its files opens their folder; one that only counts them opens nothing. */
 function openRunFolder(run: AutomationRun, onOpenFolder: ((path: string) => void) | undefined): (() => void) | undefined {
 	const first = run.files?.[0];
 	return first === undefined || onOpenFolder === undefined ? undefined : () => onOpenFolder(parentDir(first));
+}
+
+/** A run row's click: the file it worked on, selected in its folder (or just the folder, where nothing can select it). */
+function openRunFile(run: AutomationRun, onRevealFile: ((path: string) => void) | undefined, onOpenFolder: ((path: string) => void) | undefined): (() => void) | undefined {
+	const first = run.files?.[0];
+	if (first === undefined) return undefined;
+	if (onRevealFile !== undefined) return () => onRevealFile(first);
+	return onOpenFolder === undefined ? undefined : () => onOpenFolder(parentDir(first));
 }
 
 /**
@@ -1028,6 +1116,7 @@ function AutomationDetail({
 	onDelete,
 	onDraftChange,
 	onOpenFolder,
+	onRevealFile,
 }: {
 	readonly rule: AutomationRule;
 	readonly runs: readonly AutomationRun[] | undefined;
@@ -1038,6 +1127,7 @@ function AutomationDetail({
 	readonly onDelete: () => void;
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
 	readonly onOpenFolder?: ((path: string) => void) | undefined;
+	readonly onRevealFile?: ((path: string) => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const enabled = rule.enabled !== false;
@@ -1062,11 +1152,7 @@ function AutomationDetail({
 					// Figma 641:13747: no box; the faint line sits between the same hairlines the runs would, 20px from each.
 					<p className="m-0 border-t-[0.5px] border-divider py-20 text-meta leading-[16px] text-ink-faint" data-runs-empty>{t("automations.inspector.noRuns")}</p>
 				) : (
-					<div role="list" aria-label={t("automations.detail.history")} className="flex flex-col border-y-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
-						{list.map((run) => (
-							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} absoluteTime onOpen={openRunFolder(run, onOpenFolder)} flat />
-						))}
-					</div>
+					<RunHistoryList key={rule.id} runs={list} onOpenFolder={onOpenFolder} onRevealFile={onRevealFile} />
 				)}
 			</Section>
 			{/* The way out of a rule sits bottom right, away from 저장 (Figma 641:13600). */}
@@ -1129,9 +1215,20 @@ interface RunEntry {
 
 /**
  * 전체 기록 (Figma 699:3562): every automation's runs — folder rules' and right-click actions' — newest first, under the
- * day they ran. A row names the file and, under it, the automation and how it ended; › opens that automation's page.
+ * day they ran. A row names the file and, under it, the automation and how it ended. The row opens the file's folder, as on
+ * an automation's own page; the automation's name opens that automation's page.
  */
-function AllRunsPage({ entries, onOpen, crumbs }: { readonly entries: readonly RunEntry[]; readonly onOpen: (entry: RunEntry) => void; readonly crumbs: readonly Crumb[] }): ReactElement {
+function AllRunsPage({
+	entries,
+	onOpenAutomation,
+	onOpenFolder,
+	crumbs,
+}: {
+	readonly entries: readonly RunEntry[];
+	readonly onOpenAutomation: (entry: RunEntry) => void;
+	readonly onOpenFolder?: ((path: string) => void) | undefined;
+	readonly crumbs: readonly Crumb[];
+}): ReactElement {
 	const { t, i18n } = useTranslation();
 	const all = [...entries].sort((a, b) => b.run.startedAt - a.run.startedAt);
 	const days: { label: string; runs: RunEntry[] }[] = [];
@@ -1155,7 +1252,14 @@ function AllRunsPage({ entries, onOpen, crumbs }: { readonly entries: readonly R
 							<h2 className="m-0 border-b-[0.5px] border-divider pb-6 text-meta font-medium leading-[16px] text-ink-muted">{day.label}</h2>
 							<div role="list" aria-label={day.label} className="flex flex-col border-b-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
 								{day.runs.map((entry) => (
-									<RunLine key={entry.key} run={entry.run} name={entry.name} onOpen={() => onOpen(entry)} flat />
+									<RunLine
+										key={entry.key}
+										run={entry.run}
+										name={entry.name}
+										onOpen={openRunFolder(entry.run, onOpenFolder)}
+										onOpenName={() => onOpenAutomation(entry)}
+										flat
+									/>
 								))}
 							</div>
 						</div>
@@ -1647,7 +1751,7 @@ export function AutomationDraftCard({
 	);
 }
 
-export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, magicActions = [], onCreateMagicAction, onToggleRule, onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, deletingId = null, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onRetryStatus, onShowChat, onTalk, onOpenFolder, onRevealFile, magicActions = [], onCreateMagicAction, onToggleRule, onToggleMagicAction, onUpdateMagicAction, onDeleteMagicAction, place: keptPlace, onPlaceChange }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	// Which page the tab shows lives with the shell when it is given one, so coming back to the tab finds it again.
 	const [ownPlace, setOwnPlace] = useState<AutomationsPlace>(keptPlace ?? INITIAL_AUTOMATIONS_PLACE);
@@ -1807,6 +1911,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							onToggle={onToggleMagicAction}
 							onDelete={() => setConfirmMagic(magic)}
 							onOpenFolder={onOpenFolder}
+							onRevealFile={onRevealFile}
 						/>
 					) : detail !== null ? (
 						<AutomationDetail
@@ -1824,6 +1929,7 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 							}}
 							onDraftChange={onDraftChange}
 							onOpenFolder={onOpenFolder}
+							onRevealFile={onRevealFile}
 						/>
 					) : page === "all" ? (
 						<AllRunsPage
@@ -1835,7 +1941,8 @@ export function AutomationsView({ state, deletingId = null, selectedId, onSelect
 									(magicRuns[action.id] ?? []).map((run) => ({ key: `magic-${action.id}-${run.startedAt}`, kind: "magic" as const, id: action.id, name: action.label, run })),
 								),
 							]}
-							onOpen={(entry) => {
+							onOpenFolder={onOpenFolder}
+							onOpenAutomation={(entry) => {
 								// Either page opens over 전체 기록, which stays where it is behind it and in the page's path.
 								if (entry.kind === "magic") {
 									setFromAll(true);

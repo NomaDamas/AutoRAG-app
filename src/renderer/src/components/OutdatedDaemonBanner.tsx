@@ -63,6 +63,7 @@ export function OutdatedDaemonBanner({ onOpenSettings }: { readonly onOpenSettin
 	return (
 		<NoticeCard
 			className="mx-8 mt-8 flex-none"
+			clipBelow={400}
 			floating
 			tone={error !== null ? "error" : "warning"}
 			title={t("settingsCore.about.bannerTitle")}

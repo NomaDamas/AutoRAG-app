@@ -65,6 +65,7 @@ export function NoticeCard({
 	compact = false,
 	role = "alert",
 	className,
+	clipBelow,
 }: {
 	readonly tone: NoticeTone;
 	readonly title: ReactNode;
@@ -80,9 +81,14 @@ export function NoticeCard({
 	readonly compact?: boolean;
 	readonly role?: "alert" | "status";
 	readonly className?: string;
+	/**
+	 * The card's least width in px. Narrower than that, the card keeps its layout and its container cuts it on the
+	 * right, instead of the title and buttons wrapping into a tall column (a narrow Finder pane).
+	 */
+	readonly clipBelow?: number;
 }): ReactElement {
 	const { t } = useTranslation();
-	return (
+	const card = (
 		<div
 			className={cn(
 				"notice-card flex flex-col gap-12 rounded-12 px-16 border border-border bg-window text-ink",
@@ -90,6 +96,7 @@ export function NoticeCard({
 				floating && "shadow-[var(--shadow-notice)]",
 				className,
 			)}
+			style={clipBelow === undefined ? undefined : { minWidth: clipBelow }}
 			role={role}
 			data-tone={tone}
 		>
@@ -128,4 +135,5 @@ export function NoticeCard({
 			)}
 		</div>
 	);
+	return clipBelow === undefined ? card : <div className="flex-none overflow-hidden" data-notice-clip>{card}</div>;
 }

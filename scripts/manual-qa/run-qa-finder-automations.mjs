@@ -232,7 +232,7 @@ async function english() {
 		await page.keyboard.press("Delete");
 		await page.waitForSelector('[role="alertdialog"]');
 		const confirm = await text(page, '[role="alertdialog"]');
-		check("delete asks first and says the folder and files stay", confirm.includes("Delete the rule") && confirm.includes("the folder and its files stay"), confirm);
+		check("delete asks first and says the folder and files stay", confirm.includes("Delete the automation") && confirm.includes("the folder and its files stay"), confirm);
 		await sleep(350);
 		await page.screenshot({ path: join(EVIDENCE, "06-confirm-en.png") });
 		await page.keyboard.press("Escape");
@@ -245,7 +245,7 @@ async function english() {
 		check("the rules file lost only that rule, the others byte-for-byte", JSON.stringify(readRules()) === JSON.stringify([original[0], original[2]]));
 		check("the next rule is selected", (await page.locator(`${ROW(ruleC.id)}[aria-selected="true"]`).count()) === 1);
 		const toast = await text(page, "output.toast");
-		check("a toast offers Undo", toast.includes("Deleted the rule") && toast.includes("Undo"), toast);
+		check("a toast offers Undo", toast.includes("Deleted the automation") && toast.includes("Undo"), toast);
 		await sleep(250);
 		await page.screenshot({ path: join(EVIDENCE, "07-deleted-toast-en.png") });
 		await page.locator("output.toast button", { hasText: "Undo" }).click();

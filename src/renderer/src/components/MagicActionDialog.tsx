@@ -164,7 +164,7 @@ export function MagicActionDialog(): ReactElement | null {
 		});
 	};
 
-	/** 대화 기록에 저장: the run becomes a chat in AI 에이전트's history; the button then reads 저장됨. */
+	/** 채팅 기록에 저장: the run becomes a chat in AI 에이전트's history; the button then reads 저장됨. */
 	const saveToHistory = (output: string): void => {
 		const bridge = window.autorag?.magicAction;
 		if (run.status !== "done" || bridge?.saveToHistory === undefined || saveState === "saving" || saveState === "saved") return;
@@ -309,7 +309,7 @@ export function MagicActionDialog(): ReactElement | null {
 					</div>
 					<button
 						type="button"
-						className="flex size-24 flex-none cursor-pointer items-center justify-center rounded-6 border-0 bg-transparent p-0 text-ink-muted hover:bg-hover"
+						className="flex size-24 flex-none self-start cursor-pointer items-center justify-center rounded-6 border-0 bg-transparent p-0 text-ink-muted hover:bg-hover"
 						aria-label={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						title={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						onClick={dismissMagicActionDialog}

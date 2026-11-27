@@ -10,6 +10,7 @@ import { actionShort, lastRunText, ruleTitle, whatText, whenText } from "../src/
 import { kindLabelOf } from "../src/renderer/src/state/entry-values";
 import { NO_CAPABILITIES } from "../src/shared/actions-contract";
 import type { AutomationRule, AutomationRun, AutomationsSnapshot } from "../src/shared/automation-contract";
+import type { MagicAction } from "../src/shared/context-menu-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -96,7 +97,12 @@ function menuItem(row: HTMLElement | undefined, name: string): HTMLButtonElement
 
 function inspector(
 	entry: FinderEntry,
-	automations?: { rules: readonly AutomationRule[]; onEdit: (rule: AutomationRule) => void; onDelete: (rule: AutomationRule) => void },
+	automations?: {
+		rules: readonly AutomationRule[];
+		onEdit: (rule: AutomationRule) => void;
+		onDelete: (rule: AutomationRule) => void;
+		magic?: { actions: readonly MagicAction[]; onEdit: (id: string) => void; onDelete: (id: string) => void; onOpen?: (action: MagicAction, run: AutomationRun) => void };
+	},
 	extra: { readonly folderInView?: boolean } = {},
 ): React.ReactElement {
 	return (
@@ -287,5 +293,94 @@ describe("Inspector's folder automations", () => {
 		act(() => root.render(inspector(folder("/Users/jeffrey/Downloads"), { rules: [rule()], onEdit: noop, onDelete: noop })));
 		expect(button("휴지통")).toBeDefined();
 		expect(host.querySelector(".preview-sub")?.textContent).toContain("·");
+	});
+});
+
+describe("Inspector's right-click runs on a file", () => {
+	const summarize: MagicAction = { id: "pdf-summary", label: "PDF 요약하기", enabled: true, selection: "single", targetKind: "file", extensions: ["pdf"], execution: { kind: "agent", mode: "read", prompt: "요약해 줘" } };
+	const rename: MagicAction = { id: "rename-date", label: "날짜로 이름 바꾸기", enabled: true, selection: "single", targetKind: "file", extensions: [], execution: { kind: "agent", mode: "organize", prompt: "이름 바꿔 줘" } };
+	const logs: Record<string, readonly AutomationRun[]> = {};
+
+	beforeEach(() => {
+		Reflect.set(window, "autorag", { magicAction: { history: async (id: string) => logs[id] ?? [] } });
+	});
+	afterEach(() => {
+		Reflect.deleteProperty(window, "autorag");
+		for (const key of Object.keys(logs)) Reflect.deleteProperty(logs, key);
+	});
+
+	async function settle(): Promise<void> {
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+	}
+
+	it("lists under 자동화 each right-click action that ran on the file, with its newest run there, and leaves out the rest", async () => {
+		logs["pdf-summary"] = [
+			run({ startedAt: Date.now() - 5 * MIN, files: ["/Users/jeffrey/Downloads/other.pdf"] }),
+			run({ startedAt: Date.now() - 30 * MIN, exitCode: 1, files: ["/Users/jeffrey/Downloads/report.pdf"] }),
+		];
+		logs["rename-date"] = [run({ startedAt: Date.now() - 90 * MIN, files: ["/Users/jeffrey/Downloads/other.pdf"] })];
+		const edits: string[] = [];
+		const deletes: string[] = [];
+		act(() =>
+			root.render(
+				inspector(file("/Users/jeffrey/Downloads/report.pdf"), {
+					rules: [rule()],
+					onEdit: noop,
+					onDelete: noop,
+					magic: { actions: [summarize, rename], onEdit: (id) => edits.push(id), onDelete: (id) => deletes.push(id) },
+				}),
+			),
+		);
+		await settle();
+
+		expect(section()).not.toBeNull();
+		const rows = [...host.querySelectorAll<HTMLElement>("[data-inspector-magic]")];
+		expect(rows.map((row) => row.dataset.inspectorMagic)).toEqual(["pdf-summary"]);
+		expect(rows[0]?.querySelector("[data-run-tone]")?.getAttribute("data-run-tone")).toBe("fail");
+		// A rule never lands on a file's inspector, only on its folder's.
+		expect(text()).not.toContain(ruleTitle(rule()));
+
+		const row = ruleRow("PDF 요약하기");
+		click(row?.querySelector('button[aria-label="더보기"]'));
+		click(menuItem(row, "수정"));
+		click(row?.querySelector('button[aria-label="더보기"]'));
+		click(menuItem(row, "삭제"));
+		expect(edits).toEqual(["pdf-summary"]);
+		expect(deletes).toEqual(["pdf-summary"]);
+	});
+
+	it("opens the result of the run on this file from a click on its card", async () => {
+		const ran = run({ startedAt: Date.now() - 2 * MIN, files: ["/Users/jeffrey/Downloads/report.pdf"], output: "세 줄 요약" });
+		logs["pdf-summary"] = [ran];
+		const opened: Array<[string, AutomationRun]> = [];
+		act(() =>
+			root.render(
+				inspector(file("/Users/jeffrey/Downloads/report.pdf"), {
+					rules: [],
+					onEdit: noop,
+					onDelete: noop,
+					magic: { actions: [summarize], onEdit: noop, onDelete: noop, onOpen: (action, at) => opened.push([action.id, at]) },
+				}),
+			),
+		);
+		await settle();
+		click(host.querySelector('[data-inspector-magic="pdf-summary"] [data-action="open-run-result"]'));
+		expect(opened).toEqual([["pdf-summary", ran]]);
+	});
+
+	it("matches a Windows path whatever its case or slashes", async () => {
+		logs["pdf-summary"] = [run({ files: ["C:\\Users\\jeffrey\\Downloads\\Report.pdf"] })];
+		act(() => root.render(inspector(file("c:/users/jeffrey/downloads/report.pdf"), { rules: [], onEdit: noop, onDelete: noop, magic: { actions: [summarize], onEdit: noop, onDelete: noop } })));
+		await settle();
+		expect(host.querySelectorAll("[data-inspector-magic]")).toHaveLength(1);
+	});
+
+	it("shows no section for a file no right-click action ran on", async () => {
+		logs["pdf-summary"] = [run({ files: ["/Users/jeffrey/Downloads/other.pdf"] })];
+		act(() => root.render(inspector(file("/Users/jeffrey/Downloads/report.pdf"), { rules: [], onEdit: noop, onDelete: noop, magic: { actions: [summarize], onEdit: noop, onDelete: noop } })));
+		await settle();
+		expect(section()).toBeNull();
 	});
 });

@@ -44,7 +44,7 @@ import { createMagicActionRunLog } from "./magic-action-runs";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
+import { attachQuickLook, hideQuickLookOf, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, setQuickLookEditHandoff, type QuickLookWindowOptions } from "../preview/node/register";
 import { PREVIEW_CHANNELS } from "../preview/shared/contract";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
@@ -1571,6 +1571,7 @@ app.whenReady().then(async () => {
 		attachPreview: (owner, onWindowCreated) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true, onWindowCreated }),
 		// Defer creating the hidden launcher renderer until the first shortcut press (~140 MB RAM saved at startup).
 		lazy: true,
+		hidePreview: (owner) => hideQuickLookOf(owner),
 	});
 	quickSearchShortcut = createQuickSearchShortcut({
 		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),

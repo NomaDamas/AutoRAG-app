@@ -459,10 +459,54 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		expect(text(runs[2])).toContain("파일 3개완료");
 		Reflect.deleteProperty(runLogs, "pdf");
 	});
+
+	it("shows the newest five runs and folds the rest behind 더 보기, so 삭제 stays close", async () => {
+		runLogs.pdf = Array.from({ length: 8 }, (_, index) => ({ startedAt: NOW - (index + 1) * 60_000, durationMs: 900, eventCount: 1, exitCode: 0, signal: null, timedOut: false }));
+		render(props({ editing }));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const more = (): HTMLElement | null => host.querySelector('[data-action="runs-more"]');
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 (8)"]);
+		expect(host.querySelectorAll("[data-run]")).toHaveLength(5);
+		expect(text(more())).toBe("3개 더 보기");
+		expect(more()?.getAttribute("aria-expanded")).toBe("false");
+		click(more());
+		expect(host.querySelectorAll("[data-run]")).toHaveLength(8);
+		expect(text(more())).toBe("접기");
+		click(more());
+		expect(host.querySelectorAll("[data-run]")).toHaveLength(5);
+		Reflect.deleteProperty(runLogs, "pdf");
+	});
+
+	it("shows a run's file selected in its folder from its row, not just the folder", async () => {
+		runLogs.pdf = [{ startedAt: NOW - 60_000, durationMs: 900, eventCount: 1, exitCode: 0, signal: null, timedOut: false, files: ["/Users/jeffrey/Downloads/report.pdf"] }];
+		const onRevealFile = vi.fn();
+		const onOpenFolder = vi.fn();
+		render(props({ editing, onRevealFile, onOpenFolder }));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		click(host.querySelector("button[data-run]"));
+		expect(onRevealFile).toHaveBeenCalledWith("/Users/jeffrey/Downloads/report.pdf");
+		expect(onOpenFolder).not.toHaveBeenCalled();
+		Reflect.deleteProperty(runLogs, "pdf");
+	});
+
+	it("draws no 더 보기 when every run fits", async () => {
+		runLogs.pdf = Array.from({ length: 5 }, (_, index) => ({ startedAt: NOW - (index + 1) * 60_000, durationMs: 900, eventCount: 1, exitCode: 0, signal: null, timedOut: false }));
+		render(props({ editing }));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect(host.querySelectorAll("[data-run]")).toHaveLength(5);
+		expect(host.querySelector('[data-action="runs-more"]')).toBeNull();
+		Reflect.deleteProperty(runLogs, "pdf");
+	});
 });
 
 describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
-	it("lists every rule's runs newest first under the day they ran, and opens a rule from its run", async () => {
+	it("lists every rule's runs newest first under the day they ran, and opens a rule from its name under a run", async () => {
 		const today = new Date(NOW).setHours(0, 0, 0, 0);
 		runLogs["downloads-pdf-summary"] = [{ startedAt: Math.max(today, NOW - 60_000), durationMs: 1000, eventCount: 1, exitCode: 0, signal: null, timedOut: false }];
 		runLogs["hwp-to-pdf"] = [{ startedAt: today - 3_600_000, durationMs: 800, eventCount: 1, exitCode: null, signal: null, timedOut: false, error: "spawn hwp5 ENOENT" }];
@@ -482,7 +526,7 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("downloads-pdf-summary"), expect.stringContaining("hwp-to-pdf")]);
 		// 실패만 보기 is gone: every run shows, with no switch to hide the good ones.
 		expect(page()?.querySelector('[role="switch"]')).toBeNull();
-		click(runs()[1]);
+		click(runs()[1]?.querySelector('[data-action="run-open-automation"]') ?? null);
 		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
 		// The rule's page opened from here says so in its path, and 전체 기록 in it goes straight back, not to the main page.
 		const opened = p.state.rules.find((item) => item.id === "hwp-to-pdf") ?? null;

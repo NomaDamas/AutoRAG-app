@@ -837,6 +837,15 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	return options.lazy === true ? null : createWindow();
 }
 
+/**
+ * Closes `owner`'s Quick Look panel now, as its owner's hide would, for an owner that is about to minimize: on Windows
+ * the panel is an owned window, and one the system hides along with its minimizing owner can leave its last frame
+ * drawn on screen, above every app and passing clicks through, after the window itself is gone.
+ */
+export function hideQuickLookOf(owner: BrowserWindow): void {
+	for (const state of sessions) if (state.owner === owner && state.shown) hide(state, true, null, false);
+}
+
 export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
 	iconSource = icons;
 	keynoteSlides = createKeynoteSlideCache({ dir: join(app.getPath("userData"), "keynote-slides") });
