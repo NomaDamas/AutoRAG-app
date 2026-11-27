@@ -8,7 +8,7 @@
  * page the writers it needs, so a write from one page reconciles the others.
  */
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
@@ -439,6 +439,12 @@ export function SettingsView({
 		void data.refresh();
 	}, [category]);
 
+	// Every page opens at its top, not at wherever the last page was scrolled to.
+	const contentRef = useRef<HTMLElement>(null);
+	useLayoutEffect(() => {
+		if (contentRef.current !== null) contentRef.current.scrollTop = 0;
+	}, [category]);
+
 	// Usage analytics: which page is open. A `source:<alias>` page counts as `source`, so a user-chosen alias is never sent.
 	useEffect(() => {
 		const page = normalizeCategory(category);
@@ -601,7 +607,7 @@ export function SettingsView({
 						</button>
 					) : null}
 				</div>
-				<main className="settings-content" aria-label={t("settingsCore.view.contentAria", { name: sourceAlias ?? normalizeCategory(category) })}>
+				<main ref={contentRef} className="settings-content" aria-label={t("settingsCore.view.contentAria", { name: sourceAlias ?? normalizeCategory(category) })}>
 					<div className="settings-content-wrap">
 						{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 						{content}
