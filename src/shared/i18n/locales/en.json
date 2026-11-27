@@ -1446,6 +1446,10 @@
           "label": "This computer (MinSync local server)",
           "description": "Dazzi runs the MinSync embedding server on this computer while it is open, so documents are not sent anywhere for embedding."
         },
+        "localMultimodal": {
+          "label": "This computer — Multimodal images + text (EmbeddingGemma 2)",
+          "description": "Runs EmbeddingGemma 2 locally to embed both documents and standalone images (PNG/JPG/WebP) into one shared semantic search space."
+        },
         "dazzi": {
           "label": "Dazzi cloud",
           "description": "Uses the hosted embedding with your Dazzi account. Requires sign-in, and document text is sent to Dazzi's servers.",

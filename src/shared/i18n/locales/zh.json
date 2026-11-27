@@ -1446,6 +1446,10 @@
           "label": "本机(MinSync 本地服务器)",
           "description": "Dazzi 运行期间,在本机运行 MinSync 嵌入服务器。嵌入时不会将文档发送到外部。"
         },
+        "localMultimodal": {
+          "label": "本机 — 多模态图像+文本 (EmbeddingGemma 2)",
+          "description": "在本地运行 EmbeddingGemma 2,将文档和独立图像(PNG/JPG/WebP)直接嵌入同一语义空间进行检索。"
+        },
         "dazzi": {
           "label": "Dazzi 云",
           "description": "使用 Dazzi 账户的托管嵌入服务。需要登录,文档内容会发送到 Dazzi 的服务器。",

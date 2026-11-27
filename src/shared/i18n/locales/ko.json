@@ -1446,6 +1446,10 @@
           "label": "이 컴퓨터 (MinSync 로컬 서버)",
           "description": "Dazzi가 켜져 있는 동안 MinSync 임베딩 서버를 이 컴퓨터에서 직접 실행합니다. 임베딩을 위해 문서를 외부로 보내지 않습니다."
         },
+        "localMultimodal": {
+          "label": "이 컴퓨터 — 멀티모달 이미지+텍스트 (EmbeddingGemma 2)",
+          "description": "EmbeddingGemma 2를 로컬에서 실행해 문서와 이미지 파일(PNG/JPG/WebP)을 같은 의미 공간으로 직접 임베딩해 검색합니다."
+        },
         "dazzi": {
           "label": "Dazzi 클라우드",
           "description": "Dazzi 계정으로 호스팅 임베딩을 사용합니다. 로그인이 필요하고, 문서 내용이 Dazzi 서버로 전송됩니다.",

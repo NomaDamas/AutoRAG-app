@@ -18,6 +18,22 @@ import { inlServeStateRoot } from "./inl-paths";
  */
 
 export const DEFAULT_LOCAL_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B";
+export const MULTIMODAL_LOCAL_EMBEDDING_MODEL = "google/embeddinggemma-2";
+export const MULTIMODAL_MODEL_PREFIX = "multimodal:";
+
+/** Parse a daemon target string (`"google/embeddinggemma-2"` vs `"multimodal:google/embeddinggemma-2"`). */
+export function parseLocalDaemonTarget(target: string): { readonly kind: "dense" | "multimodal"; readonly model: string } {
+	if (target.startsWith(MULTIMODAL_MODEL_PREFIX)) {
+		return { kind: "multimodal", model: target.slice(MULTIMODAL_MODEL_PREFIX.length) };
+	}
+	if (target.startsWith("native-multimodal:")) {
+		return { kind: "multimodal", model: target.slice("native-multimodal:".length) };
+	}
+	if (target.startsWith("native:")) {
+		return { kind: "dense", model: target.slice("native:".length) };
+	}
+	return { kind: "dense", model: target };
+}
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const HEALTH_TIMEOUT_MS = 2_000;
@@ -31,6 +47,9 @@ const STOP_TIMEOUT_MS = 15_000;
  * The model the app must serve for this config, or null when nothing local is needed: keyword-only mode, or
  * an embedder that names an endpoint (a remote API, or a server the user runs such as Ollama), which is
  * theirs to run. A legacy `profile` field is ignored, as the librarian ignores it.
+ *
+ * Multimodal embedders (`native-multimodal:<model>`) return `"multimodal:<model>"` so the daemon probes and
+ * launches `inl serve --multimodal` / `minsync serve --multimodal` without colliding with dense daemons.
  */
 export function localEmbeddingModel(raw: Record<string, unknown>): string | null {
 	if (isJsonObject(raw.appIndexing) && raw.appIndexing.semanticSearch === false) return null;
@@ -39,6 +58,7 @@ export function localEmbeddingModel(raw: Record<string, unknown>): string | null
 	if (typeof embedder.baseUrl === "string" && embedder.baseUrl.length > 0) return null;
 	const id = typeof embedder.id === "string" ? embedder.id : undefined;
 	if (id === undefined) return DEFAULT_LOCAL_EMBEDDING_MODEL;
+	if (id.startsWith("native-multimodal:")) return `${MULTIMODAL_MODEL_PREFIX}${id.slice("native-multimodal:".length)}`;
 	if (id.startsWith("native:")) return id.slice("native:".length);
 	return id.startsWith("openai:") || id.startsWith("tei:") ? null : DEFAULT_LOCAL_EMBEDDING_MODEL;
 }
@@ -147,7 +167,8 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 	 * responding server's own `kind`/`model_id`, not on the instance directory name (which encodes device,
 	 * dtype, attention and max length that consumers do not know).
 	 */
-	const probe = async (model: string): Promise<Served | undefined> => {
+	const probe = async (target: string): Promise<Served | undefined> => {
+		const wanted = parseLocalDaemonTarget(target);
 		for (const stateRoot of stateRoots) {
 			let instances: string[];
 			try {
@@ -175,7 +196,7 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 					};
 					// `inl` reports the engine kind; a health body without it is a dense embedder (the inl default).
 					const kind = typeof health.kind === "string" ? health.kind : "dense";
-					if (health.status !== "ok" || kind !== "dense" || health.model_id?.toLowerCase() !== model.toLowerCase()) continue;
+					if (health.status !== "ok" || kind !== wanted.kind || health.model_id?.toLowerCase() !== wanted.model.toLowerCase()) continue;
 					if (typeof health.dimension !== "number" || typeof health.pid !== "number") continue;
 					const version =
 						typeof health.version === "string" && health.version.length > 0
@@ -259,10 +280,19 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 		// Best first: the shared `inl` daemon when it is on PATH (the user's own build, or a bundled
 		// `tools/bin/inl`), else the bundled MinSync, which links the same inl-server crates and publishes
 		// under the same root. A launcher that is not installed is skipped for the next one.
+		const target = parseLocalDaemonTarget(model);
 		const portArgs = preferredPort !== undefined ? ["--port", String(preferredPort)] : [];
+		const inlArgs =
+			target.kind === "multimodal"
+				? ["serve", "--multimodal", "--modalities", "text,image", "--idle-timeout", "0", ...portArgs, "--model", target.model]
+				: ["serve", "--idle-timeout", "0", ...portArgs, "--model", target.model];
+		const minsyncArgs =
+			target.kind === "multimodal"
+				? ["serve", "--multimodal", "--format", "json", "--quiet", "--idle-timeout", "0", ...portArgs, "--embedder", `native-multimodal:${target.model}`]
+				: ["serve", "--format", "json", "--quiet", "--idle-timeout", "0", ...portArgs, "--embedder", `native:${target.model}`];
 		const launchers: readonly { readonly name: string; readonly command: string; readonly args: readonly string[] }[] = [
-			{ name: "inl serve", command: "inl", args: ["serve", "--idle-timeout", "0", ...portArgs, "--model", model] },
-			{ name: "minsync serve", command: "minsync", args: ["serve", "--format", "json", "--quiet", "--idle-timeout", "0", ...portArgs, "--embedder", `native:${model}`] },
+			{ name: "inl serve", command: "inl", args: inlArgs },
+			{ name: "minsync serve", command: "minsync", args: minsyncArgs },
 		];
 
 		for (const [index, launcher] of launchers.entries()) {

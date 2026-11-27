@@ -1446,6 +1446,10 @@
           "label": "このコンピューター(MinSync ローカルサーバー)",
           "description": "Dazzi の起動中、MinSync の埋め込みサーバーをこのコンピューターで実行します。埋め込みのために文書が外部へ送信されることはありません。"
         },
+        "localMultimodal": {
+          "label": "このコンピューター — マルチモーダル画像+テキスト (EmbeddingGemma 2)",
+          "description": "EmbeddingGemma 2 をローカル実行し、文書と画像ファイル(PNG/JPG/WebP)を同じ意味空間に直接埋め込んで検索します。"
+        },
         "dazzi": {
           "label": "Dazzi クラウド",
           "description": "Dazzi アカウントでホスト型の埋め込みを使います。サインインが必要で、文書の内容は Dazzi のサーバーに送信されます。",
