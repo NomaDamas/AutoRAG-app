@@ -129,7 +129,11 @@
       "reset": "열 초기화"
     },
     "versionBanner": {
-      "retry": "다시 확인"
+      "retry": "다시 확인",
+      "missingTitle": "중복 파일 검사 도구가 없습니다",
+      "missingHint": "버전 묶음을 보려면 아래 명령으로 dupey를 설치해 주세요.",
+      "scanFailedTitle": "중복 파일 검사를 끝내지 못했습니다",
+      "scanFailedHint": "폴더가 크면 검사가 오래 걸려 멈출 수 있습니다. 잠시 뒤 다시 확인해 주세요."
     },
     "pathBar": {
       "edit": "경로로 이동",

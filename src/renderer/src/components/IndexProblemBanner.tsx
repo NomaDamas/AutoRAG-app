@@ -34,6 +34,7 @@ export function IndexProblemBanner({ onFixEmbedding }: { readonly onFixEmbedding
 	return (
 		<NoticeCard
 			className="mx-8 mt-8 flex-none"
+			clipBelow={400}
 			floating
 			tone={banner.tone}
 			title={view.title}

@@ -129,7 +129,11 @@
       "reset": "Reset Columns"
     },
     "versionBanner": {
-      "retry": "Check again"
+      "retry": "Check again",
+      "missingTitle": "The duplicate-file checker is missing",
+      "missingHint": "Install dupey with the command below to see version stacks.",
+      "scanFailedTitle": "The duplicate-file check didn't finish",
+      "scanFailedHint": "A large folder can take too long to check. Try again in a moment."
     },
     "pathBar": {
       "edit": "Go to path",
