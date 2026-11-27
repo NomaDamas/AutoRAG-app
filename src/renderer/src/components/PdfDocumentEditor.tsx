@@ -46,6 +46,7 @@ import {
 	X,
 } from "lucide-react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
+import { pdfRuns } from "../../../preview/shared/text-marks";
 import { pdfDocumentSource } from "../../../preview/ui/pdf-config";
 import type {
 	DocumentEditorPdfPayload,
@@ -53,6 +54,7 @@ import type {
 	PdfPointFraction,
 } from "../../../shared/document-editor-contract";
 import { cn } from "../lib/cn";
+import { findPageTextMatches, type PdfSearchHit } from "../lib/pdf-search";
 import { DazziFilePickerModal, loadLocalImageAsPngDataUrl } from "./DazziFilePickerModal";
 import {
 	PageNumbersModal,
@@ -516,11 +518,12 @@ export function PdfDocumentEditor({
 	const [formsOpen, setFormsOpen] = useState(false);
 	const [propertiesOpen, setPropertiesOpen] = useState(false);
 
-	// Find-in-PDF bar
+	// Find-in-PDF bar (exact per-match highlight rects in page coordinates)
 	const [findOpen, setFindOpen] = useState(false);
 	const [findQuery, setFindQuery] = useState("");
-	const [findMatches, setFindMatches] = useState<readonly number[]>([]);
+	const [findHits, setFindHits] = useState<readonly PdfSearchHit[]>([]);
 	const [findCursor, setFindCursor] = useState(0);
+	const findInputRef = useRef<HTMLInputElement | null>(null);
 
 	// Active drawing / interactive tool state
 	const [tool, setTool] = useState<InteractiveTool>("none");
@@ -638,52 +641,35 @@ export function PdfDocumentEditor({
 		});
 	}, [editorApi, onPayloadChange]);
 
-	// Cmd/Ctrl+F opens Find bar; Escape dismisses open menus/tools
-	useEffect(() => {
-		const onKey = (event: KeyboardEvent): void => {
-			if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-				event.preventDefault();
-				setFindOpen(true);
-			} else if (event.key === "Escape") {
-				setStampMenuOpen(false);
-				setMoreMenuOpen(false);
-			}
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, []);
-
-	// Execute PDF text search when query changes
+	// Execute PDF text search with exact bounding-box coordinates for live canvas highlighting
 	useEffect(() => {
 		if (!findOpen || pdf === null || findQuery.trim() === "") {
-			setFindMatches([]);
+			setFindHits([]);
 			setFindCursor(0);
 			return;
 		}
 		let cancelled = false;
-		const needle = findQuery.trim().toLowerCase();
 		const run = async (): Promise<void> => {
-			const matchedPages: number[] = [];
+			const allHits: PdfSearchHit[] = [];
 			for (let p = 1; p <= pdf.numPages; p += 1) {
 				if (cancelled) return;
 				try {
 					const page = await pdf.getPage(p);
 					const content = await page.getTextContent();
-					const text = content.items
-						.map((item) => ("str" in item ? item.str : ""))
-						.join(" ")
-						.toLowerCase();
-					if (text.includes(needle)) matchedPages.push(p - 1);
+					const viewport = page.getViewport({ scale: 1 });
+					const runs = pdfRuns(content.items, viewport.transform ?? [1, 0, 0, -1, 0, viewport.height]);
+					const pageHits = findPageTextMatches(p - 1, runs, findQuery);
+					allHits.push(...pageHits);
 				} catch {
 					// Ignore page text extraction error
 				}
 			}
 			if (cancelled) return;
-			setFindMatches(matchedPages);
+			setFindHits(allHits);
 			setFindCursor(0);
-			if (matchedPages.length > 0) setActivePage(matchedPages[0]!);
+			if (allHits.length > 0) setActivePage(allHits[0]!.pageIndex);
 		};
-		const timer = window.setTimeout(() => void run(), 180);
+		const timer = window.setTimeout(() => void run(), 150);
 		return () => {
 			cancelled = true;
 			window.clearTimeout(timer);
@@ -749,6 +735,73 @@ export function PdfDocumentEditor({
 			setBusy(false);
 		}
 	}, [busy, editorApi, onPayloadChange, payload, t, undoStack]);
+
+	// Capture-phase keyboard shortcuts for PDF editor:
+	// - Cmd/Ctrl+Z: Undo last PDF edit (unless typing inside an input/textarea or modal)
+	// - Cmd/Ctrl+F: Open & focus in-PDF Find bar (when no modal picker is open)
+	// - Escape: Dismiss open popovers / active tool / Find bar
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent): void => {
+			if (event.isComposing) return;
+			if (pickerMode !== null || sigModalOpen || watermarkOpen || pageNumbersOpen || splitOpen || formsOpen || propertiesOpen) {
+				return;
+			}
+			const target = event.target;
+			const typing =
+				target instanceof HTMLElement &&
+				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+			const mod = event.metaKey || event.ctrlKey;
+			const key = event.key.toLowerCase();
+
+			if (mod && !event.shiftKey && !event.altKey && (key === "z" || event.code === "KeyZ")) {
+				if (typing) return;
+				event.preventDefault();
+				event.stopPropagation();
+				void undoLast();
+				return;
+			}
+			if (mod && !event.shiftKey && !event.altKey && (key === "f" || event.code === "KeyF")) {
+				event.preventDefault();
+				event.stopPropagation();
+				setFindOpen(true);
+				window.setTimeout(() => {
+					findInputRef.current?.focus();
+					findInputRef.current?.select();
+				}, 0);
+				return;
+			}
+			if (event.key === "Escape") {
+				if (stampMenuOpen || moreMenuOpen) {
+					setStampMenuOpen(false);
+					setMoreMenuOpen(false);
+				} else if (findOpen) {
+					setFindOpen(false);
+					setFindQuery("");
+				} else if (pendingStamp !== null) {
+					setPendingStamp(null);
+				} else if (tool !== "none") {
+					setTool("none");
+					setCropDraft(null);
+				}
+			}
+		};
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
+	}, [
+		findOpen,
+		formsOpen,
+		moreMenuOpen,
+		pageNumbersOpen,
+		pendingStamp,
+		pickerMode,
+		propertiesOpen,
+		sigModalOpen,
+		splitOpen,
+		stampMenuOpen,
+		tool,
+		undoLast,
+		watermarkOpen,
+	]);
 
 	const handleExtractPages = useCallback(async () => {
 		if (busy || payload.encrypted || payload.pageCount === 0) return;
@@ -1508,45 +1561,55 @@ export function PdfDocumentEditor({
 				<div className="flex h-36 flex-none items-center gap-8 border-b border-divider bg-window px-12">
 					<Search size={14} className="text-ink-muted" />
 					<input
+						ref={findInputRef}
 						type="text"
 						value={findQuery}
 						data-pdf-find-input="true"
 						placeholder={t("documentEditor.pdf.findPlaceholder")}
 						className="h-24 w-240 rounded-6 border border-border bg-input px-8 text-meta text-ink outline-none focus:border-accent"
 						onChange={(e) => setFindQuery(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && findHits.length > 0) {
+								e.preventDefault();
+								const delta = e.shiftKey ? -1 : 1;
+								const next = (findCursor + delta + findHits.length) % findHits.length;
+								setFindCursor(next);
+								setActivePage(findHits[next]!.pageIndex);
+							}
+						}}
 						autoFocus
 					/>
 					{findQuery.trim() !== "" ? (
-						<span className="text-badge tabular-nums text-ink-muted">
-							{findMatches.length > 0
-								? t("documentEditor.pdf.findMatches", { current: findCursor + 1, total: findMatches.length })
+						<span className="text-badge tabular-nums text-ink-muted" data-pdf-find-count="true">
+							{findHits.length > 0
+								? t("documentEditor.pdf.findMatches", { current: findCursor + 1, total: findHits.length })
 								: t("documentEditor.pdf.findNoMatch")}
 						</span>
 					) : null}
 					<button
 						type="button"
-						disabled={findMatches.length === 0}
+						disabled={findHits.length === 0}
 						aria-label={t("documentEditor.pdf.findPrev")}
 						className={railIconBtn}
 						onClick={() => {
-							if (findMatches.length === 0) return;
-							const next = (findCursor - 1 + findMatches.length) % findMatches.length;
+							if (findHits.length === 0) return;
+							const next = (findCursor - 1 + findHits.length) % findHits.length;
 							setFindCursor(next);
-							setActivePage(findMatches[next]!);
+							setActivePage(findHits[next]!.pageIndex);
 						}}
 					>
 						<ChevronLeft size={13} />
 					</button>
 					<button
 						type="button"
-						disabled={findMatches.length === 0}
+						disabled={findHits.length === 0}
 						aria-label={t("documentEditor.pdf.findNext")}
 						className={railIconBtn}
 						onClick={() => {
-							if (findMatches.length === 0) return;
-							const next = (findCursor + 1) % findMatches.length;
+							if (findHits.length === 0) return;
+							const next = (findCursor + 1) % findHits.length;
 							setFindCursor(next);
-							setActivePage(findMatches[next]!);
+							setActivePage(findHits[next]!.pageIndex);
 						}}
 					>
 						<ChevronRight size={13} />
@@ -1922,6 +1985,32 @@ export function PdfDocumentEditor({
 									onNaturalSize={setPageNaturalSize}
 								/>
 
+								{/* Live Find-in-PDF text match highlight boxes (matches Quick Look evidence mark style) */}
+								{findOpen && findHits.length > 0
+									? findHits.map((hit, hitIdx) => {
+											if (hit.pageIndex !== activePage) return null;
+											const isCurrent = hitIdx === findCursor;
+											return hit.rects.map((rect, rectIdx) => (
+												<div
+													key={`${hitIdx}-${rectIdx}`}
+													data-pdf-find-highlight={isCurrent ? "current" : "match"}
+													className={cn(
+														"pointer-events-none absolute z-10 rounded-[2px] mix-blend-multiply",
+														isCurrent
+															? "bg-[#FF9500]/50 shadow-[0_0_0_1.5px_#E67600]"
+															: "bg-ql-evidence-mark shadow-[0_0_0_1px_var(--ql-evidence-mark-ring)]",
+													)}
+													style={{
+														left: (rect.x - 1) * effectiveScale,
+														top: (rect.y - 1) * effectiveScale,
+														width: (rect.width + 2) * effectiveScale,
+														height: (rect.height + 2) * effectiveScale,
+													}}
+												/>
+											));
+										})
+									: null}
+
 								{/* Draggable & resizable stamp overlay */}
 								{pendingStamp !== null && pendingStamp.pageIndex === activePage ? (
 									<div
@@ -2205,7 +2294,7 @@ export function PdfDocumentEditor({
 								{Array.from({ length: pdf.numPages }, (_unused, idx) => {
 									const isActive = idx === activePage;
 									const isChecked = selectedPages.has(idx);
-									const isFindHit = findMatches.includes(idx);
+									const isFindHit = findHits.some((h) => h.pageIndex === idx);
 									return (
 										<div
 											key={idx}

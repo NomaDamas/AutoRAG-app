@@ -20,6 +20,7 @@ import {
 	isPdfSplitRequest,
 } from "../src/shared/document-editor-contract";
 import { PdfDocumentEditor } from "../src/renderer/src/components/PdfDocumentEditor";
+import { findPageTextMatches } from "../src/renderer/src/lib/pdf-search";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,9 +29,14 @@ vi.mock("pdfjs-dist", () => ({
 	GlobalWorkerOptions: { workerSrc: "" },
 	getDocument: vi.fn(() => {
 		const fakePage = {
-			getViewport: () => ({ width: 595, height: 842 }),
+			getViewport: () => ({ width: 595, height: 842, transform: [1, 0, 0, -1, 0, 842] }),
 			render: () => ({ cancel: vi.fn(), promise: Promise.resolve() }),
-			getTextContent: async () => ({ items: [{ str: "Quarterly Revenue Report 2026" }] }),
+			getTextContent: async () => ({
+				items: [
+					{ str: "Quarterly Revenue Report 2026", transform: [14, 0, 0, 14, 48, 700], width: 210, height: 14 },
+					{ str: "Revenue target exceeded", transform: [12, 0, 0, 12, 48, 660], width: 160, height: 12 },
+				],
+			}),
 		};
 		const fakeDoc = {
 			numPages: 3,
@@ -107,7 +113,7 @@ function createMockBridge() {
 		onAiEvent: () => () => undefined,
 	};
 	const fsMock = {
-		locations: vi.fn(async () => [{ name: "Documents", path: "/tmp", section: "favorites", icon: "documents", available: true }]),
+		locations: vi.fn(async () => [{ name: "Documents", path: "/tmp", section: "favorites", icon: "documents", available: true, ejectable: false }]),
 		listDir: vi.fn(async (dir: string) => ({
 			path: dir,
 			entries: [
@@ -115,6 +121,14 @@ function createMockBridge() {
 				{ name: "logo.png", path: "/tmp/logo.png", kind: "file", ext: "png", size: 300, mtimeMs: 1, flags: 0 },
 			],
 		})),
+		search: vi.fn(async (query: string) => {
+			const all = [
+				{ entry: { name: "found-banner.png", path: "/tmp/sub/found-banner.png", kind: "file", ext: "png", size: 420, mtimeMs: 2, flags: 0 }, score: 1 },
+				{ entry: { name: "extra.pdf", path: "/tmp/extra.pdf", kind: "file", ext: "pdf", size: 500, mtimeMs: 1, flags: 0 }, score: 1 },
+			];
+			return all.filter((h) => h.entry.name.toLowerCase().includes(query.toLowerCase()));
+		}),
+		enrichEntries: vi.fn(async () => []),
 	};
 	(window as unknown as { autorag: { documentEditor: DocumentEditorBridge; fs: typeof fsMock } }).autorag = {
 		documentEditor: bridge,
@@ -122,6 +136,7 @@ function createMockBridge() {
 	};
 	return {
 		bridge,
+		fsMock,
 		applied,
 		splits,
 		savedForms,
@@ -183,13 +198,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-async function mountEditor(onPayloadChange = vi.fn()): Promise<{
-	applied: PdfApplyRequest[];
-	splits: PdfSplitRequest[];
-	savedForms: PdfFormSaveRequest[];
-	emitPdfChanged: (ev: PdfChangedEvent) => void;
-	onPayloadChange: ReturnType<typeof vi.fn>;
-}> {
+async function mountEditor(onPayloadChange = vi.fn()) {
 	const mock = createMockBridge();
 	container = document.createElement("div");
 	document.body.appendChild(container);
@@ -277,16 +286,19 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		await act(async () => whiteoutToggle!.click());
 		expect(whiteoutToggle!.getAttribute("aria-pressed")).toBe("true");
 
-		// 1b. Clicking Image opens in-app Dazzi file picker (never native OS Finder)
+		// 1b. Clicking Image opens real Dazzi Finder modal in List mode (2nd view mode) with SidebarSearch
 		const imgBtn = container!.querySelector('button[data-pdf-action="insert-image"]') as HTMLButtonElement;
 		expect(imgBtn).not.toBeNull();
 		await act(async () => imgBtn.click());
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(container!.querySelector('[data-dazzi-file-picker="image"]')).not.toBeNull();
-		expect(container!.querySelector('button[data-picker-file="logo.png"]')).not.toBeNull();
-		await act(async () => (container!.querySelector('[data-dazzi-file-picker="image"] button[aria-label="Close"]') as HTMLButtonElement).click());
+		const picker = container!.querySelector('[data-dazzi-file-picker="image"]');
+		expect(picker).not.toBeNull();
+		expect(picker!.getAttribute("data-picker-view-mode")).toBe("list");
+		expect(picker!.querySelector('[role="row"][data-path="/tmp/logo.png"]')).not.toBeNull();
+		expect(picker!.querySelector(".sidebar-search input")).not.toBeNull();
+		await act(async () => (picker!.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click());
 
 		// 2. Preset stamp placement & apply
 		const stampMenuBtn = container!.querySelector('button[data-pdf-stamp-menu="true"]') as HTMLButtonElement;
@@ -299,7 +311,7 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		await act(async () => commitStamp.click());
 		expect(applied.at(-1)?.operations[0]?.kind).toBe("stampImage");
 
-		// 3. Document Tools menu -> Duplicate page, Insert blank page, Merge PDFs via in-app Dazzi picker
+		// 3. Document Tools menu -> Duplicate page, Insert blank page, Merge PDFs via real Dazzi Finder picker
 		const openMore = async (): Promise<void> => {
 			const btn = container!.querySelector('button[data-pdf-more-tools="true"]') as HTMLButtonElement;
 			await act(async () => btn.click());
@@ -318,9 +330,11 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(container!.querySelector('[data-dazzi-file-picker="pdf"]')).not.toBeNull();
-		await act(async () => (container!.querySelector('button[data-picker-file="extra.pdf"]') as HTMLButtonElement).click());
-		await act(async () => (container!.querySelector('button[data-dazzi-picker-confirm="true"]') as HTMLButtonElement).click());
+		const pdfPicker = container!.querySelector('[data-dazzi-file-picker="pdf"]');
+		expect(pdfPicker).not.toBeNull();
+		expect(pdfPicker!.getAttribute("data-picker-view-mode")).toBe("list");
+		await act(async () => (pdfPicker!.querySelector('[role="row"][data-path="/tmp/extra.pdf"]') as HTMLDivElement).click());
+		await act(async () => (pdfPicker!.querySelector('button[data-dazzi-picker-confirm="true"]') as HTMLButtonElement).click());
 		expect(applied.at(-1)?.operations[0]).toEqual({ kind: "mergePdfs", sourcePaths: ["/tmp/extra.pdf"] });
 
 		// 4. Watermark modal
@@ -363,5 +377,86 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		await act(async () => (container!.querySelector('button[data-pdf-form-save="true"]') as HTMLButtonElement).click());
 		expect(savedForms).toHaveLength(1);
 		expect(savedForms[0]?.flatten).toBe(true);
+	});
+
+	it("supports Cmd/Ctrl+Z keyboard undo and renders exact Find-in-PDF highlight boxes on canvas", async () => {
+		vi.useFakeTimers();
+		try {
+			const { bridge } = await mountEditor();
+
+			// Trigger one PDF edit so undo stack has snap-1
+			const moreBtn = container!.querySelector('button[data-pdf-more-tools="true"]') as HTMLButtonElement;
+			await act(async () => moreBtn.click());
+			await act(async () => (container!.querySelector('button[data-pdf-action="duplicate"]') as HTMLButtonElement).click());
+
+			// Press Cmd+Z on window -> invokes pdfRestore("snap-1")
+			await act(async () => {
+				window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true, bubbles: true, cancelable: true }));
+				await Promise.resolve();
+			});
+			expect(bridge.pdfRestore).toHaveBeenCalledWith("snap-1");
+
+			// Press Cmd+F -> opens Find bar and highlights matching text boxes on page 1
+			await act(async () => {
+				window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", code: "KeyF", metaKey: true, bubbles: true, cancelable: true }));
+			});
+			const findInput = container!.querySelector('input[data-pdf-find-input="true"]') as HTMLInputElement;
+			expect(findInput).not.toBeNull();
+			const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+			await act(async () => {
+				nativeSetter.call(findInput, "Revenue");
+				findInput.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await act(async () => {
+				vi.advanceTimersByTime(200);
+				await Promise.resolve();
+				await Promise.resolve();
+			});
+			// 2 occurrences on page 1 across 3 identical mocked pages = 6 total hits; page 1 renders 2 highlight boxes (1 current + 1 match)
+			expect(container!.querySelector('[data-pdf-find-count="true"]')?.textContent).toBe("1 / 6");
+			expect(container!.querySelectorAll('[data-pdf-find-highlight="current"]')).toHaveLength(1);
+			expect(container!.querySelectorAll('[data-pdf-find-highlight="match"]')).toHaveLength(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("runs real SidebarSearch inside DazziFilePickerModal to find images across folders", async () => {
+		const { fsMock } = await mountEditor();
+		const imgBtn = container!.querySelector('button[data-pdf-action="insert-image"]') as HTMLButtonElement;
+		await act(async () => imgBtn.click());
+		await act(async () => {
+			await Promise.resolve();
+		});
+		const picker = container!.querySelector('[data-dazzi-file-picker="image"]')!;
+		const searchInput = picker.querySelector<HTMLInputElement>(".sidebar-search input")!;
+		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+		await act(async () => {
+			nativeSetter.call(searchInput, "banner");
+			searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			searchInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+			await Promise.resolve();
+		});
+		expect(fsMock.search).toHaveBeenCalledWith("banner");
+		expect(picker.querySelector('[role="row"][data-path="/tmp/sub/found-banner.png"]')).not.toBeNull();
+	});
+});
+
+describe("findPageTextMatches", () => {
+	it("computes merged highlight rectangles across adjacent runs and multiple hits per page", () => {
+		const runs = [
+			{ text: "Invoice ", x: 40, y: 100, width: 60, height: 14 },
+			{ text: "Clause 2026", x: 100, y: 100, width: 88, height: 14 },
+			{ text: "Second Invoice Clause", x: 40, y: 140, width: 168, height: 14 },
+		];
+		const hits = findPageTextMatches(1, runs, "invoice clause");
+		expect(hits).toHaveLength(2);
+		expect(hits[0]!.pageIndex).toBe(1);
+		expect(hits[0]!.rects).toHaveLength(1); // adjacent runs merged cleanly
+		expect(hits[0]!.rects[0]!.x).toBeCloseTo(40, 1);
+		expect(hits[0]!.rects[0]!.width).toBeGreaterThan(80);
+		expect(hits[1]!.rects[0]!.y).toBeCloseTo(140, 1);
 	});
 });
