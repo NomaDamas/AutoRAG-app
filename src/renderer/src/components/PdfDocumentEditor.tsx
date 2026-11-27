@@ -5,15 +5,41 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
 	ArrowDown,
 	ArrowUp,
+	ArrowUpRight,
+	Calendar,
 	Check,
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	Circle,
+	Copy,
 	Crop,
+	Droplets,
+	Eraser,
 	ExternalLink,
+	EyeOff,
+	FileInput,
 	FileOutput,
+	FilePlus2,
+	FileSliders,
+	Hash,
+	Highlighter,
+	Image as ImageIcon,
+	Info,
 	Loader2,
+	Minus,
+	MoreHorizontal,
+	Pencil,
 	PenLine,
 	RotateCcw,
 	RotateCw,
 	Scissors,
+	Search,
+	Shapes,
+	SplitSquareHorizontal,
+	Square,
+	Stamp,
+	StickyNote,
 	Trash2,
 	Type,
 	Upload,
@@ -23,8 +49,23 @@ import {
 } from "lucide-react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { pdfDocumentSource } from "../../../preview/ui/pdf-config";
-import type { DocumentEditorPdfPayload, PdfEditOperation } from "../../../shared/document-editor-contract";
+import type {
+	DocumentEditorPdfPayload,
+	PdfEditOperation,
+	PdfPointFraction,
+} from "../../../shared/document-editor-contract";
 import { cn } from "../lib/cn";
+import {
+	PageNumbersModal,
+	PdfFormsModal,
+	PdfPropertiesModal,
+	renderPresetStampPng,
+	renderStickyNotePng,
+	renderTextStampPng,
+	renderWatermarkPng,
+	SplitPdfModal,
+	WatermarkModal,
+} from "./PdfEditorTools";
 
 let pdfWorkerReady = false;
 function ensurePdfWorker(): void {
@@ -57,37 +98,12 @@ function storeSavedSignatures(signatures: readonly string[]): void {
 	}
 }
 
-/** Renders arbitrary text (including Korean/CJK/emoji) to a crisp transparent PNG for pdf-lib embedding. */
-function renderTextStampPng(text: string, fontSizePx = 28, color = "#1D1D1F"): { readonly dataUrl: string; readonly aspect: number } {
-	const lines = text.split("\n");
-	const dpr = 3;
-	const padX = 10;
-	const padY = 6;
-	const lineHeight = Math.round(fontSizePx * 1.3);
-	const measureCanvas = document.createElement("canvas");
-	const mctx = measureCanvas.getContext("2d")!;
-	const font = `500 ${fontSizePx}px "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-	mctx.font = font;
-	const maxWidth = Math.max(40, ...lines.map((line) => Math.ceil(mctx.measureText(line || " ").width)));
-	const logicalW = maxWidth + padX * 2;
-	const logicalH = lines.length * lineHeight + padY * 2;
-
-	const canvas = document.createElement("canvas");
-	canvas.width = logicalW * dpr;
-	canvas.height = logicalH * dpr;
-	const ctx = canvas.getContext("2d")!;
-	ctx.scale(dpr, dpr);
-	ctx.font = font;
-	ctx.fillStyle = color;
-	ctx.textBaseline = "top";
-	lines.forEach((line, idx) => {
-		ctx.fillText(line, padX, padY + idx * lineHeight);
-	});
-	return { dataUrl: canvas.toDataURL("image/png"), aspect: logicalW / logicalH };
-}
+type InteractiveTool = "none" | "crop" | "highlight" | "redact" | "whiteout" | "draw" | "shape";
+type ShapeKind = "rect" | "ellipse" | "line" | "arrow";
+type StampKind = "signature" | "text" | "image" | "stamp" | "note";
 
 interface PendingStamp {
-	readonly kind: "signature" | "text";
+	readonly kind: StampKind;
 	readonly pngDataUrl: string;
 	readonly pageIndex: number;
 	/** Normalized top-left coordinates (0..1) on the target page. */
@@ -97,12 +113,37 @@ interface PendingStamp {
 	readonly height: number;
 }
 
-interface CropDraft {
+interface RectDraft {
 	readonly pageIndex: number;
 	readonly left: number;
 	readonly top: number;
 	readonly width: number;
 	readonly height: number;
+}
+
+interface ShapeDraft {
+	readonly pageIndex: number;
+	readonly shape: ShapeKind;
+	readonly x1: number;
+	readonly y1: number;
+	readonly x2: number;
+	readonly y2: number;
+}
+
+interface DrawDraft {
+	readonly pageIndex: number;
+	readonly points: readonly PdfPointFraction[];
+}
+
+const HIGHLIGHT_COLORS = ["#FDE047", "#86EFAC", "#93C5FD", "#F9A8D4", "#FDBA74"] as const;
+const INK_COLORS = ["#1D1D1F", "#DC2626", "#2563EB", "#16A34A", "#9333EA"] as const;
+
+function todayIso(): string {
+	const now = new Date();
+	const y = now.getFullYear();
+	const m = String(now.getMonth() + 1).padStart(2, "0");
+	const d = String(now.getDate()).padStart(2, "0");
+	return `${y}-${m}-${d}`;
 }
 
 function PdfPageCanvas({
@@ -418,8 +459,11 @@ export interface PdfDocumentEditorProps {
 
 /**
  * Interactive PDF editor built on `pdfjs-dist` (rendering) and `pdf-lib` (main-process edits).
- * Supports signature drawing/upload placement, text/date stamps, page cropping (CropBox),
- * rotation, page reordering, page deletion, multi-page extraction, and snapshot undo.
+ * Covers core Adobe Acrobat workflows:
+ * - Fill & Sign: signature pad/upload, styled text & date stamps, image insertion, AcroForm fill & flatten
+ * - Annotate & Redact: highlighter, freehand pen, shapes (rect/ellipse/line/arrow), preset stamps, sticky notes, black redaction & whiteout
+ * - Organize Pages: crop, rotate CW/CCW, reorder, duplicate, insert blank page, delete, extract, merge PDFs, split PDFs
+ * - Polish & Inspect: watermark, page numbers + header/footer, document properties, full-text search, and multi-step snapshot undo
  */
 export function PdfDocumentEditor({
 	payload,
@@ -440,18 +484,46 @@ export function PdfDocumentEditor({
 	const [extractedFile, setExtractedFile] = useState<{ readonly path: string; readonly name: string } | null>(null);
 	const [undoStack, setUndoStack] = useState<readonly string[]>([]);
 
-	// Modals & active overlays
+	// Modals, composers, menus & active interactive overlays
 	const [sigModalOpen, setSigModalOpen] = useState(false);
 	const [savedSigs, setSavedSigs] = useState<readonly string[]>(loadSavedSignatures);
 	const [textPromptOpen, setTextPromptOpen] = useState(false);
 	const [textInput, setTextInput] = useState("");
+	const [textColor, setTextColor] = useState("#1D1D1F");
+	const [textSize, setTextSize] = useState(28);
+	const [notePromptOpen, setNotePromptOpen] = useState(false);
+	const [noteInput, setNoteInput] = useState("");
+	const [stampMenuOpen, setStampMenuOpen] = useState(false);
+	const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+	const [watermarkOpen, setWatermarkOpen] = useState(false);
+	const [pageNumbersOpen, setPageNumbersOpen] = useState(false);
+	const [splitOpen, setSplitOpen] = useState(false);
+	const [formsOpen, setFormsOpen] = useState(false);
+	const [propertiesOpen, setPropertiesOpen] = useState(false);
+
+	// Find-in-PDF bar
+	const [findOpen, setFindOpen] = useState(false);
+	const [findQuery, setFindQuery] = useState("");
+	const [findMatches, setFindMatches] = useState<readonly number[]>([]); // 0-based page indices with matches
+	const [findCursor, setFindCursor] = useState(0);
+
+	// Active drawing / interactive tool state
+	const [tool, setTool] = useState<InteractiveTool>("none");
+	const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
+	const [highlightColor, setHighlightColor] = useState<string>(HIGHLIGHT_COLORS[0]);
+	const [strokeColor, setStrokeColor] = useState<string>(INK_COLORS[1]);
+	const [strokeWidthPt, setStrokeWidthPt] = useState<number>(2.5);
+
 	const [pendingStamp, setPendingStamp] = useState<PendingStamp | null>(null);
-	const [cropMode, setCropMode] = useState(false);
-	const [cropDraft, setCropDraft] = useState<CropDraft | null>(null);
+	const [cropDraft, setCropDraft] = useState<RectDraft | null>(null);
+	const [rectDraft, setRectDraft] = useState<RectDraft | null>(null);
+	const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
+	const [drawDraft, setDrawDraft] = useState<DrawDraft | null>(null);
 
 	const pageFrameRef = useRef<HTMLDivElement | null>(null);
+	const imageInputRef = useRef<HTMLInputElement | null>(null);
 	const dragRef = useRef<{
-		readonly mode: "move" | "resize" | "crop";
+		readonly mode: "move" | "resize" | "crop" | "highlight" | "redact" | "whiteout" | "shape" | "draw";
 		readonly startX: number;
 		readonly startY: number;
 		readonly initX: number;
@@ -459,6 +531,9 @@ export function PdfDocumentEditor({
 		readonly initW: number;
 		readonly initH: number;
 	} | null>(null);
+	const drawPointsRef = useRef<PdfPointFraction[]>([]);
+	const rectDraftRef = useRef<RectDraft | null>(null);
+	const shapeDraftRef = useRef<ShapeDraft | null>(null);
 
 	const streamUrl = previewStreamUrl(payload.path, { modifiedAt: payload.modifiedAt, size: payload.size });
 
@@ -508,6 +583,58 @@ export function PdfDocumentEditor({
 			}
 		};
 	}, [streamUrl, payload.encrypted]);
+
+	// Cmd/Ctrl+F opens Find bar inside the PDF editor
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent): void => {
+			if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+				event.preventDefault();
+				setFindOpen(true);
+			} else if (event.key === "Escape") {
+				setStampMenuOpen(false);
+				setMoreMenuOpen(false);
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
+
+	// Execute PDF text search when query changes
+	useEffect(() => {
+		if (!findOpen || pdf === null || findQuery.trim() === "") {
+			setFindMatches([]);
+			setFindCursor(0);
+			return;
+		}
+		let cancelled = false;
+		const needle = findQuery.trim().toLowerCase();
+		const run = async (): Promise<void> => {
+			const matchedPages: number[] = [];
+			for (let p = 1; p <= pdf.numPages; p += 1) {
+				if (cancelled) return;
+				try {
+					const page = await pdf.getPage(p);
+					const content = await page.getTextContent();
+					const text = content.items
+						.map((item) => ("str" in item ? item.str : ""))
+						.join(" ")
+						.toLowerCase();
+					if (text.includes(needle)) matchedPages.push(p - 1);
+				} catch {
+					// Ignore page text extraction error
+				}
+			}
+			if (cancelled) return;
+			setFindMatches(matchedPages);
+			setFindCursor(0);
+			if (matchedPages.length > 0) setActivePage(matchedPages[0]!);
+		};
+		const timer = window.setTimeout(() => void run(), 180);
+		return () => {
+			cancelled = true;
+			window.clearTimeout(timer);
+		};
+	}, [findOpen, findQuery, pdf]);
 
 	const applyOps = useCallback(
 		async (operations: readonly PdfEditOperation[], successNote?: string): Promise<boolean> => {
@@ -588,14 +715,55 @@ export function PdfDocumentEditor({
 		}
 	}, [activePage, busy, editorApi, payload.encrypted, payload.pageCount, payload.path, selectedPages, t]);
 
-	const beginStampPlacement = (kind: "signature" | "text", pngDataUrl: string, aspect: number): void => {
-		setCropMode(false);
+	const handleMergePdfs = useCallback(async () => {
+		if (busy || payload.encrypted) return;
+		setMoreMenuOpen(false);
+		try {
+			const picked = await editorApi.pdfPickMergeFiles();
+			if (picked.length === 0) return;
+			await applyOps(
+				[{ kind: "mergePdfs", sourcePaths: picked }],
+				t("documentEditor.pdf.mergedApplied", { count: picked.length }),
+			);
+		} catch (error: unknown) {
+			setStatusMsg(error instanceof Error ? error.message : String(error));
+		}
+	}, [applyOps, busy, editorApi, payload.encrypted, t]);
+
+	const activateTool = (next: InteractiveTool): void => {
+		setPendingStamp(null);
+		setStampMenuOpen(false);
+		setMoreMenuOpen(false);
+		setTextPromptOpen(false);
+		setNotePromptOpen(false);
+		setRectDraft(null);
+		setShapeDraft(null);
+		setDrawDraft(null);
+		setTool((curr) => {
+			const resolved = curr === next ? "none" : next;
+			setCropDraft(resolved === "crop" ? { pageIndex: activePage, left: 0.08, top: 0.08, width: 0.84, height: 0.84 } : null);
+			return resolved;
+		});
+	};
+
+	const beginStampPlacement = (kind: StampKind, pngDataUrl: string, aspect: number): void => {
+		setTool("none");
 		setCropDraft(null);
-		const width = kind === "signature" ? 0.28 : Math.min(0.45, Math.max(0.16, 0.06 * aspect));
-		// Convert PNG aspect to page-fraction height assuming standard A4-ish 0.72 ratio fallback.
+		setStampMenuOpen(false);
+		setMoreMenuOpen(false);
+		const width =
+			kind === "signature"
+				? 0.28
+				: kind === "image"
+					? 0.36
+					: kind === "stamp"
+						? 0.3
+						: kind === "note"
+							? 0.28
+							: Math.min(0.45, Math.max(0.16, 0.06 * aspect));
 		const frame = pageFrameRef.current?.getBoundingClientRect();
 		const pageAspect = frame !== undefined && frame.height > 0 ? frame.width / frame.height : 0.72;
-		const height = Math.min(0.4, Math.max(0.035, (width * pageAspect) / Math.max(0.2, aspect)));
+		const height = Math.min(0.45, Math.max(0.035, (width * pageAspect) / Math.max(0.2, aspect)));
 		setPendingStamp({
 			kind,
 			pngDataUrl,
@@ -607,8 +775,38 @@ export function PdfDocumentEditor({
 		});
 	};
 
+	const handleInsertImageFile = (file: File | undefined): void => {
+		if (file === undefined) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			const src = typeof reader.result === "string" ? reader.result : "";
+			if (!src) return;
+			const img = new Image();
+			img.onload = () => {
+				const maxDim = 1600;
+				const scaleDown = Math.min(1, maxDim / Math.max(1, img.naturalWidth, img.naturalHeight));
+				const w = Math.max(1, Math.round(img.naturalWidth * scaleDown));
+				const h = Math.max(1, Math.round(img.naturalHeight * scaleDown));
+				const out = document.createElement("canvas");
+				out.width = w;
+				out.height = h;
+				out.getContext("2d")?.drawImage(img, 0, 0, w, h);
+				beginStampPlacement("image", out.toDataURL("image/png"), w / Math.max(1, h));
+			};
+			img.src = src;
+		};
+		reader.readAsDataURL(file);
+	};
+
 	const commitStamp = async (): Promise<void> => {
 		if (pendingStamp === null) return;
+		const noteKey: Record<StampKind, string> = {
+			signature: t("documentEditor.pdf.signatureApplied"),
+			text: t("documentEditor.pdf.textApplied"),
+			image: t("documentEditor.pdf.imageApplied"),
+			stamp: t("documentEditor.pdf.stampApplied"),
+			note: t("documentEditor.pdf.noteApplied"),
+		};
 		const ok = await applyOps(
 			[
 				{
@@ -621,7 +819,7 @@ export function PdfDocumentEditor({
 					height: pendingStamp.height,
 				},
 			],
-			pendingStamp.kind === "signature" ? t("documentEditor.pdf.signatureApplied") : t("documentEditor.pdf.textApplied"),
+			noteKey[pendingStamp.kind],
 		);
 		if (ok) setPendingStamp(null);
 	};
@@ -642,19 +840,36 @@ export function PdfDocumentEditor({
 			t("documentEditor.pdf.cropped"),
 		);
 		if (ok) {
-			setCropMode(false);
+			setTool("none");
 			setCropDraft(null);
 		}
 	};
 
 	const onStagePointerDown = (event: PointerEvent<HTMLDivElement>): void => {
-		if (!cropMode || event.button !== 0 || pageFrameRef.current === null) return;
+		if (tool === "none" || event.button !== 0 || pageFrameRef.current === null || busy) return;
 		const rect = pageFrameRef.current.getBoundingClientRect();
 		const fx = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
 		const fy = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
 		event.currentTarget.setPointerCapture(event.pointerId);
-		dragRef.current = { mode: "crop", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
-		setCropDraft({ pageIndex: activePage, left: fx, top: fy, width: 0.01, height: 0.01 });
+
+		if (tool === "crop") {
+			dragRef.current = { mode: "crop", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
+			setCropDraft({ pageIndex: activePage, left: fx, top: fy, width: 0.01, height: 0.01 });
+		} else if (tool === "highlight" || tool === "redact" || tool === "whiteout") {
+			dragRef.current = { mode: tool, startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
+			const next: RectDraft = { pageIndex: activePage, left: fx, top: fy, width: 0.005, height: 0.005 };
+			rectDraftRef.current = next;
+			setRectDraft(next);
+		} else if (tool === "shape") {
+			dragRef.current = { mode: "shape", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
+			const next: ShapeDraft = { pageIndex: activePage, shape: shapeKind, x1: fx, y1: fy, x2: fx, y2: fy };
+			shapeDraftRef.current = next;
+			setShapeDraft(next);
+		} else if (tool === "draw") {
+			dragRef.current = { mode: "draw", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
+			drawPointsRef.current = [{ x: fx, y: fy }];
+			setDrawDraft({ pageIndex: activePage, points: [{ x: fx, y: fy }] });
+		}
 	};
 
 	const onStagePointerMove = (event: PointerEvent<HTMLDivElement>): void => {
@@ -663,12 +878,39 @@ export function PdfDocumentEditor({
 		const rect = pageFrameRef.current.getBoundingClientRect();
 		const fx = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
 		const fy = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
+
 		if (drag.mode === "crop") {
 			const left = Math.min(drag.startX, fx);
 			const top = Math.min(drag.startY, fy);
 			const width = Math.max(0.03, Math.abs(fx - drag.startX));
 			const height = Math.max(0.03, Math.abs(fy - drag.startY));
 			setCropDraft({ pageIndex: activePage, left, top, width: Math.min(1 - left, width), height: Math.min(1 - top, height) });
+			return;
+		}
+		if (drag.mode === "highlight" || drag.mode === "redact" || drag.mode === "whiteout") {
+			const left = Math.min(drag.startX, fx);
+			const top = Math.min(drag.startY, fy);
+			const width = Math.max(0.005, Math.abs(fx - drag.startX));
+			const height = Math.max(0.005, Math.abs(fy - drag.startY));
+			const next: RectDraft = { pageIndex: activePage, left, top, width: Math.min(1 - left, width), height: Math.min(1 - top, height) };
+			rectDraftRef.current = next;
+			setRectDraft(next);
+			return;
+		}
+		if (drag.mode === "shape") {
+			const next: ShapeDraft = { pageIndex: activePage, shape: shapeKind, x1: drag.startX, y1: drag.startY, x2: fx, y2: fy };
+			shapeDraftRef.current = next;
+			setShapeDraft(next);
+			return;
+		}
+		if (drag.mode === "draw") {
+			const pts = drawPointsRef.current;
+			const last = pts.at(-1);
+			if (last === undefined || Math.hypot(fx - last.x, fy - last.y) >= 0.004) {
+				const nextPts = [...pts, { x: fx, y: fy }];
+				drawPointsRef.current = nextPts;
+				setDrawDraft({ pageIndex: activePage, points: nextPts });
+			}
 			return;
 		}
 		if (drag.mode === "move") {
@@ -695,10 +937,98 @@ export function PdfDocumentEditor({
 	};
 
 	const onStagePointerUp = (event: PointerEvent<HTMLDivElement>): void => {
-		if (dragRef.current === null) return;
+		const drag = dragRef.current;
+		if (drag === null) return;
 		dragRef.current = null;
 		if (event.currentTarget.hasPointerCapture(event.pointerId)) {
 			event.currentTarget.releasePointerCapture(event.pointerId);
+		}
+
+		if (drag.mode === "highlight" || drag.mode === "redact" || drag.mode === "whiteout") {
+			const draft = rectDraftRef.current;
+			rectDraftRef.current = null;
+			setRectDraft(null);
+			if (draft !== null && draft.width >= 0.008 && draft.height >= 0.006) {
+				if (drag.mode === "highlight") {
+					void applyOps(
+						[
+							{
+								kind: "highlightRect",
+								pageIndex: draft.pageIndex,
+								x: draft.left,
+								y: draft.top,
+								width: draft.width,
+								height: draft.height,
+								color: highlightColor,
+								opacity: 0.35,
+							},
+						],
+						t("documentEditor.pdf.highlightApplied"),
+					);
+				} else {
+					const color = drag.mode === "redact" ? "#000000" : "#FFFFFF";
+					void applyOps(
+						[
+							{
+								kind: "redactRect",
+								pageIndex: draft.pageIndex,
+								x: draft.left,
+								y: draft.top,
+								width: draft.width,
+								height: draft.height,
+								color,
+							},
+						],
+						drag.mode === "redact" ? t("documentEditor.pdf.redactApplied") : t("documentEditor.pdf.whiteoutApplied"),
+					);
+				}
+			}
+			return;
+		}
+
+		if (drag.mode === "shape") {
+			const draft = shapeDraftRef.current;
+			shapeDraftRef.current = null;
+			setShapeDraft(null);
+			if (draft !== null && Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) >= 0.01) {
+				void applyOps(
+					[
+						{
+							kind: "drawShape",
+							pageIndex: draft.pageIndex,
+							shape: draft.shape,
+							x1: draft.x1,
+							y1: draft.y1,
+							x2: draft.x2,
+							y2: draft.y2,
+							strokeColor,
+							strokeWidthPt,
+						},
+					],
+					t("documentEditor.pdf.shapeApplied"),
+				);
+			}
+			return;
+		}
+
+		if (drag.mode === "draw") {
+			const pts = drawPointsRef.current;
+			drawPointsRef.current = [];
+			setDrawDraft(null);
+			if (pts.length >= 2) {
+				void applyOps(
+					[
+						{
+							kind: "freehandPath",
+							pageIndex: activePage,
+							points: pts,
+							strokeColor,
+							strokeWidthPt,
+						},
+					],
+					t("documentEditor.pdf.drawApplied"),
+				);
+			}
 		}
 	};
 
@@ -711,16 +1041,56 @@ export function PdfDocumentEditor({
 		});
 	};
 
+	const presetStamps = [
+		{ id: "approved", label: t("documentEditor.pdf.stampApproved"), color: "#15803D" },
+		{ id: "confidential", label: t("documentEditor.pdf.stampConfidential"), color: "#B91C1C" },
+		{ id: "draft", label: t("documentEditor.pdf.stampDraft"), color: "#475569" },
+		{ id: "reviewed", label: t("documentEditor.pdf.stampReviewed"), color: "#1D4ED8" },
+		{ id: "urgent", label: t("documentEditor.pdf.stampUrgent"), color: "#C2410C" },
+	] as const;
+
 	const numPages = pdf?.numPages ?? payload.pageCount;
+
+	const toolButtonClass = (active: boolean): string =>
+		cn(
+			"inline-flex h-26 items-center gap-4 rounded-6 border px-8 text-meta font-medium transition-colors disabled:opacity-40",
+			active ? "border-accent bg-accent-soft text-accent" : "border-border bg-window text-ink hover:bg-hover-row",
+		);
+
+	const activeHint =
+		tool === "highlight"
+			? t("documentEditor.pdf.highlightHint")
+			: tool === "redact"
+				? t("documentEditor.pdf.redactHint")
+				: tool === "whiteout"
+					? t("documentEditor.pdf.whiteoutHint")
+					: tool === "draw"
+						? t("documentEditor.pdf.drawHint")
+						: tool === "shape"
+							? t("documentEditor.pdf.shapeHint")
+							: null;
 
 	return (
 		<div className="doc-editor__pdf flex min-h-0 flex-1 flex-col bg-subtle text-ink" data-pdf-editor="true">
+			{/* Hidden file picker for image stamp */}
+			<input
+				ref={imageInputRef}
+				type="file"
+				accept="image/png,image/jpeg,image/webp"
+				className="hidden"
+				onChange={(e) => {
+					handleInsertImageFile(e.target.files?.[0]);
+					e.target.value = "";
+				}}
+			/>
+
 			{/* PDF Action Toolbar */}
-			<div className="flex flex-none flex-wrap items-center gap-6 border-b border-divider bg-window px-12 py-6" role="toolbar" aria-label="PDF">
+			<div className="flex flex-none flex-wrap items-center gap-5 border-b border-divider bg-window px-10 py-6" role="toolbar" aria-label="PDF">
+				{/* Group 1: Fill & Sign + Content */}
 				<button
 					type="button"
 					disabled={busy || payload.encrypted}
-					className="inline-flex h-26 items-center gap-5 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink hover:bg-hover-row disabled:opacity-40"
+					className={toolButtonClass(false)}
 					onClick={() => setSigModalOpen(true)}
 				>
 					<PenLine size={13} className="text-accent" />
@@ -729,8 +1099,9 @@ export function PdfDocumentEditor({
 				<button
 					type="button"
 					disabled={busy || payload.encrypted}
-					className="inline-flex h-26 items-center gap-5 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink hover:bg-hover-row disabled:opacity-40"
+					className={toolButtonClass(textPromptOpen)}
 					onClick={() => {
+						setNotePromptOpen(false);
 						setTextPromptOpen((open) => !open);
 						setTextInput("");
 					}}
@@ -740,33 +1111,145 @@ export function PdfDocumentEditor({
 				</button>
 				<button
 					type="button"
-					aria-pressed={cropMode}
 					disabled={busy || payload.encrypted}
-					className={cn(
-						"inline-flex h-26 items-center gap-5 rounded-6 border px-10 text-meta font-medium transition-colors disabled:opacity-40",
-						cropMode ? "border-accent bg-accent-soft text-accent" : "border-border bg-window text-ink hover:bg-hover-row",
-					)}
+					className={toolButtonClass(false)}
+					onClick={() => imageInputRef.current?.click()}
+				>
+					<ImageIcon size={13} />
+					{t("documentEditor.pdf.addImage")}
+				</button>
+
+				<span className="mx-1 h-16 w-px bg-divider" aria-hidden="true" />
+
+				{/* Group 2: Annotate & Redact */}
+				<button
+					type="button"
+					aria-pressed={tool === "highlight"}
+					disabled={busy || payload.encrypted}
+					data-pdf-tool="highlight"
+					className={toolButtonClass(tool === "highlight")}
+					onClick={() => activateTool("highlight")}
+				>
+					<Highlighter size={13} />
+					{t("documentEditor.pdf.highlight")}
+				</button>
+				<button
+					type="button"
+					aria-pressed={tool === "draw"}
+					disabled={busy || payload.encrypted}
+					data-pdf-tool="draw"
+					className={toolButtonClass(tool === "draw")}
+					onClick={() => activateTool("draw")}
+				>
+					<Pencil size={13} />
+					{t("documentEditor.pdf.draw")}
+				</button>
+				<button
+					type="button"
+					aria-pressed={tool === "shape"}
+					disabled={busy || payload.encrypted}
+					data-pdf-tool="shape"
+					className={toolButtonClass(tool === "shape")}
+					onClick={() => activateTool("shape")}
+				>
+					<Shapes size={13} />
+					{t("documentEditor.pdf.shapes")}
+				</button>
+				<button
+					type="button"
+					aria-pressed={tool === "redact"}
+					disabled={busy || payload.encrypted}
+					data-pdf-tool="redact"
+					className={toolButtonClass(tool === "redact")}
+					onClick={() => activateTool("redact")}
+				>
+					<EyeOff size={13} />
+					{t("documentEditor.pdf.redact")}
+				</button>
+				<button
+					type="button"
+					aria-pressed={tool === "whiteout"}
+					disabled={busy || payload.encrypted}
+					data-pdf-tool="whiteout"
+					className={toolButtonClass(tool === "whiteout")}
+					onClick={() => activateTool("whiteout")}
+				>
+					<Eraser size={13} />
+					{t("documentEditor.pdf.whiteout")}
+				</button>
+
+				{/* Stamp dropdown */}
+				<div className="relative">
+					<button
+						type="button"
+						disabled={busy || payload.encrypted}
+						aria-expanded={stampMenuOpen}
+						data-pdf-stamp-menu="true"
+						className={toolButtonClass(stampMenuOpen)}
+						onClick={() => {
+							setMoreMenuOpen(false);
+							setStampMenuOpen((open) => !open);
+						}}
+					>
+						<Stamp size={13} />
+						{t("documentEditor.pdf.stamp")}
+						<ChevronDown size={11} />
+					</button>
+					{stampMenuOpen ? (
+						<div className="absolute top-full left-0 z-40 mt-4 flex w-160 flex-col gap-2 rounded-8 border border-border bg-window p-4 shadow-lg">
+							{presetStamps.map((st) => (
+								<button
+									key={st.id}
+									type="button"
+									data-pdf-preset-stamp={st.id}
+									className="flex items-center justify-between rounded-6 border-0 bg-transparent px-8 py-5 text-left text-meta font-semibold hover:bg-hover-row"
+									style={{ color: st.color }}
+									onClick={() => {
+										const rendered = renderPresetStampPng(st.label, st.color, todayIso());
+										beginStampPlacement("stamp", rendered.dataUrl, rendered.aspect);
+									}}
+								>
+									<span>{st.label}</span>
+									<span className="size-8 rounded-full" style={{ backgroundColor: st.color }} />
+								</button>
+							))}
+						</div>
+					) : null}
+				</div>
+
+				<button
+					type="button"
+					disabled={busy || payload.encrypted}
+					className={toolButtonClass(notePromptOpen)}
 					onClick={() => {
-						setPendingStamp(null);
-						setCropMode((curr) => {
-							const next = !curr;
-							setCropDraft(next ? { pageIndex: activePage, left: 0.08, top: 0.08, width: 0.84, height: 0.84 } : null);
-							return next;
-						});
+						setTextPromptOpen(false);
+						setNotePromptOpen((open) => !open);
+						setNoteInput("");
 					}}
+				>
+					<StickyNote size={13} />
+					{t("documentEditor.pdf.stickyNote")}
+				</button>
+
+				<span className="mx-1 h-16 w-px bg-divider" aria-hidden="true" />
+
+				{/* Group 3: Page Operations */}
+				<button
+					type="button"
+					aria-pressed={tool === "crop"}
+					disabled={busy || payload.encrypted}
+					className={toolButtonClass(tool === "crop")}
+					onClick={() => activateTool("crop")}
 				>
 					<Crop size={13} />
 					{t("documentEditor.pdf.cropPage")}
 				</button>
-
-				<span className="mx-2 h-16 w-px bg-divider" aria-hidden="true" />
-
 				<button
 					type="button"
 					disabled={busy || payload.encrypted || numPages === 0}
 					title={t("documentEditor.pdf.rotateRight")}
 					aria-label={t("documentEditor.pdf.rotateRight")}
-					className="inline-flex h-26 items-center gap-4 rounded-6 border border-border bg-window px-8 text-meta text-ink hover:bg-hover-row disabled:opacity-40"
+					className={toolButtonClass(false)}
 					onClick={() => void applyOps([{ kind: "rotatePage", pageIndex: activePage, deltaDegrees: 90 }], t("documentEditor.pdf.rotated"))}
 				>
 					<RotateCw size={13} />
@@ -820,7 +1303,7 @@ export function PdfDocumentEditor({
 				<button
 					type="button"
 					disabled={busy || payload.encrypted || numPages === 0}
-					className="inline-flex h-26 items-center gap-5 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink hover:bg-hover-row disabled:opacity-40"
+					className={toolButtonClass(false)}
 					onClick={() => void handleExtractPages()}
 				>
 					<FileOutput size={13} />
@@ -829,9 +1312,157 @@ export function PdfDocumentEditor({
 						: t("documentEditor.pdf.extractCurrent")}
 				</button>
 
+				{/* Group 4: Organize & Document Tools dropdown */}
+				<div className="relative">
+					<button
+						type="button"
+						disabled={busy || payload.encrypted}
+						aria-expanded={moreMenuOpen}
+						data-pdf-more-tools="true"
+						className={toolButtonClass(moreMenuOpen)}
+						onClick={() => {
+							setStampMenuOpen(false);
+							setMoreMenuOpen((open) => !open);
+						}}
+					>
+						<MoreHorizontal size={13} />
+						{t("documentEditor.pdf.moreTools")}
+					</button>
+					{moreMenuOpen ? (
+						<div className="absolute top-full left-0 z-40 mt-4 flex w-210 flex-col gap-2 rounded-8 border border-border bg-window p-4 shadow-lg">
+							<button
+								type="button"
+								data-pdf-action="merge"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => void handleMergePdfs()}
+							>
+								<FileInput size={13} />
+								{t("documentEditor.pdf.merge")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="split"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => {
+									setMoreMenuOpen(false);
+									setSplitOpen(true);
+								}}
+							>
+								<SplitSquareHorizontal size={13} />
+								{t("documentEditor.pdf.split")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="duplicate"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={async () => {
+									setMoreMenuOpen(false);
+									const ok = await applyOps([{ kind: "duplicatePage", pageIndex: activePage }], t("documentEditor.pdf.pageDuplicated"));
+									if (ok) setActivePage(activePage + 1);
+								}}
+							>
+								<Copy size={13} />
+								{t("documentEditor.pdf.duplicatePage")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="insert-blank"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={async () => {
+									setMoreMenuOpen(false);
+									const ok = await applyOps(
+										[{ kind: "insertBlankPage", insertAtIndex: activePage + 1, size: "match" }],
+										t("documentEditor.pdf.blankPageInserted"),
+									);
+									if (ok) setActivePage(activePage + 1);
+								}}
+							>
+								<FilePlus2 size={13} />
+								{t("documentEditor.pdf.insertBlankPage")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="rotate-left"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => {
+									setMoreMenuOpen(false);
+									void applyOps([{ kind: "rotatePage", pageIndex: activePage, deltaDegrees: -90 }], t("documentEditor.pdf.rotated"));
+								}}
+							>
+								<RotateCcw size={13} />
+								{t("documentEditor.pdf.rotateLeft")}
+							</button>
+
+							<div className="my-2 h-px bg-divider" />
+
+							<button
+								type="button"
+								data-pdf-action="watermark"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => {
+									setMoreMenuOpen(false);
+									setWatermarkOpen(true);
+								}}
+							>
+								<Droplets size={13} />
+								{t("documentEditor.pdf.watermark")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="page-numbers"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => {
+									setMoreMenuOpen(false);
+									setPageNumbersOpen(true);
+								}}
+							>
+								<Hash size={13} />
+								{t("documentEditor.pdf.pageNumbers")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="forms"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => {
+									setMoreMenuOpen(false);
+									setFormsOpen(true);
+								}}
+							>
+								<FileSliders size={13} />
+								{t("documentEditor.pdf.forms")}
+							</button>
+							<button
+								type="button"
+								data-pdf-action="properties"
+								className="flex items-center gap-8 rounded-6 border-0 bg-transparent px-8 py-6 text-left text-meta text-ink hover:bg-hover-row"
+								onClick={() => {
+									setMoreMenuOpen(false);
+									setPropertiesOpen(true);
+								}}
+							>
+								<Info size={13} />
+								{t("documentEditor.pdf.properties")}
+							</button>
+						</div>
+					) : null}
+				</div>
+
 				<div className="flex-1" />
 
-				{/* Undo & Zoom */}
+				{/* Find, Undo & Zoom */}
+				<button
+					type="button"
+					aria-pressed={findOpen}
+					aria-label={t("documentEditor.pdf.findPlaceholder")}
+					title={t("documentEditor.pdf.findPlaceholder")}
+					className={cn(
+						"flex size-26 items-center justify-center rounded-6 border transition-colors",
+						findOpen ? "border-accent bg-accent-soft text-accent" : "border-border bg-window text-ink-body hover:bg-hover-row",
+					)}
+					onClick={() => setFindOpen((open) => !open)}
+				>
+					<Search size={13} />
+				</button>
 				<button
 					type="button"
 					disabled={busy || undoStack.length === 0}
@@ -873,18 +1504,81 @@ export function PdfDocumentEditor({
 				) : null}
 			</div>
 
-			{/* Inline text stamp composer */}
+			{/* Find bar */}
+			{findOpen ? (
+				<div className="flex flex-none items-center gap-8 border-b border-divider bg-subtle px-14 py-6">
+					<Search size={13} className="text-ink-muted" />
+					<input
+						type="text"
+						value={findQuery}
+						data-pdf-find-input="true"
+						placeholder={t("documentEditor.pdf.findPlaceholder")}
+						className="h-26 w-240 rounded-6 border border-border bg-window px-8 text-meta text-ink outline-none focus:border-accent"
+						onChange={(e) => setFindQuery(e.target.value)}
+						autoFocus
+					/>
+					{findQuery.trim() !== "" ? (
+						<span className="text-badge tabular-nums text-ink-muted">
+							{findMatches.length > 0
+								? t("documentEditor.pdf.findMatches", { current: findCursor + 1, total: findMatches.length })
+								: t("documentEditor.pdf.findNoMatch")}
+						</span>
+					) : null}
+					<button
+						type="button"
+						disabled={findMatches.length === 0}
+						aria-label={t("documentEditor.pdf.findPrev")}
+						className="flex size-24 items-center justify-center rounded-5 border border-border bg-window text-ink disabled:opacity-35"
+						onClick={() => {
+							if (findMatches.length === 0) return;
+							const next = (findCursor - 1 + findMatches.length) % findMatches.length;
+							setFindCursor(next);
+							setActivePage(findMatches[next]!);
+						}}
+					>
+						<ChevronLeft size={12} />
+					</button>
+					<button
+						type="button"
+						disabled={findMatches.length === 0}
+						aria-label={t("documentEditor.pdf.findNext")}
+						className="flex size-24 items-center justify-center rounded-5 border border-border bg-window text-ink disabled:opacity-35"
+						onClick={() => {
+							if (findMatches.length === 0) return;
+							const next = (findCursor + 1) % findMatches.length;
+							setFindCursor(next);
+							setActivePage(findMatches[next]!);
+						}}
+					>
+						<ChevronRight size={12} />
+					</button>
+					<div className="flex-1" />
+					<button
+						type="button"
+						aria-label={t("common.close")}
+						className="border-0 bg-transparent text-ink-muted hover:text-ink"
+						onClick={() => {
+							setFindOpen(false);
+							setFindQuery("");
+						}}
+					>
+						<X size={13} />
+					</button>
+				</div>
+			) : null}
+
+			{/* Inline text stamp composer (with color, size & today's date quick button) */}
 			{textPromptOpen ? (
-				<div className="flex flex-none items-center gap-8 border-b border-divider bg-subtle px-14 py-8">
+				<div className="flex flex-none flex-wrap items-center gap-8 border-b border-divider bg-subtle px-14 py-8">
 					<input
 						type="text"
 						value={textInput}
 						placeholder={t("documentEditor.pdf.textPlaceholder")}
-						className="h-28 flex-1 rounded-6 border border-border bg-window px-10 text-body text-ink outline-none focus:border-accent"
+						className="h-28 min-w-[200px] flex-1 rounded-6 border border-border bg-window px-10 text-body text-ink outline-none focus:border-accent"
 						onChange={(e) => setTextInput(e.target.value)}
 						onKeyDown={(e) => {
 							if (e.key === "Enter" && textInput.trim() !== "") {
-								const rendered = renderTextStampPng(textInput.trim());
+								const rendered = renderTextStampPng(textInput.trim(), textSize, textColor);
 								beginStampPlacement("text", rendered.dataUrl, rendered.aspect);
 								setTextPromptOpen(false);
 							}
@@ -893,10 +1587,43 @@ export function PdfDocumentEditor({
 					/>
 					<button
 						type="button"
+						className="inline-flex h-26 items-center gap-4 rounded-6 border border-border bg-window px-8 text-badge text-ink hover:bg-hover-row"
+						onClick={() => setTextInput((curr) => (curr.trim() ? `${curr.trim()} ${todayIso()}` : todayIso()))}
+					>
+						<Calendar size={11} />
+						{t("documentEditor.pdf.insertToday")}
+					</button>
+					<div className="flex items-center gap-4">
+						{INK_COLORS.map((c) => (
+							<button
+								key={c}
+								type="button"
+								aria-label={c}
+								aria-pressed={textColor === c}
+								className={cn("size-18 rounded-full border-2", textColor === c ? "scale-110 border-accent" : "border-border")}
+								style={{ backgroundColor: c }}
+								onClick={() => setTextColor(c)}
+							/>
+						))}
+					</div>
+					<select
+						aria-label={t("documentEditor.pdf.textSize")}
+						value={textSize}
+						onChange={(e) => setTextSize(Number(e.target.value))}
+						className="h-26 rounded-6 border border-border bg-window px-6 text-badge text-ink"
+					>
+						{[18, 22, 28, 36, 48].map((sz) => (
+							<option key={sz} value={sz}>
+								{sz}px
+							</option>
+						))}
+					</select>
+					<button
+						type="button"
 						disabled={textInput.trim() === ""}
 						className="h-28 rounded-6 border-0 bg-accent px-12 text-meta font-semibold text-on-accent disabled:opacity-40"
 						onClick={() => {
-							const rendered = renderTextStampPng(textInput.trim());
+							const rendered = renderTextStampPng(textInput.trim(), textSize, textColor);
 							beginStampPlacement("text", rendered.dataUrl, rendered.aspect);
 							setTextPromptOpen(false);
 						}}
@@ -909,6 +1636,139 @@ export function PdfDocumentEditor({
 						onClick={() => setTextPromptOpen(false)}
 					>
 						{t("common.cancel")}
+					</button>
+				</div>
+			) : null}
+
+			{/* Inline sticky note composer */}
+			{notePromptOpen ? (
+				<div className="flex flex-none items-center gap-8 border-b border-divider bg-subtle px-14 py-8">
+					<StickyNote size={14} className="text-warning" />
+					<input
+						type="text"
+						value={noteInput}
+						data-pdf-note-input="true"
+						placeholder={t("documentEditor.pdf.notePlaceholder")}
+						className="h-28 flex-1 rounded-6 border border-border bg-window px-10 text-body text-ink outline-none focus:border-accent"
+						onChange={(e) => setNoteInput(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && noteInput.trim() !== "") {
+								const rendered = renderStickyNotePng(noteInput.trim());
+								beginStampPlacement("note", rendered.dataUrl, rendered.aspect);
+								setNotePromptOpen(false);
+							}
+						}}
+						autoFocus
+					/>
+					<button
+						type="button"
+						disabled={noteInput.trim() === ""}
+						className="h-28 rounded-6 border-0 bg-accent px-12 text-meta font-semibold text-on-accent disabled:opacity-40"
+						onClick={() => {
+							const rendered = renderStickyNotePng(noteInput.trim());
+							beginStampPlacement("note", rendered.dataUrl, rendered.aspect);
+							setNotePromptOpen(false);
+						}}
+					>
+						{t("documentEditor.pdf.placeNote")}
+					</button>
+					<button
+						type="button"
+						className="h-28 rounded-6 border border-border bg-window px-10 text-meta text-ink"
+						onClick={() => setNotePromptOpen(false)}
+					>
+						{t("common.cancel")}
+					</button>
+				</div>
+			) : null}
+
+			{/* Active interactive tool options & hint bar */}
+			{activeHint !== null ? (
+				<div className="flex flex-none flex-wrap items-center justify-between gap-8 border-b border-divider bg-accent-soft px-14 py-6 text-meta text-accent">
+					<div className="flex flex-wrap items-center gap-10">
+						<span>{activeHint}</span>
+						{tool === "highlight" ? (
+							<div className="flex items-center gap-4">
+								{HIGHLIGHT_COLORS.map((c) => (
+									<button
+										key={c}
+										type="button"
+										aria-label={c}
+										aria-pressed={highlightColor === c}
+										className={cn("size-16 rounded-full border-2", highlightColor === c ? "scale-110 border-accent" : "border-white/70")}
+										style={{ backgroundColor: c }}
+										onClick={() => setHighlightColor(c)}
+									/>
+								))}
+							</div>
+						) : null}
+						{tool === "shape" ? (
+							<div className="inline-flex items-center gap-3">
+								{(
+									[
+										{ id: "rect", icon: Square, label: t("documentEditor.pdf.shapeRect") },
+										{ id: "ellipse", icon: Circle, label: t("documentEditor.pdf.shapeEllipse") },
+										{ id: "line", icon: Minus, label: t("documentEditor.pdf.shapeLine") },
+										{ id: "arrow", icon: ArrowUpRight, label: t("documentEditor.pdf.shapeArrow") },
+									] as const
+								).map((item) => {
+									const Icon = item.icon;
+									return (
+										<button
+											key={item.id}
+											type="button"
+											aria-pressed={shapeKind === item.id}
+											title={item.label}
+											data-pdf-shape={item.id}
+											className={cn(
+												"inline-flex h-22 items-center gap-3 rounded-5 border px-6 text-badge",
+												shapeKind === item.id ? "border-accent bg-window text-accent font-semibold" : "border-border bg-window/70 text-ink",
+											)}
+											onClick={() => setShapeKind(item.id)}
+										>
+											<Icon size={11} />
+											{item.label}
+										</button>
+									);
+								})}
+							</div>
+						) : null}
+						{tool === "draw" || tool === "shape" ? (
+							<div className="flex items-center gap-6">
+								<div className="flex items-center gap-4">
+									{INK_COLORS.map((c) => (
+										<button
+											key={c}
+											type="button"
+											aria-label={c}
+											aria-pressed={strokeColor === c}
+											className={cn("size-16 rounded-full border-2", strokeColor === c ? "scale-110 border-accent" : "border-white/80")}
+											style={{ backgroundColor: c }}
+											onClick={() => setStrokeColor(c)}
+										/>
+									))}
+								</div>
+								<select
+									aria-label={t("documentEditor.pdf.strokeWidth")}
+									value={strokeWidthPt}
+									onChange={(e) => setStrokeWidthPt(Number(e.target.value))}
+									className="h-22 rounded-5 border border-border bg-window px-4 text-badge text-ink"
+								>
+									{[1.5, 2.5, 4, 6].map((w) => (
+										<option key={w} value={w}>
+											{w}pt
+										</option>
+									))}
+								</select>
+							</div>
+						) : null}
+					</div>
+					<button
+						type="button"
+						className="h-22 rounded-6 border border-border bg-window px-8 text-badge font-medium text-ink"
+						onClick={() => setTool("none")}
+					>
+						{t("common.close")}
 					</button>
 				</div>
 			) : null}
@@ -939,7 +1799,7 @@ export function PdfDocumentEditor({
 				</div>
 			) : null}
 
-			{cropMode && cropDraft !== null ? (
+			{tool === "crop" && cropDraft !== null ? (
 				<div className="flex flex-none items-center justify-between gap-8 border-b border-divider bg-accent-soft px-14 py-6 text-meta text-accent">
 					<span>{t("documentEditor.pdf.cropHint")}</span>
 					<div className="flex items-center gap-6">
@@ -947,7 +1807,7 @@ export function PdfDocumentEditor({
 							type="button"
 							className="h-24 rounded-6 border border-border bg-window px-10 text-meta font-medium text-ink"
 							onClick={() => {
-								setCropMode(false);
+								setTool("none");
 								setCropDraft(null);
 							}}
 						>
@@ -1014,13 +1874,14 @@ export function PdfDocumentEditor({
 						{Array.from({ length: pdf.numPages }, (_unused, idx) => {
 							const isActive = idx === activePage;
 							const isChecked = selectedPages.has(idx);
+							const isFindHit = findMatches.includes(idx);
 							return (
 								<div
 									key={idx}
 									data-pdf-thumb={idx + 1}
 									className={cn(
 										"group relative flex flex-col items-center gap-4 rounded-8 p-6 transition-colors",
-										isActive ? "bg-accent-soft ring-1 ring-accent" : "hover:bg-hover-row",
+										isActive ? "bg-accent-soft ring-1 ring-accent" : isFindHit ? "bg-warning-soft/50 ring-1 ring-warning" : "hover:bg-hover-row",
 									)}
 									onClick={() => {
 										setActivePage(idx);
@@ -1054,7 +1915,7 @@ export function PdfDocumentEditor({
 							data-pdf-page-stage={activePage + 1}
 							className={cn(
 								"relative flex-none overflow-hidden rounded-4 bg-white shadow-md ring-1 ring-black/10 select-none",
-								cropMode && "cursor-crosshair",
+								tool !== "none" && "cursor-crosshair",
 							)}
 							onPointerDown={onStagePointerDown}
 							onPointerMove={onStagePointerMove}
@@ -1117,7 +1978,7 @@ export function PdfDocumentEditor({
 							) : null}
 
 							{/* Crop selection overlay */}
-							{cropMode && cropDraft !== null && cropDraft.pageIndex === activePage ? (
+							{tool === "crop" && cropDraft !== null && cropDraft.pageIndex === activePage ? (
 								<div
 									data-pdf-crop-box="true"
 									className="pointer-events-none absolute z-20 border-2 border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.32)]"
@@ -1128,6 +1989,78 @@ export function PdfDocumentEditor({
 										height: `${cropDraft.height * 100}%`,
 									}}
 								/>
+							) : null}
+
+							{/* Live Highlight / Redact / Whiteout drag overlay */}
+							{rectDraft !== null && rectDraft.pageIndex === activePage ? (
+								<div
+									className="pointer-events-none absolute z-20"
+									style={{
+										left: `${rectDraft.left * 100}%`,
+										top: `${rectDraft.top * 100}%`,
+										width: `${rectDraft.width * 100}%`,
+										height: `${rectDraft.height * 100}%`,
+										backgroundColor:
+											tool === "highlight"
+												? highlightColor
+												: tool === "redact"
+													? "#000000"
+													: "#FFFFFF",
+										opacity: tool === "highlight" ? 0.35 : 0.95,
+										border: tool === "whiteout" ? "1px dashed #64748B" : "none",
+									}}
+								/>
+							) : null}
+
+							{/* Live Shape / Freehand SVG preview overlay */}
+							{(shapeDraft !== null && shapeDraft.pageIndex === activePage) ||
+							(drawDraft !== null && drawDraft.pageIndex === activePage) ? (
+								<svg
+									viewBox="0 0 100 100"
+									preserveAspectRatio="none"
+									className="pointer-events-none absolute inset-0 z-20 h-full w-full"
+								>
+									{shapeDraft !== null && shapeDraft.shape === "rect" ? (
+										<rect
+											x={Math.min(shapeDraft.x1, shapeDraft.x2) * 100}
+											y={Math.min(shapeDraft.y1, shapeDraft.y2) * 100}
+											width={Math.abs(shapeDraft.x2 - shapeDraft.x1) * 100}
+											height={Math.abs(shapeDraft.y2 - shapeDraft.y1) * 100}
+											fill="none"
+											stroke={strokeColor}
+											strokeWidth={0.5}
+										/>
+									) : shapeDraft !== null && shapeDraft.shape === "ellipse" ? (
+										<ellipse
+											cx={((shapeDraft.x1 + shapeDraft.x2) / 2) * 100}
+											cy={((shapeDraft.y1 + shapeDraft.y2) / 2) * 100}
+											rx={(Math.abs(shapeDraft.x2 - shapeDraft.x1) / 2) * 100}
+											ry={(Math.abs(shapeDraft.y2 - shapeDraft.y1) / 2) * 100}
+											fill="none"
+											stroke={strokeColor}
+											strokeWidth={0.5}
+										/>
+									) : shapeDraft !== null ? (
+										<line
+											x1={shapeDraft.x1 * 100}
+											y1={shapeDraft.y1 * 100}
+											x2={shapeDraft.x2 * 100}
+											y2={shapeDraft.y2 * 100}
+											stroke={strokeColor}
+											strokeWidth={0.5}
+										/>
+									) : null}
+									{drawDraft !== null && drawDraft.points.length >= 2 ? (
+										<polyline
+											fill="none"
+											stroke={strokeColor}
+											strokeWidth={0.5}
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											points={drawDraft.points.map((pt) => `${pt.x * 100},${pt.y * 100}`).join(" ")}
+										/>
+									) : null}
+								</svg>
 							) : null}
 						</div>
 					</div>
@@ -1152,6 +2085,130 @@ export function PdfDocumentEditor({
 						storeSavedSignatures(next);
 					}}
 					onClose={() => setSigModalOpen(false)}
+				/>
+			) : null}
+
+			{watermarkOpen ? (
+				<WatermarkModal
+					selectedCount={selectedPages.size}
+					onClose={() => setWatermarkOpen(false)}
+					onApply={async ({ text, color, opacity, angle, scale: wmScale, scope }) => {
+						const pngDataUrl = renderWatermarkPng(text, color, angle);
+						const pageIndices =
+							scope === "current"
+								? [activePage]
+								: scope === "selected" && selectedPages.size > 0
+									? [...selectedPages].sort((a, b) => a - b)
+									: undefined;
+						const ok = await applyOps(
+							[
+								{
+									kind: "addWatermark",
+									pngDataUrl,
+									opacity,
+									scale: wmScale,
+									...(pageIndices === undefined ? {} : { pageIndices }),
+								},
+							],
+							t("documentEditor.pdf.watermarkApplied"),
+						);
+						if (ok) setWatermarkOpen(false);
+					}}
+				/>
+			) : null}
+
+			{pageNumbersOpen ? (
+				<PageNumbersModal
+					onClose={() => setPageNumbersOpen(false)}
+					onApply={async ({ position, format, startNumber, fontSize, color, headerText, footerText }) => {
+						const ok = await applyOps(
+							[
+								{
+									kind: "addPageNumbers",
+									position,
+									format,
+									startNumber,
+									fontSize,
+									color,
+									...(headerText ? { headerText } : {}),
+									...(footerText ? { footerText } : {}),
+								},
+							],
+							t("documentEditor.pdf.pageNumbersApplied"),
+						);
+						if (ok) setPageNumbersOpen(false);
+					}}
+				/>
+			) : null}
+
+			{splitOpen ? (
+				<SplitPdfModal
+					totalPages={numPages}
+					onClose={() => setSplitOpen(false)}
+					onRunSplit={async (req) => {
+						setBusy(true);
+						setStatusMsg(null);
+						try {
+							const res = await editorApi.pdfSplit({ path: payload.path, ...req });
+							if (res.outputs.length > 0) {
+								setExtractedFile({ path: res.outputs[0]!.outputPath, name: res.outputs[0]!.name });
+							}
+							setStatusMsg(t("documentEditor.pdf.splitSuccess", { count: res.outputs.length }));
+							setSplitOpen(false);
+						} catch (error: unknown) {
+							setStatusMsg(error instanceof Error ? error.message : String(error));
+						} finally {
+							setBusy(false);
+						}
+					}}
+				/>
+			) : null}
+
+			{propertiesOpen ? (
+				<PdfPropertiesModal
+					path={payload.path}
+					onClose={() => setPropertiesOpen(false)}
+					onSave={async (metadata) => {
+						const ok = await applyOps([{ kind: "setMetadata", metadata }], t("documentEditor.pdf.metadataSaved"));
+						if (ok) setPropertiesOpen(false);
+					}}
+				/>
+			) : null}
+
+			{formsOpen ? (
+				<PdfFormsModal
+					path={payload.path}
+					onClose={() => setFormsOpen(false)}
+					onSave={async (values, flatten) => {
+						setBusy(true);
+						setStatusMsg(null);
+						try {
+							const result = await editorApi.pdfSaveFormFields({
+								path: payload.path,
+								values,
+								flatten,
+								expectedMtimeMs: payload.mtimeMs,
+							});
+							if (!result.ok) {
+								setStatusMsg(t("documentEditor.conflict"));
+								return;
+							}
+							setUndoStack((stack) => [...stack, result.snapshotId]);
+							onPayloadChange({
+								...payload,
+								size: result.size,
+								modifiedAt: result.modifiedAt,
+								mtimeMs: result.mtimeMs,
+								pageCount: result.pageCount,
+							});
+							setStatusMsg(flatten ? t("documentEditor.pdf.formsFlattened") : t("documentEditor.pdf.formsSaved"));
+							setFormsOpen(false);
+						} catch (error: unknown) {
+							setStatusMsg(error instanceof Error ? error.message : String(error));
+						} finally {
+							setBusy(false);
+						}
+					}}
 				/>
 			) : null}
 		</div>

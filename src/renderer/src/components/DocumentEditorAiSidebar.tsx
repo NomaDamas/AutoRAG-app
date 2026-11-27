@@ -85,8 +85,10 @@ export function DocumentEditorAiSidebar({ filePath }: { readonly filePath: strin
 					</div>
 					<ul className="m-0 flex list-disc flex-col gap-6 pl-18 text-ink-muted">
 						<li>{t("documentEditor.pdf.tipSignature")}</li>
+						<li>{t("documentEditor.pdf.tipAnnotate")}</li>
 						<li>{t("documentEditor.pdf.tipCrop")}</li>
 						<li>{t("documentEditor.pdf.tipPages")}</li>
+						<li>{t("documentEditor.pdf.tipOrganize")}</li>
 					</ul>
 				</div>
 			) : (

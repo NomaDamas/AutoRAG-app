@@ -73,6 +73,8 @@ import {
 	isDocumentEditorSaveRequest,
 	isPdfApplyRequest,
 	isPdfExtractRequest,
+	isPdfFormSaveRequest,
+	isPdfSplitRequest,
 } from "../shared/document-editor-contract";
 
 /**
@@ -626,6 +628,7 @@ export function registerDocumentEditorIpcHandlers(
 	service: DocumentEditService,
 	pdfIo: PdfEditorIo,
 	sendEvent: (event: DocumentEditEvent) => void,
+	pickPdfFiles?: () => Promise<readonly string[]>,
 ): void {
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.open, (_event, filePath: unknown) => {
 		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
@@ -643,9 +646,28 @@ export function registerDocumentEditorIpcHandlers(
 		if (!isPdfExtractRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
 		return pdfIo.extract(request);
 	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfSplit, (_event, request: unknown) => {
+		if (!isPdfSplitRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
+		return pdfIo.split(request);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfPickMergeFiles, () => {
+		return pickPdfFiles ? pickPdfFiles() : [];
+	});
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfRestore, (_event, snapshotId: unknown) => {
 		if (typeof snapshotId !== "string" || snapshotId === "") return { ok: false };
 		return pdfIo.restore(snapshotId);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfReadMetadata, (_event, filePath: unknown) => {
+		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
+		return pdfIo.readMetadata(filePath);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfReadFormFields, (_event, filePath: unknown) => {
+		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
+		return pdfIo.readFormFields(filePath);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfSaveFormFields, (_event, request: unknown) => {
+		if (!isPdfFormSaveRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
+		return pdfIo.saveFormFields(request);
 	});
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiStart, async (event, runId: unknown, request: unknown, capture: unknown) => {
 		if (typeof runId !== "string" || runId === "" || !isDocumentEditRequest(request)) {
