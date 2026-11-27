@@ -8,6 +8,7 @@ import {
 	chordFromKeyEvent,
 	DEFAULT_SHORTCUT_SETTINGS,
 	decomposeShortcutChord,
+	EDIT_PATH_LEGACY_CHORD,
 	resolveEffectiveShortcuts,
 	SHORTCUT_BY_ID,
 	SHORTCUT_CATALOG,
@@ -180,6 +181,17 @@ export function resolveKeyAction(
 				return null;
 			}
 			return actionForShortcutId(item.id);
+		}
+
+		// ⌘L keeps opening the path bar while ⇧⌘G is still the default and nothing else owns ⌘L.
+		const legacyItem = SHORTCUT_BY_ID.editPath;
+		if (
+			recorded.chord === EDIT_PATH_LEGACY_CHORD &&
+			effective.editPath === legacyItem.defaultChord &&
+			!Object.values(effective).includes(EDIT_PATH_LEGACY_CHORD) &&
+			!(context.typing && (!legacyItem.allowWhileTyping || !hasMod))
+		) {
+			return { type: "editPath" };
 		}
 	}
 

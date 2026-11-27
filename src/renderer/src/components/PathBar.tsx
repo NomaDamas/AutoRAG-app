@@ -100,7 +100,7 @@ export function PathBar({
 	readonly onGoToPath: (input: string) => Promise<boolean>;
 	/** Direct child folders whose names complete the draft's last segment. */
 	readonly completePath: (input: string) => Promise<readonly PathCompletion[]>;
-	/** ⌘L: the Finder keymap opened the editor; counted up on every press so a repeat press re-selects. */
+	/** ⇧⌘G: the Finder keymap opened the editor; counted up on every press so a repeat press re-selects. */
 	readonly openEditor: number;
 	/** The editor reports that it closed (Enter, Escape, blur), so the keymap can open it again. */
 	readonly onEditorClosed: () => void;
@@ -211,7 +211,7 @@ export function PathBar({
 	useLayoutEffect(() => {
 		if (editing) editorRef.current?.select();
 	}, [editing]);
-	// ⌘L opens the editor from the keyboard; a press while it is already open
+	// ⇧⌘G opens the editor from the keyboard; a press while it is already open
 	// re-selects, and one after it closed reopens it.
 	useEffect(() => {
 		if (openEditor === openedByEditor.current) return;

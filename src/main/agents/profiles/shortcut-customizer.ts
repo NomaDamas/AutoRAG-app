@@ -501,7 +501,7 @@ function systemPrompt(language: ReplyLanguage, platform: string): string {
 		catalogLines,
 		"",
 		"## Built-in Quick Presets (`preset` parameter on `update_shortcuts`)",
-		"- `macFinder` (Mac Finder): `editPath`=`Mod+Shift+G` (`⇧⌘G`), `parentFolder`=`Mod+ArrowUp` (`⌘↑`), `openItem`=`Mod+O` (`⌘O`), `rename`=`Enter` (`↩`), `trash`=`Mod+Backspace` (`⌘⌫`).",
+		"- `macFinder` (Mac Finder): `parentFolder`=`Mod+ArrowUp` (`⌘↑`), `openItem`=`Mod+O` (`⌘O`), `rename`=`Enter` (`↩`), `trash`=`Mod+Backspace` (`⌘⌫`). `editPath` stays the Dazzi default `Mod+Shift+G` (`⇧⌘G`).",
 		"- `windowsExplorer` (Windows File Explorer): `editPath`=`Alt+D`, `viewIcons`=`Mod+Shift+2`, `viewList`=`Mod+Shift+6`, `viewColumns`=`Mod+Shift+5`, `quickLook`=`Alt+P`, `rename`=`F2`, `trash`=`Delete`, `redo`=`Mod+Y`.",
 		"- `default` (Dazzi defaults): restores all 26 Dazzi default shortcuts.",
 		"",

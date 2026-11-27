@@ -949,6 +949,7 @@ export function App(): ReactElement {
 						settingsActive={path === SETTINGS_PATH}
 						showHotkeys={SHOW_HOTKEYS}
 						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
+						onOpenInNewTab={(item) => finder?.openNavInNewTab(item)}
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
 						onOpenUsage={() => {

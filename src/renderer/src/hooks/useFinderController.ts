@@ -202,9 +202,9 @@ export interface FinderController {
 	readonly canGoForward: boolean;
 	readonly query: string;
 	readonly searchFocused: boolean;
-	/** Bumped by every ⌘L: each bump opens (or re-selects) the path bar's editor. */
+	/** Bumped by every ⇧⌘G (and ⌘L, while that chord is still the default): each bump opens the path bar's editor. */
 	readonly pathEditingCount: number;
-	/** Start editing the path (⌘L). */
+	/** Start editing the path (⇧⌘G). */
 	editPath(): void;
 	/** The edit ended: Enter, Escape, or the bar closed it itself. */
 	endPathEdit(): void;
@@ -349,6 +349,8 @@ export interface FinderController {
 	/** Direct child folder candidates for the path bar's inline completion. */
 	completePath(input: string): Promise<readonly PathCompletion[]>;
 	navigateNav(item: NavItem): void;
+	/** Command-click on a sidebar folder: a new tab on that folder, leaving the current tab where it was. */
+	openNavInNewTab(item: NavItem): void;
 	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
 	ejectNav(item: NavItem): void;
 	selectTabId(id: number): void;
@@ -1102,6 +1104,16 @@ export function useFinderController(
 			}
 			navigate(item.path);
 		});
+
+	const openNavInNewTab = useLatestCallback((item: NavItem) => {
+		if (item.view !== undefined) return;
+		if (!item.available) {
+			showToast(t("finderComponents.locationOpenFailed", { name: item.label }));
+			return;
+		}
+		// The new tab has no search of its own, and the tab it leaves keeps its query.
+		setTabsState((state) => openTabAt(state, item.path));
+	});
 
 	const ejectNav = useLatestCallback(
 		(item: NavItem) => {
@@ -2631,6 +2643,7 @@ export function useFinderController(
 		goToPath,
 		completePath,
 		navigateNav,
+		openNavInNewTab,
 		ejectNav,
 		selectTabId,
 		closeTabId,

@@ -255,6 +255,9 @@ describe("resolveKeyAction with custom ShortcutSettings", () => {
 		expect(resolveKeyAction({ key: "g", meta: true, shift: true, alt: false }, { zone: "finder", typing: true }, mac)).toEqual({
 			type: "editPath",
 		});
+		// A Mac Finder preset saved when ⇧⌘G was still an override keeps that preset after it became the default.
+		const storedMacFinder = { overrides: { ...MAC_FINDER_SHORTCUT_OVERRIDES, editPath: "Mod+Shift+G" } };
+		expect(activeShortcutPreset(storedMacFinder)).toBe("macFinder");
 
 		const win = shortcutSettingsForPreset("windowsExplorer");
 		expect(win.overrides).toEqual(WINDOWS_EXPLORER_SHORTCUT_OVERRIDES);
