@@ -122,12 +122,13 @@ export function CoachMarker({
 					{ x: centre.x - diameter / 2 - 8, y: centre.y },
 				]
 			: target !== null && target.width >= ROW_MIN
-				? [{ x: target.left + Math.min(176, target.width * 0.34), y: target.top }]
-				: [
-						{ x: box.left + box.width - 13, y: box.top + 9 },
-						{ x: box.left + 13, y: box.top + 9 },
-						{ x: box.left + box.width - 13, y: box.top + box.height - 9 },
-						{ x: box.left + 13, y: box.top + box.height - 9 },
+				? [{ x: target.left + Math.min(176, target.width * 0.34), y: target.top - 12 }]
+				: // Just outside the corner, so the sunflower points at the box without sitting on its words.
+					[
+						{ x: box.left + box.width + 4, y: box.top - 6 },
+						{ x: box.left - 4, y: box.top - 6 },
+						{ x: box.left + box.width + 4, y: box.top + box.height + 6 },
+						{ x: box.left - 4, y: box.top + box.height + 6 },
 					],
 		bounds,
 		avoid,

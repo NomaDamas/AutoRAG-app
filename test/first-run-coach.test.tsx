@@ -57,9 +57,9 @@ describe("the coach overlay (Figma 156:591)", () => {
 		expect(host.querySelector(".fr-cursor-ring")).toBeNull();
 		const mascot = host.querySelector<HTMLElement>(".fr-mascot");
 		const marker = host.querySelector<HTMLElement>(".fr-cursor");
-		// Centred on the corner, 13px in and 9px down (Figma 162:1839).
-		expect(Number.parseFloat(marker?.style.left ?? "") + Number.parseFloat(mascot?.style.left ?? "") + 30).toBe(1406);
-		expect(Number.parseFloat(marker?.style.top ?? "") + Number.parseFloat(mascot?.style.top ?? "") + 30).toBe(434);
+		// Centred just outside the corner, 4px right and 6px up, so it does not sit on the box's words.
+		expect(Number.parseFloat(marker?.style.left ?? "") + Number.parseFloat(mascot?.style.left ?? "") + 30).toBe(1423);
+		expect(Number.parseFloat(marker?.style.top ?? "") + Number.parseFloat(mascot?.style.top ?? "") + 30).toBe(419);
 		act(() => root.render(<CoachMarker target={null} spot={null} data={{}} />));
 		expect(host.querySelector(".fr-cursor")).toBeNull();
 	});
@@ -76,7 +76,7 @@ describe("the coach overlay (Figma 156:591)", () => {
 	it("moves to the spotlight's other corner when the first one is cut by the window's edge", () => {
 		// The evidence panel at the window's right edge: its top-right corner would put half the sunflower off screen.
 		act(() => root.render(<CoachMarker target={null} spot={{ left: 1140, top: 120, width: 300, height: 600 }} data={{}} bounds={{ width: 1440, height: 860 }} />));
-		expect(mascotCentre()).toEqual({ x: 1153, y: 129 });
+		expect(mascotCentre()).toEqual({ x: 1136, y: 114 });
 	});
 
 	it("moves to the spotlight's other corner rather than cover the coach card", () => {
@@ -84,7 +84,7 @@ describe("the coach overlay (Figma 156:591)", () => {
 		const spot = { left: 400, top: 380, width: 620, height: 48 };
 		const card = { left: 990, top: 330, width: 320, height: 150 };
 		act(() => root.render(<CoachMarker target={null} spot={spot} data={{}} bounds={{ width: 1440, height: 860 }} avoid={card} />));
-		expect(mascotCentre()).toEqual({ x: 413, y: 389 });
+		expect(mascotCentre()).toEqual({ x: 396, y: 374 });
 	});
 
 	it("puts the sunflower left of the ring when the right side is off the window", () => {

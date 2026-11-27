@@ -1851,3 +1851,10 @@ html[data-appearance="dark"] .fr-reveal-base {
 .fr-root[data-screen="tutorial"] .fr-spot {
 	transition: left 420ms var(--fr-spring), top 420ms var(--fr-spring), width 420ms var(--fr-spring), height 420ms var(--fr-spring), opacity 240ms ease;
 }
+
+/* A guided tutorial (자동화) holds the page still: this layer takes every click but the step's target, cut out of it. */
+.fr-block {
+	position: absolute;
+	inset: 0;
+	pointer-events: auto;
+}

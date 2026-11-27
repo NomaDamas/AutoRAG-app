@@ -30,6 +30,23 @@ import {
 	type TutorialStep,
 } from "./tutorial-steps";
 
+/** Tutorials that guide by hand: while one runs, only the step's own target takes the pointer. */
+const GUIDED: ReadonlySet<TutorialId> = new Set<TutorialId>(["automations"]);
+
+/**
+ * The clip for the layer that holds the page still in a guided tutorial: the whole window, less a hole (4px larger all
+ * round) over the one thing the step asks for. No hole when the step asks for nothing on the page.
+ */
+export function blockerClip(viewport: { readonly width: number; readonly height: number }, hole: Rect | null): string | undefined {
+	if (hole === null) return undefined;
+	const pad = 4;
+	const x = hole.left - pad;
+	const y = hole.top - pad;
+	const w = hole.width + pad * 2;
+	const h = hole.height + pad * 2;
+	return `path(evenodd, "M0 0H${viewport.width}V${viewport.height}H0Z M${x} ${y}h${w}v${h}h${-w}Z")`;
+}
+
 /** A step whose spotlight target stays gone this long ends the tutorial: the person moved on. */
 const ANCHOR_GONE_MS = 4000;
 /** A step waiting for something to appear or finish gives up after this long. */
@@ -376,6 +393,10 @@ function TutorialCoach({
 	const note = step.hint === "rightClick" ? t("tutorials.rightClickHint") : step.hint === "drag" ? t("tutorials.dragHint") : null;
 	return (
 		<div className="fr-tour">
+			{GUIDED.has(id) ? (
+				// Holds the page still: only the step's click target (or the file to right-click) is cut out of it.
+				<div className="fr-block" aria-hidden="true" style={{ clipPath: blockerClip(viewport, step.tap !== undefined ? cursorRect : step.hint === "rightClick" ? rect : null) }} />
+			) : null}
 			{/* One box per page: it resizes from target to target, and is drawn anew (opening from its target's centre) when
 			    it first finds a target or the page changes. */}
 			<div key={`${page}:${rect === null ? "none" : "spot"}`} className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
