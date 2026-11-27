@@ -374,10 +374,10 @@ describe("openOrSelectFolderTab (dazzi <folder>)", () => {
 });
 
 describe("Automations tabs", () => {
-	it("titles an Automations tab in the interface language and ignores the search query", async () => {
-		expect(tabTitle({ path: AUTOMATIONS_PATH }, { query: "budget" })).toBe("자동화");
+	it("titles an Automations tab as the AI Agent tab it is a side of, in the interface language, ignoring the search query", async () => {
+		expect(tabTitle({ path: AUTOMATIONS_PATH }, { query: "budget" })).toBe("AI 에이전트");
 		await setAppLanguage("en");
-		expect(tabTitle({ path: AUTOMATIONS_PATH }, { query: "budget" })).toBe("Automations");
+		expect(tabTitle({ path: AUTOMATIONS_PATH }, { query: "budget" })).toBe("AI Agent");
 		await setAppLanguage("ko");
 	});
 

@@ -8,7 +8,7 @@ import { ERROR_FIX_SETTINGS_PAGES, MAX_ERROR_FIX_ACTIONS, MAX_ERROR_FIX_LABEL_CH
 import type { AppSettings, ConfigRefreshResult } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import type { AutoRagConfigService } from "../../autorag-config-service";
-import { intentPromptLine, withIntentTools } from "../profile-progress";
+import { INTENT_FIELD, withIntentTools } from "../profile-progress";
 import { createFixTools } from "./error-fix-files";
 
 /**
@@ -231,7 +231,7 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		name: "report_result",
 		label: "Report result",
 		description:
-			"Give your answer, once, when you are done. status is \"fixed\" (you changed something and the cause is gone; refused when you changed nothing), \"needs-user\" (only the person can act) or \"cannot-fix\". summary: one to three sentences in the reply language, saying what was wrong and what you did. nextSteps: short steps for the person, only when they must act. actions: optional, and usually left out; up to three buttons that take the person to the place in the app where they have to act, each with a short label in the reply language. kind \"settings\" goes to a Settings page (target one of: " + ERROR_FIX_SETTINGS_PAGES.join(", ") + "), kind \"source\" to one configured data source's own page (target its alias from diagnose). A button whose destination does not exist is dropped and you are told, so you can correct it.",
+			"Give your answer, once, when you are done. status is \"fixed\" (you changed something and the cause is gone; refused when you changed nothing), \"needs-user\" (only the person can act) or \"cannot-fix\". summary: one to three sentences in the app's language, saying what was wrong and what you did. nextSteps: short steps for the person, only when they must act. actions: optional, and usually left out; up to three buttons that take the person to the place in the app where they have to act, each with a short label in the app's language. kind \"settings\" goes to a Settings page (target one of: " + ERROR_FIX_SETTINGS_PAGES.join(", ") + "), kind \"source\" to one configured data source's own page (target its alias from diagnose). A button whose destination does not exist is dropped and you are told, so you can correct it.",
 		parameters: Type.Object({
 			status: Type.Union([Type.Literal("fixed"), Type.Literal("needs-user"), Type.Literal("cannot-fix")]),
 			summary: Type.String(),
@@ -241,7 +241,7 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 					Type.Object({
 						kind: Type.String({ description: "settings or source." }),
 						target: Type.String({ description: "A Settings page id, or a data source alias." }),
-						label: Type.Optional(Type.String({ description: "The button's text, short, in the reply language." })),
+						label: Type.Optional(Type.String({ description: "The button's text, short, in the app's language." })),
 					}),
 				),
 			),
@@ -280,7 +280,10 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 
 export function errorFixPrompt(input: { readonly message: string; readonly surface: ErrorFixSurface; readonly language: ReplyLanguage }): string {
 	const message = input.message.length > MAX_MESSAGE_CHARS ? `${input.message.slice(0, MAX_MESSAGE_CHARS)}…` : input.message;
-	const where = input.surface === "ai-search" ? "AI Agent (the chat that answers questions from the person's own documents)" : input.surface;
+	const where =
+		input.surface === "ai-search"
+			? "AI Agent (the chat that answers questions from the person's own documents)"
+			: "the Automations tab (rules that run an AI task when files change; the app asks the librarian CLI for their status with `autorag automate status --json`, reads the rules file ~/.autorag/automations.json, and the background service logs to ~/.autorag/automations/daemon.log)";
 	return [
 		"You are the repair helper of Dazzi, a desktop app that searches a person's own documents and data sources with AI.",
 		`The person just saw this error in ${where}:`,
@@ -309,8 +312,9 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		"What each Settings page (target) holds, so you pick the one that really has the setting:",
 		...SETTINGS_PAGE_GUIDE.map((line) => `- ${line}`),
 		"",
-		intentPromptLine(input.language),
-		`Write summary, nextSteps and every button label in the language the person writes in (their latest message decides); if it is unclear, write them in ${LANGUAGE_NAME[input.language]}. Keep it in plain words for someone who is not technical: no stack traces, no shell commands, no jargon, file paths only where they help. Write each button's label as a short, natural phrase for what the button does, the way a person who speaks that language would say it (not a word-for-word translation of a page name). Do not reply with prose; the report_result call is your answer.`,
+		`Every tool takes a short \`${INTENT_FIELD}\` argument first: one short plain phrase in ${LANGUAGE_NAME[input.language]}, saying what you are checking or doing right now (no file paths, shell commands or jargon). It is shown to the person as live progress, so do not write separate progress notes.`,
+		// The person has typed nothing here: without a fixed language the model answers in the error's own, which is English.
+		`Write summary, nextSteps and every button label in ${LANGUAGE_NAME[input.language]}, the language the app is shown in. The error above, the logs, the config and tool output are not the person's words and never change that language: say in ${LANGUAGE_NAME[input.language]} what they mean, keeping only names and file paths as they are. Keep it in plain words for someone who is not technical: no stack traces, no shell commands, no jargon, file paths only where they help. Write each button's label as a short, natural phrase for what the button does, the way a person who speaks that language would say it (not a word-for-word translation of a page name). Do not reply with prose; the report_result call is your answer.`,
 	].join("\n");
 }
 

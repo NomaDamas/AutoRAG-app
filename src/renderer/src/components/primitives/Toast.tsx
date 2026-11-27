@@ -5,7 +5,8 @@ import { cn } from "../../lib/cn";
 import { iconButtonClass } from "./icon-button";
 import { NoticeBadge } from "./NoticeCard";
 
-export type ToastTone = "ok" | "error";
+/** `busy`: work still running (자동화 삭제 중…), drawn with a spinner where the badge would be. */
+export type ToastTone = "ok" | "error" | "busy";
 
 /**
  * Bottom-center toast (Figma 554:7353): the status badge, one line, an optional blue link (the 자동화 tab's 실행 취소),
@@ -38,7 +39,13 @@ export function Toast({
 			aria-live="polite"
 			data-tone={tone}
 		>
-			<NoticeBadge tone={tone} />
+			{tone === "busy" ? (
+				<span className="flex size-16 flex-none items-center justify-center" aria-hidden="true">
+					<span className="size-12 rounded-full border-[1.75px] border-border border-t-ink-body animate-spin" />
+				</span>
+			) : (
+				<NoticeBadge tone={tone} />
+			)}
 			<span className="min-w-0 truncate">{message}</span>
 			{action === undefined ? null : (
 				<button

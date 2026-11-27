@@ -11,6 +11,9 @@
 import type { ChatSummary } from "../../../shared/search-contract";
 import { i18n, t } from "../../../shared/i18n/core";
 
+/** One history search per this many milliseconds of typing, in both history menus (the AI Search tab's and the inspector's). */
+export const HISTORY_SEARCH_DEBOUNCE_MS = 300;
+
 /** Stable bucket ids; the display label is translated at render. */
 export const HISTORY_BUCKETS = ["today", "yesterday", "last7Days", "last30Days", "older"] as const;
 export type HistoryBucket = (typeof HISTORY_BUCKETS)[number];

@@ -113,6 +113,7 @@
     "new": "新規タブ ({{shortcut}})"
   },
   "finder": {
+    "evidenceMissing": "「{{name}}」が元のフォルダに見つかりません。移動または削除された可能性があります。",
     "emptyFolder": "空のフォルダー",
     "emptyRecents": "最近開いたファイルはありません",
     "emptyTag": "「{{name}}」タグの付いた項目はありません",
@@ -154,20 +155,20 @@
       "levelLabel": "圧縮レベル",
       "recommended": "推奨",
       "levels": {
-        "light": "弱め（高画質）",
+        "light": "弱め",
         "balanced": "標準",
-        "max": "強め（最小サイズ）"
+        "max": "強め"
       },
       "specs": {
         "pdf": {
-          "light": "高画質・最大 1600px（約 30〜65% 削減）",
-          "balanced": "標準圧縮・最大 1280px（約 55〜80% 削減）",
-          "max": "最大圧縮・最大 960px（約 75〜90% 削減）"
+          "light": "高画質（約 30〜65% 削減）",
+          "balanced": "標準圧縮（約 55〜80% 削減）",
+          "max": "最大圧縮（約 75〜90% 削減）"
         },
         "image": {
-          "light": "高画質・256色/2560px（約 35〜60% 削減）",
-          "balanced": "標準・最大 1920px（約 55〜75% 削減）",
-          "max": "最大圧縮・最大 1280px（約 70〜85% 削減）"
+          "light": "高画質（約 35〜60% 削減）",
+          "balanced": "標準（約 55〜75% 削減）",
+          "max": "最大圧縮（約 70〜85% 削減）"
         },
         "video": {
           "light": "元の解像度・ビットレート約 35%+ 削減",
@@ -185,7 +186,8 @@
       "copyMode": "コピーとして保存",
       "replaceHint": "元のファイルをゴミ箱へ移動し、「{{name}}」をそのまま置き換えます。",
       "copyHint": "元のファイルを残して「{{copyName}}」として保存します。",
-      "workingHint": "完了するまで元のファイルは変更されません。"
+      "workingHint": "完了するまで元のファイルは変更されません。",
+      "working": "サイズを縮小中…"
     }
   },
   "contextMenu": {
@@ -321,7 +323,8 @@
       "evidenceFolder": "出典フォルダ",
       "evidenceFolderTooltip": "この会話の出典ファイルを一時フォルダタブで開く",
       "openPreview": "引用箇所をプレビューで表示",
-      "newSource": "新しい出典 {{number}}"
+      "newSource": "新しい出典 {{number}}",
+      "emptyHint": "回答の根拠がここに表示されます"
     },
     "chat": {
       "title": "AI エージェント",
@@ -364,7 +367,21 @@
     "searchHistory": "チャット履歴を検索",
     "emptyHistory": "保存されたチャットはありません。",
     "emptyHistorySearch": "\"{{query}}\"に一致するチャットはありません",
+    "scrollToBottom": "一番下へ移動",
+    "startHeading": "何をお手伝いしましょうか？",
+    "askPlaceholder": "Dazziに何でも聞いてください",
     "emptyPromptTitle": "何をお探しですか？",
+    "capability": {
+      "hints": "できること",
+      "find": "探す",
+      "findPlaceholder": "探したいファイルを教えてください",
+      "summarize": "要約する",
+      "summarizePlaceholder": "要約する文書を教えてください",
+      "organize": "整理する",
+      "organizePlaceholder": "どう整理したいか教えてください",
+      "automate": "自動化する",
+      "automatePlaceholder": "何が起きたら何をするか教えてください"
+    },
     "emptyPromptDesc": "ファイル、メール、メッセージ全体から素早い回答と詳細な回答を並べて提示します。",
     "generatingDeep": "詳細な回答を生成中…",
     "askDazzi": "AIに聞く",
@@ -381,10 +398,7 @@
     "workedFor": "{{time}}間回答を生成",
     "reviewing": "質問を確認中…",
     "stopped": "回答の生成を中止しました。",
-    "dropAttach": "ドロップしてチャットに添付",
-    "dropPrompt": "ここにドラッグしてAIに質問",
-    "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
-    "steerSend": "検索を修正",
+    "dropHere": "ここにファイルをドロップ",
     "voiceStart": "音声で入力",
     "voiceStop": "録音を終了して文字起こし",
     "voiceCancel": "録音をキャンセル",
@@ -394,7 +408,7 @@
     "voiceUnavailable": "このデバイスではマイクを使用できません。",
     "voiceFailed": "音声を文字起こしできませんでした: {{message}}",
     "micPermission": {
-      "title": "マイクの権限が必要です。",
+      "title": "マイクの権限が必要です",
       "body": "音声で質問するには、Dazziにマイクの権限が必要です。録音はマイクボタンを押したときだけ行います。",
       "stepsMac": "システム設定 › プライバシーとセキュリティ › マイク で Dazzi をオンにしてください。",
       "stepsWindows": "設定 › プライバシーとセキュリティ › マイク で「マイクへのアクセス」と「デスクトップ アプリがマイクにアクセスできるようにする」をオンにしてください。",
@@ -404,14 +418,19 @@
       "waiting": "設定でマイクをオンにして Dazzi に戻ると、すぐに録音を始めます。",
       "stillDenied": "マイクはまだオフです。設定でオンにしてから Dazzi に戻ってください。"
     },
-    "steerHintLead": "検索中も入力できます。",
-    "steerHintEnter": "修正",
-    "steerHintAltEnter": "次の質問",
     "steerPending": "反映待ち · 次のステップで渡されます",
     "steerDelivered": "検索に反映済み",
     "steerDropped": "反映される前に検索が終了しました",
+    "followUp": {
+      "postpone": "次の質問に回す",
+      "cancel": "キャンセル",
+      "now": "今すぐ送信",
+      "edit": "編集",
+      "remove": "削除",
+      "copy": "コピー",
+      "copied": "コピーしました"
+    },
     "queuedLabel": "次の質問",
-    "queuedRemove": "次の質問を取り消す",
     "historyGroups": {
       "today": "今日",
       "yesterday": "昨日",
@@ -424,6 +443,11 @@
       "compacted": "これまでの会話を要約しました。",
       "compactedHint": "これまでの会話は要約して記憶しています。抜けている内容は改めて伝えてください。",
       "trimmed": "検索結果が長いため、一部のみ読みました。"
+    },
+    "segment": {
+      "label": "AI エージェントの表示",
+      "chat": "チャット",
+      "automations": "自動化"
     }
   },
   "appError": {
@@ -501,11 +525,13 @@
       "triggerAria": "ファイル権限モード",
       "readonly": {
         "label": "読み取り専用",
-        "desc": "読み取りと検索のみ行います。OS サンドボックスにより変更・削除は遮断されます。"
+        "desc": "読み取りと検索のみ行います。OS サンドボックスにより変更・削除は遮断されます。",
+        "option": "読み取り専用"
       },
       "full": {
         "label": "すべて許可",
-        "desc": "ファイルの作成・編集・削除をすべて許可します。"
+        "desc": "ファイルの作成・編集・削除をすべて許可します。",
+        "option": "すべて許可"
       }
     },
     "stop": "停止",
@@ -564,6 +590,11 @@
     },
     "errors": {
       "config": "ルールファイルを読み込めません",
+      "statusTitle": "自動化の状態を確認できませんでした",
+      "fixing": "AIが原因を調べて修正しています…",
+      "fixingView": "進行状況を見る",
+      "statusHint": "しばらくしてからもう一度確認するか、AIエージェントに原因を調べて直してもらえます。",
+      "retry": "もう一度確認",
       "configHint": "AI エージェントでルールを直すか、ファイルを直接編集してください。"
     },
     "daemon": {
@@ -577,7 +608,7 @@
     },
     "menu": {
       "preview": "クイックルック",
-      "edit": "AI エージェントで編集",
+      "edit": "編集",
       "reveal": "自動化タブで表示",
       "add": "AI エージェントで新しいルールを追加…",
       "openFolder": "監視フォルダを開く",
@@ -607,25 +638,45 @@
       "agentProfile": "AI プロファイル",
       "more": "その他",
       "menuEdit": "編集",
-      "menuDelete": "削除"
+      "menuDelete": "削除",
+      "runDone": "完了",
+      "serviceOff": "オフ",
+      "failedRules": "失敗した自動化 {{count}}件 — {{name}}",
+      "recentRuns": "最近の実行",
+      "noRuns": "まだ実行されていません",
+      "draftRule": "自動化ルール",
+      "agentDoes": "AIが「{{task}}」",
+      "matches": "条件に合うファイル {{count}}件",
+      "noMatches": "今は条件に合うファイルがありません",
+      "notRun": "まだ実行されていません",
+      "runFiles": "ファイル {{count}}件",
+      "runFilesMore": "{{name}} ほか{{count}}件"
     },
     "quickLook": {
       "when": "いつ",
       "what": "すること",
       "folders": "対象フォルダ",
-      "edit": "AI エージェントで編集",
+      "edit": "編集",
       "close": "閉じる",
       "ranFail": "{{time}}に実行 · {{reason}}"
     },
     "confirm": {
       "title": "ルール「{{title}}」を削除しますか?",
       "message": "ルールだけが削除され、フォルダとファイルはそのまま残ります。",
+      "magicMessage": "右クリックメニューから外れるだけで、ファイルとフォルダはそのまま残ります。",
       "action": "削除"
     },
     "toast": {
       "deleted": "ルール「{{title}}」を削除しました。",
+      "creating": "自動化を作成しています…",
+      "created": "自動化を作成しました。",
+      "saving": "変更を保存しています…",
+      "saved": "変更を保存しました。",
+      "deleting": "ルール「{{title}}」を削除しています…",
       "undo": "取り消す",
-      "restored": "ルール「{{title}}」を元に戻しました。"
+      "restored": "ルール「{{title}}」を元に戻しました。",
+      "addingToMenu": "右クリックメニューに追加しています…",
+      "addedToMenu": "右クリックメニューに「{{title}}」を追加しました。"
     },
     "kinds": {
       "screenshot": "スクリーンショット",
@@ -665,7 +716,9 @@
       "program": "{{name}}で処理"
     },
     "time": {
-      "now": "たった今"
+      "now": "たった今",
+      "todayAt": "今日 {{time}}",
+      "yesterdayAt": "昨日 {{time}}"
     },
     "lastRun": {
       "never": "まだ実行されていません",
@@ -686,7 +739,134 @@
     "agent": {
       "reads": "読み取りのみ",
       "writes": "ファイルを変更できる"
-    }
+    },
+    "mine": "マイ自動化",
+    "create": {
+      "new": "+ 新しい自動化",
+      "headButton": "新しい自動化",
+      "title": "新しい自動化",
+      "when": "いつ",
+      "task": "Dazziがすること",
+      "taskPlaceholder": "例: 要点を3行にまとめてメモに残して",
+      "submit": "作成",
+      "sentence": "{{folder}}に{{kind}}が{{event}}とき",
+      "kindLabel": "ファイルの種類",
+      "eventLabel": "変化",
+      "modeLabel": "権限",
+      "pickFolder": "フォルダを選択",
+      "kind": {
+        "all": "ファイル",
+        "pdf": "PDFファイル",
+        "image": "画像",
+        "document": "文書"
+      },
+      "event": {
+        "create": "追加された",
+        "update": "変更された",
+        "createUpdate": "追加・変更された",
+        "delete": "削除された",
+        "other": "そのほかの変化があった"
+      },
+      "mode": {
+        "read": "読み取りのみ",
+        "write": "ファイルの変更を許可"
+      },
+      "submitEdit": "変更を保存",
+      "editTitle": "自動化を編集",
+      "open": "新しい自動化を作成"
+    },
+    "templates": {
+      "title": "おすすめの自動化",
+      "screenshot": {
+        "title": "スクリーンショット名の整理",
+        "desc": "デスクトップにスクリーンショットができたら、わかりやすい名前に変えて",
+        "task": "わかりやすい名前に変えて"
+      },
+      "pdf": {
+        "title": "新しいPDFの要約",
+        "desc": "ダウンロードにPDFが届いたら、要点を3行にまとめてメモに残して",
+        "task": "要点を3行にまとめてメモに残して"
+      },
+      "refresh": {
+        "title": "検索をすぐ最新に",
+        "desc": "書類フォルダのファイルが追加・変更されたら、すぐ検索に反映して",
+        "task": "すぐ検索に反映して"
+      },
+      "translate": {
+        "title": "文書を翻訳",
+        "desc": "文書ファイルを右クリックすると、日本語に翻訳したコピーを作ります",
+        "task": "日本語に翻訳したコピーを同じフォルダに作って"
+      },
+      "add": "追加"
+    },
+    "row": {
+      "rename": "名前を変更",
+      "edit": "編集",
+      "delete": "削除"
+    },
+    "detail": {
+      "delete": "自動化を削除",
+      "runOn": "実行オン",
+      "ok": "成功",
+      "failed": "失敗",
+      "settings": "設定",
+      "history": "実行履歴",
+      "task": "やること"
+    },
+    "tabs": {
+      "rules": "自動化",
+      "all": "すべての履歴"
+    },
+    "all": {
+      "count": "{{count}}回実行",
+      "failOnly": "失敗のみ表示",
+      "noFails": "失敗した実行の記録はありません",
+      "title": "すべての履歴",
+      "open": "すべての履歴を見る",
+      "today": "今日",
+      "yesterday": "昨日"
+    },
+    "assistant": {
+      "caption": "自動化の作成や変更はAIに聞いてください"
+    },
+    "recs": {
+      "section": "ほかにも試せる自動化",
+      "add": "追加する",
+      "more": "ほしいものがありませんか？",
+      "talk": "チャットで作る",
+      "reason": {
+        "pdf": "ダウンロードにPDFが{{count}}件あります",
+        "screenshot": "デスクトップに名前のないスクリーンショットが{{count}}件あります",
+        "refreshAgo": "書類フォルダが最後に反映されたのは{{time}}です",
+        "refreshChanged": "書類でこの1週間に変わったファイルが{{count}}件あります"
+      },
+      "hero": "繰り返しのファイル作業はDazziにおまかせください",
+      "heroCaption": "ファイルが追加・変更されたとき、または右クリックしたときに、Dazziが決めておいた作業を行います。下のおすすめから始めてみてください。"
+    },
+    "nudge": {
+      "pdf": "新しい PDF が届くたびに要約しておく自動化を作れます。",
+      "screenshot": "スクリーンショットができるたびに分かりやすい名前に変える自動化を作れます。",
+      "refresh": "文書が変わるたびに検索へすぐ反映する自動化を作れます。",
+      "make": "作成",
+      "later": "あとで",
+      "lead": "この内容で作成しますか？項目を押して変更でき、よければ「追加する」を押してください。",
+      "created": "自動化を作成しました。自動化の画面でオン・オフできます。",
+      "view": "見る"
+    },
+    "request": {
+      "command": "実行するコマンド"
+    },
+    "starter": {
+      "ask": "新しい自動化を作成",
+      "reply": "フォームで選ぶか、チャットで伝えて自動化を追加できます。"
+    },
+    "back": "戻る",
+    "magic": {
+      "title": "右クリックメニュー",
+      "on": "右クリックメニューに表示",
+      "kind": "右クリックメニューの項目"
+    },
+    "kind": "自動化"
   },
   "osMenu": {
     "ask": "Dazziに質問",
@@ -726,6 +906,19 @@
       "everything": "ファイル名をインデックス中",
       "fsearch": "ファイル名をインデックス中",
       "finalizing": "仕上げ中"
+    }
+  },
+  "indexStatus": {
+    "eta": "残り時間 約{{duration}}",
+    "etaCalculating": "残り時間を計算中",
+    "stopped": "インデックス作成を停止中",
+    "waiting": "次の更新を待っています",
+    "justNow": "たった今",
+    "count": "{{done}}/{{total}}件",
+    "paused": {
+      "battery": "電源につなぐと続きから進めます。",
+      "window": "許可された時間帯になると続きから進めます。",
+      "day": "許可された曜日になると続きから進めます。"
     }
   },
   "indexProgress": {
@@ -835,14 +1028,14 @@
   },
   "confirm": {
     "compressStopTitle": "圧縮を中止しますか？",
-    "compressStopMessage": "{{name}} の圧縮を中止し、作成途中の圧縮ファイルを削除します。",
+    "compressStopMessage": "作成途中の圧縮ファイルは削除されます。",
     "compressStopAction": "中止",
     "compressKeep": "圧縮を続ける",
-    "emptyTrashTitle": "ゴミ箱を空にする",
+    "emptyTrashTitle": "ゴミ箱を空にしますか？",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
-    "closeEvidenceFolderTitle": "出典フォルダを閉じる",
-    "closeEvidenceFolderMessage": "このタブを閉じると一時的な出典フォルダが削除・整理されます。元のファイルはそのまま残ります。本当に閉じますか？",
+    "closeEvidenceFolderTitle": "出典フォルダを閉じますか？",
+    "closeEvidenceFolderMessage": "このタブを閉じると一時的な出典フォルダが削除・整理されます。元のファイルはそのまま残ります。",
     "closeEvidenceFolderAction": "閉じる"
   },
   "settings": {
@@ -971,6 +1164,7 @@
     "openWithDefault": "{{name}} (デフォルト)",
     "openWithOther": "その他…",
     "source": {
+      "nameTaken": "「{{name}}」という名前のファイルまたはフォルダーがすでにあります",
       "actionsUnavailable": "この環境ではファイル操作を実行できません",
       "shareUnavailable": "この環境では共有を実行できません",
       "nothingToUndo": "元に戻す項目がありません",
@@ -1064,6 +1258,49 @@
     }
   },
   "main": {
+    "errors": {
+      "config": {
+        "pathEmpty": "変更する設定項目が指定されていません。",
+        "pathInvalid": "この名前は設定項目に使用できません: 「{{path}}」",
+        "pathManaged": "この項目は Dazzi が管理しているため、ここでは変更できません: 「{{field}}」",
+        "valueNotJson": "この値は設定に保存できない形式です。",
+        "plaintextSecret": "キーやトークンなどの秘密の値は設定ファイルに保存しません。キーの入力欄に入力してください: 「{{field}}」",
+        "urlInvalid": "アドレスの形式が正しくありません。http:// または https:// で始まるアドレスを入力してください: 「{{field}}」",
+        "urlNotLoopback": "書類の内容がこのデバイスの外に出ないよう、このアドレスはこのデバイス (localhost) を指す必要があります: 「{{field}}」",
+        "remoteNeedsKey": "このデバイスの外にある埋め込みサーバーを使うには API キーが必要です。サーバーの API キーも入力してください: 「{{field}}」",
+        "urlNeedsHttps": "トークンを使うリモートサーバーのアドレスは https:// で始まる必要があります: 「{{field}}」",
+        "renameSame": "新しい名前が現在の名前と同じです。",
+        "renameIntoItself": "「{{name}}」をそれ自身の中に移動することはできません。",
+        "renameTaken": "「{{name}}」という名前はすでに使われています。別の名前を入力してください。",
+        "renameMissing": "「{{name}}」が見つかりませんでした。すでに削除されている可能性があります。"
+      },
+      "account": {
+        "authFileUnreadable": "ログイン情報ファイル「{{name}}」を読み込めなかったため、何も変更していません。ファイルの内容を確認してください。"
+      },
+      "provider": {
+        "nameEmpty": "名前を入力してください。",
+        "addressEmpty": "サーバーアドレスを入力してください。",
+        "addressInvalid": "サーバーアドレスの形式が正しくありません。http:// または https:// で始まるアドレスを入力してください。",
+        "localOnly": "ローカルサーバーはこのデバイスで実行されている必要があります。localhost または 127.0.0.1 のアドレスを入力してください。",
+        "serverUnreachable": "サーバーに接続できませんでした。サーバーが起動しているか、アドレスが正しいか確認してください。",
+        "serverKeyRefused": "サーバーが API キーを拒否しました。キーを確認してください。",
+        "modelsFileUnreadable": "モデル設定ファイル「{{name}}」を読み込めなかったため、何も変更していません。ファイルの内容を確認してください。",
+        "noBrowserLogin": "「{{name}}」はブラウザーでのログインに対応していません。",
+        "loginNotWaiting": "ログインは入力を待っていません。もう一度ログインを開始してください。"
+      },
+      "credentials": {
+        "storeUnreadable": "保存された API キーのファイルを読み込めませんでした。既存のキーを守るため、何も変更していません。",
+        "envNameInvalid": "「{{name}}」は環境変数名として使用できません。英字・数字・アンダースコア(_)のみを使い、数字で始めないでください。",
+        "keyEmpty": "API キーを入力してください。",
+        "encryptionUnavailable": "このデバイスでは安全なキーリングを利用できないため、API キーを保存しませんでした。OS のキーリングを設定してから、もう一度お試しください。"
+      },
+      "errorFix": {
+        "noResult": "AI が結果を報告せずに作業を終了しました。"
+      },
+      "ltr": {
+        "statusUnreadable": "このバージョンのアプリでは読み取れない形式です。アプリを最新バージョンに更新してください。"
+      }
+    },
     "interaction": {
       "yes": "はい",
       "no": "いいえ"
@@ -1296,6 +1533,9 @@
     },
     "automations": {
       "errors": {
+        "daemonOffFailed": "自動化をオフにできませんでした。しばらくしてからもう一度お試しください。",
+        "daemonOnScheduler": "自動化をオンにできませんでした。Windows タスク スケジューラに登録できませんでした。この PC の権限やセキュリティ ポリシーが原因の可能性があります。",
+        "daemonOnFailed": "自動化をオンにできませんでした。しばらくしてからもう一度お試しください。",
         "unreadable": "自動化ルールファイルを読み込めません: {{reason}}",
         "unknownRule": "ルール「{{id}}」が見つかりません。",
         "cliFailed": "自動化の状態を確認できませんでした: {{reason}}",
@@ -1742,7 +1982,6 @@
       "contextMenu": "右クリックメニュー",
       "shortcuts": "ショートカット",
       "remote": "リモートアクセス",
-      "about": "情報",
       "ai": "AI モデル",
       "web": "ウェブ検索",
       "indexing": "インデックス作成",
@@ -1760,15 +1999,14 @@
       "keywords": {
         "account": "アカウント ログイン メール 名前 プロフィール",
         "plan": "プラン 支払い クレジット 使用量 サブスクリプション billing",
-        "general": "画面 テーマ 外観 言語 隠しファイル ログイン アップデート 統計 書類の言語 文書の言語 読み取り パーサ OCR",
+        "general": "画面 テーマ 外観 言語 隠しファイル ログイン アップデート 統計 書類の言語 文書の言語 読み取り パーサ OCR 情報 バージョン librarian minsync inl mailcrawl lazykatok 埋め込み デーモン PATH 不一致",
         "sidebar": "サイドバー お気に入り クラウド 場所 タグ フォルダ 非表示 表示 並び順 カスタム AI",
         "contextMenu": "右クリック コンテキストメニュー マジックアクション スクリプト 自動化 エージェント 拡張子 タグ カスタム AI",
         "shortcuts": "ショートカット キーボード ホットキー キーバインド 記録 カスタム AI shortcut hotkey",
         "remote": "リモートアクセス スマホ モバイル ブラウザー ペアリング コード QR Cloudflare トンネル ドメイン 端末 remote",
-        "about": "情報 バージョン librarian minsync inl mailcrawl lazykatok 埋め込み デーモン PATH 不一致",
         "ai": "LLM モデル プロバイダ サービス API キー サブスクリプション 埋め込み Jev 質問分解 並べ替え",
         "web": "ウェブ検索 インターネット 検索 サービス ページ読み取り",
-        "indexing": "更新 同期 増分 インデックス インデックス作成 インデクシング 更新間隔 sync 検索範囲 フォルダ 除外 パス",
+        "indexing": "更新 同期 増分 インデックス インデックス作成 インデクシング 更新間隔 sync 検索範囲 フォルダ 除外 パス 情報 バージョン librarian minsync inl mailcrawl lazykatok 埋め込み デーモン PATH 不一致",
         "duplicates": "重複ファイル バージョン 整理 dupey",
         "ltr": "順位学習 ltr ランキング モデル 学習 並べ替え xgboost ログ 検索履歴 学習データ reranker",
         "apps": "接続 アプリ データソース メッセンジャー メール クラウド",
@@ -1798,7 +2036,7 @@
       "removeCustom": "{{name}} を削除",
       "addCustomFolder": "フォルダを追加",
       "addCustomModalTitle": "お気に入りにフォルダを追加",
-      "addCustomModalDesc": "サイドバーのお気に入りに固定するフォルダパスを入力します。",
+      "addCustomModalDesc": "サイドバーのお気に入りに固定するフォルダパスを入力してください。",
       "addCustomPathLabel": "フォルダパス",
       "addCustomPathPlaceholder": "~/Projects または /Users/me/Work",
       "addCustomConfirm": "追加",
@@ -1837,11 +2075,13 @@
       "presetCustom": "カスタム",
       "presetCustomEmpty": "設定を変更すると、その構成がここに保存されます",
       "shortcutNote": "標準項目のキーボードショートカットは Finder 標準のまま維持され、ここでは変更できません。",
-      "magicTitle": "カスタムマジックアクション",
-      "magicEmpty": "登録されたマジックアクションはありません。AIに頼むか手動で作成してください。",
-      "addMagicAction": "マジックアクションを追加",
+      "magicTitle": "右クリック自動化",
+      "magicEmpty": "右クリック自動化はまだありません。AIに頼むか手動で作成してください。",
+      "addMagicAction": "自動化を追加",
       "editMagicAction": "{{name}} を編集",
       "removeMagicAction": "{{name}} を削除",
+      "removeMagicConfirmTitle": "自動化「{{name}}」を削除しますか？",
+      "removeMagicConfirmBody": "右クリックメニューから外れるだけで、ファイルとフォルダはそのまま残ります。",
       "condSingle": "単一項目",
       "condMultiple": "複数選択",
       "condAnySelection": "単一・複数すべて",
@@ -1849,8 +2089,6 @@
       "condFolderOnly": "フォルダのみ",
       "condAnyKind": "ファイル・フォルダ",
       "condAllExtensions": "すべての拡張子",
-      "condSkills": "スキル",
-      "condMcp": "MCP",
       "sectionsTitle": "右クリックメニューのセクションと項目",
       "lockedBadge": "常時表示",
       "lockedHint": "タグ項目は必須機能のため非表示にできません。",
@@ -1858,7 +2096,7 @@
       "sectionCount": "{{visible}}/{{total}} 表示",
       "sections": {
         "open": "開く・クイックルック",
-        "magic": "マジックアクション",
+        "magic": "自動化",
         "index": "インデックス",
         "clipboard": "クリップボード・名称変更",
         "actions": "ファイル操作（フォルダ・圧縮・共有）",
@@ -1889,75 +2127,43 @@
         "trash": "ゴミ箱に入れる / 戻す"
       },
       "editor": {
-        "createTitle": "マジックアクションを追加",
-        "editTitle": "マジックアクションを編集",
+        "createTitle": "自動化を作成",
+        "editTitle": "自動化を編集",
         "labelField": "ボタン名",
-        "labelPlaceholder": "マジックアクション名",
-        "descriptionField": "説明（任意）",
-        "descriptionPlaceholder": "設定画面に表示する短いメモ",
-        "executionField": "処理方法",
-        "kindAgent": "AIタスク",
-        "kindScript": "スクリプト",
+        "labelPlaceholder": "自動化の名前",
         "agentModeField": "エージェント権限",
         "modeRead": "読み取り・分析のみ（要約・確認・Q&A）",
         "modeOrganize": "ファイル作成・操作を許可（変換・編集・整理・スクリプト）",
         "promptField": "AI エージェントへの指示",
         "promptPlaceholder": "例：選択した文書の要点を箇条書きでまとめ、主な日程を表にしてください。",
-        "useSkillsField": "共有スキルを許可",
-        "useSkillsHint": "AutoRAG エージェントのスキルをこのマジックアクションでも使用します（既定でオン）。",
-        "useMcpField": "接続済み MCP サーバーを許可",
-        "useMcpHint": "Aside MCP など接続済みの MCP サーバーツールを呼び出せるようにします（既定でオン）。",
         "commandField": "実行するコマンド / スクリプト",
         "commandPlaceholder": "例：shasum -a 256 \"$@\" または python3 ~/scripts/process.py \"$@\"",
         "commandHint": "選択したファイルパスは位置引数 (\"$@\") と環境変数 DAZZI_FILES_JSON、DAZZI_FILE、DAZZI_FILE_COUNT で渡されます。",
-        "selectionField": "選択数",
-        "targetKindField": "種類",
-        "extensionsField": "拡張子",
-        "extensionsPlaceholder": "拡張子を入力して Enter",
         "save": "保存",
+        "test": "一時フォルダでテスト",
+        "testing": "一時フォルダでテスト中…",
+        "testPassed": "一時フォルダのテストに成功",
+        "testFailed": "一時フォルダのテストに失敗 — 修正して再テストしてください",
+        "testCreated": "作成: {{files}}",
+        "testModified": "変更: {{files}}",
+        "testDeleted": "削除: {{files}}",
         "commandPlaceholderWindows": "例：Get-FileHash -Algorithm SHA256 -LiteralPath $args または python ~\\scripts\\process.py @args",
         "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。",
-        "labelHint": "右クリックメニューにこの名前で表示されます",
         "modeReadShort": "読み取りのみ",
-        "modeOrganizeShort": "ファイル変更を許可",
-        "targetRow": "表示する対象",
-        "targetFile": "ファイル",
-        "targetFolder": "フォルダ",
-        "targetBoth": "両方",
-        "selectionAny": "指定なし",
-        "selectionSingle": "1つ",
-        "selectionMultiple": "複数",
-        "removeExtension": "{{ext}} を外す",
-        "advancedRow": "詳細設定",
-        "advancedUses": "{{list}} を使用",
-        "advancedNone": "使用しない",
-        "targetSummary": {
-          "any": {
-            "file": "{{ext}}ファイルを右クリックしたとき",
-            "folder": "フォルダを右クリックしたとき",
-            "any": "ファイルやフォルダを右クリックしたとき"
-          },
-          "single": {
-            "file": "{{ext}}ファイルを1つ右クリックしたとき",
-            "folder": "フォルダを1つ右クリックしたとき",
-            "any": "ファイルかフォルダを1つ右クリックしたとき"
-          },
-          "multiple": {
-            "file": "{{ext}}ファイルを複数右クリックしたとき",
-            "folder": "フォルダを複数右クリックしたとき",
-            "any": "ファイルやフォルダを複数右クリックしたとき"
-          }
-        }
+        "modeOrganizeShort": "ファイル変更を許可"
       },
       "assistant": {
-        "title": "右クリックメニュー＆マジックアクション AI エージェント",
+        "title": "右クリックメニュー＆自動化 AI エージェント",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
         "emptyDesc": "ファイルを右クリックしたときのメニューを自由に設定できます。",
         "placeholder": "作りたい機能を教えてください",
         "promptSummarizeDoc": "PDFやWord文書の要点を3行で要約して",
         "promptCompareFiles": "ファイルを2つ選んだら、変わった内容をまとめて",
         "promptPaperToDiscord": "論文を要約してDiscordの #論文要約 に送り、スライドにして「論文要約」フォルダに入れて",
-        "promptMaskToPdf": "hwp・docxファイルの名前を伏せてPDFに変換して保存して"
+        "promptMaskToPdf": "hwp・docxファイルの名前を伏せてPDFに変換して保存して",
+        "starterUser": "新しい自動化",
+        "starterReply": "フォームに入力するか、チャットで説明して自動化を追加できます。",
+        "starterAdded": "右クリックメニューに「{{title}}」を追加しました。"
       },
       "dragHint": "{{name}} の並べ替え: ドラッグするか ↑↓ キーを押します"
     },
@@ -2085,12 +2291,11 @@
       "quickSearchEnabled": "クイック検索のショートカットを使う",
       "quickSearchEnabledHint": "ショートカットを押すと、どこからでも検索ウインドウが開きます。もう一度押すか Esc を押すと閉じます。",
       "quickSearchShortcut": "ショートカット",
-      "quickSearchShortcutHint": "ボタンを押してから、使うキーの組み合わせを押してください。",
+      "quickSearchShortcutHint": "ボタンをクリックしてから、使うキーの組み合わせを押してください。",
       "quickSearchNeedsModifier": "すべてのアプリで使うショートカットのため、⌘/Ctrlまたは⌥/Altと一緒に押してください。",
       "quickSearchTaken": "{{shortcut}}はほかのアプリかシステムが使用中です。別の組み合わせを選んでください。"
     },
     "about": {
-      "description": "Dazzi、ライブラリアン、固定されたツール、共有ローカル埋め込みデーモンの解決済みバージョンを表示します。",
       "daemonTitle": "埋め込みデーモン",
       "daemonName": "ローカル埋め込みサーバー",
       "daemonRunning": "{{owner}} ({{engine}} {{version}}、ポート {{port}})",
@@ -2106,9 +2311,7 @@
       "restartFailed": "埋め込みデーモンを再起動できませんでした：{{message}}",
       "refresh": "更新",
       "versionsTitle": "コンポーネントバージョン",
-      "pinnedHint": "固定 {{version}}",
       "bundledAndPinnedHint": "同梱 {{bundled}} (固定 {{pinned}})",
-      "notBundled": "未同梱 (固定 {{pinned}})",
       "pathMismatch": "PATH 上の版 {{pathVersion}} ({{path}}) — 基準 {{expected}} と不一致",
       "manifestMismatch": "同梱マニフェスト {{bundled}} が固定 {{pinned}} と不一致",
       "manifestDriftTitle": "同梱ツールが固定バージョンと異なります",
@@ -2116,7 +2319,11 @@
       "bannerTitle": "埋め込みデーモンの更新があります",
       "bannerOwnedDetail": "稼働中の埋め込みデーモン ({{version}}、ポート {{port}}) は固定バージョン {{pinned}} より古いです。再インデックスなしで再起動して適用できます。",
       "bannerExternalDetail": "Dazzi の外部で起動された古い埋め込みデーモン ({{version}}、ポート {{port}}) が稼働中です (固定 {{pinned}})。準備ができたら手動で再起動してください。",
-      "openAbout": "情報を開く"
+      "versionsHint": "Dazziと一緒に動作するライブラリアンとツールのバージョンです。",
+      "versionsOff": "{{count}}件がDazziの固定バージョンと異なります。",
+      "versionsShow": "表示",
+      "versionsHide": "閉じる",
+      "openSettings": "インデックス設定を開く"
     },
     "remote": {
       "description": "別のパソコンやスマートフォンのブラウザから、このパソコンの Dazzi を使えます。",
@@ -2290,7 +2497,7 @@
       "disconnect": {
         "title": "{{name}} を切断しますか？",
         "body": "保存された認証情報を削除し、一覧から除外します。このサービスを使っていた役割は新しいモデルを選ぶ必要がある場合があります。",
-        "action": "切断"
+        "action": "接続を解除"
       },
       "disconnected": "{{name}} を切断しました。",
       "envKeyCannotRemove": "{{name}} のキーは OS の環境変数から提供されているため、アプリから解除できません。該当の環境変数を自分で削除してください。",
@@ -2298,8 +2505,7 @@
       "testOk": "接続成功",
       "testFail": "接続失敗",
       "discoverFound": "{{name}}: {{count}} 個のモデルを検出 ({{protocol}})",
-      "discoverFailed": "{{name}}: {{error}}",
-      "discoverFailWord": "検出失敗",
+      "discoverFailed": "「{{name}}」でモデルが見つかりませんでした。サーバーが起動しているか、アドレスが正しいか確認してください。",
       "menu": {
         "dazziPlan": "Dazzi プラン",
         "apiKeys": "API キー",
@@ -2438,7 +2644,7 @@
         "save": "保存",
         "advanced": "この項目にはアプリで編集できない設定があり、そのまま保持されます。",
         "badLine": "\"{{line}}\" の行を読み取れません。",
-        "removeTitle": "\"{{name}}\" を削除しますか?",
+        "removeTitle": "「{{name}}」を削除しますか？",
         "removeBody": "設定ファイルからこのサーバーが削除されます。サーバーが保存したデータはそのまま残ります。",
         "argsHint": "1 行に 1 つずつ入力します。",
         "envFormatHint": "1 行に 1 つずつ、名前=値 の形式で入力します。\n値では ${NAME} で別の環境変数を参照できます。",
@@ -2480,88 +2686,43 @@
     },
     "assistants": {
       "general": {
-        "title": "AI 一般設定アシスタント",
-        "emptyTitle": "どの設定を変えますか？",
-        "emptyDesc": "画面モード、言語、起動の設定、クイック検索のショートカットを話しかけるだけで変えられます。",
-        "placeholder": "変えたい設定を教えてください",
-        "prompt1": "画面をダークモードにして",
-        "prompt2": "アプリの言語を英語にして",
-        "prompt3": "パソコンを起動したら自動で開くようにして",
-        "heroTitle": "AIで一般設定を変える",
-        "heroDesc": "「ダークモードにして、隠しファイルも表示して」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI 一般設定アシスタント"
       },
       "ai": {
-        "title": "AI モデルアシスタント",
-        "emptyTitle": "どのモデルを使いますか？",
-        "emptyDesc": "接続したサービスのモデルを、回答・質問の分割・判断・順位付けの役割ごとに選べます。",
-        "placeholder": "どのモデルに変えるか教えてください",
-        "prompt1": "今使えるモデルを教えて",
-        "prompt2": "回答するときにもっと深く考えるようにして",
-        "prompt3": "順位付けをオフにして",
-        "heroTitle": "AIでモデルを選ぶ",
-        "heroDesc": "「回答はもっと深く考えて」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI モデルアシスタント"
       },
       "web": {
-        "title": "AI ウェブ検索アシスタント",
-        "emptyTitle": "ウェブ検索をどう使いますか？",
-        "emptyDesc": "ウェブ検索のオン・オフや、使う検索サービスを選べます。",
-        "placeholder": "ウェブ検索をどう変えるか教えてください",
-        "prompt1": "ウェブ検索をオフにして",
-        "prompt2": "検索サービスを DuckDuckGo にして",
-        "prompt3": "ウェブページの内容を読むこともオンにして",
-        "heroTitle": "AIでウェブ検索を設定する",
-        "heroDesc": "「ウェブ検索は DuckDuckGo にして」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI ウェブ検索アシスタント"
       },
       "indexing": {
-        "title": "AI 検索範囲アシスタント",
-        "emptyTitle": "どのフォルダを検索しますか？",
-        "emptyDesc": "検索するフォルダの追加・削除、除外する項目、更新の頻度を変えられます。",
-        "placeholder": "検索範囲をどう変えるか教えてください",
-        "prompt1": "書類フォルダを検索するフォルダに追加して",
-        "prompt2": "1時間ごとに自動で更新して",
-        "prompt3": "バックアップフォルダは検索から外して",
-        "heroTitle": "AIで検索範囲を整える",
-        "heroDesc": "「書類フォルダを追加して、バックアップフォルダは外して」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI 検索範囲アシスタント"
       },
       "duplicates": {
-        "title": "AI 重複ファイルアシスタント",
-        "emptyTitle": "重複ファイルをどうしますか？",
-        "emptyDesc": "同じファイルやバージョン違いのファイルを探す方法と、確認の頻度を変えられます。",
-        "placeholder": "重複ファイルの設定をどう変えるか教えてください",
-        "prompt1": "同じファイルは検索から外して",
-        "prompt2": "バージョン違いのファイル探しをオフにして",
-        "prompt3": "1日に1回だけ確認して",
-        "heroTitle": "AIで重複ファイルを設定する",
-        "heroDesc": "「確認は1日に1回だけにして」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI 重複ファイルアシスタント"
       },
       "mcp": {
-        "title": "AI MCP サーバーアシスタント",
-        "emptyTitle": "どのツールサーバーを扱いますか？",
-        "emptyDesc": "接続済みの MCP サーバーのオン・オフや表示方法を変え、新しいサーバーを追加できます。",
-        "placeholder": "MCP サーバーをどう変えるか教えてください",
-        "prompt1": "接続済みの MCP サーバーを見せて",
-        "prompt2": "使っていないサーバーはオフにして",
-        "prompt3": "https://example.com/mcp のサーバーを追加して",
-        "heroTitle": "AIで MCP サーバーを管理する",
-        "heroDesc": "「使っていないサーバーはオフにして」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI MCP サーバーアシスタント"
       },
       "apps": {
-        "title": "AI 連携アプリアシスタント",
-        "emptyTitle": "どのアプリの連携を変えますか？",
-        "emptyDesc": "連携済みアプリのオン・オフ、説明、更新の頻度を変えられます。",
-        "placeholder": "アプリの連携をどう変えるか教えてください",
-        "prompt1": "今連携しているアプリの状態を教えて",
-        "prompt2": "Slack は1時間ごとに更新して",
-        "prompt3": "使っていないアプリはオフにして",
-        "heroTitle": "AIで連携アプリを管理する",
-        "heroDesc": "「Slack は1時間ごとに更新して」のように話すだけで頼めます。",
-        "heroButton": "AIに頼む"
+        "title": "AI 連携アプリアシスタント"
+      },
+      "source": {
+        "title": "AI データソース接続アシスタント"
+      },
+      "account": {
+        "title": "AI 設定アシスタント"
+      },
+      "plan": {
+        "title": "AI 設定アシスタント"
+      },
+      "remote": {
+        "title": "AI 設定アシスタント"
+      },
+      "ltr": {
+        "title": "AI 検索順位学習アシスタント"
+      },
+      "all": {
+        "title": "AI 全般設定アシスタント"
       }
     },
     "assistantPrompt": {
@@ -2569,6 +2730,11 @@
       "no": "許可しない",
       "save": "保存",
       "secretPlaceholder": "ここに貼り付け"
+    },
+    "assistantGreeting": {
+      "title": "何をお手伝いしましょうか？",
+      "desc": "この画面の設定を言葉で変えたり、わからないことを質問したりできます。",
+      "placeholder": "何でも聞いてください"
     }
   },
   "settingsLtr": {
@@ -2925,7 +3091,7 @@
       "connectApps": "アプリを接続",
       "connect": "接続",
       "promptTitle": "{{name}} を接続",
-      "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
+      "promptDesc": "接続 ID を入力してください。空欄にするとテンプレート名を使います。",
       "promptLabel": "接続 ID",
       "promptConfirm": "接続を追加",
       "macOnlyCalendar": "macOS（EventKit）でのみ利用できます。",
@@ -2961,7 +3127,7 @@
       "removeSection": "接続を解除",
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
-      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
+      "confirmBody": "「{{alias}}」接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
       "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
       "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。",
       "whatsappOnlyNote": "WhatsApp は Mac アプリのデータベースだけを読み取れる wacrawl で取得するため、このコンピューターでは接続は無効です。コピーしたデータフォルダがある場合は、ソースパスに指定してください。",
@@ -3045,7 +3211,7 @@
     },
     "reading": {
       "title": "文書の言語",
-      "langHint": "複数選択できます。"
+      "langHint": "スキャンした文書や画像内の文字を読み取るときに使う言語です。"
     },
     "duplicates": {
       "title": "重複ファイルの整理",
@@ -3118,11 +3284,11 @@
     "modelDownloadOpen": "モデルのダウンロード状態を表示"
   },
   "magicAction": {
-    "running": "マジックアクションを実行中…",
+    "running": "自動化を実行中…",
     "completed": "実行完了",
-    "failedTitle": "マジックアクションの実行に失敗しました",
+    "failedTitle": "自動化の実行に失敗しました",
     "stoppedTitle": "実行を停止しました",
-    "minimize": "バックグラウンドで続行",
+    "minimize": "バックグラウンドで実行",
     "stop": "停止",
     "close": "閉じる",
     "copyOutput": "結果をコピー",
@@ -3132,7 +3298,7 @@
     "saveFailed": "チャット履歴に保存できませんでした。",
     "emptyOutput": "出力テキストはありません。",
     "targetsCount": "対象 {{count}} 件",
-    "sidebarOpen": "マジックアクションの結果を開く"
+    "sidebarOpen": "自動化の結果を開く"
   },
   "quickSearch": {
     "title": "クイック検索",
@@ -3234,7 +3400,7 @@
       "askOne": "AI 要約",
       "askFolder": "このフォルダについて聞く",
       "askMany": "{{count}} 項目について AI に聞く",
-      "magic": "マジックアクション",
+      "magic": "自動化",
       "tools": "クイックアクション",
       "toolsHint": "圧縮 · インデックス · 複製",
       "agent": "AI エージェント",
@@ -3462,36 +3628,24 @@
       "skip": "スキップ",
       "finish": "完了",
       "clickHint": "クリックして試してみましょう",
-      "sendHint": "送信してみましょう",
-      "typingHint": "入力しています…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "こんなふうに聞いてみましょう",
-        "body": "いま読み込んだファイルで試してみます。送信ボタンを押すか、内容を書き換えて聞いてみてください。",
+        "title": "自分のファイルに聞いてみましょう",
+        "body": "あなたの書類から聞いてみたいことを用意しました。\n送信を押してみてください。",
         "fallbackTitle": "まずは例の質問で試してみましょう",
         "fallbackBody": "ファイルが少なくて専用の質問は作れませんでした。まずはこの例の質問を送るか、聞きたい内容に書き換えて試してみてください。"
       },
       "cite": {
-        "title": "答えが出ました — 根拠の番号を押してみましょう",
-        "body": "答えはあなたのファイルだけを根拠にしています。青い番号をクリックして元の書類を開いてみましょう。",
+        "title": "答えには根拠を表示します",
+        "body": "番号を押してみてください。その文がどのファイルから来たのか、右の情報パネルで確認できます。",
         "waitingTitle": "答えを探しています",
         "waitingBody": "ファイルの中身を読んでいます。",
         "noCiteTitle": "答えが出ました",
-        "noCiteBody": "答えはあなたのファイルだけを根拠にしています。",
-        "failedTitle": "今回は答えが見つかりませんでした",
-        "failedBody": "質問を少し変えて、もう一度聞いてみてください。"
+        "noCiteBody": "答えはあなたのファイルだけを根拠にしています。"
       },
       "evidence": {
-        "title": "根拠はここに集まります",
-        "body": "原文の該当箇所をそのまま表示します。タイトルを押すとファイルの場所へ移動します。"
-      },
-      "duplicates": {
-        "title": "まとまった書類をクリックしてみましょう",
-        "body": "コピーや古い版を1行にまとめてあります。押すと版の一覧が広がります。"
-      },
-      "versions": {
-        "title": "最新版はここで確認できます",
-        "body": "同じ書類とほぼ同じ書類を並べて表示します。押すとそのファイルへ移動します。"
+        "title": "元のファイルへすぐ移動",
+        "body": "根拠のタイトルを押してみてください。そのファイルがあるフォルダが新しいタブで開きます。"
       }
     },
     "signin": {
@@ -3567,7 +3721,7 @@
     "contextMenu": {
       "intro": {
         "title": "右クリックに自分だけのボタンを",
-        "body": "「中身をひと目で確認」というマジックアクションを今作ってみます。テキストファイルを右クリックすると、サイズと最初の数行をすぐ表示します。",
+        "body": "「中身をひと目で確認」という自動化を今作ってみます。テキストファイルを右クリックすると、サイズと最初の数行をすぐ表示します。",
         "action": "例を作る"
       },
       "sample": {
@@ -3576,15 +3730,15 @@
       },
       "pick": {
         "title": "ここにあります",
-        "body": "作ったマジックアクションは、対象のファイルを右クリックしたときだけメニューに出ます。クリックして実行してみましょう。"
+        "body": "作った右クリック自動化は、対象のファイルを右クリックしたときだけメニューに出ます。クリックして実行してみましょう。"
       },
       "result": {
         "title": "結果がすぐ出ます",
-        "body": "スクリプトが選んだファイルのサイズと最初の数行を読み取りました。AI が要約するアクションも同じ方法で作れます。"
+        "body": "スクリプトが選んだファイルのサイズと最初の数行を読み取りました。AI が要約する自動化も同じ方法で作れます。"
       },
       "more": {
-        "title": "自分のアクションをもっと作る",
-        "body": "設定 › 右クリックメニューで、言葉でアクションを作ったり、項目を隠したり並べ替えたりできます。この例は練習用なので、自由に削除して構いません。",
+        "title": "自分の自動化をもっと作る",
+        "body": "設定 › 右クリックメニューで、言葉で自動化を作ったり、項目を隠したり並べ替えたりできます。この例は練習用なので、自由に削除して構いません。",
         "action": "設定を開く"
       }
     },
@@ -3610,7 +3764,7 @@
     "dragHint": "写真をドラッグしてください"
   },
   "fullDiskAccess": {
-    "title": "フルディスクアクセスを許可してください",
+    "title": "フルディスクアクセスの権限が必要です",
     "titleGranted": "フルディスクアクセスが許可されました",
     "leadTagColors": "Finderのタグの色はmacOSが保護する場所にあります。システム設定でDazziをオンにし、案内が出たら「終了して再度開く」を選んでください。",
     "leadSource": "このソースはほかのアプリのデータを読み取ります。システム設定でDazziのフルディスクアクセスをオンにし、案内が出たら「終了して再度開く」を選んでください。",
@@ -3725,6 +3879,33 @@
       "words": "{{count}}語",
       "chars": "{{count}}文字",
       "pages": "{{count}}ページ"
+    }
+  },
+  "rightClickWhen": {
+    "when": "いつ",
+    "task": "やること",
+    "kindLabel": "ファイルの種類",
+    "kind": {
+      "all": "ファイル",
+      "pdf": "PDFファイル",
+      "image": "画像",
+      "document": "文書",
+      "folder": "フォルダ",
+      "both": "ファイルかフォルダ"
+    },
+    "custom": "{{exts}}ファイル",
+    "extPlaceholder": "拡張子を入力してEnter",
+    "countLabel": "選択する数",
+    "count": {
+      "single": "1つ",
+      "multiple": "複数",
+      "any": "いくつでも"
+    },
+    "event": "右クリックした",
+    "sentence": {
+      "single": "{{kind}}を{{count}}{{event}}とき",
+      "multiple": "{{kind}}を{{count}}{{event}}とき",
+      "any": "{{kind}}を{{count}}{{event}}とき"
     }
   }
 }

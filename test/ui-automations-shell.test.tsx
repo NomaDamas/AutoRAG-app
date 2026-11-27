@@ -54,8 +54,9 @@ interface Harness {
 	bridge: AutomationBridge;
 }
 
-async function mount(initial: readonly AutomationRule[], options: { active?: boolean; removeFails?: boolean } = {}): Promise<Harness> {
+async function mount(initial: readonly AutomationRule[], options: { active?: boolean; removeFails?: boolean; serviceOff?: boolean; autoStartService?: boolean } = {}): Promise<Harness> {
 	let current = snapshot(initial);
+	if (options.serviceOff === true) current = { ...current, daemon: { platform: "darwin", installed: false, running: false } };
 	let removed: AutomationRule | undefined;
 	let removedIndex = 0;
 	const bridge: AutomationBridge = {
@@ -67,13 +68,19 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 			current = snapshot(current.rules.filter((item) => item.id !== id));
 			return { snapshot: current, removal: { entry: { id }, index: removedIndex } };
 		},
+		create: async () => ({ snapshot: current, id: "new-rule" }),
+		update: async () => current,
+		history: async () => [],
 		restore: async () => {
 			const next = [...current.rules];
 			if (removed !== undefined) next.splice(removedIndex, 0, removed);
 			current = snapshot(next);
 			return current;
 		},
-		setDaemon: async () => current,
+		setDaemon: vi.fn(async (enabled: boolean) => {
+			current = { ...current, daemon: { platform: "darwin", installed: enabled, running: enabled } };
+			return current;
+		}),
 		onChange: () => () => {},
 	};
 	const store = createAutomationsStore(bridge);
@@ -81,7 +88,7 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 	let latest: AutomationsShell | undefined;
 	function Probe(): null {
 		const view = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-		const shellDeps: AutomationsShellDeps = { store, view, active: options.active ?? true, ...deps };
+		const shellDeps: AutomationsShellDeps = { store, view, active: options.active ?? true, autoStartService: options.autoStartService ?? false, ...deps };
 		latest = useAutomationsShell(shellDeps);
 		return null;
 	}
@@ -143,19 +150,29 @@ describe("selection and keys", () => {
 });
 
 describe("editing and adding open an AI Chat draft, never a sent question", () => {
-	it("Enter and double click draft the edit for that rule, in the interface language", async () => {
+	it("Enter and double click open the rule in the 새 자동화 card, not an AI draft, and 취소 lets it go", async () => {
 		const h = await mount([rule("downloads-pdf-summary")]);
 		press("ArrowDown");
 		press("Enter");
-		expect(h.deps.openAiDraft).toHaveBeenCalledTimes(1);
-		const draft = h.deps.openAiDraft.mock.calls[0]?.[0] as string;
-		expect(draft).toContain("downloads-pdf-summary");
-		expect(draft).toContain("다운로드에 PDF 파일이 새로 생기면");
-		expect(draft.endsWith(": ")).toBe(true);
-
-		await setAppLanguage("en");
+		expect(h.deps.openAiDraft).not.toHaveBeenCalled();
+		expect(h.shell().props.editing?.id).toBe("downloads-pdf-summary");
+		expect(h.deps.showInList).toHaveBeenCalledWith("downloads-pdf-summary");
+		act(() => h.shell().props.onCancelEdit?.());
+		expect(h.shell().props.editing).toBeNull();
 		act(() => h.shell().props.onEdit("downloads-pdf-summary"));
-		expect(h.deps.openAiDraft.mock.calls[1]?.[0]).toBe("Edit this automation rule — downloads-pdf-summary (PDF files are created in Downloads). What to change: ");
+		expect(h.shell().props.editing?.id).toBe("downloads-pdf-summary");
+	});
+
+	it("저장 rewrites the rule and keeps its page open", async () => {
+		const h = await mount([rule("a")]);
+		const update = vi.spyOn(h.bridge, "update");
+		act(() => h.shell().props.onEdit("a"));
+		const draft = { paths: ["/Users/jeffrey/Desktop"], events: ["create" as const], include: [], agent: { profile: "file-triage", task: "요약" } };
+		await act(async () => {
+			await h.shell().props.onUpdate?.("a", draft);
+		});
+		expect(update).toHaveBeenCalledWith("a", draft);
+		expect(h.shell().props.editing?.id).toBe("a");
 	});
 
 	it("adding drafts the creation request", async () => {
@@ -168,6 +185,7 @@ describe("editing and adding open an AI Chat draft, never a sent question", () =
 		const h = await mount([rule("a")]);
 		act(() => h.shell().props.onEdit("gone"));
 		expect(h.deps.openAiDraft).not.toHaveBeenCalled();
+		expect(h.shell().props.editing).toBeNull();
 	});
 });
 
@@ -187,13 +205,14 @@ describe("Quick Look", () => {
 		expect(h.shell().preview).toBeNull();
 	});
 
-	it("editing from Quick Look closes it and opens the draft", async () => {
+	it("editing from Quick Look closes it and opens the rule in the card", async () => {
 		const h = await mount([rule("a")]);
 		press("ArrowDown");
 		press(" ");
 		act(() => h.shell().editFromPreview());
 		expect(h.shell().preview).toBeNull();
-		expect(h.deps.openAiDraft).toHaveBeenCalledTimes(1);
+		expect(h.shell().props.editing?.id).toBe("a");
+		expect(h.deps.openAiDraft).not.toHaveBeenCalled();
 	});
 });
 
@@ -208,6 +227,69 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules).toHaveLength(2);
 	});
 
+	it("closes the confirm at once and says 삭제 중… in the toast until the delete is done, then offers undo", async () => {
+		const h = await mount([rule("a"), rule("b")]);
+		const remove = h.bridge.remove;
+		let finish: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		h.bridge.remove = async (id) => {
+			await gate;
+			return remove(id);
+		};
+		act(() => h.shell().props.onSelect("a"));
+		press("Backspace", { metaKey: true });
+		let done: Promise<void> = Promise.resolve();
+		act(() => {
+			done = h.shell().confirmDelete();
+		});
+		expect(h.shell().deleting).toBe(true);
+		expect(h.shell().confirm).toBeNull();
+		expect(h.shell().undoToast?.message).toBe("‘a’ 규칙을 삭제하는 중…");
+		expect(h.shell().undoToast?.onUndo).toBeNull();
+		await act(async () => {
+			finish();
+			await done;
+		});
+		expect(h.shell().deleting).toBe(false);
+		expect(h.shell().undoToast?.message).toBe("‘a’ 규칙을 삭제했습니다.");
+		expect(typeof h.shell().undoToast?.onUndo).toBe("function");
+		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["b"]);
+	});
+
+	it("turns the background service on by itself once there is a rule to run, only once and only where asked", async () => {
+		const off = await mount([rule("a")], { serviceOff: true });
+		expect(off.bridge.setDaemon).not.toHaveBeenCalled();
+		act(() => root.unmount());
+		root = createRoot(host);
+		const h = await mount([rule("a")], { serviceOff: true, autoStartService: true });
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		expect(h.bridge.setDaemon).toHaveBeenCalledTimes(1);
+		expect(h.bridge.setDaemon).toHaveBeenCalledWith(true);
+		expect(h.store.getSnapshot().state.daemon?.running).toBe(true);
+	});
+
+	it("says 만드는 중… in the toast while a rule is made, then 만들었습니다", async () => {
+		const h = await mount([rule("a")]);
+		let done: Promise<boolean> = Promise.resolve(false);
+		act(() => {
+			done = h.shell().props.onCreate({ paths: ["/x"], events: ["create"], include: [], run: ["autorag", "refresh"] });
+		});
+		expect(h.shell().undoToast).toMatchObject({ message: "자동화를 만드는 중…", busy: true, onUndo: null });
+		await act(async () => {
+			await done;
+		});
+		expect(h.shell().undoToast).toMatchObject({ message: "자동화를 만들었습니다.", busy: false });
+	});
+
+	it("leaves the service alone while there are no rules", async () => {
+		const h = await mount([], { serviceOff: true, autoStartService: true });
+		expect(h.bridge.setDaemon).not.toHaveBeenCalled();
+	});
+
 	it("deletes on confirm, selects the neighbour, and offers undo that expires", async () => {
 		const h = await mount([rule("a"), rule("b"), rule("c")]);
 		act(() => h.shell().props.onSelect("b"));
@@ -216,7 +298,7 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["a", "c"]);
 		expect(h.shell().props.selectedId).toBe("c");
 		expect(h.shell().confirm).toBeNull();
-		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제했습니다.");
+		expect(h.shell().undoToast?.message).toBe("‘b’ 규칙을 삭제했습니다.");
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(5_100);
 		});
@@ -238,7 +320,7 @@ describe("deleting", () => {
 		const h = await mount([rule("a"), rule("b")]);
 		act(() => h.shell().props.onAskDelete("a"));
 		await act(async () => h.shell().confirmDelete());
-		await act(async () => h.shell().undoToast?.onUndo());
+		await act(async () => h.shell().undoToast?.onUndo?.());
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["a", "b"]);
 		expect(h.shell().props.selectedId).toBe("a");
 		expect(h.shell().undoToast).toBeNull();
@@ -260,6 +342,36 @@ describe("deleting", () => {
 		expect(h.deps.onError).toHaveBeenCalledWith("규칙을 찾을 수 없습니다.");
 		expect(h.shell().confirm).toBeNull();
 		expect(h.store.getSnapshot().state.rules).toHaveLength(1);
+	});
+
+	it("leaves the rule's own page for the list as soon as the delete is confirmed, and comes back if it fails", async () => {
+		const h = await mount([rule("a"), rule("b")]);
+		const remove = h.bridge.remove;
+		let finish: () => void = () => undefined;
+		let fail = false;
+		const gate = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		h.bridge.remove = async (id) => {
+			await gate;
+			if (fail) throw new Error("nope");
+			return remove(id);
+		};
+		act(() => h.shell().props.onEdit("a"));
+		expect(h.shell().props.editing?.id).toBe("a");
+		act(() => h.shell().props.onAskDelete("a"));
+		let done: Promise<void> = Promise.resolve();
+		act(() => {
+			done = h.shell().confirmDelete();
+		});
+		// The CLI has not finished, yet the page is already the list.
+		expect(h.shell().props.editing).toBeNull();
+		fail = true;
+		await act(async () => {
+			finish();
+			await done;
+		});
+		expect(h.shell().props.editing?.id).toBe("a");
 	});
 
 	it("delete is refused for a rule that no longer exists", async () => {

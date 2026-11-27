@@ -90,17 +90,30 @@ function writeSeededSession(cwd: string, sessionDir: string | undefined, model: 
 	return manager.getSessionFile();
 }
 
+export interface InteractiveSearchAgentExtras {
+	/** Appended to every turn's system prompt (search, organize, config, extra, and conversational follow-ups). */
+	readonly systemPromptAddendum?: string;
+	/**
+	 * When returning true for a Turn-1 query, routes it straight to the librarian's single-turn action (`extra`)
+	 * route so app-level tool workflows (like creating/customizing Magic Actions) execute cleanly without a
+	 * premature 2-phase search fast-answer. Every search and workflow tool stays available on `extra`.
+	 */
+	readonly routeToDirectAction?: (query: string) => boolean;
+}
+
 export class InteractiveSearchAgent extends AttachmentContextAgent {
 	readonly #interaction: AgentInteraction;
 	readonly #sessionDir: string | undefined;
 	readonly #userRequests: UserRequestSink;
+	readonly #systemPromptAddendum: string;
+	readonly #wrappedRunners = new WeakSet<object>();
 	#runtime: Runtime | undefined;
 	#images: readonly ImageContent[] = [];
 	readonly #contextListeners = new Set<(event: ContextEvent) => void>();
 	/** Stops watching the bound session's context; a replaced session is watched afresh. */
 	#unwatchContext: (() => void) | undefined;
 
-	constructor(options: AutoRAGAgentOptions, interaction: AgentInteraction) {
+	constructor(options: AutoRAGAgentOptions, interaction: AgentInteraction, extras?: InteractiveSearchAgentExtras) {
 		super({
 			...options,
 			tools: [...(options.tools ?? []), interaction.askUserTool],
@@ -111,6 +124,23 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 		this.#interaction = interaction;
 		this.#sessionDir = options.piSessionDir;
 		this.#userRequests = userRequestsOf(this);
+		this.#systemPromptAddendum = extras?.systemPromptAddendum?.trim() ?? "";
+		if (extras?.routeToDirectAction !== undefined) {
+			const shouldDirectRoute = extras.routeToDirectAction;
+			const basePlanQuery: unknown = Reflect.get(this, "planQuery");
+			if (typeof basePlanQuery === "function") {
+				Object.defineProperty(this, "planQuery", {
+					configurable: true,
+					writable: true,
+					value: async (query: string, resolved: unknown, signal: unknown, routeOverride?: unknown) => {
+						if (routeOverride === undefined && shouldDirectRoute(query)) {
+							return { route: "extra", queries: [query], datasources: [], web: false };
+						}
+						return Reflect.apply(basePlanQuery, this, [query, resolved, signal, routeOverride]);
+					},
+				});
+			}
+		}
 	}
 
 	/**
@@ -150,6 +180,23 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 
 	async #bind(session: AgentSession): Promise<void> {
 		await session.bindExtensions({ uiContext: this.#interaction.ui, mode: "rpc" });
+		if (this.#systemPromptAddendum !== "" && !this.#wrappedRunners.has(session.extensionRunner)) {
+			this.#wrappedRunners.add(session.extensionRunner);
+			const runner = session.extensionRunner;
+			const baseEmit = runner.emitBeforeAgentStart.bind(runner);
+			const addendum = this.#systemPromptAddendum;
+			runner.emitBeforeAgentStart = async (trigger, systemPromptOptions) => {
+				const result = await baseEmit(trigger, systemPromptOptions);
+				if (typeof result.systemPromptOptions.forceSystemPrompt === "string") {
+					result.systemPromptOptions.forceSystemPrompt = `${result.systemPromptOptions.forceSystemPrompt}\n\n${addendum}`;
+				} else {
+					result.systemPromptOptions.appendSystemPrompt = result.systemPromptOptions.appendSystemPrompt
+						? `${result.systemPromptOptions.appendSystemPrompt}\n\n${addendum}`
+						: addendum;
+				}
+				return result;
+			};
+		}
 		this.#unwatchContext?.();
 		this.#unwatchContext = watchContext(session, (event) => {
 			for (const listener of [...this.#contextListeners]) listener(event);

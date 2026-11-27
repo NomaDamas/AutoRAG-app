@@ -26,6 +26,9 @@
   --bg-subtle-alt: #FAFAFC;
   --bg-input: #F0F0F4;
   --bg-selected-nav: #E5E5EA;
+  /* 채팅 | 내 자동화: the track that holds both sides, and the raised side that is shown. */
+  --bg-segment-track: rgba(29,29,31,0.08);
+  --bg-segment-thumb: #FFFFFF;
   /* v7 Safari-style tab strip (proto:.tabs/.tab). */
   --bg-tabstrip: #D4D4D8;
   --border-tabstrip: #C3C3C7;
@@ -214,9 +217,13 @@
   --info-bg: rgba(59,130,246,0.12);
 
   --danger-dot: #FF3B30;
-  /* Notice badges and surfaces (Figma 548:14204 notice card, 554:7353 toast). */
-  --notice-warn-badge: #FFCC00;
+  /* Notice badges and surfaces (Figma 548:14204 notice card, 554:7353 toast; warning badge 556:7347). */
+  --notice-warn-badge: #F5A623;
   --shadow-notice: 0 12px 32px rgba(0,0,0,0.18);
+  /* A modal narrows with the window only down to the AI sidebar's minimum width (INSPECTOR_MIN in App.tsx); below that it is cut, not squeezed. */
+  --modal-min-width: 300px;
+  /* The AI agent's question card fills the composer slot, 12px in from each side of the sidebar; at the sidebar's minimum it stops narrowing. */
+  --dock-card-min-width: calc(var(--modal-min-width) - 24px);
   --shadow-toast: 0 6px 20px rgba(0,0,0,0.14);
   --danger-text: #FF3B30;
   --danger-bg: rgba(239,68,68,0.12);
@@ -439,6 +446,7 @@
   --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.1);
   --shadow-ql-panel: inset 0 0 0 0.5px var(--ql-hairline), inset 0 0.5px 0 var(--ql-highlight);
   --shadow-ql-segment: 0 0.5px 1.5px rgba(0,0,0,0.18);
+  --shadow-segment-thumb: 0 1px 2px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.08);
   --shadow-ql-float: 0 0 0 0.5px var(--ql-hairline), 0 4px 14px rgba(0,0,0,0.16);
   --shadow-ql-hud: 0 0 0 0.5px rgba(255,255,255,0.14), 0 10px 30px rgba(0,0,0,0.35);
   --shadow-ql-knob: 0 1px 3px rgba(0,0,0,0.4);
@@ -461,10 +469,31 @@
   --radius-11: 11px;
   --radius-12: 12px;
   --radius-14: 14px;
+  /* A modal's corner grows with the modal, so a small confirm and a wide panel read equally round:
+   * under 400px wide 14, 400-499px 16 (the Figma modal template, 111:3985), 500px and wider 18. */
+  --radius-modal-sm: 14px;
+  --radius-modal-md: 16px;
+  --radius-modal-lg: 18px;
   --radius-full: 50%;
 
   /* --------------------------------------------------------------- §7 Scrollbars */
   /* (none — native overlay scrollbars; see base.css §7) */
+
+  /* ------------------------------------------------------------ §8 AI glow */
+  /* The soft aurora behind an AI input (the 자동화 tab's 새 자동화 card): blue, violet, pink and mint, blurred far
+   * enough to read as light rather than colour, and a little stronger while the card has focus. */
+  --ai-glow: conic-gradient(from 210deg, #7AA7FF, #B08CFF, #FF9AD5, #7FE0D6, #7AA7FF);
+  --ai-glow-blur: 22px;
+  --ai-glow-opacity: 0.28;
+  --ai-glow-opacity-focus: 0.45;
+  /* A recommendation's light: the Settings sidebar AI card's yellow and blue (settings.css .sidebar-ai-hero), wide
+   * enough to drift slowly from side to side. */
+  --ai-glow-warm: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--tag-yellow) 70%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 50%,
+    color-mix(in srgb, var(--tag-yellow) 70%, transparent) 100%
+  );
 }
 
 /* The persisted app appearance drives Electron's nativeTheme.themeSource. Both
@@ -472,13 +501,18 @@
  * renderer-only theme flag or a preview-specific setting. */
 html[data-appearance="dark"] {
 	color-scheme: dark;
+	/* On a dark stage the same aurora would glare: it keeps its colours at half the strength. */
+	--ai-glow-opacity: 0.14;
+	--ai-glow-opacity-focus: 0.24;
     /* ----------------------------------------------------------- App surfaces */
     --bg-desk: #1C1C1E;
     --bg-window: #1E1E20;
     --bg-sidebar: rgba(44,44,46,0.92);
     --bg-chrome: #2C2C2E;
-    --bg-subtle: #242426;
-    --bg-subtle-alt: #202022;
+    /* Dark: the cards on the window (settings groups, 추천 자동화) are lifted about 8 steps over --bg-window;
+       at #242426 / #202022 they were 2-6 steps off and read as the same grey. */
+    --bg-subtle: #2A2A2D;
+    --bg-subtle-alt: #27272A;
     --index-map-done: #EF9F27;
     --index-map-partial: #FAC775;
     --index-map-pending: #3A3A3D;
@@ -493,6 +527,9 @@ html[data-appearance="dark"] {
     --source-new-text: #4A2F00;
     --bg-input: #3A3A3C;
     --bg-selected-nav: #48484A;
+    --bg-segment-track: rgba(255,255,255,0.07);
+    --bg-segment-thumb: #5A5A5E;
+    --shadow-segment-thumb: 0 1px 2px rgba(0,0,0,0.4);
     --bg-tabstrip: #38383A;
     --border-tabstrip: #48484A;
     --tab-grad-from: #414143;

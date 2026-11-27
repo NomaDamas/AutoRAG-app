@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { t } from "../src/shared/i18n/core";
 import { createProviderAuthService, rankConnectionProbeModels, type ProviderAuthService } from "../src/main/provider-auth-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
 import type { ProviderCredentialService } from "../src/main/provider-credentials";
@@ -180,7 +181,7 @@ describe("createProviderAuthService", () => {
 		const result = await service.discover({ kind: "local", label: "Remote", baseUrl: "https://api.example.com/v1" });
 
 		expect(result.ok).toBe(false);
-		expect(result.error).toMatch(/this device/);
+		expect(result.error).toBe(t("main.errors.provider.localOnly"));
 	});
 
 	it("discovers models from an OpenAI-compatible server", async () => {
@@ -253,7 +254,7 @@ describe("createProviderAuthService", () => {
 		const { service } = await fixture(openAiFetch);
 
 		await expect(service.start("not-a-provider", "api_key")).rejects.toThrow(/Unknown provider/);
-		await expect(service.respond("missing-session", "x")).rejects.toThrow(/not waiting for input/);
+		await expect(service.respond("missing-session", "x")).rejects.toThrow(t("main.errors.provider.loginNotWaiting"));
 	});
 
 	it("passes a local server only while it answers its model list", async () => {

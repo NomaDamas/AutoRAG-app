@@ -88,7 +88,8 @@ describe("InteractionDock in a narrow sidebar", () => {
 		);
 
 		const card = host.querySelector('[role="dialog"]') as HTMLElement;
-		expect(card.className).toContain("min-w-0");
+		// It narrows with the sidebar down to the sidebar's minimum width, then is cut rather than squeezed.
+		expect(card.className).toContain("min-w-(--dock-card-min-width)");
 		expect(card.querySelector("strong")?.textContent).toBe("Convert videos");
 		expect(card.textContent).toContain(t("interaction.step", { current: 1, total: 2 }));
 		expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.prevQuestion")}"]`)?.disabled).toBe(true);
@@ -262,5 +263,46 @@ describe("InteractionDock approval card", () => {
 		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
 		press(document.body, "Escape");
 		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny" });
+	});
+});
+
+describe("InteractionDock — right-click automation confirmation card", () => {
+	it("renders a verified agent right-click automation via AutomationDraftCard and answers with edits on Add", () => {
+		const action = {
+			id: "pdf-summary",
+			label: "PDF 3줄 요약",
+			enabled: true,
+			selection: "single" as const,
+			targetKind: "file" as const,
+			extensions: ["pdf"],
+			execution: { kind: "agent" as const, mode: "read" as const, prompt: "핵심 3줄로 요약해 줘", useSkills: true, useMcp: true },
+		};
+		render({ id: "m1", searchId: "s1", kind: "magic-action", action, isUpdate: false });
+		expect(host.querySelector('[data-interaction="magic-action"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="automation-request-label"]')?.textContent).toBe("PDF 3줄 요약");
+		expect(host.querySelector('[data-testid="automation-request-task"]')?.textContent).toBe("핵심 3줄로 요약해 줘");
+		// No AI | 스크립트 toggle exposed in the confirmation card.
+		expect(host.querySelector('[data-testid="magic-editor-kind"]')).toBeNull();
+
+		act(() => host.querySelector<HTMLButtonElement>('[data-action="automation-request-add"]')?.click());
+		expect(answer).toHaveBeenCalledWith("m1", { kind: "magic-action", action });
+	});
+
+	it("renders a verified script right-click automation command cleanly and answers cancel on 취소", () => {
+		const action = {
+			id: "line-count",
+			label: "줄 수 세기",
+			enabled: true,
+			selection: "single" as const,
+			targetKind: "file" as const,
+			extensions: ["txt"],
+			execution: { kind: "script" as const, command: 'wc -l "$@"' },
+		};
+		render({ id: "m2", searchId: "s1", kind: "magic-action", action, isUpdate: true });
+		expect(host.querySelector('[data-testid="automation-request-command"]')?.textContent).toBe('wc -l "$@"');
+		expect(host.querySelector('[data-testid="automation-request-task"]')).toBeNull();
+
+		act(() => host.querySelector<HTMLButtonElement>('[data-action="automation-request-cancel"]')?.click());
+		expect(answer).toHaveBeenCalledWith("m2", { kind: "cancel" });
 	});
 });

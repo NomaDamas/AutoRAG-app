@@ -256,7 +256,13 @@ try {
 
 	// Hide 7z로 압축 & 경로 복사, and move `magic` section to the very top
 	await page.locator('[data-sidebar-switch="builtin:compress7z"]').click();
+	await page.waitForFunction(
+		() => document.querySelector('[data-sidebar-switch="builtin:compress7z"]')?.getAttribute("aria-checked") === "false",
+	);
 	await page.locator('[data-sidebar-switch="builtin:copyPath"]').click();
+	await page.waitForFunction(
+		() => document.querySelector('[data-sidebar-switch="builtin:copyPath"]')?.getAttribute("aria-checked") === "false",
+	);
 	await page.locator('[data-cmenu-section-grip="magic"]').focus();
 	await page.keyboard.press("ArrowUp");
 
@@ -281,6 +287,12 @@ try {
 		);
 	await editor.locator('[data-testid="magic-editor-selection-multiple"]').click();
 	await editor.locator('[data-testid="magic-editor-extensions"]').fill("txt, md");
+	await editor.locator('[data-action="test-magic-editor"]').click();
+	await editor.locator('[data-testid="magic-editor-verify-result"][data-verify-ok="true"]').waitFor({ timeout: 15_000 });
+	check(
+		"Manual Magic Action editor verifies batch script in temp folder before saving",
+		(await editor.locator('[data-testid="magic-editor-verify-result"]').innerText()).includes("BATCH_COUNT=2"),
+	);
 	await shot("02-magic-action-editor-script");
 	await editor.locator('[data-action="save-magic-editor"]').click();
 	await editor.waitFor({ state: "detached" });
@@ -316,8 +328,12 @@ try {
 			},
 			delayMs: 250,
 		},
+		// Automatic temp-folder sandbox verification runs the candidate agent Magic Action on a generated sample.pdf
 		{
-			text: "PDF 단일 파일용 'PDF 핵심 3줄 요약' 매직 액션을 추가하고 잘라내기를 숨겼습니다. 태그 항목은 필수 기능이라 항상 유지됩니다.",
+			text: "임시 폴더 샘플 PDF 검증 완료: 핵심 3줄 요약이 정상 동작합니다.",
+		},
+		{
+			text: "PDF 단일 파일용 'PDF 핵심 3줄 요약' 매직 액션을 임시 폴더에서 검증한 뒤 추가하고 잘라내기를 숨겼습니다. 태그 항목은 필수 기능이라 항상 유지됩니다.",
 		},
 	);
 
@@ -340,8 +356,9 @@ try {
 	await shot("06-settings-context-menu-populated");
 
 	check(
-		"app-customizer profile does NOT load MCP tools (strictly isolated to the 6 settings tools)",
-		!seenRequests[0]?.tools.some((name) => name.startsWith("mcp__")),
+		"app-customizer profile does NOT load MCP tools (strictly isolated to the 7 settings tools including test_magic_action)",
+		!seenRequests[0]?.tools.some((name) => name.startsWith("mcp__")) &&
+			seenRequests[0]?.tools.includes("test_magic_action"),
 		JSON.stringify(seenRequests[0]?.tools),
 	);
 	const settingsFile = join(USER_DATA, "settings", "settings-state.json");

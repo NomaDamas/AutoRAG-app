@@ -6,6 +6,7 @@ import { findSecrets, maskSecret } from "../../../shared/secret-guard";
 import { isJsonObject, type JsonObject, type JsonValue, type McpExposure, type McpServerRow } from "../../../shared/settings-contract";
 import { REFRESH_INTERVALS } from "../../../shared/settings-options";
 import { resolveMcpRegistryServer, searchMcpRegistry, type McpRegistryCandidate } from "../../mcp-registry";
+import { createGuardedBashTool } from "../guarded-bash";
 import { intentPromptLine, withIntentTools } from "../profile-progress";
 import type { RunPrompter } from "../customizer-prompter";
 import {
@@ -40,6 +41,12 @@ export interface ConnectionsCustomizerToolkitDeps extends ConfigCustomizerDeps {
 	readonly platform?: NodeJS.Platform;
 	/** The registry fetch; injectable for tests, the platform `fetch` otherwise. */
 	readonly fetch?: typeof globalThis.fetch;
+	/** Full read/write shell (with secret env scrubbing) for inspecting or setting up local MCP servers and CLIs. */
+	readonly shell?: {
+		readonly homeDir?: string;
+		readonly cwd: string;
+		readonly env: NodeJS.ProcessEnv;
+	};
 }
 
 function localized(ko: string, en: string, ja: string, zh: string): Localized {
@@ -673,12 +680,24 @@ export function createConnectionsCustomizerToolkit(deps: ConnectionsCustomizerTo
 		},
 	});
 
-	return kit.toolkit([getConnections, updateDatasource, updateMcpServer, searchRegistry, installServer]);
+	const tools: ToolDefinition[] = [getConnections, updateDatasource, updateMcpServer, searchRegistry, installServer];
+	if (deps.shell !== undefined) {
+		tools.push(
+			createGuardedBashTool({
+				cwd: deps.shell.cwd,
+				env: deps.shell.env,
+			}),
+		);
+	}
+	return kit.toolkit(tools);
 }
 
-function systemPrompt(language: ReplyLanguage, surface: string, intervalHint: string): string {
+function systemPrompt(language: ReplyLanguage, surface: string, intervalHint: string, hasShell: boolean): string {
 	const replyLang = REPLY_LANGUAGE_NAME[language];
 	const section = surface === "mcp" ? "Settings → MCP servers" : "Settings → Connected apps and datasources";
+	const shellLine = hasShell
+		? "- You have a full read/write `bash` tool for inspecting or installing local MCP server runtimes/packages (`npx`, `uvx`, `node`, `python`) and checking local config files. Never copy a secret or token into a command, file, or reply — use the masked credential prompt instead."
+		: "- No shell tool is available in this session; rely on the structured MCP and web tools.";
 
 	return [
 		`You are Dazzi's dedicated Connections Assistant (\`connections-customizer\`), embedded inside ${section}.`,
@@ -688,6 +707,7 @@ function systemPrompt(language: ReplyLanguage, surface: string, intervalHint: st
 		"- You edit the connections this computer is set up with, through the same services the Settings pages write through: the shared `mcp.json` (validated by the real MCP service) and `datasources.<id>` of the shared AutoRAG config.",
 		"- You can search the official MCP registry (`search_mcp_registry`), install a server from it (`install_mcp_server`), and — when the registry has no match — use `web_search` and `web_fetch` to find a server's docs or repository and tell the person about it.",
 		`- Offered refresh intervals for a datasource: ${intervalHint} (milliseconds; 0 means manual).`,
+		shellLine,
 		"",
 		"## Non-Negotiable Invariants",
 		"1. **Secrets stay out of your reach**: you never ask for, write, invent, or reveal API keys, tokens, passwords, or credentials in chat, and you never edit sign-in or remote-access settings. To store one, use the masked field the tool opens — `install_mcp_server`, or `secretEnv`/`secretHeaders` of `update_mcp_server` — where the person types the value and the AI never sees it; the config keeps only a `${DAZZI_MCP_…}` reference. `get_connections` shows only the KEY NAMES of env/headers, never their values — keep it that way.",
@@ -708,9 +728,10 @@ function systemPrompt(language: ReplyLanguage, surface: string, intervalHint: st
 
 export function connectionsCustomizerProfile(input: ConfigCustomizerProfileInput): AgentProfile {
 	const intervalHint = [0, ...REFRESH_INTERVALS.map((option) => option.ms)].join(", ");
+	const hasShell = input.toolkit.tools.some((tool) => tool.name === "bash");
 	return {
 		id: "connections-customizer",
-		systemPrompt: systemPrompt(input.language, input.surface, intervalHint),
+		systemPrompt: systemPrompt(input.language, input.surface, intervalHint, hasShell),
 		tools: [],
 		customTools: withIntentTools(input.toolkit.tools, { language: input.language }),
 		thinking: "low",

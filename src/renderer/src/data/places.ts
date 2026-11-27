@@ -35,7 +35,6 @@ import {
 	Sparkles,
 	Tag,
 	Trash2,
-	Zap,
 	type LucideIcon,
 } from "lucide-react";
 import { tagPath, type FsLocation, type FsLocationIcon, type FsTag, type FsTagColor } from "../../../shared/fs-contract";
@@ -119,15 +118,6 @@ const AI_SEARCH_ITEM: NavItem = {
 	view: "aiSearch",
 };
 
-const AUTOMATIONS_ITEM: NavItem = {
-	label: "Automations",
-	path: AUTOMATIONS_PATH,
-	icon: Zap,
-	available: true,
-	ejectable: false,
-	view: "automations",
-};
-
 /** The Tags group heading, kept apart from the OS-reported sections. */
 export const TAGS_GROUP_LABEL = "Tags";
 
@@ -191,7 +181,8 @@ export function navGroups(
 
 			return {
 				label: "Favorites",
-				items: [AI_SEARCH_ITEM, AUTOMATIONS_ITEM, ...ordered],
+				// 자동화 lives inside AI 에이전트 (its 채팅 | 자동화 segment), so it has no row of its own.
+				items: [AI_SEARCH_ITEM, ...ordered],
 			};
 		}
 

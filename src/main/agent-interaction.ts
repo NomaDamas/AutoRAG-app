@@ -14,11 +14,13 @@ type AgentTool = NonNullable<AutoRAGAgentOptions["tools"]>[number];
  *   host: `session.bindExtensions({ uiContext, mode: "rpc" })`, again after every replaced session), so the
  *   librarian's file-change gate can ask for approval.
  * - `bind` names the run the questions belong to; between runs nobody can be asked.
+ * - `current` is that run, for a tool the app wraps (the automation card, `automation-confirm`).
  */
 export interface AgentInteraction {
 	readonly askUserTool: AgentTool;
 	readonly ui: ExtensionUIContext;
 	bind(run: RunInteraction | undefined): void;
+	current(): RunInteraction | undefined;
 }
 
 export function createAgentInteraction(): AgentInteraction {
@@ -29,5 +31,6 @@ export function createAgentInteraction(): AgentInteraction {
 		bind: (run) => {
 			current = run;
 		},
+		current: () => current,
 	};
 }

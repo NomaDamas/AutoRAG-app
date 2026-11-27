@@ -434,6 +434,18 @@
 	border-color: var(--danger-dot);
 }
 
+.linear-btn.is-danger.is-danger-solid {
+	color: #fff;
+	border-color: transparent;
+	background: var(--danger-dot);
+}
+
+.linear-btn.is-danger.is-danger-solid:hover {
+	opacity: 0.8;
+	background: var(--danger-dot);
+	border-color: transparent;
+}
+
 .linear-textarea {
 	width: 100%;
 	padding: 10px var(--space-12);
@@ -457,7 +469,7 @@
 
 .settings-source {
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -1271,11 +1283,12 @@
 .settings-view .settings-modal {
 	position: relative;
 	width: min(440px, calc(100% - 32px));
+	min-width: var(--modal-min-width);
 	max-height: calc(100vh - 48px);
 	overflow-y: auto;
 	padding: 22px 22px 18px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-12);
+	border-radius: var(--radius-modal-md);
 	background: var(--bg-window);
 	box-shadow: var(--shadow-menu);
 }
@@ -1419,14 +1432,16 @@
 
 /* -------------------------------------------- 중요 알림 (Figma 580:15140) -- */
 
-/* A short yes/no question: a small card, title and close on one line, the actions at 32px. */
+/* A short yes/no question (delete, disconnect): a small card, title and close on one line, the actions at 32px.
+   Spaced as the app's other confirms (ConfirmDialog, e.g. deleting an automation): 16 all round, 6 under the title,
+   16 above the actions. */
 .settings-view .settings-modal.settings-alert {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-12);
+	gap: var(--space-6);
 	width: min(416px, calc(100% - 32px));
-	padding: var(--space-14) var(--space-16);
-	border-radius: 14px;
+	padding: var(--space-16);
+	border-radius: var(--radius-modal-md);
 	box-shadow: var(--shadow-notice);
 }
 
@@ -1444,7 +1459,7 @@
 }
 
 .settings-view .settings-alert .settings-modal-close {
-	top: var(--space-14);
+	top: var(--space-16);
 }
 
 .settings-view .magic-editor-modal .settings-modal-close {
@@ -1453,7 +1468,7 @@
 }
 
 .settings-view .settings-alert .settings-modal-actions {
-	margin-top: 0;
+	margin-top: var(--space-10);
 }
 
 .settings-view .settings-alert .settings-modal-actions .linear-btn {
@@ -1467,7 +1482,7 @@
 	width: min(468px, calc(100% - 32px));
 	padding: 22px 20px 18px;
 	border: 0;
-	border-radius: 16px;
+	border-radius: var(--radius-modal-md);
 	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -1528,6 +1543,71 @@
 	color: var(--text-muted);
 }
 
+/*
+ * The 매직 액션 modal is the 자동화 card's form (언제 / Dazzi가 할 일), so its body matches that card: a 12px muted
+ * label over each part, the right-click sentence of chips, and a bordered 할 일 field. The name above clears the X.
+ */
+.settings-view .magic-editor > .magic-editor-name {
+	padding-right: 32px;
+}
+
+.settings-view .magic-editor-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding-top: 20px;
+}
+
+.settings-view .magic-editor-label {
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: var(--space-4);
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea {
+	height: 72px;
+	min-height: 72px;
+	margin: 0;
+	padding: var(--space-8) var(--space-10);
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-10);
+	background: var(--bg-subtle-alt);
+	font-size: 13px;
+	line-height: 20px;
+	resize: none;
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+}
+
+.settings-view .settings-modal .magic-editor-body > textarea:focus {
+	border-color: var(--accent);
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-body > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .settings-modal .magic-editor-body > p.magic-editor-card-hint {
+	margin: 0;
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
+}
+
 /* 처리 방식: a full-width segmented control, the picked half a white chip. */
 .settings-view .magic-editor-kind {
 	display: flex;
@@ -1540,7 +1620,7 @@
 	display: flex;
 	gap: 2px;
 	padding: 3px;
-	border-radius: 10px;
+	border-radius: var(--radius-9);
 	background: var(--bg-input);
 }
 
@@ -1553,7 +1633,7 @@
 	min-width: 0;
 	padding: var(--space-6) var(--space-12);
 	border: 0.5px solid transparent;
-	border-radius: var(--radius-8);
+	border-radius: var(--radius-7);
 	background: transparent;
 	color: var(--text-muted);
 	font: inherit;
@@ -1890,6 +1970,67 @@
 .settings-view .magic-editor .settings-modal-actions .linear-btn:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+
+.settings-view .magic-editor .magic-editor-test-btn {
+	margin-right: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.settings-view .magic-editor-verify-result {
+	margin-top: var(--space-12);
+	padding: var(--space-10) var(--space-12);
+	border-radius: var(--radius-8);
+	border: 1px solid var(--border);
+	background: var(--surface-muted);
+	font-size: var(--font-size-meta);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.settings-view .magic-editor-verify-result.is-ok {
+	border-color: var(--ok-dot);
+}
+
+.settings-view .magic-editor-verify-result.is-fail {
+	border-color: var(--danger-text);
+}
+
+.settings-view .magic-editor-verify-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .magic-editor-verify-result.is-ok .magic-editor-verify-head {
+	color: var(--ok-dot);
+}
+
+.settings-view .magic-editor-verify-result.is-fail .magic-editor-verify-head {
+	color: var(--danger-text);
+}
+
+.settings-view .magic-editor-verify-pre {
+	margin: 0;
+	padding: var(--space-6) var(--space-8);
+	border-radius: var(--radius-6);
+	background: var(--window);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-badge);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 120px;
+	overflow: auto;
+}
+
+.settings-view .magic-editor-verify-diff {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
 }
 
 /* MCP 서버 추가/수정 in the same dialog: the card holds labelled monospace lines instead of one prompt. */
@@ -2438,87 +2579,54 @@
 	}
 }
 
-/* Indexing > 진행 상황: the live run, same snapshot as the sidebar block. */
-.settings-view .settings-activity {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-8);
-	padding: var(--space-8) 0;
-}
-
-.settings-view .settings-activity-head {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: var(--space-12);
-}
-
-.settings-view .settings-activity-items {
+/* Indexing > 진행 상황 (Figma 596:18346, 601:4495, 601:4870): what indexing is doing, then the files read so far. */
+.settings-view .index-status {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
-.settings-view .settings-activity-item {
-	display: flex;
-	align-items: center;
-	gap: var(--space-8);
+	padding: var(--space-12) var(--space-14);
+	border-radius: var(--radius-12);
+	background: var(--bg-subtle-alt);
 	min-width: 0;
 }
 
-.settings-view .settings-activity-item .settings-list-meta {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-align: right;
-}
-
-/* The running index in stages: which one, how many files, how long, and whether anything is still finishing (seungwonme/AutoRAG-app#5). */
-.settings-view .settings-activity-detail {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-4);
-}
-
-.settings-view .settings-activity-detail .settings-list-meta {
-	margin: 0;
-	font-variant-numeric: tabular-nums;
-	white-space: normal;
-}
-
-.settings-view .settings-activity-stages {
+.settings-view .index-status-line {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--space-12);
-	margin: 0;
-	padding: 0;
-	list-style: none;
+	align-items: baseline;
+	column-gap: var(--space-12);
+	row-gap: var(--space-2);
+	min-width: 0;
 }
 
-.settings-view .settings-activity-stages > [data-state="running"] {
+.settings-view .index-status-title,
+.settings-view .index-status-count {
+	font-size: 13px;
+	font-weight: var(--weight-medium);
 	color: var(--text-primary);
-	font-weight: 600;
+	font-variant-numeric: tabular-nums;
 }
 
-.settings-view .settings-activity-stages > [data-state="pending"] {
-	opacity: 0.55;
+.settings-view .index-status[data-tone="stop"] .index-status-title {
+	color: var(--danger-text);
 }
 
-.settings-view .settings-activity-warning {
-	color: var(--error-orange-text);
+.settings-view .index-status-note {
+	min-width: 0;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
 }
 
-/* The ways out of a problem the last run left behind (issue #283). */
-.settings-view .settings-problem-actions {
+.settings-view .index-status-note > p {
+	margin: 0;
+}
+
+.settings-view .index-status-actions {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-8);
+	margin-top: var(--space-4);
 }
 
 /* The on-device embedding model's download, shared by onboarding and Settings: app tokens only, so both themes and both surfaces match. */
@@ -2790,7 +2898,7 @@
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -2949,7 +3057,7 @@
 
 .settings-view .sidebar-section-card {
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	overflow: hidden;
 }
@@ -3174,6 +3282,39 @@
 	border-color: var(--accent-pending-border);
 	background: var(--accent-drop-hover);
 	color: var(--text-primary);
+}
+
+/* 우클릭 메뉴: opening the tab lifts the assistant's welcome in like chat messages arriving — the mark,
+   the title, the line and the first suggestion together, then each next suggestion in order — so the eye lands on the assistant first. The panel is
+   only hidden on other tabs, and display:none restarts the animation, so it plays on every visit. */
+.customizer-panel[data-surface="contextMenu"] .customizer-rise {
+	animation: customizer-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	animation-delay: calc(120ms + var(--rise-i, 0) * 110ms);
+}
+
+@keyframes customizer-rise {
+	from {
+		opacity: 0;
+		transform: translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.customizer-panel[data-surface="contextMenu"] .customizer-rise {
+		animation-name: customizer-fade;
+	}
+	@keyframes customizer-fade {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 }
 
 .customizer-panel__turns {
@@ -3709,7 +3850,7 @@
 	margin-top: var(--space-10);
 	padding: var(--space-16) 20px;
 	border: 1px solid var(--border);
-	border-radius: 16px;
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 	min-width: 0;
 }
@@ -4220,8 +4361,15 @@
 	flex-direction: column;
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
+}
+
+/* 제외한 항목: five rows (5 × 56px + 4 dividers + the 2px border) show at once, the rest scrolls inside the list. */
+.settings-view .scope-list.is-scroll {
+	max-height: 286px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .settings-view .scope-row {
@@ -4593,7 +4741,7 @@
 	flex-direction: column;
 	overflow: hidden;
 	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 
@@ -4642,7 +4790,7 @@
 	display: flex;
 	flex-direction: column;
 	padding: 8px 28px;
-	border-radius: 16px;
+	border-radius: var(--radius-12);
 	background: var(--bg-subtle-alt);
 }
 
@@ -5651,19 +5799,11 @@
 
 .settings-view .scope-row-bar {
 	flex: none;
-	width: 80px;
+	width: 120px;
 	height: 5px;
 	overflow: hidden;
 	border-radius: 3px;
 	background: var(--bg-input);
-}
-
-.settings-view .scope-row-bar i {
-	display: block;
-	height: 100%;
-	border-radius: inherit;
-	background: var(--accent);
-	transition: width var(--dur-color) var(--ease-out);
 }
 
 .settings-view .scope-row-percent {
@@ -5675,13 +5815,12 @@
 	text-align: right;
 }
 
-.settings-view .scope-row-count {
-	flex: none;
-	width: 92px;
-	color: var(--text-faint);
-	font-size: var(--font-size-meta);
-	font-variant-numeric: tabular-nums;
-	text-align: right;
+.settings-view .scope-row-bar i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--accent);
+	transition: width var(--dur-color) var(--ease-out);
 }
 
 .settings-view .scope-row-remove-space {
@@ -5961,16 +6100,53 @@
 	gap: 2px;
 }
 
+/* 최신화 follows 제외한 항목 (.scope-list / .scope-row): the same frame, 56px rows, a bare 16px glyph 12px from the text,
+   the 12px path type, and the faint 24px icon button that turns ink on hover. */
 .settings-view [data-index-scope="refresh"] .settings-list {
 	overflow: hidden;
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-divider);
 	border-radius: var(--radius-12);
 	background: var(--bg-window);
 }
 
 .settings-view [data-index-scope="refresh"] .settings-list-row {
-	min-height: 60px;
-	padding: 12px 16px;
+	min-height: 56px;
+	padding: 8px 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-sync-name .settings-app-icon.is-sm {
+	width: 16px;
+	height: 16px;
+	margin-right: 12px;
+	border-radius: 0;
+	background: none;
+	color: var(--text-body);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-sync-name .settings-app-icon.is-sm > svg {
+	width: 16px;
+	height: 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list-title {
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-icon-btn {
+	width: 24px;
+	height: 24px;
+	color: var(--text-faint);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-icon-btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-icon-btn > svg {
+	width: 14px;
+	height: 14px;
 }
 
 .settings-view [data-index-scope="refresh"] .settings-list-row:last-child {

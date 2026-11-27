@@ -284,8 +284,8 @@ try {
 		check("답변과 화면에 가져온 키가 없다", !reply.includes("LiveQaCodexFixtureKey") && !(await everythingOnScreen()).includes("LiveQaCodexFixtureKey"));
 	}
 
-	// 4. The shell: reading is free (the assistant may print another agent's credential file, but the value never reaches the
-	//    model), a new environment variable can be set, and a write outside the files it manages is refused.
+	// 4. The shell: full read/write for Settings assistants (no Jev write-classification gate),
+	//    while secrets in other agents' credential files still never reach the model.
 	{
 		const { index } = await send("AI 모델", "ai", "bash로 cat ~/.codex/auth.json 의 내용을 읽어서 어떤 항목들이 들어있는지 알려줘. 키 값 자체는 말하지 말고.");
 		const { reply, seen } = await answerCards("ai", index, "shell-read", []);
@@ -304,11 +304,11 @@ try {
 		check("기존 줄은 그대로다", text.startsWith("alias ll='ls -la'\n"), text);
 	}
 	{
-		const outside = join(HOME_DIR, "Documents", "should-not-exist.txt");
-		const { index } = await send("AI 모델", "ai", `bash로 ${outside} 파일을 만들고 hello 라고 써줘.`);
-		const { reply } = await answerCards("ai", index, "shell-outside", []);
-		await shot("06c-shell-outside");
-		check("관리하지 않는 파일에는 쓰지 못한다", !existsSync(outside), reply.slice(0, 160));
+		const notePath = join(HOME_DIR, "Documents", "assistant-write-ok.txt");
+		const { index } = await send("AI 모델", "ai", `bash로 ${notePath} 파일을 만들고 hello 라고 써줘.`);
+		const { reply } = await answerCards("ai", index, "shell-write", []);
+		await shot("06c-shell-write");
+		check("설정 어시스턴트는 Jev 쓰기 게이트 없이 파일을 작성할 수 있다", existsSync(notePath) && readFileSync(notePath, "utf8").includes("hello"), reply.slice(0, 160));
 	}
 
 	// 5. MCP registry search + install with a secret.

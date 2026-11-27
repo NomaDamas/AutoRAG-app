@@ -6,17 +6,15 @@
  * step (no model, no network), so the real renderer, preload bridge, and IPC
  * path run while the timing is exact. With real keyboard input it checks:
  *
- *   1. the composer stays enabled while a search runs, with a steering hint
- *      and placeholder;
- *   2. Enter before the Quick answer sends a steer: a user bubble above the
- *      Quick answer that waits (dashed, pulsing) until the run reports
- *      delivery, then shows "Applied" with a check;
- *   3. Enter after the Quick answer places the steer between Quick and Deep;
- *   4. ⌥Enter queues a "Next question" chip instead of steering; it is asked
- *      once the run ends;
- *   5. a steer the run refuses becomes the next question;
- *   6. a steer still waiting when the run ends is struck through;
- *   7. Esc stops the whole run and puts queued questions back in the composer.
+ *   1. the composer stays enabled while a search runs, with its usual placeholder and no key hint;
+ *   2. Enter before the Quick answer holds the message (dimmed, 미루기 / 취소) and, sorted as a correction, sends it
+ *      after the hold; it turns solid once the run reports delivery, and copies under the pointer;
+ *   3. Enter after the Quick answer places the correction between Quick and Deep;
+ *   4. a correction still waiting when the run ends is struck through;
+ *   5. a message sorted as the next question, ⌥Enter, and a refused correction wait as dashed bubbles (지금 반영 /
+ *      수정 / 삭제); the first is asked once the run ends;
+ *   6. a held correction can be cancelled or postponed;
+ *   7. Esc stops the whole run and puts what was waiting back in the composer.
  *
  * Screenshots land in .omo/evidence/ai-finder-app/qa-ai-search-steer/.
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-ai-search-steer.mjs
@@ -77,13 +75,14 @@ page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`
 
 // A scripted search backend in main. The lane emits events and settles runs through `qa(...)`.
 await app.evaluate(({ ipcMain, BrowserWindow }) => {
-	const state = { runs: new Map(), steers: [], refuseNextSteer: false, starts: [] };
+	const state = { runs: new Map(), steers: [], refuseNextSteer: false, starts: [], kind: "steer" };
 	const send = (payload) => {
 		for (const window of BrowserWindow.getAllWindows()) {
 			if (window.webContents.getURL().includes("index.html")) window.webContents.send("search:event", payload);
 		}
 	};
-	for (const channel of ["search:start", "search:steer", "search:cancel"]) ipcMain.removeHandler(channel);
+	for (const channel of ["search:start", "search:steer", "search:cancel", "search:classifyFollowUp"]) ipcMain.removeHandler(channel);
+	ipcMain.handle("search:classifyFollowUp", () => state.kind);
 	ipcMain.handle("search:start", (_event, searchId, _chatId, query) => {
 		state.starts.push(query);
 		return new Promise((resolve) => state.runs.set(searchId, { resolve, query }));
@@ -125,6 +124,10 @@ const qa = (action, arg) =>
 				steer.state.refuseNextSteer = true;
 				return null;
 			}
+			if (name === "kind") {
+				steer.state.kind = value;
+				return null;
+			}
 			if (name === "state") return { steers: steer.state.steers, starts: steer.state.starts, running: steer.state.runs.size };
 			return null;
 		},
@@ -144,7 +147,7 @@ const waitFor = async (predicate, label, timeoutMs = 5000) => {
 await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await openAiSearch(page);
 const panel = page.locator(AI_PANEL);
-const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
+const composer = panel.locator('textarea[aria-label="Ask AI"]');
 const steerBubbles = panel.locator(".steer-msg");
 log("app ready");
 
@@ -155,26 +158,39 @@ await page.keyboard.press("Enter");
 await waitFor(async () => (await qa("state")).running === 1, "run start");
 check("the composer stays enabled while the search runs", await composer.isEnabled());
 const placeholder = await composer.getAttribute("placeholder");
-check("the composer invites a correction while searching", /wrong way|Correct/iu.test(placeholder ?? ""), placeholder ?? "");
-check("a hint names Enter / ⌥Enter / Esc", (await panel.locator(".steer-hint").innerText()).includes("Esc"), await panel.locator(".steer-hint").innerText());
+check("the composer keeps its usual placeholder while searching", /Dazzi/u.test(placeholder ?? ""), placeholder ?? "");
+check("no key hint sits over the composer", (await panel.locator(".steer-hint").count()) === 0);
 await page.screenshot({ path: join(EVIDENCE, "01-searching-composer.png") });
 
 // ── 2. Steer before the Quick answer. ─────────────────────────────────────
 await composer.click();
 await page.keyboard.type("Only the June planning notes.");
 await page.keyboard.press("Enter");
-await waitFor(async () => (await qa("state")).steers.length === 1, "first steer");
-check("Enter during a search steers it, it does not start a new search", JSON.stringify((await qa("state")).steers) === JSON.stringify(["Only the June planning notes."]) && (await qa("state")).starts.length === 1, JSON.stringify(await qa("state")));
-check("the composer clears after a steer", (await composer.inputValue()) === "");
 const firstSteer = steerBubbles.nth(0);
-check("the steer shows as a waiting bubble", (await firstSteer.getAttribute("data-steer-status")) === "pending");
-check("the waiting bubble says it goes in at the next step", (await firstSteer.locator(".steer-status").innerText()).includes("next step"), await firstSteer.locator(".steer-status").innerText());
+await firstSteer.waitFor();
+check("the message is held first, not sent", (await firstSteer.getAttribute("data-steer-status")) === "held" && (await qa("state")).steers.length === 0, JSON.stringify(await qa("state")));
+check("a held correction offers postpone and cancel", (await firstSteer.locator("button").count()) === 2);
+await firstSteer.locator("button").first().hover();
+await page.waitForTimeout(300);
+await page.screenshot({ path: join(EVIDENCE, "02-steer-held.png") });
+await waitFor(async () => (await qa("state")).steers.length === 1, "first steer");
+check("after the hold the correction is sent, and no new search starts", JSON.stringify((await qa("state")).steers) === JSON.stringify(["Only the June planning notes."]) && (await qa("state")).starts.length === 1, JSON.stringify(await qa("state")));
+check("the composer clears after a steer", (await composer.inputValue()) === "");
+check("a sent steer waits, with nothing to press", (await firstSteer.getAttribute("data-steer-status")) === "pending" && (await firstSteer.locator("button").count()) === 0);
+await page.mouse.move(5, 5);
 await page.waitForTimeout(400);
-await page.screenshot({ path: join(EVIDENCE, "02-steer-pending-before-quick.png") });
+await page.screenshot({ path: join(EVIDENCE, "02b-steer-pending-before-quick.png") });
 
 await qa("emit", { type: "steer-delivered" });
 await waitFor(async () => (await firstSteer.getAttribute("data-steer-status")) === "delivered", "delivery");
-check("delivery turns the bubble into Applied", (await firstSteer.locator(".steer-status").innerText()).includes("Applied"), await firstSteer.locator(".steer-status").innerText());
+check("delivery offers copy under the bubble", (await firstSteer.locator("button").count()) === 1);
+const copyOpacity = () => firstSteer.locator(".bubble-actions").evaluate((row) => getComputedStyle(row).opacity);
+check("copy is hidden until the pointer is on the bubble", (await copyOpacity()) === "0", await copyOpacity());
+await firstSteer.locator(".steer-bubble").hover();
+await page.waitForTimeout(300);
+check("copy shows under the pointer", (await copyOpacity()) === "1", await copyOpacity());
+await page.screenshot({ path: join(EVIDENCE, "02c-copy-on-hover.png") });
+await page.mouse.move(5, 5);
 await qa("emit", { type: "quick", sessionId: "s", phase: phase("- The June plan targets **July 14** for the v2 launch.") });
 await panel.locator(".assistant-prose").first().waitFor();
 const order = await panel.evaluate((root) => {
@@ -201,32 +217,59 @@ await qa("finish");
 await waitFor(async () => (await steerBubbles.nth(1).getAttribute("data-steer-status")) === "dropped", "dropped steer");
 check("a steer the run never took is struck through", (await steerBubbles.nth(1).getAttribute("data-steer-status")) === "dropped");
 check("the delivered steer stays Applied after the run", (await steerBubbles.nth(0).getAttribute("data-steer-status")) === "delivered");
-check("the composer leaves steering mode once the run ends", (await panel.locator(".steer-hint").count()) === 0);
 // The bubble's colors ease over --dur-color; capture the settled state.
 await page.waitForTimeout(400);
 await page.screenshot({ path: join(EVIDENCE, "05-run-ended-dropped-steer.png") });
 
-// ── 5. ⌥Enter queues; a refused steer queues too; both are asked in order. ──
+// ── 5. What waits: sorted as next, ⌥Enter, and a refused correction. ───────
 await composer.click();
 await page.keyboard.type("Who owns the launch checklist?");
 await page.keyboard.press("Enter");
 await waitFor(async () => (await qa("state")).running === 1, "second run");
+await qa("kind", "next");
 await composer.click();
 await page.keyboard.type("What blocks the launch?");
-await page.keyboard.press("Alt+Enter");
+await page.keyboard.press("Enter");
 await panel.locator(".queued-question").waitFor();
-check("⌥Enter queues the next question instead of steering", (await qa("state")).steers.length === 2 && (await panel.locator(".queued-question").innerText()).includes("blocks the launch"));
+check("a message sorted as the next question waits at once", (await qa("state")).steers.length === 2 && (await panel.locator(".queued-question").innerText()).includes("blocks the launch"));
+await qa("kind", "steer");
+await composer.click();
+await page.keyboard.type("Which risks are open?");
+await page.keyboard.press("Alt+Enter");
+await waitFor(async () => (await panel.locator(".queued-question").count()) === 2, "alt-enter queued");
 await qa("refuse");
 await composer.click();
 await page.keyboard.type("Also list the owners.");
 await page.keyboard.press("Enter");
-await waitFor(async () => (await panel.locator(".queued-question").count()) === 2, "refused steer queued");
-check("a steer the run refuses is queued as the next question", (await panel.locator(".queued-question").nth(1).innerText()).includes("owners"));
+await waitFor(async () => (await panel.locator(".queued-question").count()) === 3, "refused steer queued", 8000);
+check("a correction the run refuses waits as the next question", (await panel.locator(".queued-question").nth(2).innerText()).includes("owners"));
+check("a waiting question offers send now, edit and delete", (await panel.locator(".queued-question").first().locator("button").count()) === 3);
+await panel.locator(".queued-question").first().locator("button").first().hover();
 await page.waitForTimeout(300);
 await page.screenshot({ path: join(EVIDENCE, "06-queued-questions.png") });
+await panel.locator(".queued-question").nth(1).locator("button").nth(2).click();
+check("delete removes a waiting question", (await panel.locator(".queued-question").count()) === 2);
+
+// ── 6. A held correction can be cancelled or postponed. ───────────────────
+const before = (await qa("state")).steers.length;
+await composer.click();
+await page.keyboard.type("Never mind this one.");
+await page.keyboard.press("Enter");
+const held = panel.locator('.steer-msg[data-steer-status="held"]');
+await held.waitFor();
+await held.locator("button").nth(1).click();
+await page.waitForTimeout(3600);
+check("a cancelled correction is never sent", (await qa("state")).steers.length === before && (await held.count()) === 0);
+await composer.click();
+await page.keyboard.type("Ask this after.");
+await page.keyboard.press("Enter");
+await held.waitFor();
+await held.locator("button").first().click();
+check("a postponed correction waits as the next question", (await panel.locator(".queued-question").count()) === 3 && (await panel.locator(".queued-question").nth(2).innerText()).includes("Ask this after"));
+await panel.locator(".queued-question").nth(2).locator("button").nth(2).click();
 await qa("finish");
 await waitFor(async () => (await qa("state")).starts.length === 3, "queued question starts");
-check("the first queued question is asked once the run ends", (await qa("state")).starts[2] === "What blocks the launch?", JSON.stringify((await qa("state")).starts));
+check("the first waiting question is asked once the run ends", (await qa("state")).starts[2] === "What blocks the launch?", JSON.stringify((await qa("state")).starts));
 
 // ── 6. Esc stops the run; the remaining queued question returns to the composer. ──
 await page.keyboard.press("Escape");

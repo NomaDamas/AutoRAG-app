@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { AUTORAG_PROVIDER_ID } from "../shared/account-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { t } from "../shared/i18n/core";
 
 /**
  * Bridge between the app's account sign-in and the librarian's hosted-plan
@@ -58,7 +59,8 @@ async function readAuthObject(authPath: string): Promise<Record<string, unknown>
 		const parsed: unknown = JSON.parse(await readFile(authPath, "utf8"));
 		return isJsonObject(parsed) ? { ...parsed } : {};
 	} catch (error) {
-		throw new Error(`auth.json is unreadable; refusing to overwrite it (${String(error)})`);
+		console.warn(`[account] ${authPath} is unreadable: ${String(error)}`);
+		throw new Error(t("main.errors.account.authFileUnreadable", { name: basename(authPath) }));
 	}
 }
 

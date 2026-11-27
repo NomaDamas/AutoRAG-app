@@ -5,7 +5,9 @@ export function createMagicActionBridge(ipcRenderer: IpcRenderer): MagicActionBr
 	return {
 		start: (runId, request) => ipcRenderer.invoke(MAGIC_ACTION_CHANNELS.start, runId, request),
 		cancel: (runId) => ipcRenderer.invoke(MAGIC_ACTION_CHANNELS.cancel, runId),
+		verify: (request) => ipcRenderer.invoke(MAGIC_ACTION_CHANNELS.verify, request),
 		saveToHistory: (request) => ipcRenderer.invoke(MAGIC_ACTION_CHANNELS.saveToHistory, request),
+		history: (actionId) => ipcRenderer.invoke(MAGIC_ACTION_CHANNELS.history, actionId),
 		onEvent: (listener) => {
 			const handler = (_event: IpcRendererEvent, event: MagicActionEvent): void => listener(event);
 			ipcRenderer.on(MAGIC_ACTION_CHANNELS.event, handler);

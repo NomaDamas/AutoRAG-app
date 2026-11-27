@@ -51,7 +51,7 @@ export function MicrophonePermissionDialog({
 			}}
 		>
 			<div
-				className="mic-permission-dialog flex w-[420px] flex-col gap-16 p-20 border border-border rounded-12 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="mic-permission-dialog flex w-[420px] flex-col gap-16 p-20 border border-border rounded-modal-md bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="mic-permission-title"

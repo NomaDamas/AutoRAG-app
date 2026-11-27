@@ -68,7 +68,7 @@ describe("i18n configuration and locale keys", () => {
 			ja: /質問/u,
 			zh: /问题/u,
 		};
-		const keys = ["firstRun.early.start", "firstRun.setup.stage.preparing", "firstRun.tour.typingHint", "firstRun.tour.ask.title", "firstRun.tour.ask.body", "main.onboarding.noQuestion"];
+		const keys = ["firstRun.early.start", "firstRun.setup.stage.preparing", "firstRun.tour.ask.title", "firstRun.tour.ask.body", "main.onboarding.noQuestion"];
 		for (const lang of ["ko", "en", "ja", "zh"] as const) {
 			const text = leaves(resources[lang].translation);
 			for (const key of keys) {

@@ -302,3 +302,50 @@ describe("pictures attached to a question", () => {
 		expect(Math.max(...counts)).toBe(1);
 	});
 });
+
+describe("explicit Turn-1 routeOverride", () => {
+	it("bypasses Jev route classification when routeOverride is passed (organize / extra / local)", async () => {
+		const askedQuestionIds: string[] = [];
+		const registration = registerFauxProvider({ api: `faux-route-${randomUUID()}`, models: [{ id: "interactive", input: ["text"] }] });
+		registration.setResponses([fauxAssistantMessage("organized files", { stopReason: "stop" })]);
+		disposers.push(() => registration.unregister());
+		const agentDir = join(root, "agent-route");
+		mkdirSync(agentDir, { recursive: true });
+		const model = registration.getModel();
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultProvider: model.provider, defaultModel: model.id }));
+
+		const agent = new InteractiveSearchAgent(
+			{
+				model,
+				apiKey: "test-key",
+				searchPaths: [root],
+				workspacePath: root,
+				memoryPath: join(root, "memory.json"),
+				minSync: { autoInstall: false },
+				jikji: false,
+				piAgentDir: agentDir,
+				piSessionDir: join(root, "sessions"),
+				jev: {
+					backend: {
+						name: "recording-override",
+						async judge(request) {
+							askedQuestionIds.push(...request.questions.map((q) => q.id));
+							return { answers: request.questions.map(() => ({ answer: 0.1 })) };
+						},
+					},
+				},
+				filee: false,
+				permissionMode: "full",
+			},
+			createAgentInteraction(),
+		);
+		await agent.openSession();
+		disposers.push(() => agent.closeSession());
+
+		const response = await agent.searchDocuments("sort my files", { routeOverride: "organize" });
+		expect(response.answer).toContain("organized files");
+		// Jev route classification ("route") must NOT be called when routeOverride is explicit.
+		expect(askedQuestionIds).not.toContain("route");
+		expect(response.diagnostics?.some((d) => d.code === "query-routed" && d.source === "route-override" && d.message.includes("organize"))).toBe(true);
+	});
+});

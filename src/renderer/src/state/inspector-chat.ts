@@ -182,6 +182,25 @@ export function removeSteer(chat: InspectorChat, id: string): InspectorChat {
 	return { ...chat, turns: chat.turns.map((turn) => (turn.steers.some((steer) => steer.id === id) ? { ...turn, steers: turn.steers.filter((steer) => steer.id !== id) } : turn)) };
 }
 
+/** The steer `id` as it is while still held in the app, or undefined once it was sent, moved or removed. */
+export function heldSteer(tab: InspectorChatTab, id: string): SteerItem | undefined {
+	return tab.chat?.turns.flatMap((turn) => turn.steers).find((steer) => steer.id === id && steer.status === "held");
+}
+
+/** The held steer `id` goes out now: it waits for the next model request, placed by where the answer stands. */
+export function sendHeldSteer(chat: InspectorChat, id: string): InspectorChat {
+	const timing = steerTiming(chat);
+	return updateLastTurn(chat, (turn) => ({ ...turn, steers: turn.steers.map((steer) => (steer.id === id ? { ...steer, timing, status: "pending" } : steer)) }));
+}
+
+/** The run is over: corrections never sent leave the chat and, with `requeue`, wait as next questions. */
+export function releaseHeldSteers(tab: InspectorChatTab, requeue: boolean): InspectorChatTab {
+	const held = tab.chat?.turns.flatMap((turn) => turn.steers).filter((steer) => steer.status === "held") ?? [];
+	if (tab.chat === null || held.length === 0) return tab;
+	const turns = tab.chat.turns.map((turn) => ({ ...turn, steers: turn.steers.filter((steer) => steer.status !== "held") }));
+	return { ...tab, chat: { ...tab.chat, turns }, queued: requeue ? [...tab.queued, ...held.map((steer) => steer.text)] : tab.queued };
+}
+
 /** A model request of the running turn took every steer sent so far. */
 export function deliverTurnSteers(chat: InspectorChat): InspectorChat {
 	return updateLastTurn(chat, (turn) => {

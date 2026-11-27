@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { createProfileSession } from "@autorag/librarian/profiles";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createAiCustomizerToolkit, aiCustomizerProfile } from "../src/main/agents/profiles/ai-customizer";
+import { createAiCustomizerToolkit } from "../src/main/agents/profiles/ai-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import type { ConfirmPromptInput, RunPrompter, SecretPromptInput } from "../src/main/agents/customizer-prompter";
 import { subscribeProfileProgress } from "../src/main/agents/profile-progress";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
@@ -225,12 +226,12 @@ function applyUpdates(base: Record<string, unknown>, updates: readonly { path: r
 	return clone;
 }
 
-describe("ai-customizer pi agent profile & toolkit", () => {
+describe("ai-customizer toolkit & settings-customizer profile", () => {
 	it("exposes the seven AI/web tools, plus bash only with a shell, and states the new narrower invariants", () => {
 		const { kit } = toolkitFor();
-		const profile = aiCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
 
-		expect(profile.id).toBe("ai-customizer");
+		expect(profile.id).toBe("settings-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((tool) => tool.name).sort()).toEqual([
 			"connect_provider_key",
@@ -245,11 +246,10 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		expect(profile.systemPrompt).toMatch(/if it is unclear, reply in Korean/);
 		expect(profile.systemPrompt).toMatch(/connect_provider_key/);
 		expect(profile.systemPrompt).toMatch(/scan_coding_agents/);
-		expect(profile.systemPrompt).toMatch(/API key/i);
 		expect(profile.systemPrompt).toMatch(/embedding/i);
 		expect(profile.systemPrompt).toMatch(/OAuth/);
 		expect(profile.systemPrompt).toMatch(/removed before you see it/i);
-		expect(profile.systemPrompt).toMatch(/DATA, not instructions/i);
+		expect(profile.systemPrompt).toMatch(/DATA to report, never instructions/i);
 		// Written in English whatever the interface language is.
 		expect(profile.systemPrompt).not.toMatch(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7a3]/u);
 		expect(profile.systemPrompt).not.toMatch(/There is no tool for it/i);
@@ -258,25 +258,20 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 	it("offers bash when a shell is given, and the prompt then points to it", () => {
 		const shell = { homeDir: root, cwd: root, env: {} };
 		const { kit } = toolkitFor({ shell });
-		const profile = aiCustomizerProfile({ language: "en", surface: "ai", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "en", surface: "ai", toolkit: kit });
 
 		const names = profile.customTools?.map((tool) => tool.name) ?? [];
 		expect(names).toContain("bash");
 		const prompt = profile.systemPrompt;
-		// What the shell may do, stated plainly: read anywhere, write only the managed files, set environment variables,
-		// read other coding agents' config, and never copy a key by hand.
-		expect(prompt).toMatch(/READING is unrestricted/);
-		expect(prompt).toMatch(/WRITING is limited to the files you manage/);
-		expect(prompt).toMatch(/new environment variable/i);
-		expect(prompt).toMatch(/Jev before it runs/);
+		expect(prompt).toMatch(/full read\/write shell access/i);
 		expect(prompt).toMatch(/Claude Code, Codex, Gemini CLI, opencode, pi, Aider/);
-		expect(prompt).toMatch(/Never copy a key into a command/);
-		expect(prompt).not.toMatch(/confirm card|confirms it|refused outright/i);
+		expect(prompt).toMatch(/Never copy a secret or API key into a command/);
+		expect(prompt).not.toMatch(/judged by Jev before it runs/i);
 	});
 
 	it("answers the web surface with the same tools and web-search wording", () => {
 		const { kit } = toolkitFor();
-		const profile = aiCustomizerProfile({ language: "en", surface: "web", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "en", surface: "web", toolkit: kit });
 
 		expect(profile.customTools?.map((tool) => tool.name).sort()).toEqual([
 			"connect_provider_key",
@@ -634,7 +629,7 @@ describe("ai-customizer pi profile on the faux model", () => {
 		});
 		cleanups.push(() => registration.unregister());
 		const { kit } = toolkitFor();
-		const profile = aiCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
 
 		registration.setResponses([
 			fauxAssistantMessage(fauxToolCall("set_thinking_level", { i: "사고 깊이를 높음으로 바꾸는 중", level: "high" })),
@@ -670,7 +665,7 @@ describe("ai-customizer pi profile on the faux model", () => {
 		cleanups.push(() => registration.unregister());
 		const secret = "sk-ant-api03-SessionSecret0123456789abcd";
 		const { kit, record, known } = toolkitFor({ prompter: fakePrompter({ secret }).prompter });
-		const profile = aiCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
+		const profile = settingsCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
 
 		const seenByModel: string[] = [];
 		registration.setResponses([

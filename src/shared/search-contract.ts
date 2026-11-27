@@ -36,6 +36,7 @@ import type { AnswerRevision } from "./answer-revision";
 export const SEARCH_CHANNELS = {
 	start: "search:start",
 	steer: "search:steer",
+	classifyFollowUp: "search:classifyFollowUp",
 	cancel: "search:cancel",
 	event: "search:event",
 	historyList: "search:historyList",
@@ -135,7 +136,12 @@ export type SearchStreamEvent =
 	/** pi is summarising the chat's earlier turns (`active`), or has stopped: the run is not stuck meanwhile. */
 	| { readonly type: "compacting"; readonly searchId: string; readonly active: boolean }
 	| { readonly type: "context-notice"; readonly searchId: string; readonly notice: ContextNotice }
-	| { readonly type: "done"; readonly searchId: string };
+	| { readonly type: "done"; readonly searchId: string }
+	/** Sent after `done`, once the chat has a model-written title (see {@link ChatRecord.summaryTitle}). */
+	| { readonly type: "title"; readonly searchId: string; readonly chatId: string; readonly title: string };
+
+/** What a message sent during a run is: a correction of that run, or the next question. */
+export type FollowUpKind = "steer" | "next";
 
 /** When a steer reached the run: before or after its Quick answer was shown. */
 export type SteerTiming = "before-quick" | "after-quick";
@@ -174,14 +180,36 @@ export interface ChatSummary {
 
 export interface ChatRecord extends ChatSummary {
 	readonly messages: readonly ChatMessage[];
+	/** The short title the answer model wrote once the first answer was in; it replaces the first question as `title`. */
+	readonly summaryTitle?: string;
+}
+
+/**
+ * Explicit Turn-1 route override chosen by the user (for example clicking Find / Summarize / Organize / Automate
+ * in AI Agent). When provided, the first turn bypasses Jev's initial query-route classification and runs the
+ * matching branch directly.
+ */
+export type SearchRouteOverride = "local" | "organize" | "extra" | "config";
+
+/** Valid values for {@link SearchRouteOverride}, used for IPC payload validation. */
+export function isSearchRouteOverride(value: unknown): value is SearchRouteOverride {
+	return value === "local" || value === "organize" || value === "extra" || value === "config";
 }
 
 export interface SearchBridge {
 	/**
 	 * Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. `viewingFolder` is the folder the
 	 * person has open when they ask from the right sidebar with nothing selected: a hint to the model, never a limit.
+	 * `routeOverride` bypasses Jev's initial branch classification on Turn 1 when the person picked an explicit mode.
 	 */
-	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[], viewingFolder?: string): Promise<void>;
+	start(
+		searchId: string,
+		chatId: string,
+		query: string,
+		attachments: readonly ChatAttachment[],
+		viewingFolder?: string,
+		routeOverride?: SearchRouteOverride,
+	): Promise<void>;
 	/**
 	 * Steer the running search `searchId` with a correction. Resolves true when
 	 * the run took it, false when that run is not running (finished, stopped,
@@ -189,6 +217,8 @@ export interface SearchBridge {
 	 * as a new question.
 	 */
 	steer(searchId: string, text: string): Promise<boolean>;
+	/** Sorts a message sent during the run `searchId`; `next` when it cannot tell. Absent: every such message is `next`. */
+	classifyFollowUp?(searchId: string, text: string): Promise<FollowUpKind>;
 	cancel(searchId: string): Promise<void>;
 	/**
 	 * Keep an image pasted from the clipboard (`base64` is the file's bytes) and return the file attachment that stands for

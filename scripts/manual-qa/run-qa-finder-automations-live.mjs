@@ -252,7 +252,10 @@ try {
 	await sidebarItem(page, "Automations").click();
 	await page.waitForSelector(ROW(ruleA.id), { timeout: 30_000 });
 	check("the seeded rule is listed", (await text(page, ROW(ruleA.id))).includes("New PDF"), await text(page, ROW(ruleA.id)));
-	check("the background service starts off", (await text(page, "[data-daemon]")).includes("Off · rules are not running"), await text(page, "[data-daemon]"));
+	// The window turns the background service on by itself once there is a rule to run (once per launch).
+	const autoStarted = await waitFor("the service starts by itself", async () => serviceDefinition() !== null, 90_000);
+	check("the window turns the background service on by itself", autoStarted, serviceDefinition()?.path);
+	check("no banner or line about the service", (await page.locator("[data-daemon]").count()) === 0);
 
 	// 1. Edit a rule through the AI Chat draft, with the real agent.
 	await page.locator(ROW(ruleA.id)).click();
@@ -289,7 +292,6 @@ try {
 	check("the add stayed in its own AI tab", (await aiTabCount(page)) === aiTabs);
 	await page.locator(".tabs .tab").filter({ hasText: "Automations" }).first().click();
 	check("the new rule appears in the list without a click", added !== undefined && (await waitFor("the new row", async () => (await rowIds(page)).includes(added.id), 30_000)), JSON.stringify(await rowIds(page)));
-	check("the count follows", (await text(page, "[data-daemon]")).includes("Rules: 2"), await text(page, "[data-daemon]"));
 	await sleep(350);
 	await page.screenshot({ path: join(EVIDENCE, "04-list-after-add.png") });
 	const agentService = serviceDefinition();
@@ -300,11 +302,11 @@ try {
 		await page.locator(ROW(ruleA.id)).click();
 	}
 
-	// 3. The footer's switch: the real login service and the daemon.
-	await waitFor("the footer settles", async () => (await text(page, "[data-daemon]")).includes("Off · rules are not running"), 30_000);
-	await page.locator("[data-daemon] button").click();
-	const on = await waitFor("daemon on", async () => (await text(page, "[data-daemon]")).includes("Running in the background"), 90_000);
-	check("Turn on starts the background service", on, await text(page, "[data-daemon]"));
+	// 3. The service the window started at launch: the real login service and the daemon. The agent's own check above
+	// may have removed it, so it is registered again the way the window does it, through the app's bridge.
+	if (serviceDefinition() === null) await page.evaluate(() => window.autorag.automations.setDaemon(true));
+	const on = await waitFor("daemon on", async () => serviceDefinition() !== null, 90_000);
+	check("the background service runs", on);
 	const service = serviceDefinition();
 	check("a launchd agent was registered", service !== null, service?.path);
 	check("it starts Node with the librarian CLI, not the Dazzi app", service !== null && /(^|\/)node$/.test(service.program), service?.program);
@@ -358,12 +360,7 @@ try {
 		await page.screenshot({ path: join(EVIDENCE, "08-photo-renamed.png") });
 	}
 
-	// 5. Turn it off again.
-	await page.locator(".tabs .tab").filter({ hasText: "Automations" }).first().click();
-	await page.locator("[data-daemon] button").click();
-	const off = await waitFor("daemon off", async () => (await text(page, "[data-daemon]")).includes("Off · rules are not running"), 60_000);
-	check("Turn off stops the service", off, await text(page, "[data-daemon]"));
-	check("the launchd agent is gone", serviceDefinition() === null, serviceDefinition()?.path);
+	// 5. The desktop list has no Turn off (the banner only shows while the service is off); the service is removed in `finally`.
 	check("the rules were not touched by the switch", readRules().length === (photoRule === undefined ? 2 : 3));
 } catch (error) {
 	check("run completed", false, String(error).slice(0, 600));

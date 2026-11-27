@@ -12,11 +12,18 @@
  *   `i` intent progress and assistant markdown drafts.
  */
 
+import type { AutomationRun } from "./automation-contract";
+import { normalizeMagicAction, type MagicAction } from "./context-menu-contract";
+
 export const MAGIC_ACTION_CHANNELS = {
 	start: "magicAction:start",
 	cancel: "magicAction:cancel",
+	/** Runs a candidate Magic Action inside a temporary sandbox folder to verify it works before saving. */
+	verify: "magicAction:verify",
 	/** Keeps a finished run in AI 에이전트's 대화 기록 as a chat of its own; resolves to that chat's id. */
 	saveToHistory: "magicAction:saveToHistory",
+	/** An action's finished runs, newest first, in an automation rule's run shape (the 자동화 tab's dot and 실행 기록). */
+	history: "magicAction:history",
 	/** main → renderer event carrying one {@link MagicActionEvent}. */
 	event: "magicAction:event",
 } as const;
@@ -105,9 +112,48 @@ export function isMagicActionSaveRequest(value: unknown): value is MagicActionSa
 	);
 }
 
+export interface MagicActionVerifyRequest {
+	readonly action: MagicAction;
+}
+
+export function isMagicActionVerifyRequest(value: unknown): value is MagicActionVerifyRequest {
+	if (typeof value !== "object" || value === null) return false;
+	const candidate = value as Record<string, unknown>;
+	return normalizeMagicAction(candidate.action) !== null;
+}
+
+export interface MagicActionSandboxFileSnapshot {
+	readonly path: string;
+	readonly kind: "file" | "folder";
+	readonly size?: number;
+	readonly contentPreview?: string;
+}
+
+export interface MagicActionSandboxDiff {
+	readonly created: readonly MagicActionSandboxFileSnapshot[];
+	readonly modified: readonly MagicActionSandboxFileSnapshot[];
+	readonly deleted: readonly string[];
+	readonly unchanged: readonly string[];
+}
+
+export interface MagicActionVerifyResult {
+	readonly ok: boolean;
+	readonly executionKind: "script" | "agent";
+	readonly exitCode?: number | null;
+	readonly timedOut: boolean;
+	readonly durationMs: number;
+	readonly output: string;
+	readonly stderr?: string;
+	readonly error?: string;
+	readonly targetPaths: readonly string[];
+	readonly diff: MagicActionSandboxDiff;
+}
+
 export interface MagicActionBridge {
 	start(runId: string, request: MagicActionRunRequest): Promise<void>;
 	cancel(runId: string): Promise<void>;
+	verify(request: MagicActionVerifyRequest): Promise<MagicActionVerifyResult>;
 	saveToHistory(request: MagicActionSaveRequest): Promise<string>;
+	history(actionId: string): Promise<readonly AutomationRun[]>;
 	onEvent(listener: (event: MagicActionEvent) => void): () => void;
 }

@@ -1,29 +1,22 @@
 /**
- * Settings → 일반 helper agent: the pi profile and toolkit that change Dazzi's
- * own app preferences (the same `settings-state.json` store the page writes).
+ * Settings → 일반 toolkit (`createGeneralCustomizerToolkit`), composed by `settings-customizer`.
  *
- * One profile serves the `general` surface. Its tools write through the real
- * settings service (`deps.settings.set`), so a change is validated and
- * persisted exactly as a click would. Everything the page does not own (remote
- * access, AI approval mode, duplicate scanning, sidebar/context menu/shortcuts,
- * models, indexing) is out of scope and refused with a warning, never a tool.
+ * Changes Dazzi's own app preferences (`settings-state.json`) and document read languages
+ * (`config.json`) through the same validated `SettingsBridge` calls the page uses.
  */
 
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { AgentProfile } from "@autorag/librarian/profiles";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { isGlobalChord, normalizeQuickSearchSettings, type QuickSearchSettings } from "../../../shared/quick-search-contract";
 import type { AppSettings, AutoRagConfigUpdate } from "../../../shared/settings-contract";
 import { DOC_LANGUAGES, isDocLanguage } from "../../../shared/settings-options";
 import { parseShortcutChord } from "../../../shared/shortcuts-contract";
-import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
+import type { ReplyLanguage } from "../profile-progress";
 import {
 	createCustomizerKit,
-	REPLY_LANGUAGE_NAME,
 	textResult,
 	type ConfigCustomizerDeps,
-	type ConfigCustomizerProfileInput,
 	type CustomizerToolkit,
 	type Localized,
 } from "./customizer-kit";
@@ -357,43 +350,4 @@ export function createGeneralCustomizerToolkit(deps: GeneralCustomizerToolkitDep
 	});
 
 	return kit.toolkit([getGeneralSettings, updateGeneralSettings, updateReading]);
-}
-
-function systemPrompt(language: ReplyLanguage): string {
-	const replyLanguage = REPLY_LANGUAGE_NAME[language];
-	return [
-		"You are Dazzi's dedicated General Settings Assistant (`general-customizer`), embedded in the Settings → General section's right sidebar.",
-		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLanguage}. Be concise and warm.`,
-		"",
-		"## Role & Scope",
-		"- You change only the app preferences the General page owns, stored in `settings-state.json` through the same settings service the page writes.",
-		"- In scope: `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `osMenuIntegration`, `autoInstallUpdates`, `errorReporting`, `usageAnalytics`, and the `quickSearch` launcher (`quickSearchEnabled`, `quickSearchChord`).",
-		"- `update_reading` sets the document languages the parsers read (`languages`, from the offered list; an empty list or `reset: true` restores the default). They live in the shared AutoRAG config and are the Document Language section of this page.",
-		"- `osMenuIntegration` installs the OS right-click menu entries; it exists only on macOS and Windows. Where `get_general_settings` reports it unavailable, refuse the change with a warning and leave it untouched.",
-		"- `quickSearchChord` must be a valid chord held with ⌘/Ctrl or ⌥/Alt (for example `Alt+Space`, `Cmd+Shift+K`). A bare key like `F5` or `Space` would be taken from every other app, so it cannot be a system-wide shortcut: refuse it with a warning and keep the previous chord.",
-		"",
-		"## Non-Negotiable Invariants: Out-of-Scope Settings",
-		"- Remote access is NEVER touched here: `remoteAccess`, `remotePort`, and `remoteTunnelHostname` belong to the Settings → Remote Access page. Refuse politely and explain where to change them.",
-		"- The AI approval mode (`approvalMode`) is NEVER touched here: it is chosen in the AI Search message box. Refuse politely.",
-		"- The duplicate-scan interval (`dupeyScanIntervalMinutes`) is NEVER touched here: it belongs to the Settings → Duplicates page. Refuse politely.",
-		"- Sidebar visibility/order, the file right-click menu, and keyboard shortcuts are handled by other assistants: do not change `sidebar`, `contextMenu`, or `shortcuts`.",
-		"- Never change the account/plan, AI models, providers, or indexing configuration; never write API keys, credentials, or sign-in settings.",
-		"- If a request is partly out of scope, apply the part that is in scope and explain which part you left alone and where it belongs.",
-		"",
-		"## Workflow",
-		"1. Call `get_general_settings` when you need to inspect the current preferences or platform availability.",
-		"2. Call `update_general_settings` to apply the requested change immediately; it writes all valid fields in one atomic settings update.",
-		"3. After tool calls finish, summarize clearly in 1-3 short sentences what you changed.",
-		intentPromptLine(language),
-	].join("\n");
-}
-
-export function generalCustomizerProfile(input: ConfigCustomizerProfileInput): AgentProfile {
-	return {
-		id: "general-customizer",
-		systemPrompt: systemPrompt(input.language),
-		tools: [],
-		customTools: withIntentTools(input.toolkit.tools, { language: input.language }),
-		thinking: "low",
-	};
 }
