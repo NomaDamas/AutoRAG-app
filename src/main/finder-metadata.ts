@@ -22,6 +22,7 @@ import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import type { FsFinderMetadata, FsTagColor } from "../shared/fs-contract";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 import { errorMessage, extensionOf, hasErrorCode } from "./fs-entry";
 import { storedColor, tagNameOfStored } from "./finder-tags";
 import { readImageMetadata } from "./image-metadata";
@@ -68,6 +69,21 @@ const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TTL_MS = 30_000;
 /** Hard cap on cached paths so a long-running session cannot grow without bound. */
 const CACHE_LIMIT = 4096;
+/** Max paths queried in a single batched `mdls -plist -` spawn on macOS. */
+const MDLS_BATCH_LIMIT = 32;
+/** Specific Spotlight attributes needed for Finder columns (keeps batched plist small & fast). */
+const MDLS_ATTR_ARGS: readonly string[] = [
+	"-name", "kMDItemFSCreationDate",
+	"-name", "kMDItemDateAdded",
+	"-name", "kMDItemLastUsedDate",
+	"-name", "kMDItemUserTags",
+	"-name", "kMDItemFinderComment",
+	"-name", "kMDItemPixelWidth",
+	"-name", "kMDItemPixelHeight",
+	"-name", "kMDItemStarRating",
+	"-name", "kMDItemRating",
+	"-plist", "-",
+];
 
 /**
  * Launch Services, through JavaScript for Automation: which app the OS opens
@@ -182,6 +198,20 @@ export function parseFinderMetadataPlist(xml: string): FsFinderMetadata {
 	};
 }
 
+/**
+ * Parse a multi-path `mdls -name ... -plist - <p1> <p2> ...` response.
+ * When given 2+ paths, macOS wraps each file's `<dict>` inside a top-level `<array>`.
+ * Returns null if the parsed dict count does not match `expectedCount` so the caller
+ * falls back to per-path `mdls` queries.
+ */
+export function parseFinderMetadataBatchPlist(xml: string, expectedCount: number): readonly FsFinderMetadata[] | null {
+	if (expectedCount === 0) return [];
+	if (expectedCount === 1) return [parseFinderMetadataPlist(xml)];
+	const dicts = [...xml.matchAll(/<dict>([\s\S]*?)<\/dict>/g)];
+	if (dicts.length !== expectedCount) return null;
+	return dicts.map((match) => parseFinderMetadataPlist(`<dict>${match[1] ?? ""}</dict>`));
+}
+
 function defaultRun(command: string, args: readonly string[], input?: Uint8Array): Promise<string> {
 	const { promise, resolve, reject } = Promise.withResolvers<string>();
 	const child = execFile(
@@ -266,6 +296,71 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 	const cache = new Map<string, CacheEntry>();
 	const applicationCache = new Map<string, { readonly value: Promise<string | null>; readonly expiresAt: number }>();
 
+	// Primary production path on macOS: use the bundled Rust core (`readFinderXattrsNative`)
+	// to read & decode Finder tags/comments via direct `getxattr(2)` + binary plist parsing
+	// (eliminating 4 child processes per file), and batch `mdls` across up to 32 files per spawn.
+	// When a test injects a custom `deps.run` runner, stay on that runner so runner contract tests remain exact.
+	const useNativePath = platform === "darwin" && deps.run === undefined;
+
+	interface MdlsWaiter {
+		readonly path: string;
+		readonly resolve: (value: FsFinderMetadata | null) => void;
+	}
+	const mdlsQueue: MdlsWaiter[] = [];
+	let mdlsScheduled = false;
+	let mdlsDraining = false;
+
+	async function runSingleMdls(path: string): Promise<FsFinderMetadata | null> {
+		try {
+			return parseFinderMetadataPlist(await run(MDLS, [...MDLS_ATTR_ARGS, path]));
+		} catch (error) {
+			warn(`finder-metadata: mdls failed for ${path}: ${errorMessage(error)}`);
+			return null;
+		}
+	}
+
+	async function drainMdls(): Promise<void> {
+		mdlsDraining = true;
+		try {
+			while (mdlsQueue.length > 0) {
+				// Newest requests first so scrolling past an old folder prioritizes the visible one.
+				const batch = mdlsQueue.splice(Math.max(0, mdlsQueue.length - MDLS_BATCH_LIMIT), MDLS_BATCH_LIMIT);
+				if (batch.length === 1) {
+					const item = batch[0]!;
+					item.resolve(await runSingleMdls(item.path));
+					continue;
+				}
+				try {
+					const xml = await run(MDLS, [...MDLS_ATTR_ARGS, ...batch.map((item) => item.path)]);
+					const parsed = parseFinderMetadataBatchPlist(xml, batch.length);
+					if (parsed !== null) {
+						batch.forEach((item, idx) => item.resolve(parsed[idx] ?? null));
+						continue;
+					}
+				} catch {
+					// A vanished or restricted file in the batch fails mdls as a whole: fall back per-path.
+				}
+				await Promise.all(batch.map(async (item) => item.resolve(await runSingleMdls(item.path))));
+			}
+		} finally {
+			mdlsDraining = false;
+		}
+	}
+
+	function readIndexedBatched(path: string): Promise<FsFinderMetadata | null> {
+		return new Promise((resolve) => {
+			mdlsQueue.push({ path, resolve });
+			if (!mdlsDraining && !mdlsScheduled) {
+				mdlsScheduled = true;
+				// Short macrotask coalescing so concurrent `finderMetadataFor(targets)` chunks share one `mdls` spawn.
+				setImmediate(() => {
+					mdlsScheduled = false;
+					void drainMdls();
+				});
+			}
+		});
+	}
+
 	async function readXattr(path: string, name: string): Promise<string | null> {
 		try {
 			return await run(XATTR, ["-p", "-x", name, path]);
@@ -278,6 +373,7 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 	}
 
 	async function readIndexed(path: string): Promise<FsFinderMetadata | null> {
+		if (useNativePath) return readIndexedBatched(path);
 		try {
 			return parseFinderMetadataPlist(await run(MDLS, ["-plist", "-", path]));
 		} catch (error) {
@@ -326,15 +422,55 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 	}
 
 	async function resolve(path: string, isDirectory: boolean): Promise<FsFinderMetadata> {
-		const [tagsHex, commentHex, indexed, image, application] = await Promise.all([
-			readXattr(path, TAGS_XATTR),
-			readXattr(path, COMMENT_XATTR),
-			readIndexed(path),
-			readImage(path, extensionOf(basename(path))).catch(() => null),
-			resolveApplication(path, isDirectory),
-		]);
-		const tagValues = await decodeXattr(path, TAGS_XATTR, tagsHex);
-		const commentValues = await decodeXattr(path, COMMENT_XATTR, commentHex);
+		let tagValues: readonly string[] | null = null;
+		let commentValues: readonly string[] | null = null;
+		let usedNativeXattr = false;
+
+		if (useNativePath) {
+			const native = loadDazziNativeCore();
+			if (native !== null) {
+				try {
+					const xattrs = native.readFinderXattrsNative(path);
+					if (xattrs.tagsError != null) {
+						warn(`finder-metadata: ${TAGS_XATTR} is not a property list for ${path}: ${xattrs.tagsError}`);
+					}
+					if (xattrs.commentError != null) {
+						warn(`finder-metadata: ${COMMENT_XATTR} is not a property list for ${path}: ${xattrs.commentError}`);
+					}
+					tagValues = xattrs.tags ?? null;
+					commentValues = xattrs.comment == null ? null : [xattrs.comment];
+					usedNativeXattr = true;
+				} catch (error) {
+					warn(`[dazzi-core] readFinderXattrsNative failed for ${path}, falling back to xattr/plutil: ${errorMessage(error)}`);
+				}
+			}
+		}
+
+		let indexed: FsFinderMetadata | null;
+		let image: Pick<FsFinderMetadata, "width" | "height"> | null;
+		let application: string | null;
+
+		if (usedNativeXattr) {
+			[indexed, image, application] = await Promise.all([
+				readIndexed(path),
+				readImage(path, extensionOf(basename(path))).catch(() => null),
+				resolveApplication(path, isDirectory),
+			]);
+		} else {
+			const [tagsHex, commentHex, idx, img, app] = await Promise.all([
+				readXattr(path, TAGS_XATTR),
+				readXattr(path, COMMENT_XATTR),
+				readIndexed(path),
+				readImage(path, extensionOf(basename(path))).catch(() => null),
+				resolveApplication(path, isDirectory),
+			]);
+			indexed = idx;
+			image = img;
+			application = app;
+			tagValues = await decodeXattr(path, TAGS_XATTR, tagsHex);
+			commentValues = await decodeXattr(path, COMMENT_XATTR, commentHex);
+		}
+
 		const stored = tagValues === null ? indexed?.tags ?? [] : tagValues;
 		const tags = tagValues === null ? stored : stored.map(stripTagColor);
 		const tagColors = tagValues === null ? [] : storedTagColors(stored);
@@ -368,16 +504,20 @@ export function createFinderMetadataResolver(deps: FinderMetadataDeps = {}): Fin
 		if (cached !== undefined && cached.fingerprint === identity.fingerprint && time < cached.expiresAt) {
 			return cached.value;
 		}
-		nextPriority += 1;
-		const priority = nextPriority;
-		const value = (async () => {
-			await gate.acquire(priority);
-			try {
-				return await resolve(path, identity.isDirectory);
-			} finally {
-				gate.release();
-			}
-		})();
+		// On the native batched path, xattr/plist is in-process (~0.01ms) and mdls coalesces
+		// batches of 32 paths into one spawn — gating to 4 would prevent batch coalescing!
+		const value = useNativePath
+			? resolve(path, identity.isDirectory)
+			: (async () => {
+					nextPriority += 1;
+					const priority = nextPriority;
+					await gate.acquire(priority);
+					try {
+						return await resolve(path, identity.isDirectory);
+					} finally {
+						gate.release();
+					}
+				})();
 		setBounded(cache, path, { fingerprint: identity.fingerprint, expiresAt: time + ttlMs, value });
 		return value;
 	};

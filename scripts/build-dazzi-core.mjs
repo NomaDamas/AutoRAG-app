@@ -27,6 +27,7 @@ const SOURCE_FILES = [
 	join(CRATE_DIR, "build.rs"),
 	join(CRATE_DIR, "src", "lib.rs"),
 	join(CRATE_DIR, "src", "preview.rs"),
+	join(CRATE_DIR, "src", "finder_meta.rs"),
 ];
 const OUT_DIR = join(ROOT, "src", "main", "vendor");
 
