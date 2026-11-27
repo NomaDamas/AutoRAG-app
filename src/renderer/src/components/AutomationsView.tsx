@@ -1473,6 +1473,7 @@ export function AutomationDraftCard({
 	onCreateMagicAction,
 	onCancel,
 	rightClickOnly = false,
+	startOnRightClick = false,
 }: {
 	/** The rule to show filled in; null for an empty card (새 자동화) where every chip still asks. */
 	readonly initial: AutomationDraft | null;
@@ -1482,6 +1483,8 @@ export function AutomationDraftCard({
 	readonly onCancel: () => void;
 	/** Only a right-click action can be made here: the card opens on 우클릭하면 and the trigger cannot change. */
 	readonly rightClickOnly?: boolean;
+	/** The chat was asked for a right-click automation: the card opens on 우클릭하면, and the trigger can still change. */
+	readonly startOnRightClick?: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
 	const locations = useLocations();
@@ -1490,7 +1493,7 @@ export function AutomationDraftCard({
 	const first = rule.paths[0] ?? null;
 	const [folder, setFolder] = useState<string | null>(first);
 	const [kind, setKind] = useState<KindId | null>(blank ? null : kindOf(rule.include));
-	const [event, setEvent] = useState<EventId | "rightClick" | null>(rightClickOnly ? "rightClick" : blank ? null : eventOf(rule.events));
+	const [event, setEvent] = useState<EventId | "rightClick" | null>(rightClickOnly || (startOnRightClick && onCreateMagicAction !== undefined) ? "rightClick" : blank ? null : eventOf(rule.events));
 	const [task, setTask] = useState(rule.agent?.task ?? "");
 	const [busy, setBusy] = useState(false);
 	// 우클릭하면: its own file kinds (folders too), how many items, a typed extension list, and AI or a command.

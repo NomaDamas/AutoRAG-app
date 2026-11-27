@@ -75,7 +75,7 @@ import { AgentSegment } from "./AgentSegment";
 import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
 import { AutomationsContext } from "./AutomationsTab";
 import { AutomationDraftCard, templateTaken } from "./AutomationsView";
-import { isAutomationRequest } from "../state/automation-intent";
+import { automationRequestKind } from "../state/automation-intent";
 import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 
 import { IndexNoticeBanner } from "./IndexNotice";
@@ -252,7 +252,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [suggestion, setSuggestion] = useState<{ readonly id: SuggestableTemplate; readonly phase: NudgePhase | "gone" } | null>(null);
 	// "자동화 만들어줘" asked here: the person's words, the reply, and the empty 새 자동화 card, as the 자동화 sidebar
 	// answers its 새 자동화 button. Each keeps its place after the turns asked before it (`after`) and is not a search.
-	const [starters, setStarters] = useState<readonly { readonly key: string; readonly ask: string; readonly after: number; readonly added: boolean }[]>([]);
+	const [starters, setStarters] = useState<readonly { readonly key: string; readonly ask: string; readonly after: number; readonly added: boolean; readonly rightClick: boolean }[]>([]);
 	const automationsShell = useContext(AutomationsContext);
 	const queuedRef = useRef(queued);
 	queuedRef.current = queued;
@@ -722,10 +722,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const action = composerAction({ searching: runId !== null, altKey });
 		if (action === "ask") {
 			if (text.length === 0) return;
-			if (automationsShell !== null && !phone && capability === null && attachments.length === 0 && isAutomationRequest(text)) {
+			// A message that only asks to make an automation (or a right-click one) gets the 새 자동화 card at once.
+			const requested = automationsShell !== null && !phone && capability === null && attachments.length === 0 ? automationRequestKind(text) : null;
+			if (requested !== null) {
 				setQuery("");
 				followRef.current = true;
-				setStarters((current) => [...current, { key: crypto.randomUUID(), ask: text, after: pastTurns.length + (submittedQueryRef.current === null ? 0 : 1), added: false }]);
+				setStarters((current) => [...current, { key: crypto.randomUUID(), ask: text, after: pastTurns.length + (submittedQueryRef.current === null ? 0 : 1), added: false, rightClick: requested === "rightClick" }]);
 				return;
 			}
 			void runSearch(text, attachments);
@@ -1112,6 +1114,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						) : (
 							<AutomationDraftCard
 								initial={null}
+								startOnRightClick={starter.rightClick}
 								onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
 								onCreate={async (draft) => {
 									const ok = await automationsShell.props.onCreate(draft);
