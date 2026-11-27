@@ -462,7 +462,7 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 });
 
 describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
-	it("lists every rule's runs newest first under the day they ran, and opens a rule from its run", async () => {
+	it("lists every rule's runs newest first under the day they ran, and opens a rule from its name under a run", async () => {
 		const today = new Date(NOW).setHours(0, 0, 0, 0);
 		runLogs["downloads-pdf-summary"] = [{ startedAt: Math.max(today, NOW - 60_000), durationMs: 1000, eventCount: 1, exitCode: 0, signal: null, timedOut: false }];
 		runLogs["hwp-to-pdf"] = [{ startedAt: today - 3_600_000, durationMs: 800, eventCount: 1, exitCode: null, signal: null, timedOut: false, error: "spawn hwp5 ENOENT" }];
@@ -482,7 +482,7 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("downloads-pdf-summary"), expect.stringContaining("hwp-to-pdf")]);
 		// 실패만 보기 is gone: every run shows, with no switch to hide the good ones.
 		expect(page()?.querySelector('[role="switch"]')).toBeNull();
-		click(runs()[1]);
+		click(runs()[1]?.querySelector('[data-action="run-open-automation"]') ?? null);
 		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
 		// The rule's page opened from here says so in its path, and 전체 기록 in it goes straight back, not to the main page.
 		const opened = p.state.rules.find((item) => item.id === "hwp-to-pdf") ?? null;

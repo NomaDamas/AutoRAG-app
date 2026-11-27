@@ -650,7 +650,8 @@
       "noMatches": "目前没有符合条件的文件",
       "notRun": "尚未运行",
       "runFiles": "文件 {{count}} 个",
-      "runFilesMore": "{{name}} 等 {{count}} 个"
+      "runFilesMore": "{{name}} 等 {{count}} 个",
+      "runFileMissing": "找不到此文件，可能已被移动或删除。"
     },
     "quickLook": {
       "when": "何时",

@@ -650,7 +650,8 @@
       "noMatches": "今は条件に合うファイルがありません",
       "notRun": "まだ実行されていません",
       "runFiles": "ファイル {{count}}件",
-      "runFilesMore": "{{name}} ほか{{count}}件"
+      "runFilesMore": "{{name}} ほか{{count}}件",
+      "runFileMissing": "ファイルが見つかりません。移動または削除された可能性があります。"
     },
     "quickLook": {
       "when": "いつ",
