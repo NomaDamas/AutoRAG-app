@@ -51,11 +51,29 @@ describe("resolveMcpConnectInfo", () => {
 	});
 
 	it("is unavailable, not wrong, when this build has no server entry", () => {
-		expect(resolveMcpConnectInfo({ ...packaged, exists: (path) => path !== ENTRY }).available).toBe(false);
+		const standaloneEntry = join(TOOLS, "librarian", "dist", "mcp-server.js");
+		expect(resolveMcpConnectInfo({ ...packaged, exists: (path) => path !== ENTRY && path !== standaloneEntry }).available).toBe(false);
 	});
 
 	it("is unavailable when no Node can be found to run it", () => {
 		expect(resolveMcpConnectInfo({ ...packaged, findNode: () => undefined }).available).toBe(false);
+	});
+
+	it("prefers the standalone bundled MCP server under tools/librarian when app is packed into app.asar", () => {
+		const standaloneEntry = join(TOOLS, "librarian", "dist", "mcp-server.js");
+		const asarEntry = join(RESOURCES, "app.asar", "out", "main", "mcp-server.js");
+		const info = resolveMcpConnectInfo({
+			...packaged,
+			entryPath: asarEntry,
+			exists: (path) => path === standaloneEntry || path === join(TOOLS, "bin"),
+		});
+		expect(info).toEqual({
+			available: true,
+			platform: "darwin",
+			command: NODE,
+			args: [standaloneEntry],
+			env: { AUTORAG_TOOLS_DIR: TOOLS },
+		});
 	});
 
 	it("reports the platform the paste targets, folding anything that is not macOS or Windows into linux", () => {

@@ -139,8 +139,13 @@ const expect = (ok, label, detail = "") => {
 
 try {
 	expect(existsSync(executable), "installed executable exists", executable);
-	expect(existsSync(join(resources, "app", "out", "main", "vendor", "dazzi-core.node")), "bundled Rust core addon installed");
+	expect(existsSync(join(resources, "app.asar")), "app is packaged into app.asar", join(resources, "app.asar"));
+	const dazziCoreUnpacked = join(resources, "app.asar.unpacked", "out", "main", "vendor", "dazzi-core.node");
+	const dazziCoreLegacy = join(resources, "app", "out", "main", "vendor", "dazzi-core.node");
+	expect(existsSync(dazziCoreUnpacked) || existsSync(dazziCoreLegacy), "bundled Rust core addon installed");
 	expect(existsSync(join(resources, "tools", "bin")), "tools/bin installed");
+	expect(existsSync(join(resources, "tools", "librarian", "dist", "cli", "index.js")), "standalone librarian CLI bundled under tools/librarian");
+	expect(existsSync(join(resources, "tools", "librarian", "dist", "mcp-server.js")), "standalone MCP server bundled under tools/librarian");
 	// The model is downloaded on demand now, so the installer must not carry it.
 	expect(!existsSync(join(resources, "seed")), "installer does not carry the embedding model (resources/seed absent)");
 	// ...and a fresh install must not have it in the cache either (the app downloads it only when the

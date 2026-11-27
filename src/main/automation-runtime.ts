@@ -13,6 +13,7 @@ import {
 	formatVerificationPassSummary,
 	verifyBeforeSave,
 } from "./workflow-sandbox";
+import { librarianCommand, runLibrarianCli } from "./automation-service";
 
 /**
  * The librarian agent's `manage_automations` tool, kept off the app's own binary.
@@ -49,6 +50,20 @@ export interface AutomationSaveVerificationOptions {
 		rule: AutomationSandboxRuleInput,
 		originalPaths: readonly string[],
 	) => Promise<AutomationSandboxTestResult>;
+}
+
+/**
+ * Optional standalone CLI delegate for `manage_automations` `install_service`.
+ * When the app is packed into `app.asar`, the librarian's in-process `installAutomationService`
+ * resolves its own `import.meta.url` inside `app.asar`, which plain Node cannot launch as a
+ * background daemon. Delegating `install_service` to `<tools>/librarian/dist/cli/index.js automate install`
+ * guarantees the OS login service points at the real standalone bundle on disk.
+ */
+export interface StandaloneServiceInstallOptions {
+	readonly resourcesPath: string;
+	readonly env: NodeJS.ProcessEnv;
+	readonly platform: NodeJS.Platform;
+	readonly runCli?: (command: string, args: readonly string[], env: NodeJS.ProcessEnv) => Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }>;
 }
 
 function runnableFile(path: string, platform: NodeJS.Platform): boolean {
@@ -223,6 +238,7 @@ export function runAutomationToolOnNode(
 	agent: object,
 	findNode: () => string | undefined,
 	verification?: AutomationSaveVerificationOptions,
+	standaloneInstall?: StandaloneServiceInstallOptions,
 ): void {
 	const tools = (agent as { readonly tools?: readonly PatchableTool[] }).tools;
 	const tool = Array.isArray(tools) ? tools.find((candidate) => candidate.name === "manage_automations") : undefined;
@@ -232,6 +248,29 @@ export function runAutomationToolOnNode(
 	}
 	const onNode = runOnNode(tool.execute.bind(tool), findNode);
 	tool.execute = async (toolCallId: string, params: ManageAutomationsParams, ...rest: unknown[]) => {
+		if (params.action === "install_service" && standaloneInstall !== undefined) {
+			const cli = librarianCommand({
+				resourcesPath: standaloneInstall.resourcesPath,
+				env: standaloneInstall.env,
+				platform: standaloneInstall.platform,
+			});
+			const cliPath = cli.args[0] ?? "";
+			// Only hijack when a standalone `<tools>/librarian` bundle is actually present; in dev runs
+			// (unpackaged `node_modules`) the librarian's in-process installer already points at real files.
+			if (cliPath.includes(`${join("librarian", "dist", "cli", "index.js")}`)) {
+				const node = findNode() ?? cli.command;
+				const run = standaloneInstall.runCli ?? runLibrarianCli;
+				const res = await run(node, [...cli.args, "automate", "install"], standaloneInstall.env);
+				if (res.code !== 0) {
+					const detail = (res.stderr || res.stdout).trim() || `exit ${res.code}`;
+					throw new Error(`Failed to install daemon service: ${detail}`);
+				}
+				return {
+					content: [{ type: "text", text: res.stdout.trim() || "Installed automation daemon service." }],
+					details: { action: "install_service" },
+				};
+			}
+		}
 		if (params.action === "save" && verification !== undefined) {
 			const rawAutomation = recordOf(params.automation);
 			const candidate = rawAutomation === undefined ? null : extractSandboxCandidate(params.id, rawAutomation);

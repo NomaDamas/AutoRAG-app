@@ -64,6 +64,7 @@ import {
 	run,
 } from "./lib.mjs";
 import { GITHUB_ASSET_PATTERNS, assertManifestMatchesPins, assertPinsMeetFloors, assertVersionFloor, deriveVersionFloors, loadToolPins } from "./pins.mjs";
+import { bundleLibrarian } from "./bundle-librarian.mjs";
 
 const PINS = loadToolPins();
 const VERSION_FLOORS = deriveVersionFloors(PINS);
@@ -336,13 +337,18 @@ async function buildShim() {
 	return shimPath;
 }
 
-/** `autorag`: the librarian CLI the app already ships in app/node_modules, launched by the bundled Node. */
+/**
+ * `autorag`: standalone plain-Node bundle of `@autorag/librarian`'s CLI, MCP server, and isolated
+ * parse worker under `tools/librarian/`, launched by the bundled Node. Because the Electron app
+ * packs its own JS and `node_modules` into `app.asar` (`asar: true`), plain Node cannot read
+ * inside the app bundle; staging the standalone runtime here keeps CLI, automation daemon, and
+ * external-agent MCP working while collapsing ~29,000 unpacked files out of the app.
+ */
 async function stageAutoragCli() {
-	const librarian = join(ROOT, "node_modules", "@autorag", "librarian");
-	const manifest = JSON.parse(readFileSync(join(librarian, "package.json"), "utf8"));
+	const bundled = bundleLibrarian({ outDir: join(TOOLS, "librarian"), platformId, root: ROOT });
 	installBinary(await buildShim(), "autorag");
-	writeFileSync(join(BIN, "autorag.shim"), "../app/node_modules/@autorag/librarian/dist/cli/index.js\n");
-	record({ name: "autorag", version: manifest.version, source: "@autorag/librarian (public origin/main, built by scripts/sync-librarian.mjs)" });
+	writeFileSync(join(BIN, "autorag.shim"), "librarian/dist/cli/index.js\n");
+	record({ name: "autorag", version: bundled.version, source: "@autorag/librarian (public origin/main, bundled by scripts/release/bundle-librarian.mjs)" });
 }
 
 // The filee-cli archive's license and prose files: staged beside the tool (tools/licenses/filee-cli),

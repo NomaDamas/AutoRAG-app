@@ -42,11 +42,15 @@ export function resolveMcpConnectInfo(deps: McpConnectDeps): McpConnectInfo {
 		const value = deps.env[name]?.trim() ?? "";
 		if (value.length > 0) env[name] = value;
 	}
+	// Packaged builds (`asar: true`) ship a standalone plain-Node MCP entry under `<tools>/librarian/dist/mcp-server.js`
+	// so external agents spawning plain Node never try to read inside `app.asar`.
+	const standaloneEntry = join(toolsRoot, "librarian", "dist", "mcp-server.js");
+	const resolvedEntry = exists(standaloneEntry) ? standaloneEntry : deps.entryPath;
 	return {
-		available: node !== undefined && exists(deps.entryPath),
+		available: node !== undefined && exists(resolvedEntry),
 		platform: deps.platform === "darwin" || deps.platform === "win32" ? deps.platform : "linux",
 		command: node ?? "node",
-		args: [deps.entryPath],
+		args: [resolvedEntry],
 		env,
 	};
 }

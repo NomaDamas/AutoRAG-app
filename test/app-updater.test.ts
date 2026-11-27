@@ -1,8 +1,11 @@
 import { EventEmitter, once } from "node:events";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
-import { createAppUpdater, manualDownloadUrl, type UpdateCheckResultLike, type UpdaterLike } from "../src/main/app-updater";
-import { feedUrlFromAppUpdateYml, isDeveloperIdSigned } from "../src/main/app-update-host";
+import { createAppUpdater, manualDownloadUrl, STAGING_TIMEOUT_MS, type UpdateCheckResultLike, type UpdaterLike } from "../src/main/app-updater";
+import { cleanupStaleShipItCache, feedUrlFromAppUpdateYml, isDeveloperIdSigned } from "../src/main/app-update-host";
 import type { AppUpdateMode, AppUpdateSnapshot } from "../src/shared/update-contract";
 
 /** electron-updater stand-in: `checkForUpdates` plays back the events the real one emits. */
@@ -66,8 +69,8 @@ function setup(mode: AppUpdateMode, autoInstall = true, { staged }: { staged?: E
 	const seen: AppUpdateSnapshot[] = [];
 	const opened: string[] = [];
 	let auto = autoInstall;
-	/** The first-check timer start() arms; tests fire it by hand instead of waiting. */
-	let firstCheck: () => void = () => undefined;
+	/** Timers scheduled via setTimeout, keyed in registration order. */
+	const timers: { readonly callback: () => void; readonly ms: number; cleared: boolean }[] = [];
 	const service = createAppUpdater({
 		currentVersion: "1.0.0",
 		mode,
@@ -80,14 +83,27 @@ function setup(mode: AppUpdateMode, autoInstall = true, { staged }: { staged?: E
 		onChange: (snapshot) => seen.push(snapshot),
 		log: () => undefined,
 		now: () => new Date("2026-10-13T00:00:00.000Z"),
-		setTimeout: (callback) => {
-			firstCheck = callback;
-			return {};
+		setTimeout: (callback, ms) => {
+			const entry = { callback, ms, cleared: false };
+			timers.push(entry);
+			return entry as unknown as ReturnType<typeof setTimeout>;
+		},
+		clearTimeout: (handle) => {
+			const entry = handle as unknown as { cleared?: boolean } | undefined;
+			if (entry) entry.cleared = true;
 		},
 		setInterval: () => ({}),
 		...(staged === undefined ? {} : { onInstallerStaged: (listener: () => void) => void staged.on("staged", listener) }),
 	});
-	return { updater, service, seen, opened, setAuto: (value: boolean) => (auto = value), fireFirstCheck: () => firstCheck() };
+	const fireFirstCheck = (): void => {
+		const timer = timers.find((entry) => !entry.cleared && entry.ms === 30_000);
+		timer?.callback();
+	};
+	const fireStagingTimeout = (): void => {
+		const timer = timers.find((entry) => !entry.cleared && entry.ms === STAGING_TIMEOUT_MS);
+		timer?.callback();
+	};
+	return { updater, service, seen, opened, setAuto: (value: boolean) => (auto = value), fireFirstCheck, fireStagingTimeout };
 }
 
 describe("app updater policy", () => {
@@ -260,6 +276,89 @@ describe("app updater policy", () => {
 		expect(updater.installs).toEqual([]);
 		squirrel.emit("staged");
 		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+	});
+
+	it("macOS: if Squirrel.Mac never finishes staging within STAGING_TIMEOUT_MS, transitions to error so user is not stuck at 100%", async () => {
+		const squirrel = new EventEmitter();
+		const { updater, service, fireStagingTimeout } = setup("install", true, { staged: squirrel });
+		updater.next = { version: "1.1.0" };
+		expect((await service.check()).state).toEqual({ kind: "downloading", version: "1.1.0", percent: 100 });
+		fireStagingTimeout();
+		expect(service.snapshot().state.kind).toBe("error");
+		// After timing out, the user can retry download or check again.
+		await service.download();
+		expect(service.snapshot().state).toEqual({ kind: "downloading", version: "1.1.0", percent: 100 });
+		squirrel.emit("staged");
+		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+	});
+
+	it("a newer version published after an earlier version became ready supersedes the stale ready state on check", async () => {
+		const squirrel = new EventEmitter();
+		const { updater, service } = setup("install", false, { staged: squirrel });
+		updater.next = { version: "1.1.0" };
+		await service.check();
+		await service.download();
+		squirrel.emit("staged");
+		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+
+		// If the feed still reports 1.1.0 (or no update), stay ready for 1.1.0.
+		expect((await service.check()).state).toEqual({ kind: "ready", version: "1.1.0" });
+
+		// Once 1.2.0 is published, check() discovers it instead of staying stuck on 1.1.0 forever.
+		updater.next = { version: "1.2.0" };
+		expect((await service.check()).state).toEqual({ kind: "available", version: "1.2.0", downloadUrl: null });
+	});
+});
+
+describe("stale ShipIt cache recovery", () => {
+	it("removes a macOS ShipIt cache directory when ShipIt_stderr.log records a failed installation and no ShipIt is active", async () => {
+		const cachesDir = await mkdtemp(join(tmpdir(), "dazzi-shipit-test-"));
+		try {
+			const shipItDir = join(cachesDir, "com.autorag.app.ShipIt");
+			await mkdir(join(shipItDir, "update.AbCdEf"), { recursive: true });
+			await writeFile(
+				join(shipItDir, "ShipIt_stderr.log"),
+				"2026-11-24 17:56:25.271 ShipIt[20982:1] Installation error: Error Domain=SQRLInstallerErrorDomain Code=-1\n2026-11-24 17:56:25.311 ShipIt[20982:1] ShipIt quitting\n",
+			);
+			const logs: string[] = [];
+			const cleaned = await cleanupStaleShipItCache({
+				cachesDir,
+				bundleId: "com.autorag.app",
+				isShipItRunning: async () => false,
+				log: (line) => logs.push(line),
+			});
+			expect(cleaned).toBe(true);
+			expect(logs.some((line) => line.includes("ShipIt"))).toBe(true);
+		} finally {
+			await rm(cachesDir, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps a ShipIt cache when ShipIt is currently running or when the log shows a clean install", async () => {
+		const cachesDir = await mkdtemp(join(tmpdir(), "dazzi-shipit-clean-"));
+		try {
+			const shipItDir = join(cachesDir, "com.autorag.app.ShipIt");
+			await mkdir(shipItDir, { recursive: true });
+			await writeFile(join(shipItDir, "ShipIt_stderr.log"), "2026-11-23 19:10:15 ShipIt[1:1] Installation completed successfully\n");
+			const cleanedHealthy = await cleanupStaleShipItCache({
+				cachesDir,
+				bundleId: "com.autorag.app",
+				isShipItRunning: async () => false,
+				log: () => undefined,
+			});
+			expect(cleanedHealthy).toBe(false);
+
+			await writeFile(join(shipItDir, "ShipIt_stderr.log"), "Installation error: failed\n");
+			const cleanedWhileRunning = await cleanupStaleShipItCache({
+				cachesDir,
+				bundleId: "com.autorag.app",
+				isShipItRunning: async () => true,
+				log: () => undefined,
+			});
+			expect(cleanedWhileRunning).toBe(false);
+		} finally {
+			await rm(cachesDir, { recursive: true, force: true });
+		}
 	});
 });
 

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { promisify } from "node:util";
 import { autoUpdater as nativeUpdater, Menu, MenuItem } from "electron";
@@ -10,6 +11,75 @@ import type { AppUpdateMode, AppUpdateSnapshot } from "../shared/update-contract
 import { createAppUpdater, type AppUpdaterService, type UpdaterLike } from "./app-updater";
 
 const execFileAsync = promisify(execFile);
+
+/** Patterns in Squirrel.Mac's `ShipIt_stderr.log` showing a failed or aborted installation. */
+const SHIPIT_FAILURE_PATTERN = /Installation error:|Too many attempts to install|SQRLInstallerErrorDomain/u;
+const SHIPIT_SUCCESS_PATTERN = /Installation completed successfully/u;
+
+export interface StaleShipItCleanupOptions {
+	readonly cachesDir: string;
+	readonly bundleId: string;
+	readonly isShipItRunning?: () => Promise<boolean>;
+	readonly log: (line: string) => void;
+}
+
+/**
+ * macOS: if a previous Squirrel.Mac ShipIt run failed (e.g. partial copy ENOENT or exceeded
+ * retry budget) and left behind a broken `<bundleId>.ShipIt` cache directory while no ShipIt
+ * process is running, remove that stale directory so the next update download stages cleanly
+ * instead of looping on a wedged `ShipItState.plist`.
+ */
+export async function cleanupStaleShipItCache(options: StaleShipItCleanupOptions): Promise<boolean> {
+	const shipItDir = join(options.cachesDir, `${options.bundleId}.ShipIt`);
+	let stderrLog: string;
+	try {
+		stderrLog = await readFile(join(shipItDir, "ShipIt_stderr.log"), "utf8");
+	} catch {
+		return false;
+	}
+	// Check the most recent outcome in the log: only clean if the latest run failed and did not recover.
+	const lastError = stderrLog.search(SHIPIT_FAILURE_PATTERN);
+	if (lastError < 0) return false;
+	const lines = stderrLog.trim().split("\n");
+	let lastFailureIndex = -1;
+	let lastSuccessIndex = -1;
+	for (let i = 0; i < lines.length; i += 1) {
+		if (SHIPIT_FAILURE_PATTERN.test(lines[i] ?? "")) lastFailureIndex = i;
+		if (SHIPIT_SUCCESS_PATTERN.test(lines[i] ?? "")) lastSuccessIndex = i;
+	}
+	if (lastFailureIndex < 0 || lastSuccessIndex > lastFailureIndex) return false;
+
+	const checkRunning =
+		options.isShipItRunning ??
+		(async () => {
+			try {
+				const { stdout } = await execFileAsync("pgrep", ["-f", `${options.bundleId}.ShipIt`]);
+				return stdout.trim().length > 0;
+			} catch {
+				return false;
+			}
+		});
+	if (await checkRunning()) return false;
+
+	try {
+		await rm(shipItDir, { recursive: true, force: true });
+		options.log(`cleaned stale Squirrel.Mac ShipIt cache at ${shipItDir} after prior installation failure`);
+		return true;
+	} catch (error) {
+		options.log(`could not clean stale ShipIt cache ${shipItDir}: ${error instanceof Error ? error.message : String(error)}`);
+		return false;
+	}
+}
+
+async function readMacBundleIdentifier(bundlePath: string): Promise<string | null> {
+	try {
+		const plist = await readFile(join(bundlePath, "Contents", "Info.plist"), "utf8");
+		const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/u.exec(plist);
+		return match?.[1]?.trim() || null;
+	} catch {
+		return null;
+	}
+}
 
 /**
  * Electron side of the self-update: decides whether this build can update at
@@ -108,6 +178,16 @@ export async function createAppUpdateHost(deps: AppUpdateHostDeps): Promise<AppU
 	if (mode === null) return unsupported(deps.currentVersion);
 
 	const logger = fileLogger(deps.logPath);
+	if (deps.platform === "darwin" && mode === "install") {
+		const bundleId = await readMacBundleIdentifier(macBundlePath(deps.executablePath));
+		if (bundleId !== null) {
+			await cleanupStaleShipItCache({
+				cachesDir: join(homedir(), "Library", "Caches"),
+				bundleId,
+				log: (line) => logger.info(line),
+			});
+		}
+	}
 	const autoUpdater = electronUpdater.autoUpdater;
 	autoUpdater.logger = logger;
 	// Pre-release builds (v1.2.3-rc.1) follow their own channel file; releases never see them.

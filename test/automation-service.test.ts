@@ -271,6 +271,20 @@ describe("librarianCommand", () => {
 		).toThrow(t("main.automations.errors.cliMissing"));
 	});
 
+	it("prefers the standalone bundled CLI under tools/librarian so plain Node never touches app.asar", () => {
+		const toolsRoot = join("/Applications/Dazzi.app/Contents/Resources", "tools");
+		const standaloneCli = join(toolsRoot, "librarian", "dist", "cli", "index.js");
+		const asarEntry = "/Applications/Dazzi.app/Contents/Resources/app.asar/node_modules/@autorag/librarian/dist/index.js";
+		const command = librarianCommand({
+			resourcesPath: "/Applications/Dazzi.app/Contents/Resources",
+			env: {},
+			platform: "darwin",
+			exists: (path) => path === bundledNode || path === standaloneCli,
+			resolvePackage: () => asarEntry,
+		});
+		expect(command).toEqual({ command: join(bundledNode, "bin", "node"), args: [standaloneCli] });
+	});
+
 	it("resolves the CLI of the librarian this app installed", () => {
 		const command = librarianCommand({
 			resourcesPath: "/nonexistent",

@@ -148,8 +148,12 @@ try {
 	plistSet(payloadApp, "CFBundleShortVersionString", nextVersion);
 	plistSet(payloadApp, "CFBundleVersion", nextVersion);
 	// (the payload is a copy of the re-identified app, so it already carries E2E_BUNDLE_ID)
+	// Unpacked (`asar: false`) builds keep `package.json` under `Resources/app/`; `asar: true` builds
+	// read the app version from `Info.plist` (`app.getVersion()`) while `app.asar` stays untouched.
 	const pkgPath = join(payloadApp, "Contents/Resources/app/package.json");
-	writeFileSync(pkgPath, readFileSync(pkgPath, "utf8").replace(/"version":\s*"[^"]+"/, `"version": "${nextVersion}"`));
+	if (existsSync(pkgPath)) {
+		writeFileSync(pkgPath, readFileSync(pkgPath, "utf8").replace(/"version":\s*"[^"]+"/, `"version": "${nextVersion}"`));
+	}
 	sign(payloadApp);
 	const zip = join(feedDir, `v${nextVersion}/Dazzi-${nextVersion}-arm64.zip`);
 	run("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", payloadApp, zip]);

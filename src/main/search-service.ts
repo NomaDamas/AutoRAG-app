@@ -1112,11 +1112,20 @@ export function createDefaultAgentFactory(options: DefaultAgentFactoryOptions): 
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		// Also enforces temporary-sandbox verification when saving new or edited automation rules.
 		// Verified saves persist directly without popping a redundant confirmation form card.
-		runAutomationToolOnNode(agent, findNode, {
-			tracker: automationVerificationTracker,
-			verifyRule: (rule, originalPaths) =>
-				testAutomationInSandbox({ rule, originalPaths }, automationSandboxDeps),
-		});
+		runAutomationToolOnNode(
+			agent,
+			findNode,
+			{
+				tracker: automationVerificationTracker,
+				verifyRule: (rule, originalPaths) =>
+					testAutomationInSandbox({ rule, originalPaths }, automationSandboxDeps),
+			},
+			{
+				resourcesPath: process.resourcesPath ?? "",
+				env: process.env,
+				platform: process.platform,
+			},
+		);
 		return agent as SearchAgent;
 	};
 }

@@ -88,6 +88,15 @@ export class LibrarianCliMissingError extends Error {
  */
 export function librarianCommand(deps: LibrarianCommandDeps): LibrarianCommand {
 	const exists = deps.exists ?? existsSync;
+	const toolsRoot = deps.env.AUTORAG_TOOLS_DIR?.trim() || join(deps.resourcesPath, "tools");
+	const bundledNode = join(toolsRoot, "node");
+	const command = exists(bundledNode) ? join(bundledNode, deps.platform === "win32" ? "node.exe" : join("bin", "node")) : "node";
+
+	// Packaged builds (`asar: true`) ship a standalone plain-Node bundle under `<tools>/librarian/`
+	// because plain Node cannot read inside `app.asar`. Prefer it whenever present.
+	const standaloneCli = join(toolsRoot, "librarian", "dist", "cli", "index.js");
+	if (exists(standaloneCli)) return { command, args: [standaloneCli] };
+
 	const resolvePackage = deps.resolvePackage ?? ((specifier: string) => createRequire(import.meta.url).resolve(specifier));
 	let entry: string;
 	try {
@@ -99,9 +108,6 @@ export function librarianCommand(deps: LibrarianCommandDeps): LibrarianCommand {
 	const cliEntry = join(dirname(entry), "cli", "index.js");
 	if (!exists(cliEntry)) throw new LibrarianCliMissingError();
 
-	const toolsRoot = deps.env.AUTORAG_TOOLS_DIR?.trim() || join(deps.resourcesPath, "tools");
-	const bundledNode = join(toolsRoot, "node");
-	const command = exists(bundledNode) ? join(bundledNode, deps.platform === "win32" ? "node.exe" : join("bin", "node")) : "node";
 	return { command, args: [cliEntry] };
 }
 
