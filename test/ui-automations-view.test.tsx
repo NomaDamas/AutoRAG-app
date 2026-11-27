@@ -180,17 +180,17 @@ describe("AutomationsView list", () => {
 	it("suggests only the recommendations no rule already does", () => {
 		const pdfRule = rule("pdf-notes", { run: [], agent: { profile: "file-organizer", task: "요약" }, include: ["**/*.pdf"], events: ["create"] });
 		render(props({ state: state([pdfRule, failing]) }));
-		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "translate"]);
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["summary", "screenshot", "translate"]);
 		// The right-click one is taken once a right-click automation does its task.
 		const translating = { id: "tr", label: "번역", enabled: true, selection: "single" as const, targetKind: "file" as const, extensions: [], execution: { kind: "agent" as const, mode: "organize" as const, prompt: "한국어로 번역한 사본을 같은 폴더에 만들어 줘" } };
 		render(props({ state: state([pdfRule]), magicActions: [translating] }));
-		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot"]);
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["summary", "screenshot"]);
 	});
 
 	it("draws the soft glow behind each recommendation only while there are no rules", () => {
 		render(props({ state: state([]) }));
 		const cards = [...host.querySelectorAll<HTMLElement>("[data-template]")];
-		expect(cards.length).toBe(3);
+		expect(cards.length).toBe(4);
 		expect(cards.every((card) => card.parentElement?.hasAttribute("data-ai-glow") === true)).toBe(true);
 		render(props({ state: state([failing]) }));
 		expect(host.querySelector("[data-automation-recommendations] [data-ai-glow]")).toBeNull();
@@ -265,7 +265,7 @@ describe("AutomationsView empty and error states", () => {
 		expect(rows()).toEqual([]);
 		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["반복하는 파일 작업은 Dazzi에게 맡기세요"]);
 		// Two folder automations and one right-click automation; 검색 바로 최신화 is left to the chat's suggestions.
-		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["screenshot", "pdf", "translate"]);
+		expect([...host.querySelectorAll<HTMLElement>("[data-template]")].map((card) => card.dataset.template)).toEqual(["summary", "screenshot", "pdf", "translate"]);
 		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-composer-open"]')).toBeNull();
 		expect(host.querySelector('[data-action="automation-all-runs"]')).toBeNull();

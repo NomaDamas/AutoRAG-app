@@ -1354,6 +1354,77 @@ html[data-appearance="dark"] .fr-reveal-base {
 	cursor: default;
 }
 
+/* 건너뛰기 at the card's top right (the tutorials); the title keeps clear of it. */
+.fr-coach-card--skip {
+	position: relative;
+}
+
+.fr-coach-card--skip .fr-coach-title {
+	padding-right: 64px;
+}
+
+.fr-coach-skip {
+	position: absolute;
+	top: 20px;
+	right: 20px;
+}
+
+.fr-coach-skip .fr-coach-link {
+	font-size: 12px;
+}
+
+/* 다음 / 완료 is a filled button, like the app's other primary actions; 건너뛰기 stays a quiet link. */
+.fr-coach-link--primary {
+	height: 30px;
+	padding: 0 14px;
+	border-radius: 8px;
+	background: var(--accent);
+	color: var(--on-accent);
+	font-weight: 600;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+	transition: background-color var(--dur-color) ease-out;
+}
+
+.fr-coach-link--primary:hover {
+	opacity: 1;
+	background: var(--accent-hover);
+}
+
+/* The click ring sends out a ripple, two waves half a beat apart, so the target reads at a glance. */
+.fr-cursor-ring::before,
+.fr-cursor-ring::after {
+	content: "";
+	position: absolute;
+	inset: -3px;
+	border-radius: 50%;
+	border: 2px solid var(--accent);
+	opacity: 0;
+	pointer-events: none;
+	animation: fr-ring-ripple 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+.fr-cursor-ring::after {
+	animation-delay: 0.9s;
+}
+
+@keyframes fr-ring-ripple {
+	0% {
+		transform: scale(1);
+		opacity: 0.55;
+	}
+	100% {
+		transform: scale(1.75);
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fr-cursor-ring::before,
+	.fr-cursor-ring::after {
+		animation: none;
+	}
+}
+
 /* Where to click: the sunflower beside a ring on a small target, or on the corner of a wider one. Clicks pass through. */
 .fr-cursor {
 	position: absolute;

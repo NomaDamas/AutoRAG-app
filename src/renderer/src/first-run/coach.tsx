@@ -15,6 +15,7 @@ export function CoachCard({
 	count,
 	waiting = false,
 	note,
+	skip,
 	children,
 }: {
 	readonly title: string;
@@ -25,12 +26,15 @@ export function CoachCard({
 	readonly waiting?: boolean;
 	/** A line under the body for what the body cannot say (a right click, a drag). */
 	readonly note?: string | null;
+	/** 건너뛰기, at the card's top right, apart from the step's own action at the bottom. */
+	readonly skip?: ReactNode;
 	/** The links at the bottom right, in reading order: 건너뛰기, then 다음 or 완료. */
 	readonly children: ReactNode;
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<div className="fr-coach-card">
+		<div className={skip === undefined || skip === null ? "fr-coach-card" : "fr-coach-card fr-coach-card--skip"}>
+			{skip === undefined || skip === null ? null : <span className="fr-coach-skip">{skip}</span>}
 			<div className="fr-coach-copy">
 				<h2 className="fr-coach-title">
 					{waiting ? <span className="fr-coach-spinner" aria-hidden="true" /> : null}

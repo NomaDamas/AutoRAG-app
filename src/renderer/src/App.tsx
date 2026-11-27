@@ -70,7 +70,7 @@ import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, SETTIN
 import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { windowColumns } from "./state/window-layout";
 import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
-import { folderPaneId, splitTwoFolders, splitWithAiSearch } from "./first-run/tour";
+import { folderPaneId, splitWithAiSearch } from "./first-run/tour";
 import { Tutorials } from "./first-run/Tutorials";
 import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
@@ -864,46 +864,31 @@ export function App(): ReactElement {
 		async (effect: TutorialEffect, facts: TutorialFacts): Promise<TutorialFacts | null> => {
 			try {
 				switch (effect) {
-					case "askAiForRule": {
-						const { downloads, gray } = await autorag.demo.preparePhoto();
-						// The background service must be up before the rule exists, so the first dropped photo is seen.
-						void autorag.demo.ensureDaemon();
-						return { aiTab: openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray })) };
-					}
-					case "askForRightClick": {
-						// "우클릭 자동화 만들어줘" brings the 새 자동화 card at once, set to 우클릭하면: no answer to wait for.
-						const { sample } = await autorag.demo.prepareSample();
-						const known = (await autorag.settings.get()).contextMenu.magicActions.map((action) => action.id);
-						return { sample, known, aiTab: openAiDraft(translate("tutorials.automations.askText")) };
-					}
 					case "showNewRightClick": {
 						finder?.showAutomations();
-						// 추가하기 saves the action a moment after the click: look for the one that was not there before.
-						const before = new Set(facts.known ?? []);
+						// 추가하기 saves the action a moment after the click: find the one the recommendation made, by its task.
+						const task = translate("automations.templates.summary.task").trim();
 						for (let attempt = 0; attempt < 20; attempt += 1) {
-							const added = (await autorag.settings.get()).contextMenu.magicActions.find((action) => !before.has(action.id));
+							const added = (await autorag.settings.get()).contextMenu.magicActions.find((action) => action.execution.kind === "agent" && action.execution.prompt.trim() === task);
 							if (added !== undefined) return { action: added.id };
 							await new Promise((resolve) => setTimeout(resolve, 250));
 						}
 						return null;
 					}
-					case "openSample":
-						if (facts.sample !== undefined) finder?.openFolder(dirname(facts.sample));
+					case "openSample": {
+						const { sample } = await autorag.demo.prepareSample();
+						finder?.closeContextMenu();
+						finder?.openFolder(dirname(sample));
+						return { sample };
+					}
+					case "backToAutomations":
+						dismissMagicActionDialog();
+						finder?.closeContextMenu();
+						finder?.showAutomations();
 						return {};
 					case "showAutomations":
 						finder?.showAutomations();
 						return {};
-					case "arrangePhotoPanes": {
-						const { folder, photo, downloads, gray } = await autorag.demo.preparePhoto();
-						setWorkspace((current) => splitTwoFolders(current, downloads, folder));
-						return { photo, folder, downloads, gray };
-					}
-					case "showGrayFolder": {
-						// The copy is in a sub-folder of Downloads that no pane shows: bring the left pane there so the person sees it.
-						const { gray, folder } = facts;
-						if (gray !== undefined && folder !== undefined) setWorkspace((current) => splitTwoFolders(current, gray, folder));
-						return {};
-					}
 					case "createMagicAction": {
 						const { sample } = await autorag.demo.prepareMagicAction();
 						finder?.closeContextMenu();
