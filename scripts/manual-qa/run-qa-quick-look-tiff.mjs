@@ -27,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 if (process.platform !== "darwin") {
 	console.log("SKIP  TIFF decode through sips is macOS-only");
@@ -81,8 +81,8 @@ function check(label, pass, detail = "") {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * The app pre-warms two Quick Look pages, the Finder's and the quick-search launcher's, and either can
- * register with Playwright first. The Finder's is the one that has a file loaded after Space.
+ * Quick Look panels are created lazily on first preview (up to two if the quick-search launcher also
+ * opens one). The Finder's is the one that has a file loaded after Space.
  */
 const quickLookPages = async (app) => (await app.windows()).filter((page) => page.url().includes("quick-look.html"));
 async function loadedPage(app) {
@@ -95,9 +95,10 @@ async function loadedPage(app) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "en" });
 try {
 	const main = await finderWindow(app, 30_000);
-	for (let i = 0; i < 600 && (await quickLookPages(app)).length < 2; i += 1) await sleep(50);
-	if ((await quickLookPages(app)).length === 0) throw new Error("Quick Look window did not pre-warm");
-	for (const page of await quickLookPages(app)) {
+	let probed = false;
+	const ensureProbe = async () => {
+		if (probed) return;
+		const page = await waitForQuickLookPage(app, { timeoutMs: 30_000 });
 		await page.evaluate(() => {
 			window.__block = 0;
 			let last = performance.now();
@@ -107,7 +108,8 @@ try {
 				last = now;
 			}, 8);
 		});
-	}
+		probed = true;
+	};
 	const onPage = async (body, fallback) => {
 		const page = await loadedPage(app);
 		return page === null ? fallback : page.evaluate(body).catch(() => fallback);
@@ -124,9 +126,12 @@ try {
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await sleep(250);
-		for (const page of await quickLookPages(app)) await page.evaluate(() => { window.__block = 0; });
+		if (probed) {
+			for (const page of await quickLookPages(app)) await page.evaluate(() => { window.__block = 0; });
+		}
 		const started = Date.now();
 		await main.keyboard.press("Space");
+		await ensureProbe();
 		for (let i = 0; i < 6000 && !(await shown().catch(() => false)); i += 1) await sleep(10);
 		const elapsed = Date.now() - started;
 		await sleep(400);
@@ -200,8 +205,6 @@ const slowApp = await launchFinder({
 });
 try {
 	const main = await finderWindow(slowApp, 30_000);
-	for (let i = 0; i < 600 && (await quickLookPages(slowApp)).length < 2; i += 1) await sleep(50);
-	if ((await quickLookPages(slowApp)).length === 0) throw new Error("Quick Look window did not pre-warm");
 	const onPanel = async (body, fallback) => {
 		const page = await loadedPage(slowApp);
 		return page === null ? fallback : page.evaluate(body).catch(() => fallback);

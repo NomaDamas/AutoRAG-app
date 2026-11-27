@@ -8,7 +8,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 import { chord } from "./platform.mjs";
 import { pickSelect, selectField, selectValue } from "./settings-select.mjs";
 
@@ -41,17 +41,12 @@ try {
 		env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" },
 	});
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((page) => page.url().includes("quick-look.html")),
-		(page) => page !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
 
 	const row = main.getByRole("row", { name: /appearance\.md/ }).first();
 	await row.waitFor({ timeout: 30_000 });
 	await row.click();
 	await main.keyboard.press("Space");
+	const preview = await waitForQuickLookPage(app, { timeoutMs: 30_000 });
 	await poll(() => preview.evaluate(() => document.querySelector('[data-quicklook-state="ready"]') !== null), Boolean);
 
 	const initial = await Promise.all([

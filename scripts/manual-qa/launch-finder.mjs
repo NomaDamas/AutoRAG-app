@@ -64,7 +64,7 @@ export async function launchFinder({
  * The app's renderer page — its one window. A first run no longer opens a second window beside the Finder: the
  * Finder window itself carries the first-run overlay, so on that launch `window.autorag.onboarding.pending` is
  * true and the same page is both "the Finder" and "the first-run screen". A lane that opts out of onboarding
- * (`launchFinder({ onboarding: false })`) gets the same one page. The pre-warmed Quick Look window never loads
+ * (`launchFinder({ onboarding: false })`) gets the same one page. Quick Look and Quick Search windows never load
  * /index.html, so the URL filter alone picks the Finder; poll instead of trusting `firstWindow()`.
  */
 export async function appWindow(app, timeoutMs = 6000) {
@@ -83,12 +83,26 @@ export const finderWindow = (app, timeoutMs = 6000) => appWindow(app, timeoutMs)
 /** The first-run renderer page — the same Finder window, which carries the pending flag on a first run. */
 export const onboardingWindow = (app, timeoutMs = 6000) => appWindow(app, timeoutMs);
 
-/** Every pre-warmed Quick Look panel page the app has right now (see {@link createFinderPreview}). */
+/** Every Quick Look panel page the app has created so far (0, 1, or 2; see {@link createFinderPreview}). */
 export async function quickLookPages(app) {
 	return (await app.windows()).filter((page) => page.url().includes("quick-look.html"));
 }
 
-/** One reading of every pre-warmed panel: its page, its window's signals, and whether its page has a file loaded. */
+/**
+ * Wait until a Quick Look panel page exists (created lazily on the first Space / preview request).
+ * Returns the first matching page, or throws when the timeout expires.
+ */
+export async function waitForQuickLookPage(app, { timeoutMs = 30_000 } = {}) {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		const page = (await quickLookPages(app))[0];
+		if (page !== undefined) return page;
+		if (Date.now() >= deadline) throw new Error("Quick Look window did not appear");
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+}
+
+/** One reading of every existing Quick Look panel: its page, its window's signals, and whether its page has a file loaded. */
 async function previewPanelFacts(app, main) {
 	const mainHandle = main === undefined ? null : await app.browserWindow(main);
 	const mainId = mainHandle === null ? null : await mainHandle.evaluate((window) => window.id);
@@ -117,13 +131,13 @@ function previewPanelDigest(facts) {
 /**
  * The Quick Look panel that belongs to the Finder (`main`), and only that one.
  *
- * The app always pre-warms TWO panels — the Finder's and the quick-search
- * launcher's (`createQuickSearchWindow` attaches its own at startup) — and either
- * can register with Playwright first, while `BrowserWindow.getAllWindows()`
- * returns the launcher's hidden 880×640 panel first. That panel never resizes
- * with the Finder's preview, so a lane that took "the first quick-look page" or
- * "the first quick-look window" measured the wrong one (a constant 880×640 in
- * every geometry check).
+ * Quick Look panels are created lazily — 0 exist at startup, 1 once the Finder
+ * previews a file, and up to 2 if the quick-search launcher has also opened a
+ * preview. When both panels exist, either can register with Playwright first,
+ * while `BrowserWindow.getAllWindows()` may return the launcher's hidden
+ * 880×640 panel first. That panel never resizes with the Finder's preview, so
+ * a lane that took "the first quick-look page" or "the first quick-look window"
+ * could measure the wrong one (a constant 880×640 in every geometry check).
  *
  * Panels are told apart, in order, by:
  *   1. `getParentWindow()` being the Finder (Windows/Linux, where the panel is a
@@ -131,14 +145,16 @@ function previewPanelDigest(facts) {
  *   2. not floating on every workspace: the launcher's panel is created with
  *      `level: "screen-saver"`, so `setVisibleOnAllWorkspaces(true, ...)` was
  *      called on it and `isVisibleOnAllWorkspaces()` is true, while the Finder's
- *      panel never gets that call — this resolves before any file is shown;
+ *      panel never gets that call;
  *   3. after the Finder has shown a file, the only panel whose page reached
  *      `data-quicklook-state="ready"` or whose window is visible.
  *
- * Resolved once and reused. `page()` throws with the panel facts when the panels
- * cannot be told apart, rather than silently returning the launcher's. `state()`
- * reads the panel's own window through Playwright's `browserWindow(page)` handle,
- * so a bounds/visibility read can never hit the other panel.
+ * Resolved once and reused (works with 0, 1, or 2 existing panels; returns null
+ * from `state()` until the Finder's panel has been created). `page()` throws
+ * with the panel facts when no panel exists yet or the panels cannot be told
+ * apart, rather than silently returning the launcher's. `state()` reads the
+ * panel's own window through Playwright's `browserWindow(page)` handle, so a
+ * bounds/visibility read can never hit the other panel.
  */
 export function createFinderPreview(app, main) {
 	let chosen = null;

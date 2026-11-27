@@ -34,7 +34,7 @@ import {
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
-import { LANGUAGE_CHANNELS } from "../shared/language-contract";
+import { LANGUAGE_CHANNELS, LANGUAGE_FLAG } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG } from "../shared/onboarding-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import { DOCUMENT_EDITOR_CHANNELS } from "../shared/document-editor-contract";
@@ -308,6 +308,10 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 	const windowSize = appWindowSize(workArea, "finder");
 	const window = new BrowserWindow({
 		...windowSize,
+		// Shown on `ready-to-show` (below): on a slow disk the bundle takes seconds to parse, and an empty white frame
+		// (a flash in dark mode) is what the person would see meanwhile.
+		show: false,
+		backgroundColor: appearance === "dark" ? "#1E1E20" : "#FFFFFF",
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
@@ -321,6 +325,7 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 			additionalArguments: [
 				...(devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`]),
 				`--autorag-appearance=${appearance}`,
+				`${LANGUAGE_FLAG}${currentLanguage}`,
 				// The renderer's first-run layer mounts only while the flag is present; `load` is authoritative.
 				...(pending ? [ONBOARDING_PENDING_FLAG] : []),
 			],
@@ -336,6 +341,16 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 		window.setTitle(formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel));
 	});
 
+	// Safety net: a page that never reports `ready-to-show` must not leave the app invisible.
+	const showFallback = setTimeout(() => {
+		if (!window.isDestroyed() && !window.isVisible()) window.show();
+	}, 8000);
+	window.once("ready-to-show", () => {
+		clearTimeout(showFallback);
+		if (!window.isDestroyed()) window.show();
+	});
+	window.once("closed", () => clearTimeout(showFallback));
+
 	loadRendererPage(window, "index.html");
 	attachQuickLook(window, quickLookOptions(appearance));
 	return window;
@@ -348,6 +363,8 @@ function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
 		appearance,
 		language: currentLanguage,
 		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+		// The hidden panel is built on the first Space press, not at startup: an idle renderer costs ~120-150 MB.
+		lazy: true,
 		// Spawning osascript blocks the caller for the fork; the worker pays it.
 		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
 		quickLookChord: () => currentQuickLookChord,
@@ -1512,7 +1529,9 @@ app.whenReady().then(async () => {
 		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
 		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
 		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
-		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
+		attachPreview: (owner, onWindowCreated) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true, onWindowCreated }),
+		// Defer creating the hidden launcher renderer until the first shortcut press (~140 MB RAM saved at startup).
+		lazy: true,
 	});
 	quickSearchShortcut = createQuickSearchShortcut({
 		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),

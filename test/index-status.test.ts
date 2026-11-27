@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { minSyncDocumentPath, minSyncWorkspaceRoot } from "@autorag/librarian";
@@ -194,5 +194,34 @@ describe("createIndexStatusService", () => {
 		await service.setIndexExcluded(target, false);
 		const cleared = JSON.parse(await readFile(fixture.configPath, "utf8")) as { excludePaths?: string[] };
 		expect(cleared.excludePaths).toEqual(["**/node_modules/**"]);
+	});
+
+	it("caches mirror index loads when config and stage are unchanged and invalidates when stage or config updates", async () => {
+		const fixture = await createFixture();
+		const staged = await indexFile(fixture, "cached.txt", true);
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
+
+		// Repeated calls on an unchanged stage return the exact same included status.
+		const [first] = await service.indexStatus([staged]);
+		const [second] = await service.indexStatus([staged]);
+		expect(first).toMatchObject({ kind: "included", excluded: false, toggleable: true });
+		expect(second).toMatchObject({ kind: "included", excluded: false, toggleable: true });
+
+		// When a new file is seeded into the stage, stageSignature changes and the cache reloads immediately.
+		const newer = await indexFile(fixture, "newer.txt", true);
+		const [third] = await service.indexStatus([newer]);
+		expect(third).toMatchObject({ kind: "included", excluded: false, toggleable: true });
+	});
+
+	it("resolves symlinks inside a search root to their real canonical target", async () => {
+		const fixture = await createFixture();
+		const outside = join(fixture.workspace, "outside-target.txt");
+		await writeFile(outside, "hello\n");
+		const linkPath = join(fixture.docs, "link-to-outside.txt");
+		await symlink(outside, linkPath);
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
+
+		const [status] = await service.indexStatus([linkPath]);
+		expect(status).toMatchObject({ kind: "outside", toggleable: false });
 	});
 });

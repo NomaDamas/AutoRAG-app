@@ -27,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -148,11 +148,9 @@ try {
 	check("the toolbar still shows the enclosing folder", await title(), "AppBundleQA");
 
 	// 4. Space opens the app's own panel, never the bundle's contents.
-	const previews = await app.windows();
-	const preview = previews.find((candidate) => candidate.url().includes("quick-look.html"));
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
 	await row.click();
 	await page.keyboard.press("Space");
+	const preview = await waitForQuickLookPage(app, { timeoutMs: 30_000 });
 	const panel = await waitFor(() => preview.locator(".ql-bundle").count().then((count) => count > 0), 20_000);
 	check("Space opens the app panel", panel !== null, true);
 	check("the panel names the app", (await preview.locator(".ql-bundle__name").innerText()).trim(), APP_NAME);

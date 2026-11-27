@@ -743,6 +743,7 @@ function Tour({
 	const waiting = step === "cite" && (answer === "idle" || answer === "running");
 	const failed = step === "cite" && answer === "failed";
 	const noCite = step === "cite" && answer === "done" && !cited;
+	const isFallbackDemo = demo?.fallback === true;
 	const title =
 		step === null
 			? ""
@@ -752,7 +753,9 @@ function Tour({
 					? t("firstRun.tour.cite.failedTitle")
 					: noCite
 						? t("firstRun.tour.cite.noCiteTitle")
-						: t(`firstRun.tour.${step}.title`);
+						: step === "ask" && isFallbackDemo
+							? t("firstRun.tour.ask.fallbackTitle")
+							: t(`firstRun.tour.${step}.title`);
 	const body =
 		step === null
 			? ""
@@ -762,7 +765,9 @@ function Tour({
 					? t("firstRun.tour.cite.failedBody")
 					: noCite
 						? t("firstRun.tour.cite.noCiteBody")
-						: t(`firstRun.tour.${step}.body`);
+						: step === "ask" && isFallbackDemo
+							? t("firstRun.tour.ask.fallbackBody")
+							: t(`firstRun.tour.${step}.body`);
 	const hintLabel =
 		step === "ask"
 			? askReady

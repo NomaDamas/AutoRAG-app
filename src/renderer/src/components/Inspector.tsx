@@ -28,7 +28,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
-import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import { firstPageTile } from "../lib/first-page-tile";
 import { previewLoaderFor } from "../lib/preview-loader";
 import { hostPlatform } from "../lib/shortcuts";
@@ -564,7 +563,7 @@ function usePreviewState(entry: FinderEntry): {
 			platform: hostPlatform(),
 			os: osPreview,
 			page: (file, version) => firstPageTile(file, version, PREVIEW_PAPER_WIDTH),
-			hwp: hwpFirstPageUrl,
+			hwp: async (file) => (await import("../../../preview/ui/rhwp")).hwpFirstPageUrl(file),
 		});
 		let cancelled = false;
 		const settle = (next: PreviewState): void => {

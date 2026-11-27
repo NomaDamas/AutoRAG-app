@@ -95,4 +95,20 @@ describe("Quick Look panel on quit", () => {
 		autoUpdater.emit("before-quit-for-update");
 		expect(window.requestClose()).toBe(true);
 	});
+
+	it("defers creating the BrowserWindow when attached with lazy: true", async () => {
+		const preview = await loadPreview();
+		preview.registerQuickLookIpc(null, ipc);
+		const owner = new mock.FakeWindow();
+		mock.FakeWindow.all.length = 0;
+		const created = preview.attachQuickLook(owner as never, {
+			preload: "preload.js",
+			appearance: "light",
+			language: "en",
+			loadPage: () => undefined,
+			lazy: true,
+		} as never);
+		expect(created).toBeNull();
+		expect(mock.FakeWindow.all).toHaveLength(0);
+	});
 });

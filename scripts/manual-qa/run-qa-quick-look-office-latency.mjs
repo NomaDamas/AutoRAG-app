@@ -17,7 +17,7 @@
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const SOURCE = process.env.QA_OFFICE_DIR;
 if (SOURCE === undefined) throw new Error("set QA_OFFICE_DIR to a folder holding real-*.doc / real-*.ppt files");
@@ -47,27 +47,25 @@ const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPE
 try {
 	const main = await finderWindow(app, 30_000);
 	let preview;
-	for (let i = 0; i < 300 && preview === undefined; i += 1) {
-		preview = (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html"));
-		if (preview === undefined) await sleep(100);
-	}
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((item) => item.webContents.getURL().includes("quick-look.html") && item.isVisible()));
 
 	/** What the panel shows right now: the OS first-page image, the drawn page, or the extracted text. */
 	const shape = () =>
-		preview
-			.evaluate(() => {
-				const image = document.querySelector(".ql__office img.ql__image");
-				const frame = document.querySelector("iframe.ql__frame");
-				const text = document.querySelector(".ql__legacy");
-				return {
-					image: image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
-					frame: frame instanceof HTMLIFrameElement && getComputedStyle(frame).opacity === "1",
-					text: text !== null && (text.textContent ?? "").length > 20,
-				};
-			})
-			.catch(() => ({ image: false, frame: false, text: false }));
+		preview === undefined
+			? Promise.resolve({ image: false, frame: false, text: false })
+			: preview
+					.evaluate(() => {
+						const image = document.querySelector(".ql__office img.ql__image");
+						const frame = document.querySelector("iframe.ql__frame");
+						const text = document.querySelector(".ql__legacy");
+						return {
+							image: image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+							frame: frame instanceof HTMLIFrameElement && getComputedStyle(frame).opacity === "1",
+							text: text !== null && (text.textContent ?? "").length > 20,
+						};
+					})
+					.catch(() => ({ image: false, frame: false, text: false }));
 	/** Distinct colours in the panel body. A blank panel has one or two; a white page of text has about ten (white, black, anti-aliasing greys). */
 	const paint = async () => {
 		const png = await preview.screenshot({ clip: { x: 0, y: 60, width: 300, height: 300 } });
@@ -87,6 +85,7 @@ try {
 		if (dwell > 0) await sleep(dwell);
 		const pressed = Date.now();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		const at = { shown: null, image: null, frame: null, text: null };
 		const blanks = [];
 		let last = "";

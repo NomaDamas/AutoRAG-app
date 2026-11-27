@@ -13,7 +13,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? "/tmp/autorag-quicklook-csv-korean";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -50,11 +50,7 @@ const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPE
 try {
 	const main = await finderWindow(app, 30_000);
 	let preview;
-	for (let i = 0; i < 600 && preview === undefined; i += 1) {
-		preview = (await app.windows()).find((page) => page.url().includes("quick-look.html"));
-		if (preview === undefined) await sleep(50);
-	}
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("quick-look.html"))?.isVisible() ?? false);
 
 	for (const { name, expected } of fixtures) {
@@ -63,6 +59,7 @@ try {
 		await row.click();
 		await sleep(250);
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		for (let i = 0; i < 400 && !(await preview.evaluate(() => document.querySelectorAll(".ql__table td").length > 0).catch(() => false)); i += 1) await sleep(25);
 		await sleep(300);
 		const cells = await preview.locator(".ql__table th, .ql__table td").allTextContents();

@@ -57,6 +57,10 @@ const KIND_MAX_BUFFER = 1 << 20;
 const MDLS = "/usr/bin/mdls";
 /** One process answers at most this many extensions, which keeps its command line short and its run inside the timeout. */
 const WINDOWS_BATCH_LIMIT = 100;
+/** Max paths sent to a single macOS `mdls` batch (keeps argv short and avoids spawn storms on extensionless folders). */
+const MAC_BATCH_LIMIT = 64;
+/** Max concurrent macOS `mdls` helper processes when falling back to single-path queries. */
+const MAC_CONCURRENCY = 4;
 
 /**
  * The extension Explorer's Type column looks up in the registry, lower-cased as the registry is
@@ -125,6 +129,43 @@ export function parseMacKindStdout(stdout: string): KindAnswer | null {
 	if (kind === null) return null;
 	const type = parts.length > 1 ? parseKindStdout(parts[0] ?? "") : null;
 	return { kind, registered: type === null || !type.startsWith("dyn.") };
+}
+
+/**
+ * Parse a multi-path `mdls -name kMDItemKind -name kMDItemContentType -raw <p1> <p2> ...`
+ * response: each path emits two NUL-separated values (`contentType`, `kind`). Returns null
+ * if the segment count does not match `count * 2` (e.g. a missing path truncated output),
+ * signalling the caller to fall back to per-path queries.
+ */
+export function parseMacKindBatchStdout(stdout: string, count: number): (KindAnswer | null)[] | null {
+	if (count === 0) return [];
+	const parts = stdout.split("\0");
+	if (parts.length !== count * 2) return null;
+	const answers: (KindAnswer | null)[] = [];
+	for (let i = 0; i < count; i += 1) {
+		const type = parseKindStdout(parts[i * 2] ?? "");
+		const kind = parseKindStdout(parts[i * 2 + 1] ?? "");
+		answers.push(kind === null ? null : { kind, registered: type === null || !type.startsWith("dyn.") });
+	}
+	return answers;
+}
+
+/** Multi-path `mdls` batch query: answers up to `MAC_BATCH_LIMIT` files in a single process spawn. */
+function runMacBatch(paths: readonly string[]): Promise<(KindAnswer | null)[] | null> {
+	return new Promise((resolve) => {
+		execFile(
+			MDLS,
+			["-name", "kMDItemKind", "-name", "kMDItemContentType", "-raw", ...paths],
+			{ timeout: KIND_TIMEOUT_MS, maxBuffer: KIND_MAX_BUFFER, windowsHide: true },
+			(error, stdout) => {
+				if (error) {
+					resolve(null);
+					return;
+				}
+				resolve(parseMacKindBatchStdout(stdout, paths.length));
+			},
+		);
+	});
 }
 
 export function defaultRun(query: KindQuery): Promise<KindAnswer | string | null> {
@@ -272,13 +313,122 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 		return pending;
 	}
 
+	// macOS: batch concurrent mdls lookups into one process per MAC_BATCH_LIMIT paths when using
+	// defaultRun (custom test `deps.run` uses the single-path query with a concurrency cap).
+	const useMacBatch = platform === "darwin" && deps.run === undefined;
+	interface MacWaitingItem {
+		readonly key: string;
+		readonly path: string;
+		readonly ext: string;
+		readonly promise: Promise<string | null>;
+		readonly settle: (kind: string | null) => void;
+	}
+	const macWaiting: MacWaitingItem[] = [];
+	let macDraining = false;
+	let macScheduled = false;
+
+	// Concurrency cap for single-path queries (fallback when a batch fails or custom `deps.run` is injected).
+	let singleActive = 0;
+	const singleQueue: Array<() => void> = [];
+	async function withSingleSlot<T>(work: () => Promise<T>): Promise<T> {
+		if (singleActive >= MAC_CONCURRENCY) {
+			await new Promise<void>((resolve) => singleQueue.push(resolve));
+		}
+		singleActive += 1;
+		try {
+			return await work();
+		} finally {
+			singleActive -= 1;
+			singleQueue.shift()?.();
+		}
+	}
+
+	function answerToKind(answer: KindAnswer | null, ext: string): string | null {
+		if (answer === null) return null;
+		return !answer.registered && hasExtensionKindName(ext) ? null : answer.kind;
+	}
+
+	async function querySingle(key: string, path: string, ext: string, pending: Promise<string | null>): Promise<string | null> {
+		return withSingleSlot(async () => {
+			try {
+				return await query(path, ext);
+			} catch {
+				// One unanswerable file must not erase the kind of every file sharing its extension.
+				if (cache.get(key) === pending) cache.delete(key);
+				return null;
+			}
+		});
+	}
+
+	async function drainMac(): Promise<void> {
+		macDraining = true;
+		try {
+			while (macWaiting.length > 0) {
+				const batch = macWaiting.splice(0, MAC_BATCH_LIMIT);
+				if (batch.length === 1) {
+					const item = batch[0]!;
+					item.settle(await querySingle(item.key, item.path, item.ext, item.promise));
+					continue;
+				}
+				// Filter out dangling symlinks before batching so one broken link does not fail the whole mdls call.
+				const valid: MacWaitingItem[] = [];
+				const dangling: MacWaitingItem[] = [];
+				await Promise.all(
+					batch.map(async (item) => {
+						if (await isDanglingSymlink(item.path)) dangling.push(item);
+						else valid.push(item);
+					}),
+				);
+				for (const item of dangling) {
+					if (cache.get(item.key) === item.promise) cache.delete(item.key);
+					item.settle(null);
+				}
+				if (valid.length === 0) continue;
+				const answers = await runMacBatch(valid.map((item) => item.path));
+				if (answers !== null) {
+					valid.forEach((item, index) => {
+						item.settle(answerToKind(answers[index] ?? null, item.ext));
+					});
+					continue;
+				}
+				// Batch failed (e.g. a file vanished mid-flight): fall back per-path with concurrency cap.
+				await Promise.all(
+					valid.map(async (item) => {
+						item.settle(await querySingle(item.key, item.path, item.ext, item.promise));
+					}),
+				);
+			}
+		} finally {
+			macDraining = false;
+		}
+	}
+
+	function scheduleMacDrain(): void {
+		if (macDraining || macScheduled) return;
+		macScheduled = true;
+		queueMicrotask(() => {
+			macScheduled = false;
+			void drainMac();
+		});
+	}
+
 	return {
 		kindFor(path, ext) {
 			if (platform === "win32") return windowsKindFor(path);
 			const key = ext === "" ? path : ext;
 			const cached = cache.get(key);
 			if (cached !== undefined) return touch(key, cached);
-			const pending = query(path, ext).catch(() => {
+			if (useMacBatch) {
+				let settle: (kind: string | null) => void = () => {};
+				const pending = new Promise<string | null>((resolve) => {
+					settle = resolve;
+				});
+				remember(key, pending);
+				macWaiting.push({ key, path, ext, promise: pending, settle });
+				scheduleMacDrain();
+				return pending;
+			}
+			const pending = withSingleSlot(() => query(path, ext)).catch(() => {
 				// One unanswerable file must not erase the kind of every file sharing its extension.
 				if (cache.get(key) === pending) cache.delete(key);
 				return null;

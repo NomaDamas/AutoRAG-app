@@ -7,9 +7,12 @@ import type { AppSettings } from "../../../shared/settings-contract";
  * used to be applied, so without this it showed the Korean default until the
  * Finder loaded. A settings read that fails keeps the default.
  */
-export async function applyInterfaceLanguage(settings: { readonly get: () => Promise<Pick<AppSettings, "language">> }): Promise<void> {
+export async function applyInterfaceLanguage(
+	settings: { readonly get: () => Promise<Pick<AppSettings, "language">> },
+	initialLanguage?: AppSettings["language"],
+): Promise<void> {
 	try {
-		const { language } = await settings.get();
+		const language = initialLanguage ?? (await settings.get()).language;
 		await setAppLanguage(language);
 		document.documentElement.lang = language;
 	} catch (error) {

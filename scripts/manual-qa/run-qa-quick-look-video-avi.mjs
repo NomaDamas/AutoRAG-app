@@ -23,7 +23,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 if (spawnSync("ffmpeg", ["-version"]).status !== 0) {
 	console.log("SKIP  ffmpeg is not installed");
@@ -73,12 +73,8 @@ try {
 	const app = await launchFinder({ userDataDir, env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
 	try {
 		const main = await finderWindow(app, OPEN_MS);
-		const preview = await poll(
-			() => app.windows().find((candidate) => candidate.url().includes("quick-look.html")),
-			(candidate) => candidate !== undefined,
-			OPEN_MS,
-		);
-		if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+		let preview;
+		const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: OPEN_MS }));
 		const cacheDir = join(await app.evaluate(({ app: electronApp }) => electronApp.getPath("userData")), "video-playback");
 
 		const snapshot = () =>
@@ -109,6 +105,7 @@ try {
 			await row.waitFor({ timeout: 60_000 });
 			await row.click();
 			await main.keyboard.press("Space");
+			await ensurePreview();
 		};
 		const close = async () => {
 			await main.keyboard.press("Space");
