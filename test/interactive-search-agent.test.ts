@@ -303,6 +303,100 @@ describe("pictures attached to a question", () => {
 	});
 });
 
+describe("the attachment block (the file's path) on the first question of every route", () => {
+	const shot = join("/Users", "someone", "Pictures", "화면 캡처 2026.png");
+	const block = `<attachments>\n<attachment index="1" kind="file" path=${JSON.stringify(shot)}>\nBinary file; content not included. Only its path is known.\n</attachment>\n</attachments>`;
+
+	/** The text of every request the scripted model received, as it would be sent. */
+	function recorder(requests: string[], steps = 4): FauxResponseStep[] {
+		const seen = (context: { messages: readonly unknown[] }): AssistantMessage => {
+			requests.push(JSON.stringify(context.messages));
+			return fauxAssistantMessage("answer", { stopReason: "stop" });
+		};
+		return Array.from({ length: steps }, () => (context: { messages: readonly unknown[] }) => seen(context));
+	}
+
+	async function agentWith(requests: string[], extra: Record<string, unknown> = {}) {
+		const registration = registerFauxProvider({ api: `faux-attached-${randomUUID()}`, models: [{ id: "attached", input: ["text", "image"] }] });
+		registration.setResponses(recorder(requests));
+		disposers.push(() => registration.unregister());
+		const agentDir = join(root, "agent-attached");
+		mkdirSync(agentDir, { recursive: true });
+		const model = registration.getModel();
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultProvider: model.provider, defaultModel: model.id }));
+		const agent = new InteractiveSearchAgent(
+			{
+				model,
+				apiKey: "test-key",
+				searchPaths: [root],
+				workspacePath: root,
+				memoryPath: join(root, "memory.json"),
+				minSync: { autoInstall: false },
+				jikji: false,
+				piAgentDir: agentDir,
+				piSessionDir: join(root, "sessions"),
+				jev: baselineJev(),
+				filee: false,
+				permissionMode: "full",
+				...extra,
+			},
+			createAgentInteraction(),
+		);
+		await agent.openSession();
+		disposers.push(() => agent.closeSession());
+		return agent;
+	}
+
+	const occurrences = (text: string): number => text.split(JSON.stringify(shot).slice(1, -1).replaceAll("\\", "\\\\")).length - 1;
+
+	it("reaches the model in the parallel fast phase, which every user with an index runs", async () => {
+		const requests: string[] = [];
+		const agent = await agentWith(requests, { parallelFastPhase: true });
+		agent.setAttachmentContext(block);
+
+		await agent.searchDocuments("이 이미지 경로가 뭐야?");
+
+		expect(requests.length).toBeGreaterThan(0);
+		expect(requests[0]).toContain("화면 캡처 2026.png");
+		expect(occurrences(requests.at(-1) ?? "")).toBe(1);
+	});
+
+	it("reaches the model in the sequential fast phase exactly once", async () => {
+		const requests: string[] = [];
+		const agent = await agentWith(requests, { parallelFastPhase: false });
+		agent.setAttachmentContext(block);
+
+		await agent.searchDocuments("이 이미지 경로가 뭐야?");
+
+		expect(requests[0]).toContain("화면 캡처 2026.png");
+		expect(occurrences(requests.at(-1) ?? "")).toBe(1);
+	});
+
+	it.each(["organize", "extra"] as const)("reaches the model on the %s route", async (routeOverride) => {
+		const requests: string[] = [];
+		const agent = await agentWith(requests);
+		agent.setAttachmentContext(block);
+
+		await agent.searchDocuments("이 이미지 파일 이름을 바꿔줘", { routeOverride });
+
+		expect(requests.length).toBeGreaterThan(0);
+		expect(requests[0]).toContain("화면 캡처 2026.png");
+		expect(occurrences(requests.at(-1) ?? "")).toBe(1);
+	});
+
+	it("tells the model which file a picture is, not only that one was attached", async () => {
+		const requests: string[] = [];
+		const agent = await agentWith(requests);
+		agent.setAttachmentContext(block);
+		agent.setAttachmentImages([{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }]);
+
+		await agent.searchDocuments("what is in this picture?", { routeOverride: "extra" });
+
+		expect(requests[0]).toContain("화면 캡처 2026.png");
+		expect(requests[0]).toContain("image/png");
+	});
+});
+
 describe("explicit Turn-1 routeOverride", () => {
 	it("bypasses Jev route classification when routeOverride is passed (organize / extra / local)", async () => {
 		const askedQuestionIds: string[] = [];
