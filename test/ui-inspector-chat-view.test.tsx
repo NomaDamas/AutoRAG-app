@@ -499,7 +499,7 @@ describe("the Info view's chat dock", () => {
 				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
 			),
 		);
-		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("Dazzi에게 무엇이든 물어보세요");
 		expect(host.textContent).not.toContain("AI 요약");
 	});
 });
