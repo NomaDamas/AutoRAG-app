@@ -208,6 +208,7 @@ describe("quick-search launcher dismiss", () => {
 			status: () => ({}) as never,
 			setRecording: () => undefined,
 			attachPreview: () => null,
+			hidePreview: () => undefined,
 			lazy: true,
 		});
 		expect(electron.BrowserWindow.all).toHaveLength(0);
