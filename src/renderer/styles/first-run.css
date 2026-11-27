@@ -1814,3 +1814,9 @@ html[data-appearance="dark"] .fr-reveal-base {
 		animation: none;
 	}
 }
+
+/* In a tutorial the box resizes from one step's target to the next on the same page, a little slower than the
+   tour's slide so the change of size reads. */
+.fr-root[data-screen="tutorial"] .fr-spot {
+	transition: left 420ms var(--fr-spring), top 420ms var(--fr-spring), width 420ms var(--fr-spring), height 420ms var(--fr-spring), opacity 240ms ease;
+}
