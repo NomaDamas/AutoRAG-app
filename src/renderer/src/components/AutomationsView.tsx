@@ -941,7 +941,7 @@ function RunLine({
 			<button
 				type="button"
 				data-action="run-open-automation"
-				className="relative z-1 border-0 bg-transparent p-0 font-[inherit] text-ink-body cursor-pointer hover:underline hover:underline-offset-2"
+				className="relative z-1 border-0 bg-transparent p-0 font-[inherit] font-medium text-ink-body cursor-pointer hover:underline hover:underline-offset-2"
 				onClick={onOpenName}
 			>
 				{name}
