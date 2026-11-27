@@ -139,9 +139,19 @@ export function reportError(report: ErrorReport): void {
 
 const REFRESH_STEPS = ["minsync", "everything", "fsearch", "datasources"] as const;
 
+export interface RefreshFailureContext {
+	readonly excludePathsCount?: number;
+	readonly failedPhase?: string;
+}
+
 /** `minsync: …; datasources x: …` → the steps that failed. */
-function failingSteps(error: string): string[] {
-	const steps = error.split("; ").map((part) => REFRESH_STEPS.find((step) => part.startsWith(step)) ?? "other");
+function failingSteps(error: string, failedPhase?: string): string[] {
+	const steps = error.split("; ").map((part) => {
+		const matched = REFRESH_STEPS.find((step) => part.startsWith(step));
+		if (matched !== undefined) return matched;
+		if (/minsync\s+stage/iu.test(part)) return "minsync";
+		return failedPhase ?? "other";
+	});
 	return [...new Set(steps)].sort();
 }
 
@@ -182,10 +192,10 @@ function withoutToolLog(error: string): string {
 }
 
 /** A refresh that reported `ok: false`, or null when it succeeded. */
-export function refreshFailureReport(result: ConfigRefreshResult): ErrorReport | null {
+export function refreshFailureReport(result: ConfigRefreshResult, context?: RefreshFailureContext): ErrorReport | null {
 	if (result.ok) return null;
 	const error = scrubText(withoutToolLog(result.error ?? "refresh failed"));
-	const steps = failingSteps(error);
+	const steps = failingSteps(error, context?.failedPhase);
 	return {
 		title: `Index refresh failed: ${steps.join(", ")}`,
 		fingerprint: ["refresh-failed", steps.join(","), groupingText(error)],
@@ -198,6 +208,8 @@ export function refreshFailureReport(result: ConfigRefreshResult): ErrorReport |
 			deleted: result.deleted,
 			skipped: result.skipped,
 			diagnosticCodes: result.diagnostics.map((diagnostic) => diagnostic.code).join(","),
+			...(context?.excludePathsCount === undefined ? {} : { excludePathsCount: context.excludePathsCount }),
+			...(context?.failedPhase === undefined ? {} : { failedPhase: context.failedPhase }),
 		},
 	};
 }

@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { AutoRAGLite, type AutoRAGRefreshResult, type RefreshMethod } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -76,8 +77,9 @@ export const LOCAL_REFRESH_METHODS: readonly RefreshMethod[] = ["parsed", "minsy
  * fs worker) reports the same way.
  */
 export async function refreshAutoragIndex(deps: AutoragRefreshDeps, methods?: readonly string[]): Promise<ConfigRefreshResult> {
-	const result = await runRefresh(deps, methods);
-	const report = refreshFailureReport(result);
+	const context: { excludePathsCount?: number; failedPhase?: string } = {};
+	const result = await runRefresh(deps, methods, context);
+	const report = refreshFailureReport(result, context);
 	if (report !== null) reportError(report);
 	return result;
 }
@@ -85,6 +87,7 @@ export async function refreshAutoragIndex(deps: AutoragRefreshDeps, methods?: re
 async function runRefresh(
 	deps: AutoragRefreshDeps,
 	methods?: readonly string[],
+	context?: { excludePathsCount?: number; failedPhase?: string },
 ): Promise<ConfigRefreshResult> {
 	const requested = methods ?? LOCAL_REFRESH_METHODS;
 	const invalid = requested.filter((method) => REFRESH_METHODS[method as RefreshMethod] !== true);
@@ -119,6 +122,7 @@ async function runRefresh(
 	}
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
+	if (context !== undefined) context.excludePathsCount = effective.excludePaths?.length ?? 0;
 	mkdirSync(effective.workspacePath, { recursive: true });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	// A root that cannot be listed, or reads as empty although it was full, would make this
@@ -300,6 +304,11 @@ async function runRefresh(
 			error,
 		};
 	} catch (error) {
+		const message = formatCaughtRefreshError(error);
+		if (context !== undefined && context.failedPhase === undefined) {
+			const progressPhase = readLastRefreshPhase(effective.workspacePath);
+			if (progressPhase !== undefined) context.failedPhase = progressPhase;
+		}
 		return {
 			ok: false,
 			methods: selected,
@@ -308,7 +317,30 @@ async function runRefresh(
 			deleted: 0,
 			skipped: 0,
 			diagnostics,
-			error: error instanceof Error ? error.message : String(error),
+			error: message,
 		};
 	}
+}
+
+function formatCaughtRefreshError(error: unknown): string {
+	if (!(error instanceof Error)) return String(error);
+	const stderr =
+		"stderr" in error && typeof (error as { stderr?: unknown }).stderr === "string"
+			? (error as { stderr: string }).stderr.trim()
+			: "";
+	if (stderr.length === 0 || error.message.includes(stderr.slice(0, 64))) return error.message;
+	const tail = stderr.length <= 512 ? stderr : `…${stderr.slice(stderr.length - 512)}`;
+	return `${error.message} stderr: ${tail}`;
+}
+
+function readLastRefreshPhase(workspacePath: string): string | undefined {
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(join(workspacePath, ".autorag", "refresh-progress.json"), "utf8"));
+		if (typeof parsed === "object" && parsed !== null && "phase" in parsed && typeof parsed.phase === "string" && parsed.phase.length > 0) {
+			return parsed.phase;
+		}
+	} catch {
+		// best effort only
+	}
+	return undefined;
 }
