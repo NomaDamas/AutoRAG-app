@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createMagicActionRunLog, MAGIC_RUNS_KEPT } from "../src/main/magic-action-runs";
+import { createMagicActionRunLog, MAGIC_RUNS_KEPT, MAGIC_RUN_OUTPUT_KEPT } from "../src/main/magic-action-runs";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -33,11 +33,20 @@ describe("the right-click actions' run log", () => {
 
 		expect(await log.history("summary")).toEqual([
 			{ startedAt: 3_000, durationMs: 1_000, eventCount: 1, exitCode: null, signal: null, timedOut: false, files: ["/a.pdf"], error: "model unavailable" },
-			{ startedAt: 1_000, durationMs: 2_000, eventCount: 2, exitCode: 0, signal: null, timedOut: false, files: ["/a.pdf", "/b.pdf"] },
+			{ startedAt: 1_000, durationMs: 2_000, eventCount: 2, exitCode: 0, signal: null, timedOut: false, files: ["/a.pdf", "/b.pdf"], output: "ok" },
 		]);
 		expect(await log.history("other")).toEqual([]);
 		// A new log over the same file reads what was kept.
 		expect(await createMagicActionRunLog({ file }).history("summary")).toHaveLength(2);
+	});
+
+	it("keeps what a run answered, cut at the kept length, so its result can be opened again", async () => {
+		const { file, clock } = await logIn();
+		const log = createMagicActionRunLog({ file, now: () => clock.now });
+		log.record(started("r1", "long"));
+		log.record({ type: "done", runId: "r1", result: { actionId: "long", actionLabel: "long", executionKind: "agent", paths: [], output: "가".repeat(MAGIC_RUN_OUTPUT_KEPT + 10), durationMs: 5 } });
+		const [kept] = await log.history("long");
+		expect(kept?.output).toHaveLength(MAGIC_RUN_OUTPUT_KEPT);
 	});
 
 	it("keeps only the newest runs of an action", async () => {

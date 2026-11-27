@@ -637,6 +637,7 @@
       "agentAccess": "AI の権限",
       "agentProfile": "AI プロファイル",
       "more": "その他",
+      "openResult": "結果を見る",
       "menuEdit": "編集",
       "menuDelete": "削除",
       "runDone": "完了",
@@ -811,7 +812,9 @@
       "failed": "失敗",
       "settings": "設定",
       "history": "実行履歴",
-      "task": "やること"
+      "task": "やること",
+      "showMore": "さらに{{count}}件表示",
+      "showLess": "折りたたむ"
     },
     "tabs": {
       "rules": "自動化",

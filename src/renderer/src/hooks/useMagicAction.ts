@@ -9,9 +9,11 @@ import {
 	initialMagicActionStore,
 	openMagicActionStoreById,
 	reduceMagicActionStore,
+	type MagicActionRunState,
 	type MagicActionSession,
 	type MagicActionStore,
 } from "../state/magic-action";
+import type { AutomationRun } from "../../../shared/automation-contract";
 
 type MagicActionWindow = Window & { readonly autorag?: { readonly magicAction?: MagicActionBridge } };
 
@@ -99,6 +101,25 @@ export function stopMagicActionRun(): void {
 export function openMagicActionDialog(id?: string): void {
 	const targetId = id ?? current.sessions[0]?.id;
 	if (targetId !== undefined) publish(openMagicActionStoreById(current, targetId));
+}
+
+/**
+ * A past run from the log, opened in the same dialog a live run ends in (a file's inspector, its 자동화 card): its
+ * result (or why it failed) over the file it ran on. Closing it drops it, as closing a finished run does.
+ */
+export function showMagicActionRun(action: MagicAction, run: AutomationRun): void {
+	const id = `history:${action.id}:${run.startedAt}`;
+	const paths = run.files ?? [];
+	// A finished run shows what it printed, whatever its exit code, as the live dialog does; only an error has no result.
+	const state: MagicActionRunState =
+		run.error !== undefined
+			? { status: "failed", actionId: action.id, actionLabel: action.label, paths, message: run.error }
+			: {
+					status: "done",
+					result: { actionId: action.id, actionLabel: action.label, executionKind: action.execution.kind, paths, output: run.output ?? "", exitCode: run.exitCode, durationMs: run.durationMs },
+				};
+	const sessions = current.sessions.some((entry) => entry.id === id) ? current.sessions : [...current.sessions, { id, run: state }];
+	publish({ sessions, activeId: id });
 }
 
 export function dismissMagicActionDialog(): void {

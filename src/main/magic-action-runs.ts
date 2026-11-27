@@ -12,6 +12,8 @@ import type { MagicActionEvent } from "../shared/magic-actions-contract";
 
 /** How many runs each action keeps, newest first. */
 export const MAGIC_RUNS_KEPT = 50;
+/** A run's result is kept up to this many characters, so fifty runs of a long answer stay a small file. */
+export const MAGIC_RUN_OUTPUT_KEPT = 20_000;
 
 export interface MagicActionRunLog {
 	/** Feed every event a run sends; finished runs are written to the log. */
@@ -66,7 +68,7 @@ export function createMagicActionRunLog({ file, now = () => Date.now() }: { read
 			append(
 				started.actionId,
 				event.type === "done"
-					? { ...base, exitCode: event.result.exitCode ?? 0 }
+					? { ...base, exitCode: event.result.exitCode ?? 0, output: event.result.output.slice(0, MAGIC_RUN_OUTPUT_KEPT) }
 					: { ...base, exitCode: null, error: event.message },
 			);
 		},

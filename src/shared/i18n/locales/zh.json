@@ -637,6 +637,7 @@
       "agentAccess": "AI 权限",
       "agentProfile": "AI 配置",
       "more": "更多",
+      "openResult": "查看结果",
       "menuEdit": "编辑",
       "menuDelete": "删除",
       "runDone": "完成",
@@ -811,7 +812,9 @@
       "failed": "失败",
       "settings": "设置",
       "history": "运行记录",
-      "task": "任务"
+      "task": "任务",
+      "showMore": "再显示 {{count}} 条",
+      "showLess": "收起"
     },
     "tabs": {
       "rules": "自动化",
@@ -3308,9 +3311,9 @@
     "close": "关闭",
     "copyOutput": "复制结果",
     "copied": "已复制",
-    "saveToHistory": "保存到对话记录",
+    "saveToHistory": "保存到聊天记录",
     "savedToHistory": "已保存",
-    "saveFailed": "无法保存到对话记录。",
+    "saveFailed": "无法保存到聊天记录。",
     "emptyOutput": "已完成，无文本输出。",
     "targetsCount": "共 {{count}} 项",
     "sidebarOpen": "查看自动化结果"

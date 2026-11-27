@@ -637,6 +637,7 @@
       "agentAccess": "AI 권한",
       "agentProfile": "AI 프로필",
       "more": "더보기",
+      "openResult": "결과 보기",
       "menuEdit": "수정",
       "menuDelete": "삭제",
       "runDone": "완료",
@@ -811,7 +812,9 @@
       "failed": "실패",
       "settings": "설정",
       "history": "실행 기록",
-      "task": "할 일"
+      "task": "할 일",
+      "showMore": "{{count}}개 더 보기",
+      "showLess": "접기"
     },
     "tabs": {
       "rules": "자동화",
@@ -3308,9 +3311,9 @@
     "close": "닫기",
     "copyOutput": "결과 복사",
     "copied": "복사됨",
-    "saveToHistory": "대화 기록에 저장",
+    "saveToHistory": "채팅 기록에 저장",
     "savedToHistory": "저장됨",
-    "saveFailed": "대화 기록에 저장하지 못했습니다.",
+    "saveFailed": "채팅 기록에 저장하지 못했습니다.",
     "emptyOutput": "출력된 텍스트가 없습니다.",
     "targetsCount": "대상 {{count}}개",
     "sidebarOpen": "자동화 실행 결과 열기"
