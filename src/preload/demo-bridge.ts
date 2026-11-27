@@ -6,7 +6,6 @@ export function createDemoBridge(ipcRenderer: IpcRenderer): DemoBridge {
 	return {
 		preparePhoto: () => ipcRenderer.invoke(DEMO_CHANNELS.preparePhoto),
 		ensureDaemon: () => ipcRenderer.invoke(DEMO_CHANNELS.ensureDaemon),
-		prepareMagicAction: () => ipcRenderer.invoke(DEMO_CHANNELS.prepareMagicAction),
 		prepareSample: () => ipcRenderer.invoke(DEMO_CHANNELS.prepareSample),
 	};
 }

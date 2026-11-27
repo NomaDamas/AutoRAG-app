@@ -587,7 +587,6 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 export function registerDemoIpcHandlers(service: DemoBridge): void {
 	ipcMain.handle(DEMO_CHANNELS.preparePhoto, () => service.preparePhoto());
 	ipcMain.handle(DEMO_CHANNELS.ensureDaemon, () => service.ensureDaemon());
-	ipcMain.handle(DEMO_CHANNELS.prepareMagicAction, () => service.prepareMagicAction());
 	ipcMain.handle(DEMO_CHANNELS.prepareSample, () => service.prepareSample());
 }
 

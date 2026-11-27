@@ -40,7 +40,6 @@ describe("the automations tutorial adds a right-click recommendation and runs it
 
 	it("opens a new box only on the steps that bring a new page; the rest resize the last one", () => {
 		expect(steps.filter((candidate) => candidate.newPage === true).map((candidate) => candidate.key)).toEqual(["sample", "chat"]);
-		expect(TUTORIALS.contextMenu.filter((candidate) => candidate.newPage === true).map((candidate) => candidate.key)).toEqual(["sample"]);
 		expect(TUTORIALS.remoteAccess.filter((candidate) => candidate.newPage === true).map((candidate) => candidate.key)).toEqual(["toggle"]);
 	});
 

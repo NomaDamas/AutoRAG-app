@@ -735,11 +735,10 @@ export function App(): ReactElement {
 		setRightSidebarVisible: setInspectorVisible,
 		settingsFocused: path === SETTINGS_PATH,
 	});
-	const fileMenuOpen = finder?.contextMenu?.onEntry === true;
 	const settingsTabActive = path === SETTINGS_PATH;
 	const tutorialTriggers = useMemo(
-		() => ({ automations: automationsTabActive, fileMenu: fileMenuOpen, settings: settingsTabActive }),
-		[automationsTabActive, fileMenuOpen, settingsTabActive],
+		() => ({ automations: automationsTabActive, settings: settingsTabActive }),
+		[automationsTabActive, settingsTabActive],
 	);
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
@@ -888,18 +887,6 @@ export function App(): ReactElement {
 						return {};
 					case "showAutomations":
 						finder?.showAutomations();
-						return {};
-					case "createMagicAction": {
-						const { sample } = await autorag.demo.prepareMagicAction();
-						finder?.closeContextMenu();
-						finder?.openFolder(dirname(sample));
-						return { sample };
-					}
-					case "openContextMenuSettings":
-						dismissMagicActionDialog();
-						finder?.closeContextMenu();
-						requestSettingsCategory("contextMenu");
-						finder?.openSettings();
 						return {};
 					case "showRemoteSettings":
 						requestSettingsCategory("remote");

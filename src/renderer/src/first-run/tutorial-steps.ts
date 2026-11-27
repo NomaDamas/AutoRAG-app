@@ -1,19 +1,18 @@
 /**
  * Contextual tutorials: short coach-mark walkthroughs that start the first
- * time a person reaches a feature on their own (the 자동화 sidebar item, a
- * file's right-click menu, Settings), never during the first run. Each one
+ * time a person reaches a feature on their own (the 자동화 sidebar item,
+ * Settings), never during the first run. Each one
  * shows once per profile. Automations and Magic Actions are taught by making
  * a real example with the person and watching it work (`shared/demo-contract.ts`);
  * the React layer (`Tutorials.tsx`) renders them.
  */
 
-import { DEMO_MAGIC_ACTION_ID } from "../../../shared/demo-contract";
 import { AI_HOST } from "./tour";
 
-export type TutorialId = "automations" | "contextMenu" | "remoteAccess";
+export type TutorialId = "automations" | "remoteAccess";
 
 /** What an offer step's button does in the app before the tutorial goes on. */
-export type TutorialEffect = "showNewRightClick" | "openSample" | "backToAutomations" | "showAutomations" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
+export type TutorialEffect = "showNewRightClick" | "openSample" | "backToAutomations" | "showAutomations" | "showRemoteSettings";
 
 /** What the effects learned about the practice material; later steps point at it. */
 export interface TutorialFacts {
@@ -77,7 +76,6 @@ const byPath = (path: string | undefined): string => (path === undefined ? "[dat
 
 const AUTOMATIONS_VIEW = "[data-automations-view]";
 const RULE_ROW = "[data-rule-id]";
-const DEMO_MAGIC_ITEM = `.menu [data-magic-action-id="${DEMO_MAGIC_ACTION_ID}"]`;
 
 const photoRow = (facts: TutorialFacts): string => (facts.photo === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.photo)}"]`);
 const resultRow = (facts: TutorialFacts): string => (facts.result === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.result)}"]`);
@@ -107,13 +105,6 @@ export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = 
 		{ key: "pick", anchors: [newMenuItem], tap: newMenuItem },
 		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
 		{ key: "chat", anchors: [NEW_AUTOMATION], newPage: true, enter: "backToAutomations", waitFor: NEW_AUTOMATION },
-	],
-	contextMenu: [
-		{ key: "intro", anchors: ['.menu[role="menu"]'], offer: "createMagicAction" },
-		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], newPage: true, waitFor: (facts) => byPath(facts.sample), until: DEMO_MAGIC_ITEM, hint: "rightClick" },
-		{ key: "pick", anchors: [DEMO_MAGIC_ITEM], tap: DEMO_MAGIC_ITEM },
-		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
-		{ key: "more", anchors: ['[data-testid="magic-action-dialog"]'], offer: "openContextMenuSettings" },
 	],
 	remoteAccess: [
 		{ key: "offer", anchors: ['[data-settings-nav="remote"]'], offer: "showRemoteSettings" },

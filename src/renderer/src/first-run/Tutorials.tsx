@@ -1,7 +1,7 @@
 /**
  * The contextual tutorial layer (DESIGN.md §3b): watches where the person goes
- * in the Finder and, the first time they reach automations, a file's
- * right-click menu, or Settings, walks them through it with the same coach
+ * in the Finder and, the first time they reach automations or Settings,
+ * walks them through it with the same coach
  * marks as the first-run tour. Automations and Magic Actions are taught by
  * making a real example and watching it work: an offer step runs an effect
  * (create the example, drop a file), and later steps wait for the real UI to
@@ -40,8 +40,6 @@ const LONG_WAIT_MS = 180_000;
 export interface TutorialTriggers {
 	/** The focused pane shows the 자동화 view. */
 	readonly automations: boolean;
-	/** The right-click menu is open on a file or folder (not empty space). */
-	readonly fileMenu: boolean;
 	/** The focused pane shows Settings. */
 	readonly settings: boolean;
 }
@@ -98,7 +96,7 @@ export function Tutorials({
 	const [running, setRunning] = useState<Running | null>(null);
 	const runningRef = useRef(running);
 	runningRef.current = running;
-	const previous = useRef<TutorialTriggers>({ automations: false, fileMenu: false, settings: false });
+	const previous = useRef<TutorialTriggers>({ automations: false, settings: false });
 
 	// Start a tutorial on the rising edge of its trigger: one at a time, once per profile.
 	useEffect(() => {
@@ -110,12 +108,9 @@ export function Tutorials({
 			const first = nextStep(TUTORIALS[id], -1, false, present);
 			if (first === null) return false;
 			markTutorialSeen(id);
-			// The automations tutorial teaches the right-click menu too: the right-click one would repeat it.
-			if (id === "automations") markTutorialSeen("contextMenu");
 			setRunning({ id, index: first, shown: 0, facts: {}, page: 0 });
 			return true;
 		};
-		if (triggers.fileMenu && !before.fileMenu && start("contextMenu")) return;
 		if (triggers.automations && !before.automations && start("automations")) return;
 		if (triggers.settings && !before.settings && typeof window.autorag.remote?.status === "function") start("remoteAccess");
 	}, [enabled, triggers]);
