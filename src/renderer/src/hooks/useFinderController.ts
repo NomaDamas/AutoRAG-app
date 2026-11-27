@@ -414,8 +414,8 @@ export interface FinderController {
 	toggleFolder(entry: FinderEntry): void;
 	/** A row/tile mounted without an OS icon; the controller fills it in on scroll. */
 	noteVisible(entry: FinderEntry): void;
-	/** Scan for version stacks again; resolves once the scan has answered, so the notice can say it is checking until then. */
-	retryVersionFamilies(): Promise<void>;
+	/** Scan for version stacks again; resolves once the scan has answered: true when it came back without an error. */
+	retryVersionFamilies(): Promise<boolean>;
 	setRenameDraft(value: string): void;
 	commitRename(): void;
 	cancelRename(): void;
@@ -1662,12 +1662,13 @@ export function useFinderController(
 	const dragEntries = useLatestCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
 
-	const retryVersionFamilies = useLatestCallback((): Promise<void> => {
+	const retryVersionFamilies = useLatestCallback((): Promise<boolean> => {
 		const versionAtRequest = layerStoreRef.current.versions[DUPEY_LAYER_ID] ?? 0;
 		return source
 			.refreshVersionFamilies()
 			.then((result) => {
 				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
+				return result.error === null;
 			})
 			.catch((error: unknown) => {
 				console.error("version family refresh failed", error);
@@ -1681,6 +1682,7 @@ export function useFinderController(
 					},
 				};
 				setLayerStore((current) => adoptInvoke(current, DUPEY_LAYER_ID, result, versionAtRequest));
+				return false;
 			});
 	});
 
