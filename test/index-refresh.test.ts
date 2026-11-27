@@ -498,3 +498,43 @@ describe("refreshAutoragIndex embedder preflight", () => {
 		expect(refresh).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("refreshAutoragIndex caught error diagnostics (#450 / #491)", () => {
+	it("preserves child stderr on caught errors and reports excludePathsCount and failedPhase", async () => {
+		const { installErrorReporter } = await import("../src/main/error-report-core");
+		const reports: Array<Record<string, unknown>> = [];
+		installErrorReporter((r) => reports.push(r as unknown as Record<string, unknown>));
+		try {
+			const root = await mkdtemp(join(tmpdir(), "autorag-index-refresh-err-"));
+			directories.push(root);
+			const docs = join(root, "docs");
+			const workspace = join(root, "workspace");
+			await mkdir(docs, { recursive: true });
+			await mkdir(join(workspace, ".autorag"), { recursive: true });
+			await writeFile(join(workspace, ".autorag", "refresh-progress.json"), JSON.stringify({ phase: "fsearch" }));
+			const configPath = join(root, "config.json");
+			await writeFile(
+				configPath,
+				JSON.stringify({
+					searchPaths: [docs],
+					workspacePath: workspace,
+					excludePaths: [join(docs, "a"), join(docs, "b")],
+					minSync: { enabled: true },
+				}),
+			);
+			const stageErr = Object.assign(new Error("MinSync stage ended (exit code 1) before answering `commit`."), {
+				stderr: "Error: store locked by antivirus",
+			});
+			refresh.mockRejectedValueOnce(stageErr);
+
+			const outcome = await refreshAutoragIndex({ env: { HOME: root, AUTORAG_CONFIG: configPath }, cwd: root }, ["parsed"]);
+			expect(outcome.ok).toBe(false);
+			expect(outcome.error).toContain("Error: store locked by antivirus");
+			expect(reports).toHaveLength(1);
+			expect((reports[0]?.extra as Record<string, unknown>)?.excludePathsCount).toBeGreaterThanOrEqual(2);
+			expect((reports[0]?.extra as Record<string, unknown>)?.failedPhase).toBe("fsearch");
+		} finally {
+			installErrorReporter(null);
+		}
+	});
+});

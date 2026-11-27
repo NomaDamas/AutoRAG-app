@@ -138,6 +138,25 @@ describe("refreshFailureReport", () => {
 		expect(second?.fingerprint).toEqual(first?.fingerprint);
 	});
 
+	it("records excludePathsCount and failedPhase extras when provided (ELECTRON-P)", () => {
+		const report = refreshFailureReport(
+			{ ...failed, error: "spawn E2BIG" },
+			{ excludePathsCount: 12_345, failedPhase: "fsearch" },
+		);
+		expect(report?.extra).toMatchObject({
+			excludePathsCount: 12_345,
+			failedPhase: "fsearch",
+		});
+		expect(report?.tags["index.step"]).toBe("fsearch");
+	});
+
+	it("classifies MinSync stage EOF and EPIPE errors under the minsync step", () => {
+		const epipe = refreshFailureReport({ ...failed, error: "Writing to MinSync stage failed: write EPIPE" });
+		const exit1 = refreshFailureReport({ ...failed, error: "MinSync stage ended (exit code 1) before answering `commit`." });
+		expect(epipe?.tags["index.step"]).toBe("minsync");
+		expect(exit1?.tags["index.step"]).toBe("minsync");
+	});
+
 	describe("MinSync's stderr log", () => {
 		const esc = "\u001b";
 		/** A MinSync `tracing` line as it reaches stderr: dimmed timestamp, colored level, dimmed target. */
