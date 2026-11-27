@@ -4,10 +4,11 @@ import { createDefaultParserRegistry, emptyMirrorIndex, loadMirrorIndex, minSync
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { applyAppIndexing } from "./app-indexing";
 import { refreshAutoragIndex } from "./index-refresh";
+import { supportedExtensionsFromRegistry } from "./onboarding-scan";
 import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
 import type { IndexMap } from "../shared/index-map-contract";
-import { findExclusion } from "./path-exclusion";
+import { createExclusionMatcher } from "./path-exclusion";
 import { isGlobExclusion } from "../shared/index-scope-edit";
 import { buildIndexMap, scanIndexScope, type IndexScopeContext } from "./index-map";
 
@@ -31,6 +32,7 @@ interface CachedConfigState {
 	readonly exclusions: readonly string[];
 	readonly minSyncRoot: string;
 	readonly indexable: (path: string, name: string) => boolean;
+	readonly supportedExtensions: ReadonlySet<string>;
 }
 
 /**
@@ -153,6 +155,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			Promise.all(config.searchPaths.map(canonical)),
 		]);
 		const registry = createDefaultParserRegistry((config.parserOptions ?? {}) as DefaultParserRegistryOptions);
+		const supportedExtensions = supportedExtensionsFromRegistry(registry);
 		cachedConfig = {
 			configPath,
 			signature,
@@ -161,6 +164,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			exclusions,
 			minSyncRoot: config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath),
 			indexable: (path, name) => registry.getForVirtualPath(path) !== undefined && !PRODUCT_ARTIFACT_FILE_NAMES.has(name),
+			supportedExtensions,
 		};
 		return cachedConfig;
 	}
@@ -210,12 +214,15 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			skips: mirror.skips,
 			minSyncRoot: cfg.minSyncRoot,
 			indexable: cfg.indexable,
+			supportedExtensions: cfg.supportedExtensions,
+			productArtifacts: PRODUCT_ARTIFACT_FILE_NAMES,
 		};
 	}
 
 	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
 		if (paths.length === 0) return [];
 		const { roots, exclusions, entries, skips, minSyncRoot, indexable } = await loadContext();
+		const exclusionMatcher = createExclusionMatcher(exclusions);
 		// Resolve each unique parent directory once instead of running `realpath` per file.
 		// Non-symlink children inherit `join(realParent, basename)` directly; only symlinks call `realpath`.
 		const realDirs = new Map<string, string>();
@@ -235,7 +242,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			if (!roots.some((root) => isUnder(real, root))) {
 				return { path, kind: "outside", excluded: false, toggleable: false, detail: t("main.indexStatus.outside") };
 			}
-			const exclusion = findExclusion(exclusions, real);
+			const exclusion = exclusionMatcher.find(real);
 			const excluded = exclusion !== null;
 			const toggleable = exclusion === null || (exclusion.kind === "path" && exclusion.entry === real);
 			const entry = entries.get(real);

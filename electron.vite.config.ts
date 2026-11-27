@@ -84,6 +84,15 @@ const vendoredLibarchiveWasm: Plugin = {
 				source: readFileSync(macRevealHook),
 			});
 		}
+		const dazziCore = resolve(import.meta.dirname, "src/main/vendor/dazzi-core.node");
+		if (!existsSync(dazziCore)) {
+			throw new Error(`Missing required Rust native core: ${dazziCore}. Run \`node scripts/build-dazzi-core.mjs\` first.`);
+		}
+		this.emitFile({
+			type: "asset",
+			fileName: "vendor/dazzi-core.node",
+			source: readFileSync(dazziCore),
+		});
 	},
 };
 
