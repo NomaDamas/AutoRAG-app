@@ -44,6 +44,8 @@ export interface TutorialStep {
 	readonly requires?: Selector;
 	/** The step holds back until this appears (something an effect just made); the tutorial ends if it never does. */
 	readonly waitFor?: Selector;
+	/** The step brings a new page (a folder, a Settings page): its box opens anew instead of resizing from the last one. */
+	readonly newPage?: boolean;
 	/** Click-required: the cursor taps this target, and clicking it moves on. */
 	readonly tap?: Selector;
 	/** Shown only right after a click-required step was actually clicked. */
@@ -101,21 +103,21 @@ export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = 
 		{ key: "intro", anchors: [RECOMMENDATIONS, AUTOMATIONS_VIEW] },
 		{ key: "add", anchors: [SUMMARY_CARD], requires: SUMMARY_CARD, tap: SUMMARY_ADD },
 		{ key: "made", anchors: [newRow], enter: "showNewRightClick", waitFor: newRow },
-		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: newMenuItem, hint: "rightClick" },
+		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], newPage: true, enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: newMenuItem, hint: "rightClick" },
 		{ key: "pick", anchors: [newMenuItem], tap: newMenuItem },
 		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
-		{ key: "chat", anchors: [NEW_AUTOMATION], enter: "backToAutomations", waitFor: NEW_AUTOMATION },
+		{ key: "chat", anchors: [NEW_AUTOMATION], newPage: true, enter: "backToAutomations", waitFor: NEW_AUTOMATION },
 	],
 	contextMenu: [
 		{ key: "intro", anchors: ['.menu[role="menu"]'], offer: "createMagicAction" },
-		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], waitFor: (facts) => byPath(facts.sample), until: DEMO_MAGIC_ITEM, hint: "rightClick" },
+		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], newPage: true, waitFor: (facts) => byPath(facts.sample), until: DEMO_MAGIC_ITEM, hint: "rightClick" },
 		{ key: "pick", anchors: [DEMO_MAGIC_ITEM], tap: DEMO_MAGIC_ITEM },
 		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
 		{ key: "more", anchors: ['[data-testid="magic-action-dialog"]'], offer: "openContextMenuSettings" },
 	],
 	remoteAccess: [
 		{ key: "offer", anchors: ['[data-settings-nav="remote"]'], offer: "showRemoteSettings" },
-		{ key: "toggle", anchors: ['[data-settings-row="remote-access"]'], waitFor: '[data-settings-row="remote-access"]' },
+		{ key: "toggle", anchors: ['[data-settings-row="remote-access"]'], newPage: true, waitFor: '[data-settings-row="remote-access"]' },
 		{ key: "security", anchors: ['[data-settings-section="remote-access"]'], waitFor: '[data-settings-section="remote-access"]' },
 		{ key: "connect", anchors: ['[data-settings-section="remote-connect"]'], requires: '[data-settings-section="remote-connect"]' },
 	],
