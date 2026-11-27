@@ -97,6 +97,7 @@ import {
 import {
 	activeTab,
 	AI_SEARCH_PATH,
+	AUTOMATIONS_PATH,
 	applyColumnChoice,
 	exitVirtualTab,
 	goBack,
@@ -455,6 +456,8 @@ export function useFinderController(
 		readonly onFocusComposer?: () => void;
 		/** The window's toast: one for every pane. */
 		readonly onToast?: (message: string) => void;
+		/** A failure: the toast with the red badge (and the notification center). Without it, failures fall back to `onToast`. */
+		readonly onErrorToast?: (message: string) => void;
 	} = {},
 ): FinderController {
 	const { store, sidecar } = data;
@@ -468,6 +471,8 @@ export function useFinderController(
 	focusComposerRef.current = options.onFocusComposer;
 	const toastRef = useRef(options.onToast);
 	toastRef.current = options.onToast;
+	const errorToastRef = useRef(options.onErrorToast);
+	errorToastRef.current = options.onErrorToast;
 	const { pane, focused, update: updateWorkspace } = binding;
 	const paneId = pane.id;
 	const tabsState: TabsState = { tabs: pane.tabs, activeId: pane.activeId, nextId: 0 };
@@ -607,7 +612,7 @@ export function useFinderController(
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
-		(error: unknown) => toastRef.current?.(conversionErrorMessage(error)),
+		(error: unknown) => (errorToastRef.current ?? toastRef.current)?.(conversionErrorMessage(error)),
 		[],
 	);
 
@@ -845,6 +850,47 @@ export function useFinderController(
 	}, [flashPath, flashShown]);
 
 	/**
+	 * Request AutoRAG index status in bounded viewport batches instead of firing thousands of
+	 * paths at once when opening a large folder. Small folders (<= INDEX_STATUS_EAGER_LIMIT)
+	 * still fetch in one shot immediately; larger folders fetch the first screenful eagerly
+	 * and fill off-screen rows as they mount (`noteVisible`) or are selected.
+	 */
+	const INDEX_STATUS_EAGER_LIMIT = 128;
+	const INDEX_STATUS_FLUSH_MS = 60;
+	const INDEX_STATUS_CHUNK_SIZE = 64;
+	const indexStatusQueue = useRef<Set<string>>(new Set());
+	const indexStatusAsked = useRef<Set<string>>(new Set());
+	const indexStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const indexStatusGen = useRef(0);
+
+	const flushIndexStatus = useLatestCallback(() => {
+		indexStatusTimer.current = null;
+		const batch = [...indexStatusQueue.current];
+		indexStatusQueue.current.clear();
+		if (batch.length === 0) return;
+		const gen = indexStatusGen.current;
+		for (let offset = 0; offset < batch.length; offset += INDEX_STATUS_CHUNK_SIZE) {
+			const chunk = batch.slice(offset, offset + INDEX_STATUS_CHUNK_SIZE);
+			for (const p of chunk) indexStatusAsked.current.add(p);
+			source
+				.indexStatus(chunk)
+				.then((statuses) => {
+					if (indexStatusGen.current === gen) sidecar.setIndexStatuses(statuses);
+				})
+				.catch((error: unknown) => {
+					if (indexStatusGen.current === gen) reportError(error);
+				});
+		}
+	});
+
+	const enqueueIndexStatus = useLatestCallback((targetPath: string) => {
+		if (indexStatusAsked.current.has(targetPath) || indexStatusQueue.current.has(targetPath)) return;
+		indexStatusQueue.current.add(targetPath);
+		if (indexStatusTimer.current !== null) return;
+		indexStatusTimer.current = setTimeout(flushIndexStatus, INDEX_STATUS_FLUSH_MS);
+	});
+
+	/**
 	 * The files on screen, as one value-comparable key: `viewEntries` is a new
 	 * array on every selection change (version stacks open on selection), but
 	 * the set of files only changes when the listing does, so the index-status
@@ -862,26 +908,49 @@ export function useFinderController(
 	/** Every file on screen shows its real AutoRAG index state; a settled refresh re-reads it. */
 	useEffect(() => {
 		void indexRevision;
+		indexStatusGen.current += 1;
+		const gen = indexStatusGen.current;
+		indexStatusQueue.current.clear();
+		indexStatusAsked.current.clear();
+		if (indexStatusTimer.current !== null) {
+			clearTimeout(indexStatusTimer.current);
+			indexStatusTimer.current = null;
+		}
 		if (indexStatusKey === "") {
 			return;
 		}
-		const paths = indexStatusKey.split("\u0000");
+		const allPaths = indexStatusKey.split("\u0000");
+		const initialPaths = allPaths.length <= INDEX_STATUS_EAGER_LIMIT ? allPaths : allPaths.slice(0, INDEX_STATUS_EAGER_LIMIT);
+		for (const p of initialPaths) indexStatusAsked.current.add(p);
 		let live = true;
 		source
-			.indexStatus(paths)
+			.indexStatus(initialPaths)
 			.then((statuses) => {
 				// Each row re-renders only if its own status moved.
-				if (live) sidecar.setIndexStatuses(statuses);
+				if (live && indexStatusGen.current === gen) sidecar.setIndexStatuses(statuses);
 			})
 			.catch((error: unknown) => {
-				if (live) {
+				if (live && indexStatusGen.current === gen) {
 					reportError(error);
 				}
 			});
 		return () => {
 			live = false;
+			if (indexStatusTimer.current !== null) {
+				clearTimeout(indexStatusTimer.current);
+				indexStatusTimer.current = null;
+			}
 		};
 	}, [source, sidecar, indexStatusKey, indexRevision, reportError]);
+
+	// Ensure focused/selected entries always have Finder metadata and index status (even if selected programmatically off-screen).
+	useEffect(() => {
+		if (selection.focus === null) return;
+		const entry = viewEntries.find((candidate) => candidate.path === selection.focus);
+		if (entry === undefined || entry.kind !== "file") return;
+		store.requestMetadata(entry);
+		enqueueIndexStatus(entry.path);
+	}, [selection.focus, viewEntries, store, enqueueIndexStatus]);
 
 	useEffect(() => () => cancelReveal.current?.(), []);
 
@@ -1666,7 +1735,7 @@ export function useFinderController(
 				.then((entries) => {
 					const entry = findEvidenceSource(entries, target);
 					if (entry === undefined) {
-						throw new Error(`Evidence source was not found in its folder: ${target}`);
+						throw new Error(t("finder.evidenceMissing", { name: basename(target) }));
 					}
 					setTabsState((state) => openTabRevealing(state, folder, entry.path));
 					setFlashPath(entry.path);
@@ -2337,6 +2406,7 @@ export function useFinderController(
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
+					automations: current.path === AUTOMATIONS_PATH,
 					documentEditor: isDocumentEditorTabPath(current.path),
 				};
 			}),
@@ -2471,7 +2541,14 @@ export function useFinderController(
 	const setRenameDraft = useLatestCallback((value: string) => setRename((current) => (current === null ? null : { ...current, draft: value })));
 	const cancelRename = useLatestCallback(() => setRename(null));
 	const indexStatusFor = useCallback((target: string) => sidecar.indexStatus(target), [sidecar]);
-	const noteVisible = useCallback((entry: FinderEntry) => store.requestIcon(entry), [store]);
+	const noteVisible = useCallback(
+		(entry: FinderEntry) => {
+			if (entry.iconUrl === undefined) store.requestIcon(entry);
+			if (entry.finder === undefined) store.requestMetadata(entry);
+			if (sidecar.indexStatus(entry.path) === null) enqueueIndexStatus(entry.path);
+		},
+		[store, sidecar, enqueueIndexStatus],
+	);
 
 	return {
 		tabs: tabViews,

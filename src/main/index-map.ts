@@ -1,7 +1,8 @@
 import { access, opendir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { minSyncDocumentPath, type ParsedMirrorEntry, type ParsedMirrorIndex } from "@autorag/librarian";
-import { findExclusion } from "./path-exclusion";
+import { loadDazziNativeCore, type NativeMirrorEntry, type NativeScanDir } from "./dazzi-native-core";
+import { createExclusionMatcher } from "./path-exclusion";
 import {
 	emptyIndexMapCounts,
 	indexMapFolderState,
@@ -33,6 +34,10 @@ export interface IndexScopeContext {
 	readonly minSyncRoot: string;
 	/** True when a parser reads this file and it is not product output. */
 	readonly indexable: (path: string, name: string) => boolean;
+	/** Lower-case extensions with leading dot supported by the parser registry (enables single-call native tree scan). */
+	readonly supportedExtensions?: ReadonlySet<string>;
+	/** Product artifact filenames excluded from indexing even when their extension matches (e.g. `.jikji_agent_map.md`). */
+	readonly productArtifacts?: ReadonlySet<string>;
 }
 
 export interface ScanFile {
@@ -68,10 +73,56 @@ const CLASSIFY_BATCH = 128;
 /** Nodes sent to the renderer before large subtrees fold into per-state parcels. */
 export const INDEX_MAP_NODE_BUDGET = 2400;
 
+function fromNativeScanDir(dir: NativeScanDir): ScanDir {
+	return {
+		name: dir.name,
+		path: dir.path,
+		files: dir.files,
+		dirs: dir.dirs.map(fromNativeScanDir),
+		sealed: dir.sealed ?? null,
+	};
+}
+
 export async function scanIndexScope(context: IndexScopeContext, maxEntries = INDEX_MAP_MAX_ENTRIES): Promise<ScanResult> {
+	// Primary path: run the entire directory tree walk, glob exclusion, and mirror classification
+	// on the libuv thread pool inside Rust so large workspaces cross FFI only once.
+	const native = context.supportedExtensions !== undefined ? loadDazziNativeCore() : null;
+	if (native !== null && context.supportedExtensions !== undefined) {
+		try {
+			if (native.canHandleExclusionsNatively(context.exclusions)) {
+				const mirrorEntries: NativeMirrorEntry[] = [];
+				for (const entry of context.entries.values()) {
+					mirrorEntries.push({
+						sourcePath: entry.sourcePath,
+						stagedPath: minSyncDocumentPath(context.minSyncRoot, entry.virtualPath),
+						sourceMtimeNs: entry.sourceMtimeNs,
+						sourceSizeBytes: entry.sourceSizeBytes,
+					});
+				}
+				const unindexablePaths: string[] = [];
+				for (const skip of context.skips.values()) {
+					if (skip.reason !== "user-excluded") unindexablePaths.push(skip.sourcePath);
+				}
+				const result = await native.scanIndexScopeNative(
+					context.roots,
+					context.exclusions,
+					[...context.supportedExtensions],
+					context.productArtifacts ? [...context.productArtifacts] : [],
+					mirrorEntries,
+					unindexablePaths,
+					maxEntries,
+				);
+				return { roots: result.roots.map(fromNativeScanDir), truncated: result.truncated };
+			}
+		} catch (error) {
+			console.warn("[dazzi-core] scanIndexScopeNative failed, falling back to JS:", error instanceof Error ? error.message : error);
+		}
+	}
+
 	let visited = 0;
 	let truncated = false;
-	const excludedBy = (path: string): boolean => findExclusion(context.exclusions, path) !== null;
+	const exclusionMatcher = createExclusionMatcher(context.exclusions);
+	const excludedBy = (path: string): boolean => exclusionMatcher.isExcluded(path);
 
 	async function classify(path: string): Promise<IndexMapState> {
 		// Exclusion wins: an excluded file is out of the index even if the mirror still holds it from before.

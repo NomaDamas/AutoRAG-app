@@ -296,9 +296,12 @@ check("chunk text bold renders as emphasized strong", evBold >= 1, `strong=${evB
 // 5. Title click opens Quick Look at the cited passage instead of a new Finder tab.
 await chipOf(2).click();
 const tabsBefore = await page.locator(".tabs .tab").count();
-const quickLook = app.windows().find((candidate) => candidate.url().includes("quick-look.html")) ?? (await app.waitForEvent("window", { predicate: (candidate) => candidate.url().includes("quick-look.html"), timeout: 15_000 }));
 const clickedAt = Date.now();
+const quickLookPromise =
+	app.windows().find((candidate) => candidate.url().includes("quick-look.html")) ??
+	app.waitForEvent("window", { predicate: (candidate) => candidate.url().includes("quick-look.html"), timeout: 15_000 });
 await page.locator(`${EVIDENCE_HALF} button[title="Preview at the cited passage"]`).click();
+const quickLook = await quickLookPromise;
 await quickLook.waitForSelector('.ql-pages__evidence[data-evidence-state="found"]', { timeout: 10_000 });
 const jumpMs = Date.now() - clickedAt;
 const markedPage = await quickLook.locator('.ql__paper:has(.ql__mark[data-evidence-mark="first"])').getAttribute("data-page");

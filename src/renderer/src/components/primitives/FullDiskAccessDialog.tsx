@@ -64,7 +64,7 @@ export function FullDiskAccessDialog({
 			}}
 		>
 			<div
-				className="relative flex w-360 flex-col gap-16 p-18 border border-border rounded-12 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="relative flex w-360 flex-col gap-16 p-18 border border-border rounded-modal-sm bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-label={title}

@@ -1,6 +1,7 @@
 import {
 	IDLE_AUTOMATIONS,
 	type AutomationBridge,
+	type AutomationDraft,
 	type AutomationRemoval,
 	type AutomationRule,
 	type AutomationsSnapshot,
@@ -70,6 +71,14 @@ export interface AutomationsStore {
 	undo(): Promise<void>;
 	clearUndo(): void;
 	setDaemon(enabled: boolean): Promise<void>;
+	/** Enable or pause rule `id`; resolves false when there is no bridge. */
+	setEnabled?(id: string, enabled: boolean): Promise<boolean>;
+	/** Write a new rule; resolves with the id it was given, or null when there is no bridge. */
+	create(draft: AutomationDraft): Promise<string | null>;
+	/** Rewrite rule `id`; resolves false when there is no bridge. */
+	update(id: string, draft: AutomationDraft): Promise<boolean>;
+	/** Read the rules and the service again, for the person who saw the read fail. */
+	reload(): Promise<void>;
 	dispose(): void;
 }
 
@@ -118,6 +127,14 @@ export function createAutomationsStore(bridge: AutomationBridge | undefined): Au
 			};
 		},
 		getSnapshot: () => view,
+		async reload() {
+			if (bridge === undefined) return;
+			try {
+				publish({ state: await bridge.get() });
+			} catch (cause) {
+				publish({ state: { ...view.state, ready: true, error: ipcMessage(cause) } });
+			}
+		},
 		async remove(id) {
 			if (bridge === undefined) return;
 			const rule = view.state.rules.find((candidate) => candidate.id === id);
@@ -148,6 +165,43 @@ export function createAutomationsStore(bridge: AutomationBridge | undefined): Au
 				publish({ state: await bridge.setDaemon(enabled), daemonBusy: false });
 			} catch (cause) {
 				publish({ daemonBusy: false });
+				throw new Error(ipcMessage(cause));
+			}
+		},
+		async setEnabled(id, enabled) {
+			if (bridge === undefined || typeof bridge.setEnabled !== "function") return false;
+			// Optimistically reflect the toggle right away; reconcile with the main process snapshot (or roll back on error).
+			const previous = view.state;
+			publish({
+				state: {
+					...previous,
+					rules: previous.rules.map((rule) => (rule.id === id ? { ...rule, enabled } : rule)),
+				},
+			});
+			try {
+				publish({ state: await bridge.setEnabled(id, enabled) });
+				return true;
+			} catch (cause) {
+				publish({ state: previous });
+				throw new Error(ipcMessage(cause));
+			}
+		},
+		async create(draft) {
+			if (bridge === undefined) return null;
+			try {
+				const { snapshot, id } = await bridge.create(draft);
+				publish({ state: snapshot });
+				return id;
+			} catch (cause) {
+				throw new Error(ipcMessage(cause));
+			}
+		},
+		async update(id, draft) {
+			if (bridge === undefined) return false;
+			try {
+				publish({ state: await bridge.update(id, draft) });
+				return true;
+			} catch (cause) {
 				throw new Error(ipcMessage(cause));
 			}
 		},

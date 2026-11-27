@@ -874,6 +874,15 @@ describe("createSearchService", () => {
 			expect(stopped.agent.steer).not.toHaveBeenCalled();
 		});
 
+		it("sorts a follow-up with the question the run is answering, and says next without a sorter or a run", async () => {
+			const run = await runningSearch();
+			// No sorter is wired in this harness.
+			expect(await run.service.classifyFollowUp?.("search-steer", "Only June.")).toBe("next");
+			expect(await run.service.classifyFollowUp?.("search-unknown", "Only June.")).toBe("next");
+			run.finish();
+			await run.started;
+		});
+
 		it("refuses a blank steer", async () => {
 			const run = await runningSearch();
 
@@ -2116,5 +2125,59 @@ describe("createSearchService learning-to-rank training", () => {
 			expect(events.some((event) => event.type === "error")).toBe(false);
 			expect(events.at(-1)).toEqual({ type: "done", searchId: "search-hook" });
 		}
+	});
+});
+
+describe("createSearchService chat title", () => {
+	it("names a chat once after its first answer, keeps the name on the record and through a follow-up, and sends it after done", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-title", "The refund needs two approvals.", 3) };
+		});
+		const { events, send } = collectEvents();
+		const chatStore = await createStore();
+		const titleChat = vi.fn(async () => "환불 승인 절차");
+		const service = createSearchService({ agentFactory: () => agent, chatStore, send, now, titleChat });
+
+		await service.start("search-title", "chat-title", "how many people approve a refund?", []);
+		await vi.waitFor(() => expect(events.at(-1)).toEqual({ type: "title", searchId: "search-title", chatId: "chat-title", title: "환불 승인 절차" }));
+
+		expect(titleChat).toHaveBeenCalledWith("how many people approve a refund?", "The refund needs two approvals.");
+		expect((await chatStore.get("chat-title"))?.title).toBe("환불 승인 절차");
+		expect((await chatStore.list())[0]?.title).toBe("환불 승인 절차");
+
+		await service.start("search-title-2", "chat-title", "and who signs last?", []);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(titleChat).toHaveBeenCalledTimes(1);
+		expect((await chatStore.get("chat-title"))?.title).toBe("환불 승인 절차");
+	});
+
+	it("keeps the first question as the title when the model gives none", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-untitled", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const chatStore = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore, send, now, titleChat: async () => null });
+
+		await service.start("search-untitled", "chat-untitled", "refund approval", []);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(events.some((event) => event.type === "title")).toBe(false);
+		expect((await chatStore.get("chat-untitled"))?.title).toBe("refund approval");
+	});
+
+	it("forwards explicit routeOverride to searchDocumentsStream when provided", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-route", "Done", 0) };
+		});
+		const { send } = collectEvents();
+		const chatStore = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore, send, now });
+
+		await service.start("search-route-1", "chat-route-1", "organize Downloads", [], undefined, "organize");
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("organize Downloads", { routeOverride: "organize" });
+
+		await service.start("search-route-2", "chat-route-2", "plain query", []);
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("plain query");
 	});
 });

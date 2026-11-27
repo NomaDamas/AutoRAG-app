@@ -13,6 +13,7 @@ import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
+import { ComponentVersionsRow } from "./ToolVersions";
 import { QuickSearchSettingsSection } from "./QuickSearchSettings";
 import { PlainDivider, PlainRow, PlainSection, SettingsPageHead } from "./SettingsKit";
 import { SelectField } from "./SelectField";
@@ -59,6 +60,14 @@ export function GeneralPage({
 	const osMenu = platform === "darwin" || platform === "win32";
 	const defaultFileManagerHint =
 		platform === "win32" ? t("settingsCore.general.defaultFileManagerHintWin") : t("settingsCore.general.defaultFileManagerHintMac");
+	const interceptName =
+		platform === "win32"
+			? t("settingsCore.general.defaultFileManagerInterceptReveal")
+			: t("settingsCore.general.defaultFileManagerInterceptMac");
+	const interceptHint =
+		platform === "win32"
+			? t("settingsCore.general.defaultFileManagerInterceptRevealHint")
+			: t("settingsCore.general.defaultFileManagerInterceptMacHint");
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.general")} />
@@ -74,15 +83,12 @@ export function GeneralPage({
 									ariaLabel={t("settingsCore.general.defaultFileManager")}
 								/>
 							</PlainRow>
-							{platform === "win32" && appSettings.defaultFileManager ? (
-								<PlainRow
-									name={t("settingsCore.general.defaultFileManagerInterceptReveal")}
-									hint={t("settingsCore.general.defaultFileManagerInterceptRevealHint")}
-								>
+							{appSettings.defaultFileManager ? (
+								<PlainRow name={interceptName} hint={interceptHint} anchor="default-file-manager-intercept">
 									<Switch
 										checked={appSettings.defaultFileManagerInterceptReveal}
 										onChange={() => void setApp({ defaultFileManagerInterceptReveal: !appSettings.defaultFileManagerInterceptReveal })}
-										ariaLabel={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+										ariaLabel={interceptName}
 									/>
 								</PlainRow>
 							) : null}
@@ -133,6 +139,8 @@ export function GeneralPage({
 						<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel={t("settingsCore.general.autoUpdates")} />
 					</PlainRow>
 					<AppUpdateRow />
+					{/* Once Settings → 정보: the librarian's and the tools' versions, folded under Dazzi's own. */}
+					<ComponentVersionsRow />
 				</PlainSection>
 				<PlainDivider />
 				<PlainSection title={t("settingsCore.general.privacyTitle")}>

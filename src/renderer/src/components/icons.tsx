@@ -16,12 +16,18 @@ import {
 	Archive,
 	ArrowDownUp,
 	ArrowLeft,
+	ArrowDown,
 	ArrowUp,
 	ChartNoAxesColumn,
 	Check,
 	ChevronDown,
+	CircleX,
+	Clock,
+	FilePen,
+	FileText,
 	FileArchive,
 	Maximize,
+	MousePointerClick,
 	ChevronLeft,
 	ChevronRight,
 	ChevronUp,
@@ -40,6 +46,7 @@ import {
 	Film,
 	Flag,
 	FoldVertical,
+	Folder as FolderOutline,
 	HardDrive,
 	History,
 	Image as ImageGlyph,
@@ -49,6 +56,7 @@ import {
 	List,
 	Maximize2,
 	MessagesSquare,
+	MessageSquare,
 	Mic,
 	Monitor,
 	PackageOpen,
@@ -120,6 +128,11 @@ export const CheckIcon = glyph(Check, 12, 2.4);
 
 export const CopyIcon = glyph(Copy, 12, 2);
 
+export const ClockIcon = glyph(Clock, 14, 2);
+
+/** ✕ at the weight of the icons beside it under a chat bubble. */
+export const BubbleCloseIcon = glyph(X, 14, 2);
+
 export const TrashIcon = glyph(Trash2, 12, 2);
 
 export const ShareIcon = glyph(Share, 14, 2);
@@ -156,6 +169,8 @@ export const ExpandCornersIcon = glyph(Expand, 16, 1.75);
 export const ArrowLeftIcon = glyph(ArrowLeft, 13, 2.2);
 
 export const MessagesIcon = glyph(MessagesSquare, 12, 2);
+/** One speech bubble: the 채팅 side of the AI 에이전트 head (Figma 672:3658). */
+export const ChatBubbleIcon = glyph(MessageSquare, 13, 1.8);
 
 export const ChevronDownIcon = glyph(ChevronDown, 10, 3);
 
@@ -203,6 +218,7 @@ export const SendIcon = glyph(Send, 16, 2.4);
 export const SparklesIcon = glyph(Sparkles, 14, 2);
 
 export const ArrowUpIcon = glyph(ArrowUp, 16, 2.6);
+export const ArrowDownIcon = glyph(ArrowDown, 16, 2);
 
 export const MicIcon = glyph(Mic, 16, 2);
 
@@ -215,6 +231,8 @@ export const RotateIcon = glyph(RotateCw, 10, 2.8);
  * `autorag refresh` rule (the zap and the sparkles cover the rest).
  */
 export const ZapIcon = glyph(Zap, 11, 2);
+/** A right-click (magic) action in the automation list: the glyph Settings → 우클릭 메뉴 uses. */
+export const MousePointerClickIcon = glyph(MousePointerClick, 14, 2);
 export const MoreIcon = glyph(Ellipsis, 16, 2);
 
 export const RefreshIcon = glyph(RefreshCw, 20, 1.8);
@@ -235,6 +253,14 @@ export const ListRowsIcon = glyph(Rows3, 16, 1.9);
 export const PanelLeftIcon = glyph(PanelLeft, 16, 1.9);
 
 export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
+
+/** 자동화 (Figma 611:3601): a failed rule's badge, a document, an image, a rule that may change files. */
+export const CircleXIcon = glyph(CircleX, 14, 2);
+export const FileTextIcon = glyph(FileText, 14, 2);
+/** An outline folder for an action on folders (the AI tab's "organize" hint); a folder item itself uses `FolderGlyph`. */
+export const FolderOutlineIcon = glyph(FolderOutline, 14, 2);
+export const ImageIcon = glyph(ImageGlyph, 14, 2);
+export const FilePenIcon = glyph(FilePen, 13, 2);
 
 /** A notice that something may not work as expected (a search over an index that is not ready). */
 export const WarningIcon = glyph(TriangleAlert, 14, 2);

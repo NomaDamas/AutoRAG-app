@@ -311,15 +311,16 @@ describe("createFirstRunService run", () => {
 		expect(bars).toEqual([...bars].sort((a, b) => a - b));
 	});
 
-	it("does not reach ready without the tour's question: it stops on the retry screen with the index kept", async () => {
+	it("falls back to a localized default question and reaches ready when indexing finishes but no personalized question could be generated", async () => {
 		const directory = await workDir("autorag-firstrun-");
-		const service = createFirstRunService(await makeDeps(directory, { requireQuestion: true }));
+		const service = createFirstRunService(await makeDeps(directory, { requireQuestion: true, language: () => "ko" }));
 		await service.start();
-		const final = await waitForStage(service, "failed");
-		expect(final.stage).toBe("failed");
-		expect(final.demo).toBeNull();
-		expect(final.error).not.toBeNull();
-		// The first index itself finished: the retry is about the question, and the index is recorded as done.
+		const final = await waitForStage(service, "ready");
+		expect(final.stage).toBe("ready");
+		expect(final.error).toBeNull();
+		expect(final.demo).toMatchObject({ fallback: true, sourcePath: "", latencyMs: 0 });
+		expect(final.demo?.question.length).toBeGreaterThan(0);
+		// The first index itself finished cleanly and is recorded as done.
 		await vi.waitFor(async () => expect(typeof (await readIndexingFinishedAt(directory))).toBe("string"), { timeout: 3_000 });
 	});
 

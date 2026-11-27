@@ -103,13 +103,20 @@ export interface FirstRunFolder {
 
 export type SetupStage = "idle" | "scanning" | "planning" | "duplicates" | "indexing" | "preparing" | "ready" | "failed";
 
-/** The question the tour asks: written from one indexed document, returned by keyword retrieval, accepted by Jev, and answered by the real AI Search agent with a citation of that document. */
+/**
+ * The question the tour asks: normally written from one indexed document, returned by keyword retrieval,
+ * accepted by Jev, and answered by the real AI Search agent with a citation of that document. When indexing
+ * finishes cleanly on a sparse/fresh computer with too few readable documents to synthesize a personalized
+ * question, `fallback` is true and `question` carries a localized default example question instead.
+ */
 export interface FirstRunDemo {
 	readonly question: string;
-	/** The document the question came from. */
+	/** The document the question came from (empty string for a default fallback question). */
 	readonly sourcePath: string;
-	/** How long the verifying retrieval took. */
+	/** How long the verifying retrieval took (0 for a default fallback question). */
 	readonly latencyMs: number;
+	/** True when no personalized question could be generated (e.g. too few readable files) and a default example is shown. */
+	readonly fallback?: boolean;
 }
 
 export interface SetupStatus {

@@ -76,7 +76,7 @@ export function DocumentEditorAiSidebar({ filePath }: { readonly filePath: strin
 			{/* Body */}
 			{isPdf ? (
 				<div className="flex flex-1 flex-col gap-12 overflow-y-auto px-14 py-16 text-meta text-ink-body">
-					<div className="flex items-start gap-8 rounded-10 border border-divider bg-subtle p-12">
+					<div className="flex items-start gap-8 rounded-12 border border-divider bg-subtle p-12">
 						<PenLine size={15} className="mt-1 flex-none text-accent" />
 						<div className="flex flex-col gap-4">
 							<div className="font-semibold text-ink">{t("documentEditor.pdf.sidebarTitle")}</div>
@@ -131,7 +131,7 @@ export function DocumentEditorAiSidebar({ filePath }: { readonly filePath: strin
 
 									{/* Assistant turn */}
 									<div
-										className="flex flex-col gap-6 rounded-10 border border-divider bg-subtle px-10 py-8 text-meta"
+										className="flex flex-col gap-6 rounded-12 border border-divider bg-subtle px-10 py-8 text-meta"
 										data-edit-state={turn.status === "done" ? (turn.changed ? "changed" : "unchanged") : turn.status}
 										role="status"
 									>

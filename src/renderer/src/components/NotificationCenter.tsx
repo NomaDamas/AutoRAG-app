@@ -54,6 +54,9 @@ interface ActiveItem {
 }
 
 /** Figma Button, size 28: 숨기기 is text only, the main action the accent fill, the other one outlined. */
+/** The panel stops growing here (about five notices) and scrolls its list; a short window caps it sooner. */
+const NOTICE_PANEL_MAX_HEIGHT = 520;
+
 function actionClass(kind: ItemAction["kind"]): string {
 	return cn(
 		"inline-flex h-28 flex-none items-center justify-center px-10 rounded-6 border text-meta font-medium leading-[16px] whitespace-nowrap cursor-pointer transition-opacity duration-(--dur-color) ease-out hover:opacity-80",
@@ -78,16 +81,27 @@ function NoticeRow({
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<li className="notice-item relative flex gap-10 border-t border-divider p-12" data-tone={tone}>
+		<li className="notice-item flex gap-10 border-t border-divider p-12" data-tone={tone}>
 			<span className="flex h-[19px] w-16 flex-none items-center justify-center">
 				<NoticeBadge tone={tone} />
 			</span>
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
-				<div className={cn("flex items-start gap-6", onDismiss !== undefined && "pr-22")}>
-					<strong className="min-w-0 flex-1 text-[13px] font-bold leading-[19px] text-ink break-keep">{title}</strong>
+				<div className="flex items-start gap-6">
+					<strong className="min-w-0 flex-1 text-[13px] font-medium leading-[19px] text-ink break-keep [overflow-wrap:anywhere]">{title}</strong>
 					{age === null ? null : <span className="flex-none text-[11px] leading-[19px] text-ink-faint">{age}</span>}
+					{onDismiss === undefined ? null : (
+						<button
+							type="button"
+							className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "-ml-5 h-[19px] w-20 flex-none rounded-5")}
+							aria-label={t("notifications.dismiss")}
+							title={t("notifications.dismiss")}
+							onClick={onDismiss}
+						>
+							<X size={14} strokeWidth={1.28} />
+						</button>
+					)}
 				</div>
-				{body === null || body === "" ? null : <p className="m-0 select-text whitespace-pre-wrap break-words text-meta leading-[1.5] text-ink-muted">{body}</p>}
+				{body === null || body === "" ? null : <p className="m-0 select-text whitespace-pre-wrap [overflow-wrap:anywhere] text-meta leading-[1.5] text-ink-muted">{body}</p>}
 				{actions.length === 0 ? null : (
 					<div className="flex flex-wrap items-center justify-end gap-8 pt-4">
 						{actions.map((action) => (
@@ -98,17 +112,6 @@ function NoticeRow({
 					</div>
 				)}
 			</div>
-			{onDismiss === undefined ? null : (
-				<button
-					type="button"
-					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "absolute top-12 right-12 size-20 rounded-5")}
-					aria-label={t("notifications.dismiss")}
-					title={t("notifications.dismiss")}
-					onClick={onDismiss}
-				>
-					<X size={12} strokeWidth={1.8} />
-				</button>
-			)}
 		</li>
 	);
 }
@@ -129,6 +132,13 @@ function sourceDetail(row: DataSourceRow): string | null {
 	}
 	return null;
 }
+
+// The bell is cut away 2px around the unread dot, so whatever is behind the
+// button (the sidebar, its hover, the open state) shows as the dot's outline.
+// The dot's centre is 13px right and 2px down from the 16px icon's corner.
+const BELL_DOT_CUTOUT = {
+	maskImage: "radial-gradient(circle at 13px 2px, transparent 5px, #000 5.5px)",
+} as const;
 
 export function NotificationCenter({
 	onOpenAiSettings,
@@ -397,7 +407,7 @@ export function NotificationCenter({
 					kind: "primary",
 					run: () => {
 						void window.autorag?.defaultFileManager
-							?.apply({ enabled: true, interceptReveal: dfmStatus.platform === "win32" })
+							?.apply({ enabled: true, interceptReveal: true })
 							.then((next) => setDfmStatus(next))
 							.catch(() => undefined);
 					},
@@ -421,15 +431,15 @@ export function NotificationCenter({
 				aria-haspopup="dialog"
 				onClick={() => setNotificationCenterOpen(!open)}
 			>
-				<Bell size={16} strokeWidth={1.6} aria-hidden="true" />
-				{dot ? <span className="absolute top-[5px] right-[6px] size-6 rounded-full bg-danger-dot ring-2 ring-chrome" aria-hidden="true" /> : null}
+				<Bell size={16} strokeWidth={1.6} aria-hidden="true" style={dot ? BELL_DOT_CUTOUT : undefined} />
+				{dot ? <span className="absolute top-[5px] right-[6px] size-6 rounded-full bg-danger-dot" aria-hidden="true" /> : null}
 			</button>
 			{open && anchor !== null
 				? createPortal(
 						<div
 							ref={panelRef}
 							className="notification-center fixed z-60 flex w-[332px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-14 border border-border bg-window shadow-[0_12px_32px_rgba(0,0,0,0.16)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
-							style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: `calc(100vh - ${anchor.bottom + 16}px)` }}
+							style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: `min(${NOTICE_PANEL_MAX_HEIGHT}px, calc(100vh - ${anchor.bottom + 16}px))` }}
 							role="dialog"
 							aria-label={t("notifications.title")}
 						>
@@ -442,7 +452,7 @@ export function NotificationCenter({
 									</button>
 								)}
 							</div>
-							<div className="min-h-0 flex-1 overflow-y-auto">
+							<div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
 								{shown.length === 0 && notifications.past.length === 0 ? (
 									<p className="m-0 border-t border-divider px-16 py-24 text-center text-meta text-ink-muted">{t("notifications.empty")}</p>
 								) : null}

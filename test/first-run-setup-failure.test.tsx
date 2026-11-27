@@ -27,8 +27,7 @@ const host: FirstRunHost = {
 	arrange: vi.fn(),
 	focusAi: vi.fn(),
 	typeDraft: vi.fn(),
-	showFamily: vi.fn(),
-	versionFamilies: vi.fn(async () => []),
+	resetAi: vi.fn(),
 	setCovered: vi.fn(),
 } as unknown as FirstRunHost;
 

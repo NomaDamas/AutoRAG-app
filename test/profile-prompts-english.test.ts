@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { CustomizerToolkit } from "../src/main/agents/profiles/customizer-kit";
-import { aiCustomizerProfile } from "../src/main/agents/profiles/ai-customizer";
-import { generalCustomizerProfile } from "../src/main/agents/profiles/general-customizer";
-import { searchCustomizerProfile } from "../src/main/agents/profiles/search-customizer";
 import { connectionsCustomizerProfile } from "../src/main/agents/profiles/connections-customizer";
-import { appCustomizerProfile } from "../src/main/agents/profiles/app-customizer";
-import { shortcutCustomizerProfile } from "../src/main/agents/profiles/shortcut-customizer";
+import { datasourceConnectionsProfile } from "../src/main/agents/profiles/datasource-connections-customizer";
+import { settingsCustomizerProfile } from "../src/main/agents/profiles/settings-customizer";
 import { magicActionProfile } from "../src/main/agents/profiles/magic-action";
 import { documentEditProfile } from "../src/main/agents/profiles/document-edit";
 import { errorFixProfile, type ErrorFixToolkit } from "../src/main/agents/profiles/error-fix";
 import { createProposalCollector, smartIndexingProfile } from "../src/main/agents/profiles/smart-indexing";
 import { createFolderSurvey } from "../src/main/agents/profiles/folder-stats";
+import { buildUnifiedWorkflowsPrompt } from "../src/main/workflow-sandbox";
 
 type Language = "ko" | "en" | "ja" | "zh";
 
@@ -36,37 +34,49 @@ const emptyErrorFixKit: ErrorFixToolkit = {
 };
 
 /** Builds one profile's system prompt for a given interface language; the toolkit itself never reaches the prompt. */
-const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (language: Language) => string }[] = [
-	{ name: "ai-customizer (ai page)", prompt: (language) => aiCustomizerProfile({ language, surface: "ai", toolkit: emptyKit }).systemPrompt },
-	{ name: "ai-customizer (web page)", prompt: (language) => aiCustomizerProfile({ language, surface: "web", toolkit: emptyKit }).systemPrompt },
-	{
-		name: "ai-customizer (with a shell)",
-		prompt: (language) =>
-			aiCustomizerProfile({
-				language,
-				surface: "ai",
-				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
-			}).systemPrompt,
-	},
-	{
-		name: "general-customizer",
-		prompt: (language) => generalCustomizerProfile({ language, surface: "general", toolkit: emptyKit }).systemPrompt,
-	},
-	{
-		name: "search-customizer",
-		prompt: (language) => searchCustomizerProfile({ language, surface: "indexing", toolkit: emptyKit }).systemPrompt,
-	},
+const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (language: Language) => string; /** Nobody types to this helper, so the interface language decides. */ readonly interfaceLanguage?: true }[] = [
 	{
 		name: "connections-customizer",
 		prompt: (language) => connectionsCustomizerProfile({ language, surface: "mcp", toolkit: emptyKit }).systemPrompt,
 	},
 	{
-		name: "app-customizer",
-		prompt: (language) => appCustomizerProfile({ language, toolkit: emptyKit }).systemPrompt,
+		name: "connections-customizer (with a shell)",
+		prompt: (language) =>
+			connectionsCustomizerProfile({
+				language,
+				surface: "mcp",
+				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
+			}).systemPrompt,
 	},
 	{
-		name: "shortcut-customizer",
-		prompt: (language) => shortcutCustomizerProfile({ language, toolkit: emptyKit }).systemPrompt,
+		name: "datasource-connections-customizer",
+		prompt: (language) => datasourceConnectionsProfile({ language, surface: "apps", toolkit: emptyKit }).systemPrompt,
+	},
+	{
+		name: "datasource-connections-customizer (with a shell)",
+		prompt: (language) =>
+			datasourceConnectionsProfile({
+				language,
+				surface: "apps",
+				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
+			}).systemPrompt,
+	},
+	{
+		name: "settings-customizer (unified)",
+		prompt: (language) => settingsCustomizerProfile({ language, surface: "ltr", toolkit: emptyKit }).systemPrompt,
+	},
+	{
+		name: "settings-customizer (unified with a shell)",
+		prompt: (language) =>
+			settingsCustomizerProfile({
+				language,
+				surface: "all",
+				toolkit: { ...emptyKit, tools: [{ name: "bash" } as never] },
+			}).systemPrompt,
+	},
+	{
+		name: "settings-customizer (win32)",
+		prompt: (language) => settingsCustomizerProfile({ language, surface: "contextMenu", toolkit: emptyKit, platform: "win32" }).systemPrompt,
 	},
 	{
 		name: "magic-action",
@@ -95,6 +105,7 @@ const PROMPT_BUILDERS: readonly { readonly name: string; readonly prompt: (langu
 	},
 	{
 		name: "error-fix",
+		interfaceLanguage: true,
 		prompt: (language) => errorFixProfile({ message: "boom", surface: "ai-search", language, toolkit: emptyErrorFixKit }).systemPrompt,
 	},
 	{
@@ -116,6 +127,11 @@ describe("every profile's system prompt is written in English and defers to the 
 				// (a) no Hangul, Hiragana, Katakana or CJK ideograph anywhere in the prompt.
 				expect(prompt, `non-English text in ${builder.name}`).not.toMatch(NOT_ENGLISH);
 
+				if (builder.interfaceLanguage === true) {
+					expect(prompt).toContain(`in ${LANGUAGE_NAME[language]}, the language the app is shown in`);
+					return;
+				}
+
 				// (b) the reply-language rule sends the model to the language the person writes in.
 				expect(prompt).toMatch(/language the person writes in/iu);
 				expect(prompt).toMatch(/their latest message decides/iu);
@@ -131,4 +147,13 @@ describe("every profile's system prompt is written in English and defers to the 
 			});
 		}
 	}
+
+	it("unified main-agent workflows addendum is written in English on all platforms", () => {
+		for (const platform of ["darwin", "linux", "win32"] as const) {
+			const prompt = buildUnifiedWorkflowsPrompt(platform, { includeMagicActions: true });
+			expect(prompt).not.toMatch(NOT_ENGLISH);
+			expect(prompt).toContain("test_automation_in_sandbox");
+			expect(prompt).toContain("test_magic_action");
+		}
+	});
 });

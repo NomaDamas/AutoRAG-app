@@ -4,6 +4,7 @@ import { extname, join } from "node:path";
 import type { ParserRegistry } from "@autorag/librarian";
 import type { FolderScan } from "../shared/onboarding-contract";
 import { DEFAULT_CODE_FOLDER_NAMES } from "../shared/settings-contract";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 
 /**
  * The folder pre-scan behind the folders step. It walks each candidate the same
@@ -98,6 +99,52 @@ export async function scanFolder(
 		lastEmit = at;
 		emit(snapshot(false));
 	};
+
+	const native = !signal.aborted ? loadDazziNativeCore() : null;
+	if (native !== null) {
+		const control = new native.WalkControl();
+		const onAbort = (): void => control.cancel();
+		signal.addEventListener("abort", onAbort, { once: true });
+		// Poll the worker's atomic counters at `throttleMs` so the folders step still streams running totals on giant trees.
+		const poller =
+			throttleMs > 0
+				? setInterval(() => {
+						const live = control.snapshot();
+						if (live.files !== files || live.bytes !== bytes || live.onlineOnly !== onlineOnly) {
+							files = live.files;
+							bytes = live.bytes;
+							onlineOnly = live.onlineOnly;
+							emit(snapshot(false));
+						}
+					}, throttleMs)
+				: null;
+		try {
+			const result = await native.scanFolderNative(
+				root,
+				[...options.supportedExtensions],
+				Object.keys(skip).map((name) => name.toLowerCase()),
+				options.maxSourceBytes,
+				maxEntries,
+				dataless === undefined ? null : [...dataless],
+				control,
+			);
+			files = result.files;
+			bytes = result.bytes;
+			onlineOnly = result.onlineOnly;
+			const final = snapshot(true);
+			emit(final);
+			return final;
+		} catch (caught) {
+			console.warn(`[dazzi-core] scanFolderNative failed for ${root}, falling back to JS:`, caught instanceof Error ? caught.message : caught);
+			// Reset partial counters and fall through to emergency JS walk below.
+			files = 0;
+			bytes = 0;
+			onlineOnly = 0;
+		} finally {
+			if (poller !== null) clearInterval(poller);
+			signal.removeEventListener("abort", onAbort);
+		}
+	}
 
 	const queue: string[] = [root];
 	try {

@@ -12,7 +12,8 @@ export type NoticeTone = "warning" | "error" | "ok";
  */
 export function NoticeBadge({ tone, size = 16 }: { readonly tone: NoticeTone; readonly size?: number }): ReactElement {
 	const fill = tone === "warning" ? "var(--notice-warn-badge)" : tone === "error" ? "var(--danger-dot)" : "var(--ok-dot)";
-	const mark = tone === "warning" ? "#1D1D1F" : "#FFFFFF";
+	// Every badge carries a white mark (Figma 556:7347 for the warning one).
+	const mark = "#FFFFFF";
 	return (
 		<svg className="notice-badge flex-none" width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" data-tone={tone}>
 			<circle cx="8" cy="8" r="8" fill={fill} />
@@ -35,12 +36,14 @@ export interface NoticeAction {
 	readonly onClick: () => void;
 	readonly primary?: boolean;
 	readonly icon?: ReactNode;
+	readonly disabled?: boolean;
 }
 
-/** Figma Button, size 32: the secondary is white with the border, the primary the accent fill. */
-export function noticeButtonClass(primary: boolean): string {
+/** Figma Button, size 32 (28 on the compact card): the secondary is white with the border, the primary the accent fill. */
+export function noticeButtonClass(primary: boolean, compact = false): string {
 	return cn(
-		"notice-btn inline-flex h-32 flex-none items-center justify-center gap-6 px-12 rounded-6 border text-meta font-medium leading-[16px] whitespace-nowrap cursor-pointer transition-opacity duration-(--dur-color) ease-out hover:opacity-80",
+		"notice-btn inline-flex flex-none items-center justify-center gap-6 rounded-6 border text-meta font-medium leading-[16px] whitespace-nowrap cursor-pointer transition-opacity duration-(--dur-color) ease-out hover:opacity-80",
+		compact ? "h-28 px-10" : "h-32 px-12",
 		primary ? "border-transparent bg-accent text-on-accent" : "border-border bg-window text-ink-body",
 	);
 }
@@ -59,6 +62,7 @@ export function NoticeCard({
 	footer,
 	onClose,
 	floating = false,
+	compact = false,
 	role = "alert",
 	className,
 }: {
@@ -69,6 +73,11 @@ export function NoticeCard({
 	readonly footer?: ReactNode;
 	readonly onClose?: () => void;
 	readonly floating?: boolean;
+	/**
+	 * The one-line notice (Figma 641:13722, the index notice): 12px radius and vertical padding, the badge, a 13px
+	 * medium line and the × centred on one 28px row, and 28px buttons.
+	 */
+	readonly compact?: boolean;
 	readonly role?: "alert" | "status";
 	readonly className?: string;
 }): ReactElement {
@@ -76,20 +85,24 @@ export function NoticeCard({
 	return (
 		<div
 			className={cn(
-				"notice-card flex flex-col gap-12 px-16 py-14 border border-border rounded-14 bg-window text-ink",
+				"notice-card flex flex-col gap-12 rounded-12 px-16 border border-border bg-window text-ink",
+				compact ? "py-12" : "py-14",
 				floating && "shadow-[var(--shadow-notice)]",
 				className,
 			)}
 			role={role}
 			data-tone={tone}
 		>
-			<div className="notice-card__head flex items-center gap-10">
-				<NoticeBadge tone={tone} />
-				<strong className="min-w-0 flex-1 text-[14px] font-bold leading-[20px] text-ink break-keep">{title}</strong>
+			{/* Figma 548:14204: the badge and the close button stay on the title's first line when the title wraps. */}
+			<div className={cn("notice-card__head flex gap-12", compact ? "min-h-28 items-center" : "items-start")}>
+				<span className={cn("flex flex-none", !compact && "mt-2")}>
+					<NoticeBadge tone={tone} />
+				</span>
+				<strong className={cn("min-w-0 flex-1 leading-[20px] text-ink break-keep", compact ? "text-[13px] font-medium" : "text-[14px] font-bold")}>{title}</strong>
 				{onClose === undefined ? null : (
 					<button
 						type="button"
-						className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "size-24 -my-4 -mr-4")}
+						className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "size-24 -mr-4 flex-none", !compact && "-mt-2")}
 						aria-label={t("common.close")}
 						title={t("common.close")}
 						onClick={onClose}
@@ -106,7 +119,7 @@ export function NoticeCard({
 					{footer === undefined ? null : <div className="min-w-0 self-end">{footer}</div>}
 					<span className="flex-1" />
 					{actions.map((action, index) => (
-						<button key={index} type="button" className={noticeButtonClass(action.primary === true)} onClick={action.onClick}>
+						<button key={index} type="button" className={cn(noticeButtonClass(action.primary === true, compact), "disabled:cursor-default disabled:opacity-50")} disabled={action.disabled === true} onClick={action.onClick}>
 							{action.icon}
 							{action.label}
 						</button>

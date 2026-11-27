@@ -14,14 +14,14 @@
  *                      to the Info view (Figma 328:3991, 328:5742).
  */
 
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
+import { Fragment, useCallback, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contract";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
 import type { InteractionRequest } from "../../../shared/interaction-contract";
-import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
+import { groupChatHistory, HISTORY_BUCKET_KEYS, HISTORY_SEARCH_DEBOUNCE_MS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
 import { cn } from "../lib/cn";
 import { buttonClass } from "./primitives/button";
 import { evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
@@ -29,9 +29,16 @@ import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorCh
 import { drawQuickAnswer } from "../state/answer-revisions";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
-import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
+import { ProseBlocks, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
+import { QueuedBubble, SentActions, SteerBubble } from "./FollowUpBubbles";
+import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
+import { AutomationNudge, type NudgePhase } from "./AutomationNudge";
+import { AutomationsContext } from "./AutomationsTab";
+import { AutomationDraftCard, templateTaken } from "./AutomationsView";
+import { rightClickSentence } from "./RightClickWhen";
+import { putOff, readPutOff, suggestTemplate, type SuggestableTemplate } from "../state/automation-suggest";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
 import {
@@ -191,6 +198,7 @@ function Composer({
 	onQueue,
 	onStop,
 	onDismiss,
+	returned = null,
 }: {
 	/** The cards above the input, each with its ×; empty for the Info view's composer, which only types. */
 	readonly pending: readonly ChatAttachment[];
@@ -207,9 +215,14 @@ function Composer({
 	readonly onQueue?: (text: string) => void;
 	readonly onStop: () => void;
 	readonly onDismiss: (id: string) => void;
+	/** A waiting question taken back to be edited; a new `key` adds its text to the draft once. */
+	readonly returned?: { readonly key: number; readonly text: string } | null;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
+	useEffect(() => {
+		if (returned !== null) setDraft((current) => [current.trim(), returned.text].filter((part) => part !== "").join(" "));
+	}, [returned?.key]);
 	/** Images pasted into the field: cards of their own, sent with the next question. */
 	const [pasted, setPasted] = useState<readonly ChatAttachment[]>([]);
 	const [busyNotice, setBusyNotice] = useState(false);
@@ -256,14 +269,14 @@ function Composer({
 						))}
 					</div>
 				)}
+				{/* The words on their own row; the mode and the send button share the row under them, as in the AI 에이전트 chat. */}
 				<form
-					className="flex items-end gap-8"
+					className="flex flex-col gap-6"
 					onSubmit={(event) => {
 						event.preventDefault();
 						send();
 					}}
 				>
-					<ApprovalModeMenu mode={approval.mode} onChange={approval.setMode} compact />
 					<ComposerField
 						className="py-4 text-meta leading-[16px] text-ink placeholder:text-ink-faint"
 						value={draft}
@@ -276,40 +289,44 @@ function Composer({
 						onAltEnter={() => send(true)}
 						onPasteImages={pasteImages}
 					/>
-					{running && onSteer !== undefined && draft.trim().length > 0 ? (
-						<button
-							type="submit"
-							className={composerButton}
-							aria-label={t("aiSearch.steerSend")}
-							title={t("aiSearch.steerSend")}
-						>
-							<ArrowUpIcon size={12} />
-						</button>
-					) : null}
-					{running ? (
-						<button
-							type="button"
-							className="flex size-24 flex-none items-center justify-center rounded-full border-0 bg-selected-nav p-0 text-ink cursor-pointer"
-							aria-label={t("inspector.chat.stop")}
-							title={t("inspector.chat.stop")}
-							onClick={onStop}
-						>
-							<span className="size-8 rounded-2 bg-current" aria-hidden="true" />
-						</button>
-					) : draft.trim().length === 0 && voice !== undefined ? (
-						<VoiceButton voice={voice} onTranscript={(text) => setDraft((current) => appendTranscript(current, text))} onError={setVoiceNotice} />
-					) : (
-						<button
-							type="button"
-							className={composerButton}
-							aria-label={t("inspector.chat.send")}
-							title={t("inspector.chat.send")}
-							disabled={draft.trim().length === 0}
-							onClick={() => send()}
-						>
-							<ArrowUpIcon size={12} />
-						</button>
-					)}
+					<div className="flex items-center gap-8">
+						<ApprovalModeMenu mode={approval.mode} onChange={approval.setMode} compact />
+						<span className="flex-1" />
+						{running && onSteer !== undefined && draft.trim().length > 0 ? (
+							<button
+								type="submit"
+								className={composerButton}
+								aria-label={t("inspector.chat.send")}
+								title={t("inspector.chat.send")}
+							>
+								<ArrowUpIcon size={12} />
+							</button>
+						) : null}
+						{running ? (
+							<button
+								type="button"
+								className="flex size-24 flex-none items-center justify-center rounded-full border-0 bg-selected-nav p-0 text-ink cursor-pointer"
+								aria-label={t("inspector.chat.stop")}
+								title={t("inspector.chat.stop")}
+								onClick={onStop}
+							>
+								<span className="size-8 rounded-2 bg-current" aria-hidden="true" />
+							</button>
+						) : draft.trim().length === 0 && voice !== undefined ? (
+							<VoiceButton voice={voice} onTranscript={(text) => setDraft((current) => appendTranscript(current, text))} onError={setVoiceNotice} />
+						) : (
+							<button
+								type="button"
+								className={composerButton}
+								aria-label={t("inspector.chat.send")}
+								title={t("inspector.chat.send")}
+								disabled={draft.trim().length === 0}
+								onClick={() => send()}
+							>
+								<ArrowUpIcon size={12} />
+							</button>
+						)}
+					</div>
 				</form>
 			</div>
 			{busyNotice ? (
@@ -352,9 +369,11 @@ export interface InspectorChatDockProps {
 	readonly onStop: () => void;
 	/** "이어서 대화": the tab's chat, as it was. */
 	readonly onResume: () => void;
+	/** The 자동화 tab's own chat: the ask box alone, with no 이어서 대화. */
+	readonly standalone?: boolean;
 }
 
-export function InspectorChatDock({ tab, now, targets, running, request, onAsk, onSummarize, onStop, onResume }: InspectorChatDockProps): ReactElement {
+export function InspectorChatDock({ tab, now, targets, running, request, onAsk, onSummarize, onStop, onResume, standalone = false }: InspectorChatDockProps): ReactElement {
 	const { t } = useTranslation();
 	const ago = useAgo();
 	const chat = tab.chat;
@@ -363,7 +382,7 @@ export function InspectorChatDock({ tab, now, targets, running, request, onAsk, 
 		// With nothing selected the dock is the panel's foot on its own: no divider above it, and the chat footer's padding.
 		<div className={cn("inspector-chat-dock flex flex-col gap-4", targets.length === 0 ? "px-12 pt-12 pb-12" : "px-12 pb-12")}>
 			{targets.length === 0 ? null : <div className="mb-4 h-px bg-divider" aria-hidden="true" />}
-			{chat !== null ? (
+			{standalone ? null : chat !== null ? (
 				<div className="flex">
 					<button type="button" className={cn("inspector-chat-continue", DOCK_CHIP)} onClick={onResume}>
 						<span className="flex text-ink-muted" aria-hidden="true">
@@ -562,7 +581,8 @@ function PhaseAnswer({
 function TurnView({
 	turn,
 	live,
-	steerLabels,
+	onPostpone,
+	onCancelSteer,
 	imageActions,
 	onReveal,
 	onPreview,
@@ -570,7 +590,8 @@ function TurnView({
 	readonly turn: InspectorTurn;
 	/** The turn's run is still streaming. */
 	readonly live: boolean;
-	readonly steerLabels: Readonly<Record<SteerItem["status"], string>>;
+	readonly onPostpone?: ((id: string) => void) | undefined;
+	readonly onCancelSteer?: ((id: string) => void) | undefined;
 	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
@@ -581,16 +602,17 @@ function TurnView({
 	const quickDraw = drawQuickAnswer(turn.quick, turn.deep, turn.revisions);
 	return (
 		<>
-			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
+			<div className="group/bubble flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
 				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+				<SentActions text={turn.question} className="-mt-2" />
 			</div>
 			{turn.steers
 				.filter((steer) => steer.timing === "before-quick")
 				.map((steer) => (
-					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+					<SteerBubble key={steer.id} steer={steer} compact onPostpone={onPostpone} onCancel={onCancelSteer} />
 				))}
 			<div className="flex min-w-0 flex-col gap-8">
 				{quickText === "" ? null : (
@@ -606,7 +628,7 @@ function TurnView({
 				{turn.steers
 					.filter((steer) => steer.timing === "after-quick")
 					.map((steer) => (
-						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+						<SteerBubble key={steer.id} steer={steer} compact onPostpone={onPostpone} onCancel={onCancelSteer} />
 					))}
 				{deepText === "" ? null : (
 					<div className="flex min-w-0 flex-col gap-6">
@@ -633,7 +655,11 @@ function TurnView({
 	);
 }
 
-/** The chat title's menu: the recent AI Search chats, grouped by day; picking one makes it the tab's chat. */
+/**
+ * The chat title's menu: the recent AI Search chats, grouped by day; picking one makes it the tab's chat. It is the
+ * AI Search tab's history menu in a narrower column: the same search field over the list, the same day captions, and
+ * the same rows (the title, its snippet, and the time on the right), so the two read as one feature.
+ */
 function ChatHistoryMenu({
 	currentChatId,
 	onPick,
@@ -645,25 +671,35 @@ function ChatHistoryMenu({
 }): ReactElement {
 	const { t } = useTranslation();
 	const [groups, setGroups] = useState<readonly ChatHistoryGroup[] | null>(null);
+	const [query, setQuery] = useState("");
 	const menuRef = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		let alive = true;
-		const list = window.autorag?.search?.historyList;
-		if (list === undefined) {
+	const seq = useRef(0);
+	const debounce = useRef<number | null>(null);
+	// The store owns the matching (questions and answers alike); a stale reply never lands after a newer keystroke.
+	const load = useCallback((value: string): void => {
+		const search = window.autorag?.search;
+		seq.current += 1;
+		const mine = seq.current;
+		const request = value.trim().length === 0 ? search?.historyList?.() : search?.historySearch?.(value);
+		if (request === undefined) {
 			setGroups([]);
 			return;
 		}
-		void list()
+		void request
 			.then((items) => {
-				if (alive) setGroups(groupChatHistory(items, new Date()));
+				if (mine === seq.current) setGroups(groupChatHistory(items, new Date()));
 			})
 			.catch(() => {
-				if (alive) setGroups([]);
+				if (mine === seq.current) setGroups([]);
 			});
-		return () => {
-			alive = false;
-		};
 	}, []);
+	useEffect(() => {
+		load("");
+		return () => {
+			seq.current += 1;
+			if (debounce.current !== null) window.clearTimeout(debounce.current);
+		};
+	}, [load]);
 	useEffect(() => {
 		const onDown = (event: MouseEvent): void => {
 			if (!(event.target instanceof Node) || menuRef.current?.contains(event.target) === true) return;
@@ -683,34 +719,63 @@ function ChatHistoryMenu({
 	return (
 		<div
 			ref={menuRef}
-			className="inspector-chat-history absolute top-full left-8 z-30 mt-2 flex max-h-[360px] w-208 flex-col gap-6 overflow-y-auto rounded-12 border border-divider bg-window py-12 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+			className="inspector-chat-history history absolute top-full left-8 z-30 mt-2 flex max-h-[360px] w-[min(358px,calc(100%-16px))] flex-col overflow-hidden rounded-[16px] border border-divider bg-window py-12 shadow-[0_0_10px_rgba(0,0,0,0.2)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 			role="menu"
 			aria-label={t("inspector.chat.history")}
 		>
-			{groups === null ? null : groups.length === 0 ? (
-				<span className="block px-16 py-4 text-sm text-ink-muted">{historyEmptyText("")}</span>
-			) : (
-				groups.map((group) => (
-					<div key={group.label} className="flex flex-col">
-						<span className="block px-16 text-badge font-medium leading-[16px] text-ink-muted">{t(HISTORY_BUCKET_KEYS[group.label])}</span>
-						{group.items.map((item) => (
-							<button
-								type="button"
-								role="menuitem"
-								key={item.id}
-								className={cn(
-									"mx-8 block truncate rounded-8 border-0 px-16 py-8 text-left text-sm font-normal leading-[18px] text-ink-body cursor-pointer hover:bg-hover",
-									item.id === currentChatId ? "bg-selected-nav" : "bg-transparent",
-								)}
-								title={item.title}
-								onClick={() => onPick(item.id)}
-							>
-								{item.title}
-							</button>
-						))}
-					</div>
-				))
-			)}
+			<input
+				autoFocus
+				value={query}
+				placeholder={t("aiSearch.searchHistory")}
+				aria-label={t("aiSearch.searchHistory")}
+				className="w-full flex-none border-0 bg-transparent px-16 pt-4 pb-12 text-body font-medium leading-[19px] text-ink outline-none placeholder:text-ink-faint"
+				onChange={(event) => {
+					const value = event.target.value;
+					setQuery(value);
+					if (debounce.current !== null) window.clearTimeout(debounce.current);
+					debounce.current = window.setTimeout(() => {
+						debounce.current = null;
+						load(value);
+					}, HISTORY_SEARCH_DEBOUNCE_MS);
+				}}
+				onKeyDown={(event) => {
+					if (event.key !== "Enter") return;
+					event.preventDefault();
+					const first = groups?.[0]?.items[0];
+					if (first !== undefined) onPick(first.id);
+				}}
+			/>
+			<div className="history-list min-h-0 flex-1 overflow-auto">
+				{groups === null ? null : groups.length === 0 ? (
+					<span className="block px-16 py-24 text-center text-meta text-ink-muted">{historyEmptyText(query)}</span>
+				) : (
+					groups.map((group, index) => (
+						<div key={group.label}>
+							{/* A hairline above each period after the first (어제, 지난 7일, …) so where one ends is easy to see. */}
+							<div className={cn("history-group text-badge font-bold leading-[15px] text-ink-muted", index === 0 ? "px-16 pt-4 pb-2" : "mx-16 mt-6 border-t-[0.5px] border-divider pt-10 pb-2")}>{t(HISTORY_BUCKET_KEYS[group.label])}</div>
+							{group.items.map((item) => (
+								<button
+									type="button"
+									role="menuitem"
+									key={item.id}
+									title={item.title}
+									className={cn(
+										"history-item flex w-full items-start gap-8 border-0 px-16 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
+										item.id === currentChatId ? "current bg-accent-history-current" : "bg-transparent",
+									)}
+									onClick={() => onPick(item.id)}
+								>
+									<span className="hist-copy flex min-w-0 flex-1 flex-col gap-1">
+										<b className="block truncate text-sm font-medium leading-[19.5px] text-ink">{item.title}</b>
+										{item.snippet.length === 0 ? null : <small className="block truncate text-caption leading-[16.5px] text-ink-muted">{item.snippet}</small>}
+									</span>
+									<span className="hist-time flex-none text-badge font-medium leading-[14px] text-ink-faint">{item.time}</span>
+								</button>
+							))}
+						</div>
+					))
+				)}
+			</div>
 		</div>
 	);
 }
@@ -732,6 +797,11 @@ export interface InspectorChatViewProps {
 	readonly onQueue: (text: string) => void;
 	/** Cancel the queued question at `index`. */
 	readonly onUnqueue: (index: number) => void;
+	/** A held correction waits as the next question instead. */
+	readonly onPostpone?: (id: string) => void;
+	readonly onCancelSteer?: (id: string) => void;
+	/** Work the queued question at `index` into the answer in flight. */
+	readonly onSendNow?: (index: number) => void;
 	readonly onStop: () => void;
 	/** × : back to the Info view (the sidebar stays). */
 	readonly onBack: () => void;
@@ -744,6 +814,88 @@ export interface InspectorChatViewProps {
 	readonly onReveal: (path: string) => void;
 	/** Quick Look the cited file at the cited passage. */
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
+	/**
+	 * The 자동화 tab's own chat: a plain title (no history menu), and only 새 대화 in its header — it does not open in
+	 * the AI Agent tab and does not close back to another view, because it is the whole column.
+	 */
+	readonly standalone?: boolean;
+	/** When 새 자동화 was last pressed: the column shows the request, the reply and an empty card at its end, anew each time. */
+	readonly newAutomation?: number | null;
+	/** The empty card was cancelled: the column goes back to what it showed before. */
+	readonly onNewAutomationDone?: () => void;
+}
+
+/**
+ * The chat column's head: the title (a button that opens the chat history, in the 자동화 tab's column too), 새 채팅, and, beside a file,
+ * 크게 보기 and 닫기. It is also what the 자동화 column shows over its empty state, so a past chat can be picked before one is started.
+ */
+export function InspectorChatHead({
+	title,
+	standalone = false,
+	running = false,
+	currentChatId,
+	newChatDisabled = false,
+	onNewChat,
+	onExpand,
+	onBack,
+	onOpenChat,
+}: {
+	readonly title: string;
+	readonly standalone?: boolean;
+	readonly running?: boolean;
+	readonly currentChatId: string | null;
+	readonly newChatDisabled?: boolean;
+	readonly onNewChat: () => void;
+	readonly onExpand?: () => void;
+	readonly onBack?: () => void;
+	readonly onOpenChat: (chatId: string) => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const [historyOpen, setHistoryOpen] = useState(false);
+	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
+	return (
+		<div className="relative flex h-35 flex-none items-center gap-4 bg-subtle-alt py-6 pl-12 pr-8">
+			{/* At least 30px before the buttons (Figma 328:3802): a wider sidebar shows more of the title, and once it is whole the gap grows. */}
+			<div className="flex min-w-0 flex-1 pr-26">
+				<button
+					type="button"
+					className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
+					aria-haspopup="menu"
+					aria-expanded={historyOpen}
+					title={title}
+					onClick={() => setHistoryOpen((open) => !open)}
+				>
+					<span className="truncate">{title}</span>
+					<span className="flex flex-none text-ink-muted" aria-hidden="true">
+						<TitleChevronIcon size={16} />
+					</span>
+				</button>
+			</div>
+			<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running || newChatDisabled} onClick={onNewChat}>
+				<ChatNewIcon size={16} />
+			</button>
+			{standalone ? null : (
+				<>
+					<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
+						<MaximizeIcon size={16} />
+					</button>
+					<button type="button" className={headButton} aria-label={t("inspector.chat.close")} title={t("inspector.chat.close")} onClick={onBack}>
+						<PanelCloseIcon size={16} />
+					</button>
+				</>
+			)}
+			{historyOpen ? (
+				<ChatHistoryMenu
+					currentChatId={currentChatId}
+					onClose={() => setHistoryOpen(false)}
+					onPick={(chatId) => {
+						setHistoryOpen(false);
+						if (chatId !== currentChatId) onOpenChat(chatId);
+					}}
+				/>
+			) : null}
+		</div>
+	);
 }
 
 export function InspectorChatView({
@@ -757,6 +909,9 @@ export function InspectorChatView({
 	onSteer,
 	onQueue,
 	onUnqueue,
+	onPostpone,
+	onCancelSteer,
+	onSendNow,
 	onStop,
 	onBack,
 	onNewChat,
@@ -765,99 +920,159 @@ export function InspectorChatView({
 	onDismiss,
 	onReveal,
 	onPreview,
+	standalone = false,
+	newAutomation = null,
+	onNewAutomationDone,
 }: InspectorChatViewProps): ReactElement {
 	const { t } = useTranslation();
-	const [historyOpen, setHistoryOpen] = useState(false);
+	const [returned, setReturned] = useState<{ readonly key: number; readonly text: string } | null>(null);
 	const turns = tab.chat?.turns ?? [];
-	const steerLabels = {
-		pending: t("aiSearch.steerPending"),
-		delivered: t("aiSearch.steerDelivered"),
-		dropped: t("aiSearch.steerDropped"),
+	// The chat follows its newest line only while the person is at the bottom; scrolling up lets go and shows the floating button.
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	const followRef = useRef(true);
+	const [awayFromBottom, setAwayFromBottom] = useState(false);
+	useEffect(() => {
+		const body = bodyRef.current;
+		if (body !== null && followRef.current) body.scrollTop = body.scrollHeight;
+	});
+	const onBodyScroll = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		const away = body.scrollHeight - body.scrollTop - body.clientHeight > 120;
+		followRef.current = !away;
+		setAwayFromBottom(away);
 	};
+	const scrollToBottom = (): void => {
+		const body = bodyRef.current;
+		if (body === null) return;
+		followRef.current = true;
+		setAwayFromBottom(false);
+		body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+	};
+	// The automation the last answer suggests under it, as in the AI 에이전트 chat (Figma 672:3658, 672:3740).
+	const automationsShell = useContext(AutomationsContext);
+	const last = turns[turns.length - 1];
+	const lastKey = `${tab.chat?.chatId ?? ""}:${turns.length}`;
+	const lastAnswered = last !== undefined && !running && (quickTextOf(last) !== "" || deepTextOf(last) !== "");
+	const [suggestion, setSuggestion] = useState<{ readonly key: string; readonly id: SuggestableTemplate; readonly phase: NudgePhase | "gone" } | null>(null);
+	useEffect(() => {
+		if (!lastAnswered || last === undefined || automationsShell === null || suggestion?.key === lastKey) return;
+		const sources = [...(last.quick?.evidence ?? []), ...(last.deep?.evidence ?? [])].map((item) => `${item.title} ${item.source ?? ""}`).join(" ");
+		const rules = automationsShell.props.state.rules;
+		const id = suggestTemplate(`${last.question} ${sources}`, (template) => templateTaken(rules, template), readPutOff());
+		setSuggestion(id === null ? null : { key: lastKey, id, phase: "nudge" });
+	}, [lastAnswered, lastKey]);
+	// 새 자동화 started here: the person's 새 자동화 만들기, the reply, and the card, rising one after another. It keeps
+	// its place in the conversation, so a question asked after it comes below it, as in any chat.
+	const starter =
+		newAutomation === null || automationsShell === null ? null : (
+						// Figma 672:3740: the person's 새 자동화 만들기, the reply, and the card, rising one after another.
+						<div key={newAutomation} className="flex flex-col gap-10" data-automation-starter>
+							<div className="flex max-w-[90%] self-end animate-rise [animation-fill-mode:both]">
+								<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window">{t("automations.starter.ask")}</div>
+							</div>
+							<p className="m-0 text-sm leading-[1.5] text-ink-body animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
+							<div className="animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+								<AutomationDraftCard
+									initial={null}
+									onCancel={() => onNewAutomationDone?.()}
+									onCreate={async (draft) => {
+										const folder = draft.paths[0] ?? "";
+										const kindText = draft.include.length === 0 ? t("automations.kinds.all") : draft.include.join(", ");
+										const eventsText = draft.events.join(", ");
+										const taskText = draft.agent?.task ?? (draft.run ?? []).join(" ");
+										const prompt = `${t("automations.starter.ask")}: ${folder} (${kindText}, ${eventsText}) — ${taskText}`;
+										onNewAutomationDone?.();
+										onAsk(prompt, []);
+										return true;
+									}}
+									onCreateMagicAction={async (action) => {
+										const taskText = action.execution.kind === "agent" ? action.execution.prompt : action.execution.command;
+										const target = rightClickSentence(t, action);
+										const prompt = `${t("automations.starter.ask")}: ${target} — ${taskText}`;
+										onNewAutomationDone?.();
+										onAsk(prompt, []);
+										return true;
+									}}
+								/>
+							</div>
+						</div>
+		);
+	const [starterAt, setStarterAt] = useState<{ readonly key: number; readonly at: number } | null>(null);
+	useEffect(() => {
+		if (newAutomation !== null) setStarterAt({ key: newAutomation, at: turns.length });
+	}, [newAutomation]);
+	const starterIndex = starterAt !== null && starterAt.key === newAutomation ? Math.min(starterAt.at, turns.length) : turns.length;
 	/** A chat picked from history carries its own title; a chat started here is titled by the selection it is about. */
 	const title = tab.chat?.title ?? targetName;
-	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
-			<div className="relative flex h-35 flex-none items-center gap-4 bg-subtle-alt py-6 pl-12 pr-8">
-				{/* At least 30px before the buttons (Figma 328:3802): a wider sidebar shows more of the title, and once it is whole the gap grows. */}
-				<div className="flex min-w-0 flex-1 pr-26">
-					<button
-						type="button"
-						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
-						aria-haspopup="menu"
-						aria-expanded={historyOpen}
-						title={title}
-						onClick={() => setHistoryOpen((open) => !open)}
-					>
-						<span className="truncate">{title}</span>
-						<span className="flex flex-none text-ink-muted" aria-hidden="true">
-							<TitleChevronIcon size={16} />
-						</span>
-					</button>
-				</div>
-				<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running} onClick={onNewChat}>
-					<ChatNewIcon size={16} />
-				</button>
-				<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
-					<MaximizeIcon size={16} />
-				</button>
-				<button type="button" className={headButton} aria-label={t("inspector.chat.close")} title={t("inspector.chat.close")} onClick={onBack}>
-					<PanelCloseIcon size={16} />
-				</button>
-				{historyOpen ? (
-					<ChatHistoryMenu
-						currentChatId={tab.chat?.chatId ?? null}
-						onClose={() => setHistoryOpen(false)}
-						onPick={(chatId) => {
-							setHistoryOpen(false);
-							if (chatId !== tab.chat?.chatId) onOpenChat(chatId);
+			<InspectorChatHead
+				title={title}
+				standalone={standalone}
+				running={running}
+				currentChatId={tab.chat?.chatId ?? null}
+				onNewChat={onNewChat}
+				onExpand={onExpand}
+				onBack={onBack}
+				onOpenChat={onOpenChat}
+			/>
+			<div className="relative flex min-h-0 flex-1 flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10" ref={bodyRef} onScroll={onBodyScroll}>
+				{turns.map((turn, index) => (
+					<Fragment key={`${tab.chat?.chatId ?? ""}:${index}`}>
+						{index === starterIndex ? starter : null}
+						<TurnView
+							turn={turn}
+							live={running && index === turns.length - 1}
+							onPostpone={onPostpone}
+							onCancelSteer={onCancelSteer}
+							imageActions={imageActions}
+							onReveal={onReveal}
+							onPreview={onPreview}
+						/>
+					</Fragment>
+				))}
+				{starterIndex >= turns.length ? starter : null}
+				{suggestion !== null && suggestion.key === lastKey && suggestion.phase !== "gone" && lastAnswered && automationsShell !== null ? (
+					<AutomationNudge
+						narrow
+						template={suggestion.id}
+						phase={suggestion.phase}
+						onPhase={(phase) => setSuggestion({ ...suggestion, phase })}
+						onLater={() => {
+							putOff(suggestion.id);
+							setSuggestion({ ...suggestion, phase: "gone" });
 						}}
+						onCreate={automationsShell.props.onCreate}
 					/>
 				) : null}
-			</div>
-			<div
-				className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10"
-				ref={(node) => {
-					if (node !== null) node.scrollTop = node.scrollHeight;
-				}}
-			>
-				{turns.map((turn, index) => (
-					<TurnView
-						key={`${tab.chat?.chatId ?? ""}:${index}`}
-						turn={turn}
-						live={running && index === turns.length - 1}
-						steerLabels={steerLabels}
-						imageActions={imageActions}
-						onReveal={onReveal}
-						onPreview={onPreview}
-					/>
-				))}
 				{tab.queued.length === 0 ? null : (
-					<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
+					<div className="queued-questions flex flex-col items-end gap-12" aria-label={t("aiSearch.queuedLabel")}>
 						{tab.queued.map((text, index) => (
-							<div key={`${index}:${text}`} className="queued-question flex max-w-[90%] items-center gap-8 rounded-10 border border-dashed border-border-strong px-12 py-6 text-meta text-ink-muted">
-								<span className="flex-none font-medium">{t("aiSearch.queuedLabel")}</span>
-								<span className="min-w-0 truncate text-ink-body">{text}</span>
-								<button
-									type="button"
-									className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
-									aria-label={t("aiSearch.queuedRemove")}
-									title={t("aiSearch.queuedRemove")}
-									onClick={() => onUnqueue(index)}
-								>
-									<CloseIcon size={10} />
-								</button>
-							</div>
+							<QueuedBubble
+								key={`${index}:${text}`}
+								text={text}
+								compact
+								onSendNow={running && onSendNow !== undefined ? () => onSendNow(index) : undefined}
+								onEdit={() => {
+									setReturned((current) => ({ key: (current?.key ?? 0) + 1, text }));
+									onUnqueue(index);
+								}}
+								onRemove={() => onUnqueue(index)}
+							/>
 						))}
 					</div>
 				)}
+			</div>
+			{awayFromBottom ? <ScrollToBottomButton answering={running} onClick={scrollToBottom} /> : null}
 			</div>
 			<div className="flex-none px-12 pt-12 pb-12">
 				{request === null ? (
 					<Composer
 						pending={pending}
-						placeholder={running ? t("aiSearch.steerPlaceholder") : t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
+						placeholder={t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
+						returned={returned}
 						running={running}
 						onSend={onAsk}
 						onSteer={onSteer}

@@ -8,14 +8,23 @@ import {
 	type SearchDocumentsStreamEvent,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { type AssistantMessage, type ImageContent, isContextOverflow } from "@earendil-works/pi-ai";
-import { isJsonObject } from "../shared/settings-contract";
+import { isJsonObject, type SettingsBridge } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
 import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-images";
 import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
+import {
+	createAutomationVerificationTracker,
+	createTestAutomationInSandboxTool,
+	testAutomationInSandbox,
+} from "./automation-sandbox";
+import type { ReplyLanguage } from "./agents/profile-progress";
+import { verifyMagicActionInSandbox } from "./magic-action-sandbox";
+import { createMagicActionTools } from "./magic-action-tools";
+import { buildUnifiedWorkflowsPrompt, isMagicActionManagementQuery } from "./workflow-sandbox";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
@@ -33,9 +42,10 @@ import type {
 	IndexNotice,
 	SearchBridge,
 	SearchErrorAction,
+	SearchRouteOverride,
 	SearchStreamEvent,
 } from "../shared/search-contract";
-import { SEARCH_CHANNELS } from "../shared/search-contract";
+import { SEARCH_CHANNELS, type FollowUpKind } from "../shared/search-contract";
 import { type AnswerRevision, isAnswerChange, remainderAfterRevised, revisedAnswer } from "../shared/answer-revision";
 import { buildAttachmentContext, buildViewingFolderContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
@@ -78,7 +88,7 @@ type ChatSession = {
 };
 
 export type SearchAgent = {
-	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
+	readonly searchDocumentsStream: (query: string, options?: { readonly routeOverride?: SearchRouteOverride }) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
 	/** The pictures the next run sends with the question (image files among its attachments). */
@@ -136,6 +146,13 @@ export interface SearchServiceDeps {
 	 * the search it follows.
 	 */
 	readonly afterAnsweredSearch?: () => void | Promise<unknown>;
+	/**
+	 * Writes a chat's short title from its first question and answer, or null. Asked once per chat, after its first
+	 * answered run; the title is kept on the record and sent as a `title` event. Absent: a chat is titled by its first question.
+	 */
+	readonly titleChat?: (question: string, answer: string) => Promise<string | null>;
+	/** Says whether a message sent during a run corrects it or is the next question. Absent: always the next question. */
+	readonly sortFollowUp?: (question: string, followUp: string) => Promise<FollowUpKind>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
 	/**
@@ -180,6 +197,8 @@ function seedTurnsOf(messages: readonly ChatMessage[]): SeedTurn[] {
 interface SearchRun {
 	readonly searchId: string;
 	readonly chatId: string;
+	/** The question the run is answering. */
+	readonly question: string;
 	/** Null while the async agent factory is still building it. */
 	agent: SearchAgent | null;
 	readonly finish: Promise<void>;
@@ -525,6 +544,29 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
+	/** Chats whose title is being written, so a quick follow-up does not ask for a second one. */
+	const titling = new Set<string>();
+
+	/** Gives an answered chat its model-written title once: detached, and silent when the model has none to give. */
+	function titleChatOnce(run: SearchRun): void {
+		const titleChat = deps.titleChat;
+		if (titleChat === undefined || titling.has(run.chatId)) return;
+		titling.add(run.chatId);
+		void (async () => {
+			const record = await deps.chatStore.get(run.chatId);
+			if (record === null || record.summaryTitle !== undefined) return;
+			const question = record.messages.find((message) => message.role === "user");
+			const answer = record.messages.find((message) => message.role === "assistant" && (message.quick ?? message.deep) !== null);
+			if (question?.role !== "user" || answer?.role !== "assistant") return;
+			const title = await titleChat(question.text, (answer.quick ?? answer.deep)?.answer ?? "");
+			if (title === null) return;
+			await writeChat(run, (existing) => ({ ...existing, summaryTitle: title }));
+			emit({ type: "title", searchId: run.searchId, chatId: run.chatId, title });
+		})()
+			.catch(() => undefined)
+			.finally(() => titling.delete(run.chatId));
+	}
+
 	/** Runs one read-modify-write of the run's chat record after every earlier one. */
 	function writeChat(run: SearchRun, update: (existing: ChatRecord) => ChatRecord): Promise<void> {
 		const write = run.writes.then(async () => {
@@ -616,7 +658,14 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
-	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[], viewingFolder: string | undefined): Promise<void> {
+	async function consume(
+		run: SearchRun,
+		agent: SearchAgent,
+		query: string,
+		attachments: readonly ChatAttachment[],
+		viewingFolder: string | undefined,
+		routeOverride: SearchRouteOverride | undefined,
+	): Promise<void> {
 		const live = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
@@ -650,7 +699,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			agent.setAttachmentImages?.(images);
 			const hub = deps.interaction;
 			agent.bindRun?.(hub === undefined ? undefined : { open: (body, signal) => hub.open(run.searchId, body, signal) });
-			for await (const event of agent.searchDocumentsStream(query)) {
+			const stream = routeOverride === undefined ? agent.searchDocumentsStream(query) : agent.searchDocumentsStream(query, { routeOverride });
+			for await (const event of stream) {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
@@ -725,7 +775,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				// A stream that ended with no answer at all did not answer.
 				const answered = !(run.failed || (run.quick === null && run.deep === null));
 				reportFinished(run, answered ? "answered" : "failed");
-				if (answered) runAfterAnswered();
+				if (answered) {
+					runAfterAnswered();
+					titleChatOnce(run);
+				}
 			}
 			active.delete(run.searchId);
 			run.resolveFinish();
@@ -737,7 +790,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			chosenMode = mode;
 			for (const agent of agents.values()) agent.setApprovalMode?.(mode);
 		},
-		start: async (searchId, chatId, query, attachments, viewingFolder) => {
+		start: async (searchId, chatId, query, attachments, viewingFolder, routeOverride) => {
 
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
@@ -753,6 +806,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			const run: SearchRun = {
 				searchId,
 				chatId,
+				question: query,
 				agent: null,
 				finish,
 				resolveFinish,
@@ -785,6 +839,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				snippet: "",
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
+				// A follow-up keeps the title the chat was given.
+				...(existing?.summaryTitle === undefined ? {} : { summaryTitle: existing.summaryTitle }),
 			});
 			let refusal: SearchRefusal | null = null;
 			try {
@@ -823,7 +879,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				return;
 			}
 			run.agent = agent;
-			void consume(run, agent, query, attachments, viewingFolder);
+			void consume(run, agent, query, attachments, viewingFolder, routeOverride);
 			await finish;
 		},
 		steer: async (searchId, text) => {
@@ -835,6 +891,12 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			run.pendingSteers += 1;
 			await saveSteer(run, trimmed);
 			return true;
+		},
+		classifyFollowUp: async (searchId, text) => {
+			const run = active.get(searchId);
+			const trimmed = text.trim();
+			if (run === undefined || run.cancelled || run.ended || trimmed === "" || deps.sortFollowUp === undefined) return "next";
+			return deps.sortFollowUp(run.question, trimmed).catch(() => "next" as const);
 		},
 		cancel: async (searchId) => {
 			const run = active.get(searchId);
@@ -942,7 +1004,27 @@ async function resolveDecomposition(
  * `sessionDir` is where pi keeps each chat's conversation file: an app-owned folder, so the files move with the
  * app's data and "clear history" can delete exactly them.
  */
-export function createDefaultAgentFactory(options: { readonly sessionDir: string }): () => Promise<SearchAgent> {
+export interface DefaultAgentFactoryOptions {
+	readonly sessionDir: string;
+	/** When provided, the main AI Agent can also list, create, verify, customize, and delete right-click Magic Actions directly. */
+	readonly settings?: Pick<SettingsBridge, "get" | "set">;
+	readonly language?: () => ReplyLanguage;
+}
+
+type LibrarianAgentTool = NonNullable<AutoRAGAgentOptions["tools"]>[number];
+
+function toLibrarianAgentTools(tools: readonly ToolDefinition[]): LibrarianAgentTool[] {
+	return tools.map((tool) => ({
+		name: tool.name,
+		label: tool.label,
+		description: tool.description,
+		parameters: tool.parameters,
+		execute: (toolCallId, params, signal, onUpdate) =>
+			tool.execute(toolCallId, params, signal, onUpdate, undefined as never),
+	}));
+}
+
+export function createDefaultAgentFactory(options: DefaultAgentFactoryOptions): () => Promise<SearchAgent> {
 	return async () => {
 		const input = { flags: {}, env: process.env, cwd: process.cwd() };
 		const config = resolveConfigReadOnly(input);
@@ -968,8 +1050,43 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
 		const baseOptions = buildAgentOptions(effective);
+		const findNode = (): string | undefined =>
+			resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform });
+		const automationSandboxDeps = {
+			env: process.env,
+			platform: process.platform,
+			resourcesPath: process.resourcesPath ?? "",
+			findNode,
+		};
+		const automationVerificationTracker = createAutomationVerificationTracker();
+		const sandboxAutomationTool = createTestAutomationInSandboxTool({
+			...automationSandboxDeps,
+			tracker: automationVerificationTracker,
+		});
+		const language = options.language ?? (() => "ko" as const);
+		const interaction = createAgentInteraction();
+		const magicActionTools: LibrarianAgentTool[] =
+			options.settings === undefined
+				? []
+				: toLibrarianAgentTools(
+						createMagicActionTools({
+							settings: options.settings,
+							includeListTool: true,
+							platform: process.platform,
+							language,
+							testMagicAction: (verifyInput) =>
+								verifyMagicActionInSandbox(verifyInput, {
+									resolveModel: async () => resolved,
+									agentDir,
+									env: process.env,
+									platform: process.platform,
+									language,
+								}),
+						}).tools,
+					);
 		const agentOptions: AutoRAGAgentOptions = {
 			...baseOptions,
+			tools: [...(baseOptions.tools ?? []), sandboxAutomationTool, ...magicActionTools],
 			...(sllm !== undefined ? { jev: { ...baseOptions.jev, sllm } } : {}),
 			model: resolved.model,
 			piAgentDir: agentDir,
@@ -981,10 +1098,25 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
 		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
+		const agent = new InteractiveSearchAgent(
+			agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic),
+			interaction,
+			{
+				systemPromptAddendum: buildUnifiedWorkflowsPrompt(process.platform, {
+					includeMagicActions: magicActionTools.length > 0,
+				}),
+				...(magicActionTools.length > 0 ? { routeToDirectAction: isMagicActionManagementQuery } : {}),
+			},
+		);
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
-		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
+		// Also enforces temporary-sandbox verification when saving new or edited automation rules.
+		// Verified saves persist directly without popping a redundant confirmation form card.
+		runAutomationToolOnNode(agent, findNode, {
+			tracker: automationVerificationTracker,
+			verifyRule: (rule, originalPaths) =>
+				testAutomationInSandbox({ rule, originalPaths }, automationSandboxDeps),
+		});
 		return agent as SearchAgent;
 	};
 }

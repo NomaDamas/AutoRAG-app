@@ -1,5 +1,6 @@
 import { matchesGlob, sep } from "node:path";
 import { isGlobExclusion } from "../shared/index-scope-edit";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 
 /**
  * What an `excludePaths` entry covers, read the way the librarian reads it (`filesystem/path-exclusions.ts`, not part of
@@ -32,4 +33,85 @@ export function findExclusion(exclusions: readonly string[], path: string): Excl
 		}
 	}
 	return glob;
+}
+
+export interface ExclusionMatcher {
+	find(path: string): ExclusionMatch | null;
+	isExcluded(path: string): boolean;
+	findBatch(paths: readonly string[]): (ExclusionMatch | null)[];
+}
+
+/**
+ * Compiled matcher over one exclusion list. Uses the bundled Rust N-API core as
+ * the primary implementation; falls back to Node's `matchesGlob` only for glob
+ * syntax outside the native compiler (braces/character classes) or if the native
+ * module errors.
+ */
+export function createExclusionMatcher(exclusions: readonly string[]): ExclusionMatcher {
+	if (exclusions.length === 0) {
+		return {
+			find: () => null,
+			isExcluded: () => false,
+			findBatch: (paths) => new Array<ExclusionMatch | null>(paths.length).fill(null),
+		};
+	}
+	const native = loadDazziNativeCore();
+	if (native !== null) {
+		try {
+			if (native.canHandleExclusionsNatively(exclusions)) {
+				const compiled = new native.CompiledExclusions(exclusions);
+				return {
+					find: (path) => {
+						try {
+							return compiled.find(path);
+						} catch {
+							return findExclusion(exclusions, path);
+						}
+					},
+					isExcluded: (path) => {
+						try {
+							return compiled.isExcluded(path);
+						} catch {
+							return findExclusion(exclusions, path) !== null;
+						}
+					},
+					findBatch: (paths) => {
+						if (paths.length === 0) return [];
+						try {
+							return native.findExclusionBatch(exclusions, paths);
+						} catch {
+							return paths.map((path) => findExclusion(exclusions, path));
+						}
+					},
+				};
+			}
+		} catch (error) {
+			console.warn("[dazzi-core] exclusion matcher error, falling back to JS:", error instanceof Error ? error.message : error);
+		}
+	}
+	return {
+		find: (path) => findExclusion(exclusions, path),
+		isExcluded: (path) => findExclusion(exclusions, path) !== null,
+		findBatch: (paths) => paths.map((path) => findExclusion(exclusions, path)),
+	};
+}
+
+/**
+ * Evaluate `exclusions` over a batch of `paths` in one native FFI call.
+ * Falls back to JS only if a complex glob requires Node `matchesGlob` or native throws.
+ */
+export function findExclusionsBatch(exclusions: readonly string[], paths: readonly string[]): (ExclusionMatch | null)[] {
+	if (paths.length === 0) return [];
+	if (exclusions.length === 0) return new Array<ExclusionMatch | null>(paths.length).fill(null);
+	const native = loadDazziNativeCore();
+	if (native !== null) {
+		try {
+			if (native.canHandleExclusionsNatively(exclusions)) {
+				return native.findExclusionBatch(exclusions, paths);
+			}
+		} catch (error) {
+			console.warn("[dazzi-core] findExclusionBatch error, falling back to JS:", error instanceof Error ? error.message : error);
+		}
+	}
+	return paths.map((path) => findExclusion(exclusions, path));
 }

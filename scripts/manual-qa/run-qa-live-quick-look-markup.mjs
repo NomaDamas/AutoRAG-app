@@ -186,17 +186,22 @@ try {
 	console.log(`live model: ${MODEL_ID}`);
 
 	const finderPreview = createFinderPreview(app, main);
-	const preview = await poll(() => finderPreview.page().catch(() => undefined), (page) => page !== undefined, 30_000);
-	if (preview === undefined) throw new Error("the Finder Quick Look window did not pre-warm");
-	preview.setDefaultTimeout(60_000);
+	let preview;
+	const progress = [];
+	const ensurePreview = async () => {
+		if (preview !== undefined) return preview;
+		preview = await poll(() => finderPreview.page().catch(() => undefined), (page) => page !== undefined, 30_000);
+		if (preview === undefined) throw new Error("the Finder Quick Look window did not appear");
+		preview.setDefaultTimeout(60_000);
+		await preview.exposeFunction("__qaEditProgress", (text) => progress.push(text));
+		await preview.evaluate(() => window.quickLook.onEditEvent((event) => event.type === "progress" && window.__qaEditProgress(event.text)));
+		return preview;
+	};
 	const shot = async (name) => {
 		await sleep(300);
 		await preview.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 	};
 	const visible = async () => (await finderPreview.state())?.visible ?? false;
-	const progress = [];
-	await preview.exposeFunction("__qaEditProgress", (text) => progress.push(text));
-	await preview.evaluate(() => window.quickLook.onEditEvent((event) => event.type === "progress" && window.__qaEditProgress(event.text)));
 
 	await main.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
 	async function open(name) {
@@ -207,6 +212,7 @@ try {
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		if ((await poll(visible, Boolean, 15_000)) !== true) {
 			await main.keyboard.press("Space");
 			await poll(visible, Boolean, 10_000);

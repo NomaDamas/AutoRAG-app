@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { t } from "../src/shared/i18n/core";
 import type { AutomationCliResult } from "../src/main/automation-service";
 import { createLtrService, withoutAgentAutoTrain, type LtrServiceDeps } from "../src/main/ltr-service";
 import { LTR_MODEL_ID_PATTERN } from "../src/shared/ltr-contract";
@@ -123,9 +124,9 @@ describe("createLtrService.get", () => {
 	it("rejects when the CLI prints something that is not a status", async () => {
 		const { service } = harness([{ code: 0, stdout: "not json", stderr: "" }]);
 
-		await expect(service.get()).rejects.toThrow(/status/iu);
+		await expect(service.get()).rejects.toThrow(t("main.errors.ltr.statusUnreadable"));
 		const { service: other } = harness([ok({ loggedRuns: "many" })]);
-		await expect(other.get()).rejects.toThrow(/status/iu);
+		await expect(other.get()).rejects.toThrow(t("main.errors.ltr.statusUnreadable"));
 	});
 
 	it("is an empty, disabled snapshot when the librarian CLI is not installed", async () => {

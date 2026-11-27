@@ -3,10 +3,9 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { AgentProfile } from "@autorag/librarian/profiles";
 import type { AppCustomizerChange } from "../../../shared/app-customizer-contract";
 import type { FsLocation, FsTag } from "../../../shared/fs-contract";
-import type { AppSettings, SettingsBridge } from "../../../shared/settings-contract";
+import type { SettingsBridge } from "../../../shared/settings-contract";
 import {
 	cloudSidebarItemId,
 	connectionSidebarItemId,
@@ -35,23 +34,17 @@ import {
 	isLockedContextMenuItemId,
 	normalizeContextMenuItemId,
 	normalizeContextMenuSettings,
-	normalizeMagicAction,
 	type BuiltinContextMenuItemId,
 	type ContextMenuSectionId,
 	type ContextMenuSettings,
 	type HideableContextMenuSectionId,
 	type MagicAction,
 } from "../../../shared/context-menu-contract";
-import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
+import type { MagicActionVerificationResult, VerifyMagicActionInput } from "../../magic-action-sandbox";
+import { createMagicActionTools } from "../../magic-action-tools";
+import type { ReplyLanguage } from "../profile-progress";
 
 export type { ReplyLanguage };
-
-const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
-	ko: "Korean",
-	en: "English",
-	ja: "Japanese",
-	zh: "Simplified Chinese",
-};
 
 export interface AppCustomizerToolkitDeps {
 	readonly settings: Pick<SettingsBridge, "get" | "set">;
@@ -61,6 +54,8 @@ export interface AppCustomizerToolkitDeps {
 	readonly platform?: NodeJS.Platform;
 	readonly language?: () => ReplyLanguage;
 	readonly cancelled?: () => boolean;
+	/** Runs a candidate Magic Action inside a temporary sandbox folder and returns its execution result and filesystem diff. */
+	readonly testMagicAction?: (input: VerifyMagicActionInput) => Promise<MagicActionVerificationResult>;
 }
 
 export interface AppCustomizerToolkit {
@@ -170,52 +165,6 @@ function summarizeSidebarChange(language: ReplyLanguage, fields: readonly string
 	}
 }
 
-const GENERAL_FIELD_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<string, string>>>> = {
-	ko: {
-		appearance: "화면 모드",
-		language: "앱 언어",
-		showHiddenFiles: "숨김 파일",
-		launchAtLogin: "로그인 시 실행",
-		autoInstallUpdates: "자동 업데이트",
-	},
-	en: {
-		appearance: "Appearance",
-		language: "App Language",
-		showHiddenFiles: "Hidden Files",
-		launchAtLogin: "Launch at Login",
-		autoInstallUpdates: "Auto Updates",
-	},
-	ja: {
-		appearance: "画面モード",
-		language: "アプリの言語",
-		showHiddenFiles: "隠しファイル",
-		launchAtLogin: "ログイン時に起動",
-		autoInstallUpdates: "自動アップデート",
-	},
-	zh: {
-		appearance: "显示模式",
-		language: "应用语言",
-		showHiddenFiles: "隐藏文件",
-		launchAtLogin: "登录时启动",
-		autoInstallUpdates: "自动更新",
-	},
-};
-
-function summarizeGeneralChange(language: ReplyLanguage, fields: readonly string[]): string {
-	const labels = GENERAL_FIELD_LABELS[language];
-	const localized = fields.map((field) => labels[field] ?? field).join(", ");
-	switch (language) {
-		case "ko":
-			return `앱 설정 변경 (${localized})`;
-		case "ja":
-			return `アプリ設定を変更 (${localized})`;
-		case "zh":
-			return `应用设置已更改 (${localized})`;
-		default:
-			return `Updated app settings (${localized})`;
-	}
-}
-
 function summarizeContextMenuChange(
 	language: ReplyLanguage,
 	fields: readonly string[],
@@ -236,25 +185,25 @@ function summarizeContextMenuChange(
 	if (opts.upsertedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 저장: ${opts.upsertedLabel}`;
+				return `자동화 저장: ${opts.upsertedLabel}`;
 			case "ja":
-				return `マジックアクションを保存: ${opts.upsertedLabel}`;
+				return `自動化を保存: ${opts.upsertedLabel}`;
 			case "zh":
-				return `已保存魔法动作: ${opts.upsertedLabel}`;
+				return `已保存自动化: ${opts.upsertedLabel}`;
 			default:
-				return `Saved Magic Action: ${opts.upsertedLabel}`;
+				return `Saved automation: ${opts.upsertedLabel}`;
 		}
 	}
 	if (opts.deletedLabel !== undefined) {
 		switch (language) {
 			case "ko":
-				return `매직 액션 삭제: ${opts.deletedLabel}`;
+				return `자동화 삭제: ${opts.deletedLabel}`;
 			case "ja":
-				return `マジックアクションを削除: ${opts.deletedLabel}`;
+				return `自動化を削除: ${opts.deletedLabel}`;
 			case "zh":
-				return `已删除魔法动作: ${opts.deletedLabel}`;
+				return `已删除自动化: ${opts.deletedLabel}`;
 			default:
-				return `Deleted Magic Action: ${opts.deletedLabel}`;
+				return `Deleted automation: ${opts.deletedLabel}`;
 		}
 	}
 	const parts: string[] = [];
@@ -448,7 +397,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		name: "get_app_settings",
 		label: "Get App Settings",
 		description:
-			"Read Dazzi's current app settings (stored in settings-state.json, separate from AutoRAG config), including the full sidebar customization state, the file right-click context menu customization & custom Magic Actions, and general appearance/Finder preferences.",
+			"Read Dazzi's current app settings (stored in settings-state.json, separate from AutoRAG config), including the full sidebar customization state, the file right-click context menu customization & custom right-click automations, and general appearance/Finder preferences.",
 		parameters: Type.Object({}),
 		execute: async () => {
 			ensureLive();
@@ -730,54 +679,11 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		}),
 	});
 
-	const updateGeneralSettings = defineTool({
-		name: "update_general_settings",
-		label: "Update General App Settings",
-		description:
-			"Update Dazzi's general app preferences stored in settings-state.json (appearance Light/Dark, interface language, showing hidden dot-files in Finder, launch at login, automatic updates).",
-		parameters: Type.Object({
-			appearance: Type.Optional(Type.Union([Type.Literal("light"), Type.Literal("dark")])),
-			language: Type.Optional(Type.Union([Type.Literal("ko"), Type.Literal("en"), Type.Literal("ja"), Type.Literal("zh")])),
-			showHiddenFiles: Type.Optional(Type.Boolean()),
-			launchAtLogin: Type.Optional(Type.Boolean()),
-			autoInstallUpdates: Type.Optional(Type.Boolean()),
-		}),
-		execute: (_callId, params) => serialized(async () => {
-			ensureLive();
-			const patch: Partial<AppSettings> = {
-				...(params.appearance === undefined ? {} : { appearance: params.appearance }),
-				...(params.language === undefined ? {} : { language: params.language }),
-				...(params.showHiddenFiles === undefined ? {} : { showHiddenFiles: params.showHiddenFiles }),
-				...(params.launchAtLogin === undefined ? {} : { launchAtLogin: params.launchAtLogin }),
-				...(params.autoInstallUpdates === undefined ? {} : { autoInstallUpdates: params.autoInstallUpdates }),
-			};
-			const fields = Object.keys(patch);
-			const updated = await deps.settings.set(patch);
-			if (fields.length > 0) {
-				changes.push({
-					kind: "general",
-					summary: summarizeGeneralChange(updated.language, fields),
-					fields,
-				});
-			}
-			return textResult({
-				ok: true,
-				updated: {
-					appearance: updated.appearance,
-					language: updated.language,
-					showHiddenFiles: updated.showHiddenFiles,
-					launchAtLogin: updated.launchAtLogin,
-					autoInstallUpdates: updated.autoInstallUpdates,
-				},
-			});
-		}),
-	});
-
 	const updateContextMenu = defineTool({
 		name: "update_context_menu",
 		label: "Update Context Menu",
 		description:
-			"Customize which built-in items and sections appear in the file right-click context menu, reorder sections or custom Magic Actions, or reset the context menu to default. IMPORTANT: `Tags` (`builtin:tags` / section `tags`) is mandatory and can NEVER be hidden, and keyboard shortcuts cannot be reassigned.",
+			"Customize which built-in items and sections appear in the file right-click context menu, reorder sections or custom right-click automations, or reset the context menu to default. IMPORTANT: `Tags` (`builtin:tags` / section `tags`) is mandatory and can NEVER be hidden, and keyboard shortcuts cannot be reassigned.",
 		parameters: Type.Object({
 			showItems: Type.Optional(
 				Type.Array(Type.String(), {
@@ -808,12 +714,12 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			),
 			magicActionsOrder: Type.Optional(
 				Type.Array(Type.String(), {
-					description: "Desired order of custom Magic Action IDs.",
+					description: "Desired order of custom right-click automation IDs.",
 				}),
 			),
 			resetToDefault: Type.Optional(
 				Type.Boolean({
-					description: "When true, resets the entire file context menu configuration (including Magic Actions) back to factory defaults.",
+					description: "When true, resets the entire file context menu configuration (including custom right-click automations) back to factory defaults.",
 				}),
 			),
 		}),
@@ -946,203 +852,30 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		}),
 	});
 
-	const stringEnum = <const T extends readonly string[]>(values: T, description: string) =>
-		Type.Unsafe<T[number]>({ type: "string", enum: [...values], description });
-	const upsertMagicAction = defineTool({
-		name: "upsert_magic_action",
-		label: "Upsert Magic Action",
-		description: isWindows
-			? "Create or update a custom right-click Magic Action button on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
-			: "Create or update a custom right-click Magic Action button on files/folders. A Magic Action can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
-		parameters: Type.Object({
-			id: Type.Optional(Type.String({ description: "Stable slug ID (optional on create; derived from label if omitted; pass existing id to update)." })),
-			label: Type.String({ description: "Menu button label shown on right-click (e.g. 'PDF 3줄 요약', '이미지 용량 정리', 'SHA-256 해시 복사')." }),
-			description: Type.Optional(Type.String({ description: "Short description shown in Settings." })),
-			enabled: Type.Optional(Type.Boolean({ description: "Whether this Magic Action is enabled (default true)." })),
-			selection: Type.Optional(
-				stringEnum(["any", "single", "multiple"], "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items)."),
-			),
-			targetKind: Type.Optional(
-				stringEnum(["any", "file", "folder"], "Target type filter: 'file', 'folder', or 'any'."),
-			),
-			extensions: Type.Optional(
-				Type.Array(Type.String(), {
-					description: "File extensions filter (e.g. ['pdf', 'docx'] or ['png', 'jpg']). Omit or pass [] to match all extensions.",
-				}),
-			),
-			executionKind: stringEnum(["script", "agent"], "'script' runs a shell command/code; 'agent' runs a pi AI agent loop on the target files."),
-			command: Type.Optional(
-				Type.String({
-					description: isWindows
-						? "Required when executionKind='script'. Windows PowerShell script/command to execute in powershell.exe. Selected file paths are passed in PowerShell's $args array (e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args) and in env vars $env:DAZZI_FILES_JSON (JSON string array), $env:DAZZI_FILE (first path), $env:DAZZI_FILE_COUNT. Do NOT use POSIX \"$@\" or $VAR syntax."
-						: "Required when executionKind='script'. Shell command to execute in /bin/sh. Selected file paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON (JSON string array), DAZZI_FILE (first path), DAZZI_FILE_COUNT.",
-				}),
-			),
-			agentMode: Type.Optional(
-				stringEnum(["read", "organize"], "Used when executionKind='agent': 'read' for read-only analysis/summary/Q&A; 'organize' when the agent may create, edit, convert, rename, move, or run tools on files."),
-			),
-			prompt: Type.Optional(
-				Type.String({
-					description: "Required when executionKind='agent'. Instruction telling the agent what to do with the selected file(s).",
-				}),
-			),
-			useSkills: Type.Optional(
-				Type.Boolean({
-					description:
-						"Used when executionKind='agent'. Share installed Skills with the AutoRAG Agent (default: true; set false to disable skills for this action).",
-				}),
-			),
-			useMcp: Type.Optional(
-				Type.Boolean({
-					description:
-						"Used when executionKind='agent'. Share connected MCP servers (such as Aside MCP in mcp.json) with the AutoRAG Agent (default: true; set false to disable MCP servers for this action).",
-				}),
-			),
-		}),
-		execute: (_callId, params) => serialized(async () => {
-			ensureLive();
-			const execution =
-				params.executionKind === "script"
-					? { kind: "script" as const, command: params.command ?? "" }
-					: {
-							kind: "agent" as const,
-							mode: params.agentMode === "organize" ? ("organize" as const) : ("read" as const),
-							prompt: params.prompt ?? "",
-							useSkills: params.useSkills ?? true,
-							useMcp: params.useMcp ?? true,
-						};
-			const normalized = normalizeMagicAction({
-				id: params.id,
-				label: params.label,
-				description: params.description,
-				enabled: params.enabled ?? true,
-				selection: params.selection ?? "any",
-				targetKind: params.targetKind ?? "file",
-				extensions: params.extensions ?? [],
-				execution,
-			});
-			if (normalized === null) {
-				return textResult({
-					ok: false,
-					error: "Invalid Magic Action: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
-				});
-			}
-			const currentApp = await deps.settings.get();
-			const current = normalizeContextMenuSettings(currentApp.contextMenu);
-			const existingIdx = current.magicActions.findIndex((item) => item.id === normalized.id);
-			const nextActions = [...current.magicActions];
-			if (existingIdx >= 0) nextActions[existingIdx] = normalized;
-			else nextActions.push(normalized);
-
-			const nextContextMenu = normalizeContextMenuSettings({
-				...current,
-				magicActions: nextActions,
-			});
-			ensureLive();
-			await deps.settings.set({ contextMenu: nextContextMenu });
-
-			const change: AppCustomizerChange = {
-				kind: "contextMenu",
-				summary: summarizeContextMenuChange(lang(), ["contextMenu.magicActions"], { upsertedLabel: normalized.label }),
-				fields: ["contextMenu.magicActions"],
-			};
-			changes.push(change);
-			return textResult({
-				ok: true,
-				magicAction: normalized,
-				contextMenu: nextContextMenu,
-			});
-		}),
-	});
-
-	const deleteMagicAction = defineTool({
-		name: "delete_magic_action",
-		label: "Delete Magic Action",
-		description: "Remove a custom right-click Magic Action by its ID or display label.",
-		parameters: Type.Object({
-			idOrLabel: Type.String({ description: "The ID or exact label of the Magic Action to delete." }),
-		}),
-		execute: (_callId, params) => serialized(async () => {
-			ensureLive();
-			const needle = params.idOrLabel.trim().toLowerCase();
-			const currentApp = await deps.settings.get();
-			const current = normalizeContextMenuSettings(currentApp.contextMenu);
-			const target = current.magicActions.find(
-				(action) => action.id.toLowerCase() === needle || action.label.toLowerCase() === needle,
-			);
-			if (target === undefined) {
-				return textResult({
-					ok: false,
-					error: `No Magic Action found matching '${params.idOrLabel}'.`,
-				});
-			}
-			const nextContextMenu = normalizeContextMenuSettings({
-				...current,
-				magicActions: current.magicActions.filter((action) => action.id !== target.id),
-			});
-			ensureLive();
-			await deps.settings.set({ contextMenu: nextContextMenu });
+	const magicActionTools = createMagicActionTools({
+		settings: deps.settings,
+		includeListTool: false,
+		platform,
+		language: lang,
+		cancelled: isCancelled,
+		serialize: serialized,
+		...(deps.testMagicAction !== undefined ? { testMagicAction: deps.testMagicAction } : {}),
+		onChange: (change) => {
 			changes.push({
 				kind: "contextMenu",
-				summary: summarizeContextMenuChange(lang(), ["contextMenu.magicActions"], { deletedLabel: target.label }),
+				summary: summarizeContextMenuChange(
+					lang(),
+					["contextMenu.magicActions"],
+					change.kind === "deleted" ? { deletedLabel: change.label } : { upsertedLabel: change.label },
+				),
 				fields: ["contextMenu.magicActions"],
 			});
-			return textResult({
-				ok: true,
-				deleted: target,
-				contextMenu: nextContextMenu,
-			});
-		}),
+		},
 	});
 
 	return {
-		tools: [getAppSettings, updateSidebar, updateContextMenu, upsertMagicAction, deleteMagicAction, updateGeneralSettings],
+		tools: [getAppSettings, updateSidebar, updateContextMenu, ...magicActionTools.tools],
 		takeChanges: () => changes.splice(0),
 		peekChanges: () => [...changes],
-	};
-}
-
-function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = process.platform): string {
-	const replyLang = LANGUAGE_NAME[language];
-	const scriptDetail =
-		platform === "win32"
-			? "`executionKind: 'script'` runs in Windows `powershell.exe`, receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON`, `$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT` (write valid Windows PowerShell such as `Get-FileHash -Algorithm SHA256 -LiteralPath $args`; NEVER use POSIX `\"$@\"` or `$DAZZI_FILE`)"
-			: "`executionKind: 'script'` runs in `/bin/sh`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`";
-	return [
-		"You are Dazzi's dedicated App Customization Assistant (`app-customizer`), embedded inside Settings.",
-		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
-		"",
-		"## Role & Scope",
-		"- You customize Dazzi's own app settings (stored in `settings-state.json`, completely separate from the AutoRAG index config).",
-		"- **Finder Sidebar (`update_sidebar`)**: show or hide items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reorder Favorites or sections, pin or remove custom folders, or reset the sidebar to default.",
-		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `delete_magic_action`)**:",
-		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:pinToSidebar`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
-		`  - Create, update, or remove custom **Magic Actions** (\`upsert_magic_action\` / \`delete_magic_action\`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (${scriptDetail}) OR run a pi AI agent loop (\`executionKind: 'agent'\`, \`agentMode: 'read'\` for analysis/summary or \`'organize'\` for file creation/editing/conversion/shell actions, with \`useSkills\` and \`useMcp\` both enabled \`true\` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn \`useSkills: false\` or \`useMcp: false\` off) with conditions (\`selection: 'single' | 'multiple' | 'any'\`, \`targetKind: 'file' | 'folder' | 'any'\`, \`extensions: ['pdf', ...]\`).`,
-		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
-		"",
-		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",
-		"- Sidebar: `AI Agent` (`app:aiSearch`) and `Automations` (`app:automations`) at the top of Favorites can NEVER be hidden or removed.",
-		"- Right-Click Context Menu: `Tags` (`builtin:tags`, and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
-		"- If the person asks to hide any locked item (or asks to 'hide everything'), keep the locked items visible, apply the rest of their request, and explain politely which core items always remain shown.",
-		"",
-		"## Workflow",
-		"1. Call `get_app_settings` when you need to inspect the current sidebar, right-click context menu, Magic Actions, or app preferences.",
-		"2. Call `update_sidebar`, `update_context_menu`, `upsert_magic_action`, `delete_magic_action`, and/or `update_general_settings` to apply the requested changes immediately.",
-		"3. After tool calls finish, summarize clearly in 1-3 short sentences what you changed.",
-		intentPromptLine(language),
-	].join("\n");
-}
-
-export function appCustomizerProfile(input: {
-	readonly language: ReplyLanguage;
-	readonly toolkit: AppCustomizerToolkit;
-	readonly platform?: NodeJS.Platform;
-}): AgentProfile {
-	return {
-		id: "app-customizer",
-		systemPrompt: systemPrompt(input.language, input.platform),
-		tools: [],
-		customTools: withIntentTools(input.toolkit.tools, { language: input.language }),
-		thinking: "low",
 	};
 }

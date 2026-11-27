@@ -9,6 +9,7 @@ import {
 	defaultRun,
 	kindQueryForPlatform,
 	parseKindStdout,
+	parseMacKindBatchStdout,
 	parseMacKindStdout,
 	parseWindowsKindStdout,
 	windowsKindQuery,
@@ -64,6 +65,20 @@ describe("parseMacKindStdout", () => {
 	it("has no kind when the OS reported none", () => {
 		expect(parseMacKindStdout(`(null)${SEP}(null)`)).toBeNull();
 		expect(parseMacKindStdout("")).toBeNull();
+	});
+
+	it("parses multi-path mdls batch stdout and returns null on mismatched segment counts", () => {
+		expect(
+			parseMacKindBatchStdout(
+				`public.json${SEP}JSON Document${SEP}dyn.ah62d4rv4${SEP}Document${SEP}(null)${SEP}(null)`,
+				3,
+			),
+		).toEqual([
+			{ kind: "JSON Document", registered: true },
+			{ kind: "Document", registered: false },
+			null,
+		]);
+		expect(parseMacKindBatchStdout(`public.json${SEP}JSON Document`, 2)).toBeNull();
 	});
 });
 

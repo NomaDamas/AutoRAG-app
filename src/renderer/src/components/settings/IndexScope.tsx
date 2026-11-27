@@ -199,17 +199,17 @@ function PathRow({ path, file, disabled, onRemove }: { readonly path: string; re
 }
 
 /** A folder's share of its files that is read, as a bar, a percentage and the counts; a dash before the map is read. */
+/** A folder's progress as a bar and its percent: the file counts are in 진행 상황's banner and under the folder picked in the map. */
 function Progress({ counts }: { readonly counts: { readonly indexed: number; readonly targets: number } | null }): ReactElement {
 	const { i18n } = useTranslation();
 	const number = new Intl.NumberFormat(i18n.language);
 	const percentage = counts === null || counts.targets === 0 ? null : Math.min(counts.indexed === counts.targets ? 100 : 99, Math.round((counts.indexed * 100) / counts.targets));
 	return (
 		<>
-			<span className="scope-row-bar" aria-hidden="true">
+			<span className="scope-row-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage ?? undefined}>
 				<i style={{ width: `${percentage ?? 0}%` }} />
 			</span>
 			<span className="scope-row-percent">{percentage === null ? "—" : `${number.format(percentage)}%`}</span>
-			<span className="scope-row-count">{counts === null ? "" : `${number.format(counts.indexed)} / ${number.format(counts.targets)}`}</span>
 		</>
 	);
 }
@@ -337,7 +337,7 @@ export function ExclusionsSection({ editor, snapshot }: { readonly editor: Scope
 				<AddExclusionMenu choices={excludeChoices(window.autoragIsRemote === true)} disabled={editor.saving} onChoose={(choice) => void editor.chooseExclusion(choice)} />
 			</SectionHead>
 			{editor.excludePaths.length === 0 ? null : (
-				<div className="scope-list">
+				<div className="scope-list is-scroll">
 					{editor.excludePaths.map((path, index) => (
 						<PathRow key={`${path}:${index}`} path={path} file={looksLikeFile(path)} disabled={editor.saving} onRemove={() => editor.removeExclusion(index)} />
 					))}

@@ -69,8 +69,9 @@ describe("the error-fix profile", () => {
 
 		expect(prompt).toContain("Search root /Users/me/Docs does not exist");
 		expect(prompt).toContain("AI Agent");
-		expect(prompt).toMatch(/language the person writes in/iu);
-		expect(prompt).toContain("if it is unclear, write them in Japanese");
+		expect(prompt).toContain("Write summary, nextSteps and every button label in Japanese");
+		// The error text is usually English: it must not decide the language of the answer.
+		expect(prompt).toMatch(/never change that language/iu);
 		expect(prompt).toContain("report_result");
 		expect(prompt).toMatch(/never (?:change|touch|edit)[^.]*model/iu);
 	});
@@ -146,11 +147,11 @@ describe("the error-fix profile", () => {
 		expect(prompt).toMatch(/does not hold the setting is worse than no button/iu);
 	});
 
-	it("writes the summary, next steps and every button label in the person's language, falling back to the interface language, as a short natural phrase", () => {
+	it("writes the summary, next steps and every button label in the interface language, whatever language the error is in, as a short natural phrase", () => {
 		for (const [language, name] of [["ko", "Korean"], ["en", "English"], ["ja", "Japanese"], ["zh", "Simplified Chinese"]] as const) {
 			const prompt = errorFixProfile({ message: "x", surface: "ai-search", language, toolkit: toolkit() }).systemPrompt;
 
-			expect(prompt, language).toMatch(/language the person writes in/iu);
+			expect(prompt, language).not.toMatch(/their latest message decides/iu);
 			expect(prompt, language).toMatch(new RegExp(`label[^\\n]*${name}`, "iu"));
 			expect(prompt, language).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		}

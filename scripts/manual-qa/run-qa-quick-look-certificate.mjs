@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CERT_ONLY_P12_BASE64, EC_EXPIRED, EC_EXPIRED_PEM, RSA_CA, RSA_CA_PEM } from "../../test/support/certificate-fixture.ts";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? fileURLToPath(new URL("../../.omo/evidence/quick-look-certificate/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
@@ -76,18 +76,14 @@ async function poll(read, accept, timeoutMs = 8000) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "en" });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	let preview;
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 
 	// What the main process answered on preview:certificate for the shown file, exactly as the page's bridge receives it.
 	const replies = [];
 	const ipcReply = async (name) => {
 		const path = join(root, name);
-		const reply = JSON.stringify(await preview.evaluate((file) => window.quickLook.certificatePreview(file), path));
+		const reply = JSON.stringify(await (await ensurePreview()).evaluate((file) => window.quickLook.certificatePreview(file), path));
 		replies.push({ path, reply });
 		return reply;
 	};
@@ -104,6 +100,7 @@ try {
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		await poll(
 			() =>
 				preview

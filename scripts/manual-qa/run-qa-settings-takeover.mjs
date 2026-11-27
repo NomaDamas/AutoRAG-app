@@ -194,8 +194,9 @@ try {
 	check("settings rows use the Finder sidebar's font size, line height, weight, height, padding, radius and row gap", JSON.stringify({ ...settingsRow }) === JSON.stringify({ ...finderRow }) && settingsGap === finderGap, JSON.stringify({ finderRow, settingsRow, finderGap, settingsGap }));
 	check("settings group labels use the Finder sidebar's label type", settingsLabel.fontSize === finderLabel.fontSize && settingsLabel.fontWeight === finderLabel.fontWeight && settingsLabel.letterSpacing === finderLabel.letterSpacing && settingsLabel.lineHeight === finderLabel.lineHeight, JSON.stringify({ finderLabel, settingsLabel }));
 	const headBg = await page.evaluate(() => { const col = document.querySelector(".inspector-column"); return col === null ? null : getComputedStyle(col).backgroundColor; });
-	const settingsEmpty = await page.evaluate(() => { const half = document.querySelector(".inspector-column .inspector-half"); return half === null ? null : { logo: half.querySelectorAll("img").length, text: (half.textContent ?? "").trim() }; });
-	check("on a page without an assistant the right sidebar is the logo alone too", settingsEmpty !== null && settingsEmpty.logo === 1 && settingsEmpty.text === "", JSON.stringify(settingsEmpty));
+	const generalPanel = page.locator('[data-testid="app-customizer-panel"][data-surface="general"]:not([hidden])');
+	await generalPanel.waitFor();
+	check("General docks the Settings AI assistant in the right sidebar", await generalPanel.isVisible());
 
 	// The window's focus-search shortcut (⌘F) goes to Settings' own search box: the Finder's is hidden.
 	await page.locator(".settings-content").click({ position: { x: 5, y: 300 } });

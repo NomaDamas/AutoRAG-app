@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { RestartDaemonResponse, ToolVersionsSnapshot } from "../src/shared/tool-versions-contract";
-import { AboutPage } from "../src/renderer/src/components/settings/AboutPage";
+import { ComponentVersionsRow, EmbeddingDaemonSection } from "../src/renderer/src/components/settings/ToolVersions";
 import { OutdatedDaemonBanner } from "../src/renderer/src/components/OutdatedDaemonBanner";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -58,56 +58,57 @@ afterEach(async () => {
 	Reflect.deleteProperty(window, "autorag");
 });
 
-describe("AboutPage", () => {
-	it("displays all resolved component versions, flags PATH mismatch, and restarts an owned outdated daemon", async () => {
-		const before = makeSnapshot();
-		const after = makeSnapshot({
-			daemon: { ...before.daemon, version: "0.3.4", outdated: false, canRestart: false, pid: 5678 },
-		});
-		const restartDaemon = vi.fn(async (): Promise<RestartDaemonResponse> => ({ ok: true, snapshot: after }));
-		Reflect.set(window, "autorag", {
-			toolVersions: { get: vi.fn(async () => before), restartDaemon },
-		});
-
+describe("ComponentVersionsRow (일반)", () => {
+	it("folds the librarian and the tools under one row, opens to their versions, and flags a PATH mismatch", async () => {
+		Reflect.set(window, "autorag", { toolVersions: { get: vi.fn(async () => makeSnapshot()), restartDaemon: vi.fn() } });
 		await act(async () => {
-			root.render(<AboutPage />);
+			root.render(<ComponentVersionsRow />);
 		});
-
-		expect(host.textContent).toContain("Dazzi");
-		expect(host.textContent).toContain("@autorag/librarian");
-		expect(host.textContent).toContain("minsync");
-		expect(host.textContent).toContain("inl");
-		expect(host.textContent).toContain("mailcrawl");
-		expect(host.textContent).toContain("lazykatok");
+		// Folded: the row says something differs, the list is not drawn.
+		expect(host.querySelector("[data-component-versions]")).toBeNull();
+		expect(host.textContent).toContain("Component Versions");
+		expect(host.textContent).toContain("differ from the versions Dazzi pins");
+		const toggle = host.querySelector<HTMLButtonElement>('[data-action="component-versions-toggle"]');
+		await act(async () => {
+			toggle?.click();
+		});
+		const list = host.querySelector("[data-component-versions]");
+		expect(list).not.toBeNull();
+		// Dazzi's own version is 앱 버전, above this row.
+		expect(list?.querySelector('[data-tool-version="app"]')).toBeNull();
+		for (const id of ["librarian", "minsync", "inl", "mailcrawl", "lazykatok"]) expect(list?.querySelector(`[data-tool-version="${id}"]`)).not.toBeNull();
+		expect(list?.querySelector('[data-tool-version="minsync"]')?.getAttribute("data-path-mismatch")).toBe("true");
 		expect(host.textContent).toContain("PATH copy is 0.7.3");
+		// A component that is what Dazzi pins shows its version alone.
+		expect(list?.querySelector('[data-tool-version="mailcrawl"]')?.parentElement?.parentElement?.querySelector("small")).toBeNull();
+	});
+});
 
-		const minsyncBadge = host.querySelector('[data-tool-version="minsync"]');
-		expect(minsyncBadge?.getAttribute("data-path-mismatch")).toBe("true");
-
+describe("EmbeddingDaemonSection (인덱싱)", () => {
+	it("restarts an owned outdated daemon", async () => {
+		const before = makeSnapshot();
+		const after = makeSnapshot({ daemon: { ...before.daemon, version: "0.3.4", outdated: false, canRestart: false, pid: 5678 } });
+		const restartDaemon = vi.fn(async (): Promise<RestartDaemonResponse> => ({ ok: true, snapshot: after }));
+		Reflect.set(window, "autorag", { toolVersions: { get: vi.fn(async () => before), restartDaemon } });
+		await act(async () => {
+			root.render(<EmbeddingDaemonSection />);
+		});
 		const restartButton = host.querySelector<HTMLButtonElement>('[data-testid="about-restart-daemon"]');
 		expect(restartButton).not.toBeNull();
-
 		await act(async () => {
 			restartButton?.click();
 		});
-
 		expect(restartDaemon).toHaveBeenCalledOnce();
 		expect(host.querySelector('[data-testid="about-restart-daemon"]')).toBeNull();
 		expect(host.textContent).toContain("0.3.4");
 	});
 
 	it("does not show a restart button when the outdated daemon was started outside Dazzi", async () => {
-		const before = makeSnapshot({
-			daemon: { ...makeSnapshot().daemon, owned: false, canRestart: false },
-		});
-		Reflect.set(window, "autorag", {
-			toolVersions: { get: vi.fn(async () => before), restartDaemon: vi.fn() },
-		});
-
+		const before = makeSnapshot({ daemon: { ...makeSnapshot().daemon, owned: false, canRestart: false } });
+		Reflect.set(window, "autorag", { toolVersions: { get: vi.fn(async () => before), restartDaemon: vi.fn() } });
 		await act(async () => {
-			root.render(<AboutPage />);
+			root.render(<EmbeddingDaemonSection />);
 		});
-
 		expect(host.querySelector('[data-testid="about-restart-daemon"]')).toBeNull();
 		expect(host.textContent).toContain("started outside Dazzi");
 	});
@@ -125,7 +126,7 @@ describe("OutdatedDaemonBanner", () => {
 		});
 
 		await act(async () => {
-			root.render(<OutdatedDaemonBanner onOpenAbout={vi.fn()} />);
+			root.render(<OutdatedDaemonBanner onOpenSettings={vi.fn()} />);
 		});
 
 		expect(host.textContent).toContain("Embedding daemon update available");
@@ -149,7 +150,7 @@ describe("OutdatedDaemonBanner", () => {
 		});
 
 		await act(async () => {
-			root.render(<OutdatedDaemonBanner onOpenAbout={vi.fn()} />);
+			root.render(<OutdatedDaemonBanner onOpenSettings={vi.fn()} />);
 		});
 
 		expect(host.textContent).toBe("");

@@ -16,7 +16,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? "/tmp/autorag-quicklook-pdf-password";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -45,12 +45,8 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: process.env.QA_LANGUAGE ?? "en" });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	let preview;
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 	const state = () =>
 		app.evaluate(({ BrowserWindow }) => {
 			const all = BrowserWindow.getAllWindows();
@@ -87,15 +83,16 @@ try {
 			await native("keyUp", code);
 		}
 	}
-	const field = preview.locator("input[type=password]");
-	const value = () => field.inputValue();
+	const field = () => preview.locator("input[type=password]");
+	const value = () => field().inputValue();
 
 	async function openLocked() {
 		const row = main.getByRole("row", { name: /locked\.pdf/ }).first();
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await main.keyboard.press("Space");
-		await field.waitFor({ timeout: 15_000 });
+		await ensurePreview();
+		await field().waitFor({ timeout: 15_000 });
 		await poll(async () => (await state()).visible, Boolean);
 		await pause(500);
 	}
@@ -104,10 +101,10 @@ try {
 	await openLocked();
 	await preview.screenshot({ path: join(EVIDENCE, "1-prompt.png") });
 	let text = await preview.locator("body").innerText();
-	check("an encrypted PDF shows a password prompt, not the cannot-open panel", (await field.count()) === 1 && !text.includes("Couldn’t open the PDF"));
+	check("an encrypted PDF shows a password prompt, not the cannot-open panel", (await field().count()) === 1 && !text.includes("Couldn’t open the PDF"));
 	check("the prompt says the document is password protected and names the file", text.includes("password protected") && text.includes("locked.pdf"));
 	check("the preview window takes focus so the field receives keys", (await state()).focused === true);
-	check("the field is focused", await field.evaluate((element) => document.activeElement === element));
+	check("the field is focused", await field().evaluate((element) => document.activeElement === element));
 
 	// 2. Space and the arrows belong to the field while it has focus.
 	await typeNative("no pe");
@@ -116,14 +113,14 @@ try {
 	await press("Up");
 	await pause(300);
 	text = await preview.locator("body").innerText();
-	check("Up and Down do not walk the Finder selection away from the prompt", (await field.count()) === 1 && text.includes("locked.pdf"));
+	check("Up and Down do not walk the Finder selection away from the prompt", (await field().count()) === 1 && text.includes("locked.pdf"));
 
 	// 3. A wrong password is refused in place.
 	await enter();
 	await preview.locator("[role=alert]").waitFor({ timeout: 10_000 });
 	await preview.screenshot({ path: join(EVIDENCE, "2-wrong.png") });
-	check("a wrong password says so and keeps the prompt", (await preview.locator("[role=alert]").innerText()).includes("incorrect") && (await field.count()) === 1);
-	check("the refused password is cleared and the field is focused again", (await value()) === "" && (await field.evaluate((element) => document.activeElement === element)));
+	check("a wrong password says so and keeps the prompt", (await preview.locator("[role=alert]").innerText()).includes("incorrect") && (await field().count()) === 1);
+	check("the refused password is cleared and the field is focused again", (await value()) === "" && (await field().evaluate((element) => document.activeElement === element)));
 
 	// 4. The right password unlocks it in place.
 	await typeNative(PASSWORD);
@@ -148,7 +145,7 @@ try {
 	await pause(500);
 	await preview.screenshot({ path: join(EVIDENCE, "4-unlocked.png") });
 	check("the right password renders the page (non-blank canvas)", drawn === true);
-	check("the prompt is gone once unlocked", (await field.count()) === 0);
+	check("the prompt is gone once unlocked", (await field().count()) === 0);
 	await poll(async () => (await state()).height > promptSize.height, Boolean, 5000);
 	const pageSize = await state();
 	check("the window grows from the prompt to the page", pageSize.height > promptSize.height, `${promptSize.width}x${promptSize.height} -> ${pageSize.width}x${pageSize.height}`);
@@ -161,7 +158,7 @@ try {
 
 	// 6. Nothing is remembered: the next preview asks again. Escape closes even from the field.
 	await openLocked();
-	check("reopening asks for the password again", (await field.count()) === 1);
+	check("reopening asks for the password again", (await field().count()) === 1);
 	await typeNative("x");
 	await press("Escape");
 	await poll(async () => (await state()).visible === false, Boolean);

@@ -73,7 +73,7 @@ describe("sidebar-contract normalization & locked items", () => {
 });
 
 describe("navGroups with SidebarSettings", () => {
-	it("hides selected favorite, cloud, location, and tag rows while ALWAYS keeping AI Search and Automations visible", () => {
+	it("hides selected favorite, cloud, location, and tag rows while ALWAYS keeping AI Search visible", () => {
 		const settings: SidebarSettings = {
 			...DEFAULT_SIDEBAR_SETTINGS,
 			// Even if a caller passes locked ids in an unnormalized object, navGroups must never hide AI Search or Automations.
@@ -93,14 +93,14 @@ describe("navGroups with SidebarSettings", () => {
 		const groups = navGroups(SAMPLE_LOCATIONS, SAMPLE_TAGS, settings);
 
 		expect(groups.map((g) => [g.label, g.items.map((item) => item.label)])).toEqual([
-			["Favorites", ["AI Agent", "Automations", "Recents", "me", "Desktop", "Documents", "Downloads", "Trash"]],
+			["Favorites", ["AI Agent", "Recents", "me", "Desktop", "Documents", "Downloads", "Trash"]],
 			["Cloud", ["iCloud Drive"]],
 			["Locations", ["Macintosh HD"]],
 			["Tags", ["Work"]],
 		]);
 	});
 
-	it("keeps Favorites with AI Search and Automations even when every OS favorite is hidden", () => {
+	it("keeps Favorites with AI Search even when every OS favorite is hidden", () => {
 		const settings = normalizeSidebarSettings({
 			hiddenItems: [
 				"recents",
@@ -120,10 +120,10 @@ describe("navGroups with SidebarSettings", () => {
 		const groups = navGroups(SAMPLE_LOCATIONS, SAMPLE_TAGS, settings);
 		expect(groups).toHaveLength(1);
 		expect(groups[0]?.label).toBe("Favorites");
-		expect(groups[0]?.items.map((item) => item.label)).toEqual(["AI Agent", "Automations"]);
+		expect(groups[0]?.items.map((item) => item.label)).toEqual(["AI Agent"]);
 	});
 
-	it("reorders customizable Favorites, pins custom folders, and reorders sections while keeping AI Search and Automations first", () => {
+	it("reorders customizable Favorites, pins custom folders, and reorders sections while keeping AI Search first", () => {
 		const settings = normalizeSidebarSettings({
 			favoritesOrder: ["custom:/Users/me/Projects", "place:downloads", "place:documents"],
 			customFavorites: [{ path: "/Users/me/Projects", label: "Projects" }],
@@ -133,15 +133,14 @@ describe("navGroups with SidebarSettings", () => {
 
 		const groups = navGroups(SAMPLE_LOCATIONS, SAMPLE_TAGS, settings);
 		expect(groups.map((g) => g.label)).toEqual(["Favorites", "Tags", "Locations"]);
-		expect(groups[0]?.items.slice(0, 6).map((item) => item.label)).toEqual([
+		expect(groups[0]?.items.slice(0, 5).map((item) => item.label)).toEqual([
 			"AI Agent",
-			"Automations",
 			"Projects",
 			"Downloads",
 			"Documents",
 			"Recents",
 		]);
-		expect(groups[0]?.items[2]?.path).toBe("/Users/me/Projects");
+		expect(groups[0]?.items[1]?.path).toBe("/Users/me/Projects");
 	});
 });
 

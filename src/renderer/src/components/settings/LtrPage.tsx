@@ -88,7 +88,7 @@ function ModelRow({
 				{asking ? (
 					<>
 						<span className="ltr-ask">{t("settingsLtr.model.deleteAsk")}</span>
-						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => { setAsking(false); onDelete(); }}>{t("settingsLtr.model.deleteConfirm")}</button>
+						<button type="button" className="linear-btn is-danger is-danger-solid" disabled={busy} onClick={() => { setAsking(false); onDelete(); }}>{t("settingsLtr.model.deleteConfirm")}</button>
 						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => setAsking(false)}>{t("settingsLtr.model.cancel")}</button>
 					</>
 				) : (
@@ -106,11 +106,14 @@ export function LtrPage({
 	snapshot,
 	onSaved,
 	onOpenAi,
+	assistantRevision = 0,
 }: {
 	readonly snapshot: AutoRagConfigSnapshot;
 	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
 	/** Settings → AI 모델, where the reranker is turned on. */
 	readonly onOpenAi?: () => void;
+	/** Incremented when a Settings assistant changed config behind the page's back. */
+	readonly assistantRevision?: number;
 }): ReactElement {
 	const { t } = useTranslation();
 	const { run, error: writeError } = useConfigWriter(onSaved);
@@ -151,6 +154,10 @@ export function LtrPage({
 			stop();
 		};
 	}, [reload]);
+
+	useEffect(() => {
+		if (assistantRevision > 0) void reload();
+	}, [assistantRevision, reload]);
 
 	// A write changes what the librarian reports (serving, the pinned model, whether training is due).
 	const write = useCallback(
@@ -208,6 +215,9 @@ export function LtrPage({
 
 	const rankingLog = getAt(snapshot.config, ["rankingLog"]) !== false;
 	const ltrBlock = asRecord(getAt(snapshot.config, ["ltr"]));
+	const autoTrainBlock = asRecord(ltrBlock?.autoTrain);
+	const autoTrainOn = typeof autoTrainBlock?.enabled === "boolean" ? autoTrainBlock.enabled : (ltr?.autoTrain.enabled ?? false);
+	const autoTrainEvery = typeof autoTrainBlock?.minNewRuns === "number" ? autoTrainBlock.minNewRuns : (ltr?.autoTrain.minNewRuns ?? 200);
 	const pinnedModel = stringOf(ltrBlock?.model);
 	const rerankOn = rerankIsOn(snapshot.config);
 	const error = writeError ?? actionError;
@@ -218,7 +228,7 @@ export function LtrPage({
 	const canTrain = ltr !== null && missing === 0 && !training;
 	const serving = ltr?.serving;
 	const servingId = serving?.status === "active" ? serving.modelId : null;
-	const useOn = ltr?.enabled ?? ltrBlock?.enabled === true;
+	const useOn = typeof ltrBlock?.enabled === "boolean" ? ltrBlock.enabled : (ltr?.enabled ?? false);
 	const useHint =
 		serving === undefined || serving.status === "disabled"
 			? useOn
@@ -274,19 +284,19 @@ export function LtrPage({
 					) : null}
 					<PlainRow name={t("settingsLtr.auto.name")} hint={t("settingsLtr.auto.hint")}>
 						<Switch
-							checked={ltr?.autoTrain.enabled ?? false}
+							checked={autoTrainOn}
 							ariaLabel={t("settingsLtr.auto.name")}
-							onChange={() => void write([{ path: ["ltr", "autoTrain", "enabled"], value: !(ltr?.autoTrain.enabled ?? false) }])}
+							onChange={() => void write([{ path: ["ltr", "autoTrain", "enabled"], value: !autoTrainOn }])}
 						/>
 					</PlainRow>
-					{ltr?.autoTrain.enabled === true ? (
+					{autoTrainOn ? (
 						<PlainRow name={t("settingsLtr.auto.every")} hint={t("settingsLtr.auto.everyHint")}>
 							<input
 								type="text"
 								inputMode="numeric"
 								className="settings-select-compact ltr-number"
 								aria-label={t("settingsLtr.auto.every")}
-								value={interval ?? String(ltr.autoTrain.minNewRuns)}
+								value={interval ?? String(autoTrainEvery)}
 								onChange={(event) => {
 									setIntervalProblem(false);
 									setIntervalText(event.target.value);

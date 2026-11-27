@@ -255,7 +255,7 @@ export function McpPage(): ReactElement {
 				/>
 			) : null}
 			{removing !== null ? (
-				// Figma 580:15140 (중요 알림): a small card; 삭제 is the blue "yes", not a red button.
+				// Figma 580:15140 (중요 알림): a small card; 삭제 is the solid red button, as every delete confirm is.
 				<ModalShell className="settings-alert" onClose={() => setRemoving(null)} label={t("settingsCore.mcp.modal.removeTitle", { name: removing.name })}>
 					<h2>{t("settingsCore.mcp.modal.removeTitle", { name: removing.name })}</h2>
 					<p>{t("settingsCore.mcp.modal.removeBody")}</p>
@@ -263,7 +263,7 @@ export function McpPage(): ReactElement {
 						<button type="button" className="linear-btn" onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
 						<button
 							type="button"
-							className="linear-btn settings-btn-primary"
+							className="linear-btn is-danger is-danger-solid"
 							onClick={() => {
 								const target = removing;
 								setRemoving(null);

@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
+import { AUTOMATION_HISTORY_LIMIT, IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationDraft, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { t } from "../shared/i18n/core";
 
@@ -32,6 +32,14 @@ export interface AutomationService {
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Enable (true) or pause (false) rule `id` in the rules file. */
+	setEnabled(id: string, enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Add a rule with a fresh id; the file is put back as it was if the librarian then refuses it. */
+	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
+	/** Rewrite rule `id`'s folders, changes, files and action; everything else in its entry stays as written. */
+	update(id: string, draft: AutomationDraft): Promise<AutomationsSnapshot>;
+	/** Rule `id`'s runs from its log, newest first; a line the log cannot parse is skipped. */
+	history(id: string): Promise<readonly AutomationRun[]>;
 	/** Watch for changes; `onChange` fires only when something about the automations actually changed. Returns the stop function. */
 	start(onChange: (snapshot: AutomationsSnapshot) => void): () => void;
 }
@@ -101,6 +109,8 @@ export function librarianCommand(deps: LibrarianCommandDeps): LibrarianCommand {
 const SLOW_COMMANDS: readonly string[] = ["install", "uninstall"];
 const SLOW_TIMEOUT_MS = 60_000;
 const TIMEOUT_MS = 30_000;
+/** Pause before the one repeat of a status read that failed. */
+const STATUS_RETRY_DELAY_MS = 800;
 
 /**
  * Runs the librarian CLI without a shell. Never rejects: a command that could not start comes back as a non-zero code.
@@ -111,14 +121,47 @@ export function runLibrarianCli(command: string, args: readonly string[], env: N
 	const launched = Promise.withResolvers<AutomationCliResult>();
 	execFile(command, [...args], { timeout, maxBuffer: 4 * 1024 * 1024, windowsHide: true, env }, (error, stdout, stderr) => {
 		const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;
-		launched.resolve({ code, stdout: String(stdout), stderr: String(stderr) || error?.message || "" });
+		// The error's own message ("Command failed: node …") says nothing about why; it stands in only when the program wrote nothing at all.
+		const wrote = String(stderr).trim().length > 0 || String(stdout).trim().length > 0;
+		launched.resolve({ code, stdout: String(stdout), stderr: String(stderr) || (wrote ? "" : (error?.message ?? "")) });
 	});
 	return launched.promise;
 }
 
+/**
+ * What a failed CLI run said, without the parts nobody can read. `--json` answers {"ok": false, "error": "..."}: the
+ * error alone is the reason. A Windows program (schtasks) answers in the console's code page (CP949 on a Korean PC)
+ * and the CLI decodes it as UTF-8, so its words arrive as U+FFFD and look-alikes; a word with one in it is dropped
+ * rather than shown as noise.
+ */
+export function readableCliText(raw: string): string {
+	let text = raw;
+	const rows = raw
+		.split("\n")
+		.map((row) => row.trim())
+		.filter((row) => row.length > 0);
+	// The CLI may print the answer pretty-printed over several lines, or as one line after other output.
+	for (const candidate of [raw.trim(), rows.at(-1) ?? ""]) {
+		try {
+			const parsed: unknown = JSON.parse(candidate);
+			if (isJsonObject(parsed) && typeof parsed.error === "string" && parsed.error.trim().length > 0) {
+				text = parsed.error;
+				break;
+			}
+		} catch {
+			// Not JSON: the next candidate, or the text as it is.
+		}
+	}
+	return text
+		.split(/\s+/u)
+		.filter((word) => !word.includes("\uFFFD"))
+		.join(" ")
+		.trim();
+}
+
 /** One line saying why a CLI run failed, short enough to show in the window. */
 export function cliFailureReason(result: AutomationCliResult, limit = 300): string {
-	const detail = (result.stderr.trim() || result.stdout.trim()).replaceAll(/\s+/gu, " ");
+	const detail = readableCliText(result.stderr.trim() || result.stdout.trim()).replaceAll(/\s+/gu, " ");
 	return `exit ${result.code}${detail.length === 0 ? "" : `: ${detail.slice(0, limit)}`}`;
 }
 
@@ -126,10 +169,52 @@ function textArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function runFilesOf(value: unknown): readonly string[] {
+	if (Array.isArray(value)) {
+		const out: string[] = [];
+		for (const item of value) {
+			if (typeof item === "string" && item.trim().length > 0) out.push(item.trim());
+			else if (isJsonObject(item) && typeof item.path === "string" && item.path.trim().length > 0) out.push(item.path.trim());
+		}
+		return out;
+	}
+	return [];
+}
+
+/**
+ * Fallback for legacy folder-automation run logs written before the librarian recorded `files`:
+ * extract absolute file paths printed in stdout (e.g. `moved /Users/.../a.pdf -> /Users/.../b.pdf`).
+ */
+function inferFilesFromStdout(stdout: unknown): readonly string[] {
+	if (typeof stdout !== "string" || stdout.trim().length === 0) return [];
+	const found: string[] = [];
+	const seen = new Set<string>();
+	// Match POSIX (/Users/..., /home/..., /Volumes/..., /tmp/...) or Windows (C:\...) file paths with an extension.
+	const pattern = /(?:\/(?:Users|home|Volumes|tmp|var|private|opt|mnt)\/[^\r\n"'`<>|*?]+?\.[A-Za-z0-9]{1,12}|[A-Za-z]:\\[^\r\n"'`<>|*?]+?\.[A-Za-z0-9]{1,12})/gu;
+	for (const line of stdout.split(/\r?\n/u)) {
+		// On a "moved src -> dst" line, prefer the source path (first path on the line) or the resulting file name.
+		const parts = line.split(/\s*->\s*/u);
+		const candidate = parts[0] ?? line;
+		const match = candidate.match(pattern);
+		if (match !== null) {
+			for (const raw of match) {
+				const cleaned = raw.replace(/[.,;:)\]]+$/u, "").trim();
+				if (cleaned.length > 0 && !seen.has(cleaned)) {
+					seen.add(cleaned);
+					found.push(cleaned);
+				}
+			}
+		}
+	}
+	return found;
+}
+
 function runOf(value: unknown): AutomationRun | null {
 	if (!isJsonObject(value) || typeof value.startedAt !== "string") return null;
 	const startedAt = Date.parse(value.startedAt);
 	if (Number.isNaN(startedAt)) return null;
+	const recorded = runFilesOf(value.files);
+	const files = recorded.length > 0 ? recorded : inferFilesFromStdout(value.stdout);
 	return {
 		startedAt,
 		durationMs: typeof value.durationMs === "number" ? value.durationMs : 0,
@@ -138,6 +223,7 @@ function runOf(value: unknown): AutomationRun | null {
 		signal: typeof value.signal === "string" ? value.signal : null,
 		timedOut: value.timedOut === true,
 		...(typeof value.error === "string" && value.error.length > 0 ? { error: value.error } : {}),
+		...(files.length > 0 ? { files } : {}),
 	};
 }
 
@@ -152,6 +238,7 @@ function ruleOf(value: unknown): AutomationRule | null {
 	const events = textArray(value.events).filter((event): event is AutomationRule["events"][number] => event === "create" || event === "update" || event === "delete");
 	return {
 		id: value.id,
+		enabled: value.enabled !== false,
 		paths: textArray(value.paths),
 		events,
 		include: textArray(value.include),
@@ -245,8 +332,14 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 			return current;
 		}
 		try {
-			const result = await deps.run(["automate", "status", "--json"]);
-			const snapshot = parseStatus(result.stdout);
+			// One read that fails is often a moment's trouble (the rules file being written, the service manager busy): ask once more.
+			let result = await deps.run(["automate", "status", "--json"]);
+			let snapshot = parseStatus(result.stdout);
+			if (snapshot === null) {
+				await new Promise((resolve) => setTimeout(resolve, STATUS_RETRY_DELAY_MS));
+				result = await deps.run(["automate", "status", "--json"]);
+				snapshot = parseStatus(result.stdout);
+			}
 			if (snapshot === null) throw new Error(cliFailureReason(result));
 			current = snapshot;
 			return snapshot;
@@ -294,6 +387,7 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 		const path = rulesPath();
 		const temporary = `${path}.${process.pid}.tmp`;
 		const mode = (await stat(path).catch(() => null))?.mode;
+		await mkdir(dirname(path), { recursive: true });
 		try {
 			await writeFile(temporary, `${JSON.stringify({ automations: entries }, null, 2)}\n`, mode === undefined ? undefined : { mode });
 			await rename(temporary, path);
@@ -305,6 +399,24 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 
 	return {
 		snapshot,
+		history: async (id) => {
+			// The id names a file in the logs folder: anything that could leave it is refused, not resolved.
+			if (!/^[A-Za-z0-9._-]+$/.test(id) || id.startsWith(".")) return [];
+			const text = await readFile(join(deps.home(), "automations", "logs", `${id}.jsonl`), "utf8").catch(() => "");
+			const runs: AutomationRun[] = [];
+			const lines = text.split("\n");
+			for (let index = lines.length - 1; index >= 0 && runs.length < AUTOMATION_HISTORY_LIMIT; index -= 1) {
+				const line = lines[index]?.trim() ?? "";
+				if (line.length === 0) continue;
+				try {
+					const run = runOf(JSON.parse(line));
+					if (run !== null) runs.push(run);
+				} catch {
+					continue;
+				}
+			}
+			return runs;
+		},
 		remove: (id) =>
 			serialized(async () => {
 				const entries = await loadEntries({ required: true });
@@ -324,9 +436,79 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 				await saveEntries([...entries.slice(0, index), entry, ...entries.slice(index)]);
 				return freshSnapshot();
 			}),
+		create: (draft) =>
+			serialized(async () => {
+				const entries = await loadEntries({ required: false });
+				const taken = new Set(entries.map((entry) => entry.id));
+				const base = `rule-${Date.now().toString(36)}`;
+				let id = base;
+				for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+				const entry: Record<string, unknown> = {
+					id,
+					paths: [...draft.paths],
+					events: [...draft.events],
+					...(draft.include.length === 0 ? {} : { include: [...draft.include] }),
+					...(draft.agent === undefined ? { run: [...(draft.run ?? [])] } : { agent: { profile: draft.agent.profile, task: draft.agent.task } }),
+				};
+				await saveEntries([...entries, entry]);
+				const snapshot = await freshSnapshot();
+				// The librarian judges the file; one it refuses would stop every rule, so the new entry comes back out.
+				if (snapshot.configError !== null) {
+					await saveEntries(entries);
+					await freshSnapshot();
+					throw new Error(snapshot.configError);
+				}
+				return { snapshot, id };
+			}),
+		update: (id, draft) =>
+			serialized(async () => {
+				const entries = await loadEntries({ required: true });
+				const index = entries.findIndex((entry) => entry.id === id);
+				if (index === -1) throw new Error(t("main.automations.errors.unknownRule", { id }));
+				const { include: _include, agent: _agent, run: _run, ...kept } = entries[index] as Record<string, unknown>;
+				const entry: Record<string, unknown> = {
+					...kept,
+					paths: [...draft.paths],
+					events: [...draft.events],
+					...(draft.include.length === 0 ? {} : { include: [...draft.include] }),
+					...(draft.agent === undefined ? { run: [...(draft.run ?? [])] } : { agent: { ...(isJsonObject(_agent) ? _agent : {}), profile: draft.agent.profile, task: draft.agent.task } }),
+				};
+				await saveEntries(entries.map((existing, at) => (at === index ? entry : existing)));
+				const snapshot = await freshSnapshot();
+				// A file the librarian refuses would stop every rule: put the old entry back.
+				if (snapshot.configError !== null) {
+					await saveEntries(entries);
+					await freshSnapshot();
+					throw new Error(snapshot.configError);
+				}
+				return snapshot;
+			}),
+		setEnabled: (id, enabled) =>
+			serialized(async () => {
+				const entries = await loadEntries({ required: true });
+				const index = entries.findIndex((entry) => entry.id === id);
+				if (index === -1) throw new Error(t("main.automations.errors.unknownRule", { id }));
+				const nextEntry: Record<string, unknown> = { ...(entries[index] as Record<string, unknown>), enabled };
+				if (enabled) delete nextEntry.enabled;
+				await saveEntries(entries.map((existing, at) => (at === index ? nextEntry : existing)));
+				const snapshot = await freshSnapshot();
+				if (snapshot.configError !== null) {
+					await saveEntries(entries);
+					await freshSnapshot();
+					throw new Error(snapshot.configError);
+				}
+				return snapshot;
+			}),
 		setDaemon: async (enabled) => {
 			const result = await deps.run(["automate", enabled ? "install" : "uninstall", "--json"]);
-			if (result.code !== 0) throw new Error(t("main.automations.errors.cliFailed", { reason: cliFailureReason(result) }));
+			if (result.code !== 0) {
+				const reason = cliFailureReason(result);
+				// Windows Task Scheduler refused the registration: its own words are unreadable code-page text, so say what it means.
+				if (enabled && /schtasks/iu.test(reason)) throw new Error(t("main.automations.errors.daemonOnScheduler"));
+				// The CLI's words are for a log, not for the window: they are often code-page noise or a JSON dump, so the notice only says it failed.
+				console.warn("automation daemon change failed:", reason);
+				throw new Error(t(enabled ? "main.automations.errors.daemonOnFailed" : "main.automations.errors.daemonOffFailed"));
+			}
 			return freshSnapshot();
 		},
 		start: (onChange) => {

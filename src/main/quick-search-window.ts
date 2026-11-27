@@ -36,8 +36,16 @@ export interface QuickSearchWindowDeps {
 	/** Settings' status read and its recording pause, answered by the global shortcut. */
 	readonly status: () => QuickSearchStatus;
 	readonly setRecording: (recording: boolean) => void;
-	/** Pre-creates the hidden Quick Look panel owned by the launcher window; returns the panel's window. */
-	readonly attachPreview: (owner: BrowserWindow) => BrowserWindow;
+	/**
+	 * Registers the launcher's own Quick Look session. With `lazy` its BrowserWindow is only built on the first Space press, so
+	 * `onWindowCreated` hands the window over when that happens (the launcher listens for its blur to dismiss itself).
+	 */
+	readonly attachPreview: (owner: BrowserWindow, onWindowCreated: (preview: BrowserWindow) => void) => BrowserWindow | null;
+	/**
+	 * Defer creating the hidden launcher BrowserWindow until the first `toggle()`.
+	 * Saves ~130-150 MB of renderer RAM at startup when the global launcher shortcut is unused.
+	 */
+	readonly lazy?: boolean;
 }
 
 /** How long focus may take to land on the other window before a blur counts as leaving Dazzi. */
@@ -69,6 +77,7 @@ function isPathList(value: unknown): value is readonly string[] {
 export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearchWindow {
 	const darwin = process.platform === "darwin";
 	let window: BrowserWindow | null = null;
+	let loaded: Promise<void> = Promise.resolve();
 	let preview: BrowserWindow | null = null;
 	let destroyed = false;
 	/** Set when the app starts to quit (see {@link whenQuitting}): the quit closes every window, and this one must not refuse. */
@@ -99,7 +108,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 				nodeIntegration: false,
 				sandbox: false,
 				spellcheck: false,
-				backgroundThrottling: false,
+				backgroundThrottling: true,
 				additionalArguments: [`--autorag-appearance=${deps.appearance}`, `${LANGUAGE_FLAG}${deps.language}`],
 			},
 		});
@@ -126,9 +135,14 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 			event.preventDefault();
 			hide("restore");
 		});
+		loaded = new Promise<void>((resolve) => created.webContents.once("did-finish-load", () => resolve()));
 		deps.loadPage(created);
-		preview = deps.attachPreview(created);
-		preview.on("blur", dismissIfFocusLeft);
+		const adopt = (panel: BrowserWindow): void => {
+			preview = panel;
+			panel.on("blur", dismissIfFocusLeft);
+		};
+		const attached = deps.attachPreview(created, adopt);
+		if (attached !== null) adopt(attached);
 		return created;
 	};
 
@@ -144,7 +158,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 		current.hide();
 	};
 
-	window = create();
+	if (deps.lazy !== true) window = create();
 
 	const fromLauncher = (sender: Electron.WebContents): boolean => window !== null && !window.isDestroyed() && sender === window.webContents;
 	ipcMain.on(QUICK_SEARCH_CHANNELS.hide, (event, mode: unknown) => {
@@ -171,9 +185,11 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	return {
 		toggle() {
 			if (destroyed || quitting) return;
-			if (window === null || window.isDestroyed()) window = create();
+			const createdNow = window === null || window.isDestroyed();
+			if (createdNow) window = create();
 			const current = window;
-			if (current.isVisible() && (current.isFocused() || preview?.isFocused() === true)) {
+			if (current === null) return;
+			if (!createdNow && current.isVisible() && (current.isFocused() || preview?.isFocused() === true)) {
 				hide("restore");
 				return;
 			}
@@ -183,7 +199,16 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 			current.show();
 			current.focus();
 			current.webContents.focus();
-			current.webContents.send(QUICK_SEARCH_CHANNELS.shown);
+			if (createdNow) {
+				void loaded.then(() => {
+					if (!current.isDestroyed() && current.isVisible()) {
+						current.webContents.focus();
+						current.webContents.send(QUICK_SEARCH_CHANNELS.shown);
+					}
+				});
+			} else {
+				current.webContents.send(QUICK_SEARCH_CHANNELS.shown);
+			}
 		},
 		destroy() {
 			destroyed = true;

@@ -1,6 +1,5 @@
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { AgentProfile } from "@autorag/librarian/profiles";
 import type { AppCustomizerChange } from "../../../shared/app-customizer-contract";
 import type { SettingsBridge } from "../../../shared/settings-contract";
 import {
@@ -24,16 +23,9 @@ import {
 	type ShortcutPresetId,
 	type ShortcutSettings,
 } from "../../../shared/shortcuts-contract";
-import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
+import type { ReplyLanguage } from "../profile-progress";
 
 export type { ReplyLanguage };
-
-const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
-	ko: "Korean",
-	en: "English",
-	ja: "Japanese",
-	zh: "Simplified Chinese",
-};
 
 const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, string>>>> = {
 	ko: {
@@ -478,58 +470,5 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 		tools: [getShortcuts, updateShortcuts],
 		takeChanges: () => changes.splice(0),
 		peekChanges: () => [...changes],
-	};
-}
-
-function systemPrompt(language: ReplyLanguage, platform: string): string {
-	const replyLang = LANGUAGE_NAME[language];
-	const modLabel = platform === "darwin" ? "⌘ (Mod)" : "Ctrl (Mod)";
-	const altLabel = platform === "darwin" ? "⌥ (Alt)" : "Alt";
-	const catalogLines = SHORTCUT_CATALOG.map(
-		(item) => `- \`${item.id}\` (${ACTION_LABELS.en[item.id]}): default \`${item.defaultChord}\` [scope: ${item.scope}]`,
-	).join("\n");
-
-	return [
-		"You are Dazzi's dedicated Keyboard Shortcut Customization Assistant (`shortcut-customizer`), embedded inside Settings → Shortcuts.",
-		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
-		"",
-		"## Role & Scope",
-		"- You customize Dazzi's keyboard shortcuts stored in `settings-state.json` (separate from the shared AutoRAG config).",
-		`- Current host platform modifier display: primary modifier is ${modLabel}, secondary modifier is ${altLabel}, Shift is ⇧/Shift. Canonical chords use \`Mod\`, \`Alt\`, \`Shift\` (e.g. \`Mod+Shift+P\`, \`Alt+ArrowUp\`, \`F2\`, \`Space\`, \`Enter\`).`,
-		"",
-		"## Fixed Shortcut Catalog (26 Default-Bound Actions)",
-		catalogLines,
-		"",
-		"## Built-in Quick Presets (`preset` parameter on `update_shortcuts`)",
-		"- `macFinder` (Mac Finder): `editPath`=`Mod+Shift+G` (`⇧⌘G`), `parentFolder`=`Mod+ArrowUp` (`⌘↑`), `openItem`=`Mod+O` (`⌘O`), `rename`=`Enter` (`↩`), `trash`=`Mod+Backspace` (`⌘⌫`).",
-		"- `windowsExplorer` (Windows File Explorer): `editPath`=`Alt+D`, `viewIcons`=`Mod+Shift+2`, `viewList`=`Mod+Shift+6`, `viewColumns`=`Mod+Shift+5`, `quickLook`=`Alt+P`, `rename`=`F2`, `trash`=`Delete`, `redo`=`Mod+Y`.",
-		"- `default` (Dazzi defaults): restores all 26 Dazzi default shortcuts.",
-		"",
-		"## Non-Negotiable Invariants",
-		"1. **Closed Action Catalog**: You can ONLY edit, swap, or reset shortcuts for the 26 existing actions listed above. You can NEVER create new actions, macros, custom shell commands, or shortcuts for features that do not already have a default shortcut in Dazzi. If the person asks to add a shortcut for an unsupported/new feature, apply any valid requests and politely explain that only existing default-bound shortcuts can be customized.",
-		"2. **Locked System Keys**: `Esc` (`dismiss`) and unmodified arrow keys (`↑`, `↓`, `←`, `→`) are reserved system keys and can NEVER be reassigned.",
-		"3. **Modifier Rule**: Letter, digit, and punctuation keys require `Mod` (`⌘`/`Ctrl`) or `Alt` (`⌥`/`Alt`). `Space`, `Enter`, `Backspace`, `Delete`, and `F1`–`F12` work with or without modifiers.",
-		"4. **Conflicts**: If the person asks to bind a chord already used by an overlapping action (or asks to swap two shortcuts), pass `swapConflicts: true` or update both actions in `bindings`.",
-		"",
-		"## Workflow",
-		"1. Call `get_shortcuts` when you need to inspect current customized bindings or check conflicts.",
-		"2. Call `update_shortcuts` to apply changes or reset shortcuts immediately.",
-		"3. Summarize clearly in 1-3 short sentences what changed (using platform-friendly key labels like `⌘⇧P` or `F2`).",
-		"",
-		intentPromptLine(language),
-	].join("\n");
-}
-
-export function shortcutCustomizerProfile(input: {
-	readonly language: ReplyLanguage;
-	readonly toolkit: ShortcutCustomizerToolkit;
-	readonly platform?: string;
-}): AgentProfile {
-	return {
-		id: "shortcut-customizer",
-		systemPrompt: systemPrompt(input.language, input.platform ?? process.platform),
-		tools: [],
-		customTools: withIntentTools(input.toolkit.tools, { language: input.language }),
-		thinking: "low",
 	};
 }

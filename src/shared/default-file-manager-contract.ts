@@ -5,9 +5,11 @@
  * When enabled:
  * - macOS: sets global `NSFileViewer` to Dazzi's bundle ID (`com.autorag.app`),
  *   registers Dazzi as the LaunchServices default role handler for
- *   `public.folder`, and handles both AppleEvent `misc`/`mvis`
+ *   `public.folder`, handles both AppleEvent `misc`/`mvis`
  *   (`kAERevealSelection`, "Reveal in Finder" from other apps) and
- *   `open-file` / `odoc` ("Open folder") inside Dazzi.
+ *   `open-file` / `odoc` ("Open folder") inside Dazzi, and optionally runs a
+ *   lightweight Finder-window watcher (`mac-finder-watcher.ts`) so folders
+ *   double-clicked on the Desktop or opened in Finder also hand over to Dazzi.
  * - Windows: registers per-user `HKCU\Software\Classes\Folder\shell\open\command`
  *   and `Directory\shell\open\command` (forwarding virtual `::{CLSID}` paths
  *   safely back to `explorer.exe`), registers the Win+E CLSID
@@ -39,9 +41,9 @@ export interface DefaultFileManagerStatus {
 	readonly enabled: boolean;
 	/** Whether the OS itself currently points at Dazzi (verified against defaults / registry). */
 	readonly osRegistered: boolean;
-	/** Windows only: whether the background Explorer-window interceptor (`SHOpenFolderAndSelectItems`) is enabled. */
+	/** Whether the background OS file-manager window interceptor (Finder on macOS / Explorer on Windows) is enabled. */
 	readonly interceptReveal: boolean;
-	/** Windows only: whether the background Explorer-window interceptor is currently running. */
+	/** Whether the background OS file-manager window interceptor is currently running. */
 	readonly interceptRevealActive: boolean;
 	/** macOS only: whether the native AppleEvent `misc`/`mvis` handler is loaded in this build. */
 	readonly macRevealHookLoaded: boolean;
@@ -53,7 +55,7 @@ export interface DefaultFileManagerStatus {
 
 export interface DefaultFileManagerApplyRequest {
 	readonly enabled: boolean;
-	/** Windows only: also intercept `SHOpenFolderAndSelectItems` Explorer windows. */
+	/** Also intercept newly opened OS file-manager windows (Desktop folders/Finder on macOS; Explorer `SHOpenFolderAndSelectItems` on Windows). */
 	readonly interceptReveal?: boolean;
 }
 

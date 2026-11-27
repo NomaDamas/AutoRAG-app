@@ -34,12 +34,13 @@ import {
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
-import { LANGUAGE_CHANNELS } from "../shared/language-contract";
+import { LANGUAGE_CHANNELS, LANGUAGE_FLAG } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG } from "../shared/onboarding-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import { DOCUMENT_EDITOR_CHANNELS } from "../shared/document-editor-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import { createMagicActionRunLog } from "./magic-action-runs";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
@@ -97,6 +98,8 @@ import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
 import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
+import { createChatTitler } from "./chat-title";
+import { createFollowUpSorter } from "./follow-up-sorter";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { createOsClipboard } from "./os-clipboard";
@@ -186,6 +189,7 @@ import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv, type
 import { DEFAULT_FILE_MANAGER_CHANNELS } from "../shared/default-file-manager-contract";
 import { createDefaultFileManagerService, parseExternalOpenArgv } from "./default-file-manager";
 import { installMacRevealHook } from "./mac-reveal-hook";
+import { createMacFinderWatcher, type MacFinderWatcher } from "./mac-finder-watcher";
 import { createWindowsExplorerWatcher, type WindowsExplorerWatcher } from "./windows-explorer-watcher";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
@@ -308,6 +312,10 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 	const windowSize = appWindowSize(workArea, "finder");
 	const window = new BrowserWindow({
 		...windowSize,
+		// Shown on `ready-to-show` (below): on a slow disk the bundle takes seconds to parse, and an empty white frame
+		// (a flash in dark mode) is what the person would see meanwhile.
+		show: false,
+		backgroundColor: appearance === "dark" ? "#1E1E20" : "#FFFFFF",
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
@@ -321,6 +329,7 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 			additionalArguments: [
 				...(devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`]),
 				`--autorag-appearance=${appearance}`,
+				`${LANGUAGE_FLAG}${currentLanguage}`,
 				// The renderer's first-run layer mounts only while the flag is present; `load` is authoritative.
 				...(pending ? [ONBOARDING_PENDING_FLAG] : []),
 			],
@@ -336,6 +345,16 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 		window.setTitle(formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel));
 	});
 
+	// Safety net: a page that never reports `ready-to-show` must not leave the app invisible.
+	const showFallback = setTimeout(() => {
+		if (!window.isDestroyed() && !window.isVisible()) window.show();
+	}, 8000);
+	window.once("ready-to-show", () => {
+		clearTimeout(showFallback);
+		if (!window.isDestroyed()) window.show();
+	});
+	window.once("closed", () => clearTimeout(showFallback));
+
 	loadRendererPage(window, "index.html");
 	attachQuickLook(window, quickLookOptions(appearance));
 	return window;
@@ -348,6 +367,8 @@ function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
 		appearance,
 		language: currentLanguage,
 		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+		// The hidden panel is built on the first Space press, not at startup: an idle renderer costs ~120-150 MB.
+		lazy: true,
 		// Spawning osascript blocks the caller for the fork; the worker pays it.
 		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
 		quickLookChord: () => currentQuickLookChord,
@@ -559,8 +580,16 @@ app.whenReady().then(async () => {
 		env: process.env,
 	});
 	await credentials.load();
-	// Windows Explorer watcher (`SHOpenFolderAndSelectItems` interceptor); created before fsWorker so intentional
-	// "Show in Explorer" calls from inside Dazzi can briefly suppress interception.
+	// OS file-manager window watchers; created before fsWorker so intentional
+	// "Reveal in Finder / Show in Explorer" calls from inside Dazzi can briefly suppress interception.
+	const macFinderWatcher: MacFinderWatcher = createMacFinderWatcher({
+		platform: process.platform,
+		onIntercept: (event) => {
+			const request = normalizeOsLaunchRequest({ action: event.action, paths: [event.path] });
+			if (request !== null) void osRequests.push(request);
+		},
+		onError: (message) => console.warn("[default-file-manager] finder watcher:", message),
+	});
 	const windowsExplorerWatcher: WindowsExplorerWatcher = createWindowsExplorerWatcher({
 		platform: process.platform,
 		onIntercept: (event) => {
@@ -574,11 +603,12 @@ app.whenReady().then(async () => {
 	// ends only that process (FS roadmap #101). Main keeps the Electron-only
 	// pieces it lends the worker: thumbnails, the shell, the clipboard.
 	const workerShell =
-		process.platform === "win32"
+		process.platform === "win32" || process.platform === "darwin"
 			? {
 					trashItem: (target: string) => shell.trashItem(target),
 					showItemInFolder: (target: string) => {
-						// Dazzi intentionally asked Windows Explorer to reveal this item; do not intercept it back.
+						// Dazzi intentionally asked Finder/Explorer to reveal this item; do not intercept it back.
+						macFinderWatcher.suppressFor(2500);
 						windowsExplorerWatcher.suppressFor(2500);
 						shell.showItemInFolder(target);
 					},
@@ -677,7 +707,27 @@ app.whenReady().then(async () => {
 	});
 	const searchService = createSearchService({
 		afterAnsweredSearch: () => ltr.autoTrainIfDue(),
-		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
+		// The tab's head names the chat once it has answered, with the model that answered it.
+		titleChat: createChatTitler({
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			// Through Pi's runtime, which authenticates the plan's OAuth credential; a bare `completeSimple` has no key for it.
+			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
+			language: () => currentLanguage,
+		}),
+		// A message sent while an answer is in flight: the answer model says whether it corrects it or waits.
+		sortFollowUp: createFollowUpSorter({
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
+		}),
+		agentFactory: createDefaultAgentFactory({
+			sessionDir: chatSessionsDirectory,
+			// The settings service is built further down; an agent is only built long after startup.
+			settings: {
+				get: () => settingsService.get(),
+				set: (patch) => settingsService.set(patch),
+			},
+			language: () => currentLanguage,
+		}),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		pastedImages: createPastedImageStore({ directory: join(app.getPath("userData"), "pasted-images") }),
@@ -757,6 +807,7 @@ app.whenReady().then(async () => {
 		execPath: process.execPath,
 		appArgs: [...(app.isPackaged ? [] : [app.getAppPath()]), `--user-data-dir=${app.getPath("userData")}`],
 		macRevealHookLoaded: macRevealHook.loaded,
+		macWatcher: macFinderWatcher,
 		windowsWatcher: windowsExplorerWatcher,
 		run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
 	});
@@ -1255,8 +1306,13 @@ app.whenReady().then(async () => {
 	});
 	registerAppCustomizerIpcHandlers(appCustomizerService);
 	app.once("will-quit", () => appCustomizerService.dispose());
+	// Each finished right-click run is kept for the 자동화 tab's status dot and 실행 기록.
+	const magicActionRuns = createMagicActionRunLog({ file: join(app.getPath("userData"), "magic-action-runs.json") });
 	const magicActionService = createMagicActionService({
-		send: (event) => sendToMainWindow(MAGIC_ACTION_CHANNELS.event, event),
+		send: (event) => {
+			magicActionRuns.record(event);
+			sendToMainWindow(MAGIC_ACTION_CHANNELS.event, event);
+		},
 		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
 		agentDir: getAgentDir(),
 		env: process.env,
@@ -1264,7 +1320,7 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		settings: settingsService,
 	});
-	registerMagicActionIpcHandlers(magicActionService, chatStore);
+	registerMagicActionIpcHandlers(magicActionService, chatStore, magicActionRuns);
 	app.once("will-quit", () => magicActionService.dispose());
 	const documentEditWriteJudge = createWriteJudge({
 		resolveBackends: () =>
@@ -1512,7 +1568,9 @@ app.whenReady().then(async () => {
 		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
 		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
 		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
-		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
+		attachPreview: (owner, onWindowCreated) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true, onWindowCreated }),
+		// Defer creating the hidden launcher renderer until the first shortcut press (~140 MB RAM saved at startup).
+		lazy: true,
 	});
 	quickSearchShortcut = createQuickSearchShortcut({
 		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),

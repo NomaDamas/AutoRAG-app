@@ -9,7 +9,7 @@ import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createMcpSettingsService } from "../src/main/mcp-settings-service";
 import { createProviderCredentialService } from "../src/main/provider-credentials";
 import { createSettingsService } from "../src/main/settings-service";
-import type { AppCustomizerEvent, AppCustomizerSurface } from "../src/shared/app-customizer-contract";
+import { APP_CUSTOMIZER_SURFACES, type AppCustomizerEvent, type AppCustomizerSurface } from "../src/shared/app-customizer-contract";
 
 const SECRET = "sk-ant-api03-TopSecretValue0123456789abcdef";
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -166,7 +166,7 @@ describe("an assistant stores a key the person types without the model seeing it
 	});
 });
 
-describe("web tools for the assistants that research (MCP, apps, AI models)", () => {
+describe("web tools for every Settings assistant (full access since the v2.15 permission simplification)", () => {
 	const toolkitOf = (...names: string[]) => ({
 		tools: names.map((name) => ({ name, label: name, description: name, parameters: {} as never, execute: async () => ({ content: [], details: undefined }) })) as never,
 		takeChanges: () => [],
@@ -180,20 +180,16 @@ describe("web tools for the assistants that research (MCP, apps, AI models)", ()
 		expect(web.map((tool) => tool.name)).toEqual(["web_search", "web_fetch"]);
 	});
 
-	it("MCP, apps and AI models get them next to their own tools", () => {
-		for (const surface of ["mcp", "apps", "ai"] as const) expect(namesFor(surface), surface).toEqual(["own_tool", "web_search", "web_fetch"]);
-	});
-
-	it("the page-only assistants never get the web", () => {
-		for (const surface of ["general", "web", "indexing", "duplicates"] as const) expect(namesFor(surface), surface).toEqual(["own_tool"]);
+	it("every surface gets them next to its own tools", () => {
+		for (const surface of APP_CUSTOMIZER_SURFACES) expect(namesFor(surface), surface).toEqual(["own_tool", "web_search", "web_fetch"]);
 	});
 });
 
-describe("the AI-model assistant's shell: read anything, change only what it manages, never repeat a secret", () => {
+describe("the AI-model assistant's shell: full read/write, never repeats a secret", () => {
 	/** Runs one scripted turn on the AI surface and returns what the tool results looked like to the model. */
 	async function runShell(
 		commands: readonly string[],
-		options: { readonly home: string; readonly judge?: (state: string) => number } = { home: root },
+		options: { readonly home: string; readonly surface?: AppCustomizerSurface } = { home: root },
 	): Promise<{ results: string[]; reply: string }> {
 		const { settings, configPath } = build({});
 		await writeBase(configPath);
@@ -208,9 +204,6 @@ describe("the AI-model assistant's shell: read anything, change only what it man
 			homeDir: options.home,
 			language: () => "en",
 			settings,
-			writeJudge: async (state, questions) => ({
-				verdicts: questions.map((question) => ({ id: question.id ?? "", type: "noul", answer: options.judge?.(state) ?? 0.02, confidence: 0.95, escalate: false }) as never),
-			}),
 			listLocations: async () => [],
 			listTags: async () => [],
 		});
@@ -221,7 +214,7 @@ describe("the AI-model assistant's shell: read anything, change only what it man
 				return fauxAssistantMessage("done");
 			},
 		] as never);
-		await service.send("run-shell", { sessionId: "s-shell", surface: "ai", message: "look around" });
+		await service.send("run-shell", { sessionId: "s-shell", surface: options.surface ?? "ai", message: "look around" });
 		service.dispose();
 		const done = events.find((event) => event.type === "turn-done");
 		return { results, reply: done?.type === "turn-done" ? done.messages.join(" ") : "" };
@@ -240,11 +233,12 @@ describe("the AI-model assistant's shell: read anything, change only what it man
 		expect(seen).not.toContain("opaque-access-token-shell-0001");
 	});
 
-	it("does not run a write Jev puts outside the managed files, and says why", async () => {
-		const target = join(root, "outside.txt");
-		const { results } = await runShell([`echo hi > ${target}`], { home: root, judge: (state) => (state.includes("outside.txt") ? 0.95 : 0.02) });
-		expect(results.join("")).toMatch(/Refused|Jev/u);
-		await expect(readFile(target, "utf8")).rejects.toThrow();
+	it("writes a file from every Settings profile surface (general, mcp, apps, ai) without any write-classification gate", async () => {
+		for (const surface of ["ai", "general", "mcp", "apps"] as const) {
+			const target = join(root, `write-${surface}.txt`);
+			await runShell([`echo ${surface} > ${target}`], { home: root, surface });
+			expect(await readFile(target, "utf8")).toBe(`${surface}\n`);
+		}
 	});
 
 	it("appends a new environment variable to the shell profile", async () => {

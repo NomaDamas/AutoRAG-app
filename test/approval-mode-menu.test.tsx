@@ -86,7 +86,7 @@ describe("ApprovalModeMenu", () => {
 		expect(host.textContent).toContain(t("interaction.mode.full.desc"));
 		const checked = items().filter((item) => item.getAttribute("aria-checked") === "true");
 		expect(checked).toHaveLength(1);
-		expect(checked[0]?.textContent).toContain(t("interaction.mode.readonly.label"));
+		expect(checked[0]?.textContent).toContain(t("interaction.mode.readonly.option"));
 	});
 
 	it("opens above a trigger that sits at the bottom of the window, without covering it", async () => {
@@ -106,7 +106,7 @@ describe("ApprovalModeMenu", () => {
 		await renderHarness();
 		act(() => trigger().click());
 
-		const full = items().find((item) => item.textContent?.includes(t("interaction.mode.full.label")));
+		const full = items().find((item) => item.textContent?.includes(t("interaction.mode.full.option")));
 		await act(async () => {
 			full?.click();
 		});
@@ -121,7 +121,7 @@ describe("ApprovalModeMenu", () => {
 		await renderHarness();
 		act(() => trigger().click());
 
-		const full = items().find((item) => item.textContent?.includes(t("interaction.mode.full.label")));
+		const full = items().find((item) => item.textContent?.includes(t("interaction.mode.full.option")));
 		await act(async () => {
 			full?.click();
 		});

@@ -28,7 +28,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
-import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import { firstPageTile } from "../lib/first-page-tile";
 import { previewLoaderFor } from "../lib/preview-loader";
 import { hostPlatform } from "../lib/shortcuts";
@@ -193,13 +192,14 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
  * The right sidebar with nothing to show: the faded monochrome Dazzi mark, centred (Figma 247:5981, 367:8769).
  * Dark mode has its own lighter mark, with its fade already in the image.
  */
-export function FadedDazziMark({ reserveDock = false }: { readonly reserveDock?: boolean } = {}): ReactElement {
+export function FadedDazziMark({ reserveDock = false, caption }: { readonly reserveDock?: boolean; readonly caption?: string } = {}): ReactElement {
 	return (
 		// `reserveDock`: a sidebar without the chat bar (Settings, the empty AI Search evidence) keeps the 68px it takes, so the mark sits where the
-		// Finder's empty inspector shows it, centred above its chat bar.
-		<div className={cn("inspector-empty flex flex-1 min-h-0 items-center justify-center", reserveDock && "pb-68")}>
+		// Finder's empty inspector shows it, centred above its chat bar. `caption` says what will appear there.
+		<div className={cn("inspector-empty flex flex-1 min-h-0 flex-col items-center justify-center gap-12", reserveDock && "pb-68")}>
 			<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
 			<img className="hidden size-67 object-contain dark:block" src={dazziMarkMonoDark} alt="" aria-hidden="true" draggable={false} />
+			{caption === undefined ? null : <p className="m-0 px-16 text-center text-meta leading-[18px] text-ink-muted">{caption}</p>}
 		</div>
 	);
 }
@@ -564,7 +564,7 @@ function usePreviewState(entry: FinderEntry): {
 			platform: hostPlatform(),
 			os: osPreview,
 			page: (file, version) => firstPageTile(file, version, PREVIEW_PAPER_WIDTH),
-			hwp: hwpFirstPageUrl,
+			hwp: async (file) => (await import("../../../preview/ui/rhwp")).hwpFirstPageUrl(file),
 		});
 		let cancelled = false;
 		const settle = (next: PreviewState): void => {
@@ -1143,7 +1143,7 @@ function EvidencePanel({
 						{folderButton}
 					</div>
 				) : null}
-				<FadedDazziMark reserveDock />
+				<FadedDazziMark reserveDock caption={t("inspector.evidencePanel.emptyHint")} />
 			</div>
 		);
 	}

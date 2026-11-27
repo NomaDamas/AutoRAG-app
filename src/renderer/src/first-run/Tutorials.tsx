@@ -13,7 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { useTranslation } from "../../../shared/i18n";
 import { cn } from "../lib/cn";
-import { CursorGlyph } from "./cursor";
+import { CoachCard, CoachMarker } from "./coach";
 import { placeBubble, type Rect } from "./tour";
 import {
 	anchorSelectors,
@@ -357,52 +357,38 @@ function TutorialCoach({
 		setBusy(true);
 		void onAccept(offer);
 	};
+	// The card says what to do; only a right click or a drag needs saying on top of it.
+	const note = step.hint === "rightClick" ? t("tutorials.rightClickHint") : step.hint === "drag" ? t("tutorials.dragHint") : null;
 	return (
 		<div className="fr-tour">
 			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			{cursorRect === null ? null : (
-				<div className="fr-cursor" data-tutorial-tap={step.key} style={{ left: cursorRect.left + Math.min(cursorRect.width * 0.34, 96), top: cursorRect.top + cursorRect.height * 0.58 }} aria-hidden="true">
-					<span className="fr-cursor-ring" />
-					<CursorGlyph />
-				</div>
-			)}
+			<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} />
 			<div ref={bubbleRef} className="fr-coach" data-tutorial-step={step.key} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={t(`${copy}.title` as LocaleKey)}>
-				<div className="fr-coach-card">
-					<p className="fr-coach-count">{t("firstRun.tour.progress", { index: index + 1, count })}</p>
-					<h2 className="fr-coach-title">
-						{waiting || busy ? <span className="fr-coach-spinner" aria-hidden="true" /> : null}
-						{t(`${copy}.title` as LocaleKey)}
-					</h2>
-					<p className="fr-coach-body">{t(`${copy}.body` as LocaleKey)}</p>
-					<div className="fr-coach-actions">
-						{offer === undefined ? (
-							<>
-								<button type="button" className="fr-link" data-action="tutorial-skip" onClick={onEnd}>
+				<CoachCard key={step.key} title={t(`${copy}.title` as LocaleKey)} body={t(`${copy}.body` as LocaleKey)} index={index} count={count} waiting={waiting || busy} note={note}>
+					{offer === undefined ? (
+						<>
+							{last && hintKey === null ? null : (
+								<button type="button" className="fr-coach-link" data-action="tutorial-skip" onClick={onEnd}>
 									{t("firstRun.tour.skip")}
 								</button>
-								{hintKey !== null ? (
-									<span className="fr-coach-hint">
-										<span className="fr-coach-hint-dot" aria-hidden="true" />
-										{t(hintKey)}
-									</span>
-								) : (
-									<button type="button" className="fr-btn fr-btn--primary fr-btn--sm" data-action="tutorial-next" onClick={last ? onEnd : onNext}>
-										{last ? t("firstRun.tour.finish") : t("firstRun.tour.next")}
-									</button>
-								)}
-							</>
-						) : (
-							<>
-								<button type="button" className="fr-link" data-action="tutorial-later" onClick={onEnd}>
-									{t("tutorials.later")}
+							)}
+							{hintKey === null ? (
+								<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-next" onClick={last ? onEnd : onNext}>
+									{last ? t("firstRun.tour.finish") : t("firstRun.tour.next")}
 								</button>
-								<button type="button" className="fr-btn fr-btn--primary fr-btn--sm" data-action="tutorial-accept" disabled={busy} onClick={accept}>
-									{t(`${copy}.action` as LocaleKey)}
-								</button>
-							</>
-						)}
-					</div>
-				</div>
+							) : null}
+						</>
+					) : (
+						<>
+							<button type="button" className="fr-coach-link" data-action="tutorial-later" onClick={onEnd}>
+								{t("tutorials.later")}
+							</button>
+							<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-accept" disabled={busy} onClick={accept}>
+								{t(`${copy}.action` as LocaleKey)}
+							</button>
+						</>
+					)}
+				</CoachCard>
 			</div>
 		</div>
 	);

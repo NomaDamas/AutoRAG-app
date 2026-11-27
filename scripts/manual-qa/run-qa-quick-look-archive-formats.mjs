@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync, zstdCompressSync } from "node:zlib";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const EVIDENCE = process.argv[2] ?? fileURLToPath(new URL("../../.omo/evidence/quick-look-archive-formats/", import.meta.url));
 mkdirSync(EVIDENCE, { recursive: true });
@@ -150,12 +150,8 @@ async function poll(read, accept, timeoutMs = 8000) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "ko" });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	let preview;
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 	const visible = () =>
 		app.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
@@ -168,6 +164,7 @@ try {
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		await poll(
 			() =>
 				preview

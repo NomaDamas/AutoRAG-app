@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
 import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
 import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
+import { AutomationDraftCard } from "../AutomationsView";
+import { rightClickSentence } from "../RightClickWhen";
 import { VoiceButton } from "../InspectorChat";
 import { SeedLoader } from "../SeedLoader";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerPrompt, AppCustomizerPromptAnswer, AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
@@ -12,7 +14,15 @@ import type { AppSettings } from "../../../../shared/settings-contract";
 import { findSecrets, redactSecrets } from "../../../../shared/secret-guard";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
 
-type CustomizerWindow = Window & { readonly autorag?: { readonly appCustomizer?: AppCustomizerBridge } };
+type CustomizerWindow = Window & {
+	readonly autorag?: { readonly appCustomizer?: AppCustomizerBridge; readonly settings?: { get(): Promise<AppSettings>; set(patch: Partial<AppSettings>): Promise<AppSettings> } };
+};
+
+/** One 매직 액션 만들기 press: the card it opened, and once 추가하기 saved it, the name it was saved under. */
+interface MagicStarter {
+	readonly key: number;
+	readonly added: string | null;
+}
 
 function getCustomizerBridge(): AppCustomizerBridge | undefined {
 	return (window as CustomizerWindow).autorag?.appCustomizer;
@@ -41,18 +51,23 @@ interface SurfaceCopy {
 	readonly unavailable: LocaleKey;
 }
 
+/**
+ * Every assistant but 우클릭 메뉴's opens the same way: one greeting and no example prompts, since most of what those
+ * pages do takes one click and the assistant is there for whatever else the person wants. 우클릭 메뉴 keeps its
+ * examples: Magic Actions are new to people and their requests are long.
+ */
+const OPEN_GREETING = {
+	emptyTitle: "settingsCore.assistantGreeting.title",
+	emptyDesc: "settingsCore.assistantGreeting.desc",
+	placeholder: "settingsCore.assistantGreeting.placeholder",
+	suggestions: [],
+} as const satisfies Pick<SurfaceCopy, "emptyTitle" | "emptyDesc" | "placeholder" | "suggestions">;
+
 /** The context-menu assistant has no copy of its own for the shared states and reuses the sidebar assistant's. */
 const OWN_SURFACE_COPY: Readonly<Record<"sidebar" | "contextMenu" | "shortcuts", SurfaceCopy>> = {
 	sidebar: {
 		title: "settingsCore.sidebar.assistant.title",
-		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
-		emptyDesc: "settingsCore.sidebar.assistant.emptyDesc",
-		placeholder: "settingsCore.sidebar.assistant.placeholder",
-		suggestions: [
-			"settingsCore.sidebar.assistant.promptHideMedia",
-			"settingsCore.sidebar.assistant.promptReorder",
-			"settingsCore.sidebar.assistant.promptReset",
-		],
+		...OPEN_GREETING,
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
@@ -74,15 +89,7 @@ const OWN_SURFACE_COPY: Readonly<Record<"sidebar" | "contextMenu" | "shortcuts",
 	},
 	shortcuts: {
 		title: "settingsCore.shortcuts.assistant.title",
-		emptyTitle: "settingsCore.shortcuts.assistant.emptyTitle",
-		emptyDesc: "settingsCore.shortcuts.assistant.emptyDesc",
-		placeholder: "settingsCore.shortcuts.assistant.placeholder",
-		suggestions: [
-			"settingsCore.shortcuts.assistant.promptMacFinder",
-			"settingsCore.shortcuts.assistant.promptWindowsExplorer",
-			"settingsCore.shortcuts.assistant.promptRenameF2",
-			"settingsCore.shortcuts.assistant.promptReset",
-		],
+		...OPEN_GREETING,
 		thinking: "settingsCore.shortcuts.assistant.thinking",
 		openAiSettings: "settingsCore.shortcuts.assistant.openAiSettings",
 		unavailable: "settingsCore.shortcuts.assistant.unavailable",
@@ -94,10 +101,7 @@ function configSurfaceCopy(surface: ConfigAssistantSurface): SurfaceCopy {
 	const base = `settingsCore.assistants.${surface}` as const;
 	return {
 		title: `${base}.title`,
-		emptyTitle: `${base}.emptyTitle`,
-		emptyDesc: `${base}.emptyDesc`,
-		placeholder: `${base}.placeholder`,
-		suggestions: [`${base}.prompt1`, `${base}.prompt2`, `${base}.prompt3`],
+		...OPEN_GREETING,
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
@@ -253,14 +257,18 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
  */
 export function AppCustomizerPanel({
 	surface,
+	sourceAlias = null,
 	hidden,
 	focusRequest,
 	prefill,
 	onSettingsUpdated,
 	onChangesApplied,
 	onOpenAiSettings,
+	starterRequest = 0,
 }: {
 	readonly surface: AppCustomizerSurface;
+	/** Active datasource alias when docked beside a `source:<alias>` detail page. */
+	readonly sourceAlias?: string | null;
 	readonly hidden: boolean;
 	/** Bumped when the user explicitly opens the panel; the composer takes focus then, never on a plain page visit. */
 	readonly focusRequest: number;
@@ -270,6 +278,11 @@ export function AppCustomizerPanel({
 	/** A turn ended with settings changed (even one the person stopped or that failed half way): the page beside the sidebar reads them again. */
 	readonly onChangesApplied: () => void;
 	readonly onOpenAiSettings: () => void;
+	/**
+	 * Bumped by 우클릭 메뉴's 매직 액션 만들기: the chat opens a new-action card, the same form as the 자동화 tab's
+	 * 새 자동화 card set to 우클릭하면, under a "새 매직 액션 만들기" turn.
+	 */
+	readonly starterRequest?: number;
 }): ReactElement {
 	const { t } = useTranslation();
 	const copy = surfaceCopy(surface);
@@ -284,6 +297,11 @@ export function AppCustomizerPanel({
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const appliedPrefillNonce = useRef(0);
+	const [starters, setStarters] = useState<readonly MagicStarter[]>([]);
+
+	useEffect(() => {
+		if (starterRequest > 0) setStarters((current) => (current.some((item) => item.key === starterRequest) ? current : [...current, { key: starterRequest, added: null }]));
+	}, [starterRequest]);
 
 	useEffect(() => {
 		if (prefill === null || prefill === undefined || prefill.nonce === appliedPrefillNonce.current) return;
@@ -313,7 +331,7 @@ export function AppCustomizerPanel({
 		if (container !== null) {
 			container.scrollTop = container.scrollHeight;
 		}
-	}, [turns]);
+	}, [turns, starters]);
 
 	useEffect(() => {
 		const bridge = getCustomizerBridge();
@@ -439,18 +457,20 @@ export function AppCustomizerPanel({
 				setTurns((prev) => prev.map((turn) => (turn.id === runId ? { ...turn, status: "error", error: t(copy.unavailable) } : turn)));
 				return;
 			}
-			void bridge.send(runId, { sessionId, message: trimmed, surface }).catch((cause: unknown) => {
-				setActiveRunId((current) => (current === runId ? null : current));
-				setTurns((prev) =>
-					prev.map((turn) =>
-						turn.id === runId
-							? { ...turn, status: "error", error: cause instanceof Error ? cause.message : String(cause) }
-							: turn,
-					),
-				);
-			});
+			void bridge
+				.send(runId, { sessionId, message: trimmed, surface, ...(sourceAlias !== null && sourceAlias.length > 0 ? { sourceAlias } : {}) })
+				.catch((cause: unknown) => {
+					setActiveRunId((current) => (current === runId ? null : current));
+					setTurns((prev) =>
+						prev.map((turn) =>
+							turn.id === runId
+								? { ...turn, status: "error", error: cause instanceof Error ? cause.message : String(cause) }
+								: turn,
+						),
+					);
+				});
 		},
-		[sessionId, surface, copy, t],
+		[sessionId, surface, sourceAlias, copy, t],
 	);
 
 	const resetChat = useCallback((): void => {
@@ -460,6 +480,7 @@ export function AppCustomizerPanel({
 		void getCustomizerBridge()?.reset(sessionId);
 		setActiveRunId(null);
 		setTurns([]);
+		setStarters([]);
 		setSessionId(makeId(`customizer-${surface}-sess`));
 		textareaRef.current?.focus();
 	}, [sessionId, surface]);
@@ -480,21 +501,24 @@ export function AppCustomizerPanel({
 	return (
 		<aside className="customizer-panel" aria-label={t(copy.title)} data-testid="app-customizer-panel" data-surface={surface} hidden={hidden}>
 			<div ref={scrollRef} className="customizer-panel__body">
-				{turns.length === 0 ? (
+				{turns.length === 0 && starters.length === 0 ? (
 					<div className="customizer-panel__empty">
 						{/* The faded monochrome mark (Figma 367:8865); dark mode has its own, with the fade in the image. */}
-						<div className="customizer-panel__empty-orb" aria-hidden="true">
+						{/* On 우클릭 메뉴 the welcome rises in like chat messages: the mark, title, line and first suggestion together, then each next suggestion in turn (settings.css .customizer-rise). */}
+						<div className="customizer-panel__empty-orb customizer-rise" style={{ "--rise-i": 0 } as CSSProperties} aria-hidden="true">
 							<img src={dazziMarkMono} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--light" draggable={false} />
 							<img src={dazziMarkMonoDark} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--dark" draggable={false} />
 						</div>
-						<h3 className="customizer-panel__empty-title">{t(copy.emptyTitle)}</h3>
-						<p className="customizer-panel__empty-desc">{t(copy.emptyDesc)}</p>
+						<h3 className="customizer-panel__empty-title customizer-rise" style={{ "--rise-i": 0 } as CSSProperties}>{t(copy.emptyTitle)}</h3>
+						<p className="customizer-panel__empty-desc customizer-rise" style={{ "--rise-i": 0 } as CSSProperties}>{t(copy.emptyDesc)}</p>
+						{copy.suggestions.length === 0 ? null : (
 						<div className="customizer-panel__suggestions">
-							{copy.suggestions.map((key) => (
+							{copy.suggestions.map((key, index) => (
 								<button
 									key={key}
 									type="button"
-									className="customizer-suggestion-chip"
+									className="customizer-suggestion-chip customizer-rise"
+									style={{ "--rise-i": index } as CSSProperties}
 									data-action="customizer-suggestion"
 									onClick={() => sendMessage(t(key))}
 								>
@@ -502,6 +526,7 @@ export function AppCustomizerPanel({
 								</button>
 							))}
 						</div>
+						)}
 					</div>
 				) : (
 					<div className="customizer-panel__turns">
@@ -554,6 +579,46 @@ export function AppCustomizerPanel({
 											</button>
 										</div>
 									) : null}
+								</div>
+							</div>
+						))}
+						{starters.map((starter) => (
+							// As 새 자동화 does in the AI column: the person's 새 매직 액션 만들기, the reply, and the card, rising one after another.
+							<div key={`starter-${starter.key}`} className="customizer-turn" data-magic-starter={starter.key}>
+								<div className="customizer-turn__user-row animate-rise [animation-fill-mode:both]">
+									<div className="customizer-turn__user-bubble">{t("settingsCore.contextMenu.assistant.starterUser")}</div>
+								</div>
+								<div className="customizer-turn__assistant-row">
+									<div className="animate-rise [animation-delay:140ms] [animation-fill-mode:both]">
+										<CustomizerReplyBody text={t("settingsCore.contextMenu.assistant.starterReply")} />
+									</div>
+									{starter.added === null ? (
+										// The card takes the column's whole width and follows it as the sidebar is resized.
+										<div className="w-full min-w-0 self-stretch animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+										<AutomationDraftCard
+											initial={null}
+											rightClickOnly
+											onCreate={async () => false}
+											onCreateMagicAction={async (action) => {
+												// Hand the form request to the Settings assistant so it verifies in a temp sandbox and saves directly.
+												const taskText = action.execution.kind === "agent" ? action.execution.prompt : action.execution.command;
+												const target = rightClickSentence(t, action);
+												const prompt = `${t("settingsCore.contextMenu.assistant.starterUser")}: ${target} — ${taskText}`;
+												setStarters((current) => current.filter((item) => item.key !== starter.key));
+												sendMessage(prompt);
+												return true;
+											}}
+											onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
+										/>
+										</div>
+									) : (
+										<div className="customizer-turn__changes">
+											<span className="customizer-change-pill">
+												<Check size={14} strokeWidth={1.8} aria-hidden="true" />
+												<span>{t("settingsCore.contextMenu.assistant.starterAdded", { title: starter.added })}</span>
+											</span>
+										</div>
+									)}
 								</div>
 							</div>
 						))}

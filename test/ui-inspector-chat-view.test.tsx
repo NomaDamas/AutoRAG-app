@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InspectorChatDock, InspectorChatView } from "../src/renderer/src/components/InspectorChat";
 import type { InspectorChatTab } from "../src/renderer/src/state/inspector-chat";
 import type { ChatAttachment } from "../src/shared/search-contract";
@@ -323,7 +323,7 @@ describe("the inspector chat view", () => {
 		const title = host.querySelector<HTMLButtonElement>(".inspector-chat-title");
 		expect(title?.textContent).toBe("deck.pdf");
 		expect(title?.getAttribute("aria-haspopup")).toBe("menu");
-		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]:not(.inspector-chat-title)")].map((button) => button.getAttribute("aria-label"));
 		expect(labels).toEqual(["새 대화", "AI 에이전트 탭에서 열기", "대화 닫기"]);
 		act(() => host.querySelector<HTMLButtonElement>('button[aria-label="대화 닫기"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(backs).toEqual(["back"]);
@@ -358,12 +358,68 @@ describe("the inspector chat view", () => {
 		expect(host.querySelector(".inspector-chat-title")?.textContent).toBe("3분기 기획안 요약");
 	});
 
-	it("puts the approval-mode chip, icon only, left of the input", () => {
+	it("is the 자동화 tab's own chat when standalone: the title opens the history, beside it only 새 대화, no open-in-tab, no close", () => {
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={tab}
+					targetName="자동화"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					request={null}
+					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+					standalone
+				/>,
+			),
+		);
+		expect(host.querySelector(".inspector-chat-title")?.tagName).toBe("BUTTON");
+		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+		expect(labels).toEqual(["새 대화"]);
+	});
+
+	it("opens the AI tab's history menu from the title: a search field over day captions, each chat with its time", async () => {
+		const now = Date.now();
+		const summaries = [
+			{ id: "chat-1", title: "첨부한 파일을 요약해줘", snippet: "", updatedAt: new Date(now - 60_000).toISOString() },
+			{ id: "chat-2", title: "3분기 기획안 요약", snippet: "", updatedAt: new Date(now - 120_000).toISOString() },
+		];
+		Reflect.set(globalThis, "autorag", { search: { historyList: async () => summaries, historySearch: vi.fn(async () => summaries.slice(1)) } });
+		render([]);
+		act(() => host.querySelector<HTMLButtonElement>(".inspector-chat-title")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		const menu = host.querySelector(".inspector-chat-history");
+		expect(menu?.querySelector("input")?.getAttribute("placeholder")).toBe("대화 기록 검색");
+		expect([...(menu?.querySelectorAll(".history-group") ?? [])].map((group) => group.textContent)).toEqual(["오늘"]);
+		const items = [...(menu?.querySelectorAll(".history-item") ?? [])];
+		expect(items.map((item) => item.querySelector("b")?.textContent)).toEqual(["첨부한 파일을 요약해줘", "3분기 기획안 요약"]);
+		expect(items.every((item) => (item.querySelector(".hist-time")?.textContent ?? "").length > 0)).toBe(true);
+		Reflect.deleteProperty(globalThis, "autorag");
+	});
+
+	it("puts the words on their own row and the approval-mode chip, icon only, under them beside the send button", () => {
 		render([]);
 		const chip = host.querySelector<HTMLButtonElement>('.inspector-chat-composer button[aria-haspopup="menu"]');
 		expect(chip).not.toBeNull();
 		expect(chip?.textContent).toBe("");
-		expect(chip?.nextElementSibling?.tagName).toBe("TEXTAREA");
+		const field = host.querySelector(".inspector-chat-composer textarea");
+		expect(field?.nextElementSibling?.contains(chip ?? null)).toBe(true);
+		// The send (or mic) button closes the same row.
+		expect(chip?.parentElement?.lastElementChild?.tagName).toBe("BUTTON");
 	});
 
 	it("asks about the waiting files, each as a card, and follows up otherwise", () => {
@@ -534,7 +590,7 @@ describe("the inspector chat while a run streams", () => {
 		renderRunning({ steer: (text) => (steered.push(text), true) });
 		const input = host.querySelector<HTMLTextAreaElement>("textarea");
 		if (input === null) throw new Error("no input");
-		expect(input.getAttribute("placeholder")).toBe("검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)");
+		expect(input.getAttribute("placeholder")).toBe("이어서 묻기");
 		typeInto(input, "지난주 것만");
 		press(input, {});
 		expect(steered).toEqual(["지난주 것만"]);
@@ -576,6 +632,18 @@ describe("the inspector chat while a run streams", () => {
 			["pending", "한국어로"],
 		]);
 		expect(host.querySelector(".queued-question")?.textContent).toContain("다음 질문");
+		// A sent correction copies under the pointer; one still on its way has nothing to press.
+		expect(bubbles.map((node) => [...node.querySelectorAll("button")].map((button) => button.getAttribute("aria-label")))).toEqual([["복사"], []]);
+	});
+
+	it("offers 미루기 and 취소 under a held correction, and 수정 puts a waiting question back into the draft", () => {
+		renderRunning({ steers: [{ id: "h", text: "지난주 것만", timing: "before-quick", status: "held" }], queued: ["다음 질문"] });
+		const labels = (selector: string): (string | null)[] => [...host.querySelectorAll(`${selector} button`)].map((button) => button.getAttribute("aria-label"));
+		// Without a handler a held bubble shows no icons; the queued one keeps 수정 and 삭제 (no 지금 반영 without a handler).
+		expect(labels(".queued-question")).toEqual(["수정", "삭제"]);
+		const edit = host.querySelector<HTMLButtonElement>('.queued-question button[aria-label="수정"]');
+		act(() => edit?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("다음 질문");
 	});
 
 	it("replaces the composer with the agent's question and sends the pick back through the bridge", () => {

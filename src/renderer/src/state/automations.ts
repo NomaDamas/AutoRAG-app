@@ -159,8 +159,43 @@ export function actionShort(rule: AutomationRule): string {
 	return t("automations.action.run", { name: commandName(rule) });
 }
 
-/** "새 PDF → Dazzi에게 맡기기": the name a person reads in a list. */
+/** Names people gave their rules (app settings, by rule id); App keeps this in step with the settings. */
+let ruleNames: Readonly<Record<string, string>> = {};
+
+export function setRuleNames(names: Readonly<Record<string, string>>): void {
+	ruleNames = names;
+}
+
+export function ruleNamesNow(): Readonly<Record<string, string>> {
+	return ruleNames;
+}
+
+/** Auto-generated ids from the card (`rule-abc123`) have no human meaning; explicit ids (`jonyenyeo-photo-sorter`) do. */
+const GENERATED_RULE_ID = /^rule-[a-z0-9]+(?:-\d+)?$/i;
+
+/** Whether `id` is a meaningful user/agent-chosen name rather than a random `rule-<base36>` slug. */
+export function hasMeaningfulRuleId(id: string): boolean {
+	const trimmed = id.trim();
+	return trimmed.length > 0 && !GENERATED_RULE_ID.test(trimmed);
+}
+
+/** The name a person gave the rule, or null when it goes by its id or derived title. */
+export function customRuleName(rule: AutomationRule): string | null {
+	return ruleNames[rule.id] ?? null;
+}
+
+/**
+ * The rule's title shown in lists, details, breadcrumbs, and Quick Look:
+ * 1. An explicit rename saved in app settings (`automationNames[rule.id]`)
+ * 2. The rule's own meaningful `id` (e.g. `jonyenyeo-photo-sorter`, `receipt-inbox-sorter`)
+ * 3. Fallback sentence derived from its trigger and action (for auto-generated `rule-<ts>` ids).
+ */
 export function ruleTitle(rule: AutomationRule): string {
+	return customRuleName(rule) ?? (hasMeaningfulRuleId(rule.id) ? rule.id : derivedTitle(rule));
+}
+
+/** "새 PDF → Dazzi에게 맡기기": the title a rule goes by until a person names it. */
+export function derivedTitle(rule: AutomationRule): string {
 	const everyFile = isEveryFile(rule);
 	const kinds = kindsText(rule.include);
 	const createdOnly = rule.events.length === 1 && rule.events[0] === "create";
@@ -212,6 +247,18 @@ export type RunTone = "ok" | "fail" | "never";
 export function runTone(run: AutomationRun | null): RunTone {
 	if (run === null) return "never";
 	return run.timedOut || run.error !== undefined || run.exitCode !== 0 ? "fail" : "ok";
+}
+
+/**
+ * The run dot's four states: `never` before any run, `ok` after a clean one, `error` when the run could not
+ * start or finish (a missing command, a timeout), and `fail` when it ran to the end and reported failure.
+ */
+export type RunDotTone = "ok" | "error" | "fail" | "never";
+
+export function runDotTone(run: AutomationRun | null): RunDotTone {
+	if (run === null) return "never";
+	if (run.timedOut || run.error !== undefined) return "error";
+	return run.exitCode === 0 ? "ok" : "fail";
 }
 
 export function failReason(run: AutomationRun): string {

@@ -133,14 +133,18 @@ const app = await launchFinder({
 try {
 	const main = await finderWindow(app, 30_000);
 	const finderPreview = createFinderPreview(app, main);
-	const preview = await poll(() => finderPreview.page().catch(() => null), (candidate) => candidate !== null, 30_000);
-	if (preview === null) throw new Error("Quick Look window did not pre-warm");
-
 	const previewWarnings = [];
-	preview.on("console", (msg) => {
-		if (msg.type() === "warning" || msg.type() === "error") previewWarnings.push(msg.text());
+	const attachPreviewListeners = (page) => {
+		page.on("console", (msg) => {
+			if (msg.type() === "warning" || msg.type() === "error") previewWarnings.push(msg.text());
+		});
+		page.on("pageerror", (err) => previewWarnings.push(err.message));
+	};
+	// Attach listeners as soon as the lazy Quick Look window registers so no early pdf.js warnings are missed.
+	app.on("window", (page) => {
+		if (page.url().includes("quick-look.html")) attachPreviewListeners(page);
+		else page.once("load", () => { if (page.url().includes("quick-look.html")) attachPreviewListeners(page); });
 	});
-	preview.on("pageerror", (err) => previewWarnings.push(err.message));
 
 	const mainWarnings = [];
 	main.on("console", (msg) => {
@@ -153,6 +157,8 @@ try {
 	await row.waitFor({ timeout: 30_000 });
 	await row.click();
 	await main.keyboard.press("Space");
+	const preview = await poll(() => finderPreview.page().catch(() => null), (candidate) => candidate !== null, 30_000);
+	if (preview === null) throw new Error("Quick Look window did not appear");
 
 	const qlInk = await poll(
 		() => measureCanvasInk(preview, "canvas"),
