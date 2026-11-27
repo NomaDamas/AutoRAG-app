@@ -12,6 +12,8 @@ export const DEMO_CHANNELS = {
 	ensureDaemon: "demo:ensureDaemon",
 	/** Add the example Magic Action (and make sure its sample file exists). */
 	prepareMagicAction: "demo:prepareMagicAction",
+	/** Make sure the sample text file exists, and add nothing: the automations tutorial has the person make the action. */
+	prepareSample: "demo:prepareSample",
 } as const;
 
 /** The Magic Action the right-click tutorial creates. */
@@ -38,4 +40,5 @@ export interface DemoBridge {
 	preparePhoto(): Promise<DemoPhotoReady>;
 	ensureDaemon(): Promise<boolean>;
 	prepareMagicAction(): Promise<DemoMagicActionReady>;
+	prepareSample(): Promise<DemoMagicActionReady>;
 }

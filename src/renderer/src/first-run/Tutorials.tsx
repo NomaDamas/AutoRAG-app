@@ -108,6 +108,8 @@ export function Tutorials({
 			const first = nextStep(TUTORIALS[id], -1, false, present);
 			if (first === null) return false;
 			markTutorialSeen(id);
+			// The automations tutorial teaches the right-click menu too: the right-click one would repeat it.
+			if (id === "automations") markTutorialSeen("contextMenu");
 			setRunning({ id, index: first, shown: 0, facts: {} });
 			return true;
 		};
