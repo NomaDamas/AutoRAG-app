@@ -389,8 +389,8 @@ function TutorialCoach({
 		setBusy(true);
 		void onAccept(offer);
 	};
-	// The card says what to do; only a right click or a drag needs saying on top of it.
-	const note = step.hint === "rightClick" ? t("tutorials.rightClickHint") : step.hint === "drag" ? t("tutorials.dragHint") : null;
+	// The card's own words already say to right-click; only a drag still gets a line on top of them.
+	const note = step.hint === "drag" ? t("tutorials.dragHint") : null;
 	return (
 		<div className="fr-tour">
 			{GUIDED.has(id) ? (
