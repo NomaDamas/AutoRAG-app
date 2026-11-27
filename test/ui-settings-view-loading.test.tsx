@@ -266,6 +266,21 @@ describe("the Remote Access page", () => {
 		expect(navItem?.getAttribute("aria-current")).toBe("true");
 	});
 
+	it("opens at its top, wherever the page before it was scrolled to", async () => {
+		bridge.sourcesList.mockResolvedValue(SOURCES);
+		await renderView("general");
+		const content = host.querySelector<HTMLElement>(".settings-content");
+		expect(content).not.toBeNull();
+		if (content !== null) content.scrollTop = 480;
+
+		const navItem = [...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((button) => button.textContent?.trim() === "Remote Access");
+		await act(async () => navItem?.click());
+		await settle();
+
+		expect(host.querySelector("h1")?.textContent).toBe("Remote Access");
+		expect(host.querySelector<HTMLElement>(".settings-content")?.scrollTop).toBe(0);
+	});
+
 	it("is found by searching for what it does", async () => {
 		bridge.sourcesList.mockResolvedValue(SOURCES);
 		await renderView("general");
