@@ -35,9 +35,11 @@ import {
 	jevSllmConfigUpdates,
 	modelConfigUpdates,
 	rerankConfigUpdates,
-	visualParseOcrConfigUpdates,
-	visualParseOffConfigUpdates,
+	visualParseOcrLocalConfigUpdates,
+	visualParseOcrOffConfigUpdates,
+	visualParseOcrRemoteConfigUpdates,
 	visualParseVlmConfigUpdates,
+	visualParseVlmOffConfigUpdates,
 } from "../../../shared/model-config";
 import { THINKING_LEVELS, WEBSEARCH_PROVIDERS } from "../../../shared/settings-options";
 import type { AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../shared/settings-contract";
@@ -118,7 +120,12 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					decomposition: { current: roleSelectionFromConfig("decomposition", snapshot.config, connected), choices: modelChoices, specials: ["same", "default"] },
 					jev: { current: roleSelectionFromConfig("jev", snapshot.config, connected), choices: jevChoices, specials: [JEV_SLLM_BACKEND] },
 					rerank: { current: roleSelectionFromConfig("rerank", snapshot.config, connected), choices: rerankChoices, specials: ["off"] },
-					visualParse: { current: roleSelectionFromConfig("visualParse", snapshot.config, connected), choices: visualModelChoices, specials: ["off", "ocr"] },
+					visualParse: { current: roleSelectionFromConfig("visualParse", snapshot.config, connected), choices: visualModelChoices, specials: ["off"] },
+					visualParseOcr: {
+						current: roleSelectionFromConfig("visualParseOcr", snapshot.config, connected),
+						choices: visualModelChoices,
+						specials: ["off", "auto", "kordoc", "tesseract"],
+					},
 				},
 				thinking: { current: thinkingLevelOf(snapshot.config), levels: THINKING_LEVELS.map((level) => level.value) },
 				webSearch: { ...webSearchStateOf(snapshot.config), providers: WEBSEARCH_PROVIDERS.map((provider) => provider.id) },
@@ -139,6 +146,7 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					Type.Literal("jev"),
 					Type.Literal("rerank"),
 					Type.Literal("visualParse"),
+					Type.Literal("visualParseOcr"),
 				],
 				{
 					description: "Which role to change.",
@@ -155,11 +163,13 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						Type.Literal("default"),
 						Type.Literal("sllm"),
 						Type.Literal("off"),
-						Type.Literal("ocr"),
+						Type.Literal("auto"),
+						Type.Literal("kordoc"),
+						Type.Literal("tesseract"),
 					],
 					{
 						description:
-							"A non-model choice: decomposition `same`/`default`, jev `sllm`, rerank `off`, visualParse `off`/`ocr`.",
+							"A non-model choice: decomposition `same`/`default`, jev `sllm`, rerank `off`, visualParse `off`, visualParseOcr `off`/`auto`/`kordoc`/`tesseract`.",
 					},
 				),
 			),
@@ -207,16 +217,24 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 				}
 				if (role === "visualParse" && special === "off") {
 					return apply(
-						visualParseOffConfigUpdates(),
-						localized("시각 문서 파싱을 사용 안 함으로 설정", "Turned visual page parsing off", "視覚ページパースをオフに設定", "已停用视觉页面解析"),
+						visualParseVlmOffConfigUpdates(snapshot.config),
+						localized("시각 문서 파싱(VLM)을 사용 안 함으로 설정", "Turned visual VLM parsing off", "視覚パース (VLM) をオフに設定", "已停用视觉解析 (VLM)"),
 						["visualParse"],
 						warnings,
 					);
 				}
-				if (role === "visualParse" && special === "ocr") {
+				if (role === "visualParseOcr" && special === "off") {
 					return apply(
-						visualParseOcrConfigUpdates(snapshot.config),
-						localized("시각 문서 파싱을 로컬 OCR로 설정", "Set visual page parsing to local OCR", "視覚ページパースをローカル OCR に設定", "已将视觉页面解析设为本地 OCR"),
+						visualParseOcrOffConfigUpdates(snapshot.config),
+						localized("OCR 모델을 사용 안 함으로 설정", "Turned OCR model off", "OCR モデルをオフに設定", "已停用 OCR 模型"),
+						["visualParse"],
+						warnings,
+					);
+				}
+				if (role === "visualParseOcr" && (special === "auto" || special === "kordoc" || special === "tesseract")) {
+					return apply(
+						visualParseOcrLocalConfigUpdates(special, snapshot.config),
+						localized(`OCR 모델을 로컬(${special})로 설정`, `Set OCR engine to local (${special})`, `OCR モデルをローカル (${special}) に設定`, `已将 OCR 引擎设为本地 (${special})`),
 						["visualParse"],
 						warnings,
 					);
@@ -284,14 +302,18 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						? modelConfigUpdates(entry)
 						: role === "visualParse"
 							? visualParseVlmConfigUpdates(entry, snapshot.config)
-							: decompositionConfigUpdates(entry);
+							: role === "visualParseOcr"
+								? visualParseOcrRemoteConfigUpdates(entry, snapshot.config)
+								: decompositionConfigUpdates(entry);
 				const name = entry.name.trim().length > 0 ? entry.name.trim() : entry.id;
 				summary =
 					role === "answer"
 						? localized(`답변 모델을 ${name}로 변경`, `Changed the answer model to ${name}`, `回答モデルを ${name} に変更`, `已将回答模型更改为 ${name}`)
 						: role === "visualParse"
-							? localized(`시각 문서 파싱 모델을 ${name}로 변경`, `Changed the visual parsing model to ${name}`, `視覚パースモデルを ${name} に変更`, `已将视觉解析模型更改为 ${name}`)
-							: localized(`질문 분해 모델을 ${name}로 변경`, `Changed the decomposition model to ${name}`, `質問分解モデルを ${name} に変更`, `已将问题分解模型更改为 ${name}`);
+							? localized(`시각 파싱(VLM) 모델을 ${name}로 변경`, `Changed the visual VLM model to ${name}`, `視覚パース (VLM) モデルを ${name} に変更`, `已将视觉解析 (VLM) 模型更改为 ${name}`)
+							: role === "visualParseOcr"
+								? localized(`OCR 모델을 ${name}로 변경`, `Changed the OCR model to ${name}`, `OCR モデルを ${name} に変更`, `已将 OCR 模型更改为 ${name}`)
+								: localized(`질문 분해 모델을 ${name}로 변경`, `Changed the decomposition model to ${name}`, `質問分解モデルを ${name} に変更`, `已将问题分解模型更改为 ${name}`);
 			}
 			return apply(
 				updates,

@@ -31,8 +31,12 @@ const { providerRoleCleanup, roleSelectionFor } = await import("../src/renderer/
 const { jevBackendFor, jevModelsFor } = await import("../src/shared/ai-roles");
 const {
 	visualParseOcrConfigUpdates,
+	visualParseOcrLocalConfigUpdates,
+	visualParseOcrOffConfigUpdates,
+	visualParseOcrRemoteConfigUpdates,
 	visualParseOffConfigUpdates,
 	visualParseVlmConfigUpdates,
+	visualParseVlmOffConfigUpdates,
 } = await import("../src/shared/model-config");
 
 let host: HTMLDivElement;
@@ -136,7 +140,64 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 				value: {
 					enabled: true,
 					threshold: 0.65,
-					extractor: { kind: "ocr" },
+					ocr: { engine: "auto" },
+				},
+			},
+		]);
+
+		expect(visualParseOcrLocalConfigUpdates("kordoc", existing)).toEqual([
+			{
+				path: ["visualParse"],
+				value: {
+					enabled: true,
+					threshold: 0.65,
+					ocr: { engine: "kordoc" },
+				},
+			},
+		]);
+
+		expect(visualParseOcrRemoteConfigUpdates(vlmEntry, existing)).toEqual([
+			{
+				path: ["visualParse"],
+				value: {
+					enabled: true,
+					threshold: 0.65,
+					ocr: {
+						engine: "vlm",
+						model: {
+							provider: "openrouter",
+							id: "google/gemini-3.5-flash-lite",
+							name: "Gemini 3.5 Flash Lite",
+							api: "openai-completions",
+						},
+					},
+				},
+			},
+		]);
+
+		expect(
+			visualParseVlmOffConfigUpdates({
+				visualParse: {
+					enabled: true,
+					extractor: { kind: "vlm", model: { provider: "openrouter", id: "m" } },
+					ocr: { engine: "kordoc" },
+				},
+			}),
+		).toEqual([{ path: ["visualParse"], value: { enabled: true, ocr: { engine: "kordoc" } } }]);
+		expect(
+			visualParseOcrOffConfigUpdates({
+				visualParse: {
+					enabled: true,
+					extractor: { kind: "vlm", model: { provider: "openrouter", id: "m" } },
+				},
+			}),
+		).toEqual([
+			{
+				path: ["visualParse"],
+				value: {
+					enabled: true,
+					extractor: { kind: "vlm", model: { provider: "openrouter", id: "m" } },
+					ocr: false,
 				},
 			},
 		]);
@@ -168,7 +229,8 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 
 		await render([openrouter], {});
 		expect(host.textContent).toContain("Decision model (Jev)");
-		expect(host.textContent).toContain("Advanced visual parsing");
+		expect(host.textContent).toContain("Advanced visual parsing (VLM)");
+		expect(host.textContent).toContain("OCR model");
 		expect(host.querySelector('[data-action="run-visualParse"]')).toBeNull();
 
 		bridge.configRefresh.mockResolvedValue({ ok: true, written: 3 });
@@ -176,6 +238,7 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 			visualParse: {
 				enabled: true,
 				extractor: { kind: "vlm", model: { provider: "openrouter", id: "google/gemini-3.5-flash-lite" } },
+				ocr: { engine: "vlm", model: { provider: "openrouter", id: "google/gemini-3.5-flash-lite" } },
 			},
 		});
 		expect(host.textContent).not.toContain("Visual page gate");
@@ -192,5 +255,15 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 				[openrouter],
 			),
 		).toEqual({ kind: "model", provider: "openrouter", modelId: "google/gemini-3.5-flash-lite" });
+		expect(
+			roleSelectionFor(
+				"visualParseOcr",
+				{ visualParse: { enabled: true, ocr: { engine: "vlm", model: { provider: "openrouter", id: "google/gemini-3.5-flash-lite" } } } },
+				[openrouter],
+			),
+		).toEqual({ kind: "model", provider: "openrouter", modelId: "google/gemini-3.5-flash-lite" });
+		expect(
+			roleSelectionFor("visualParseOcr", { visualParse: { enabled: true, ocr: { engine: "kordoc" } } }, [openrouter]),
+		).toEqual({ kind: "special", value: "kordoc" });
 	});
 });

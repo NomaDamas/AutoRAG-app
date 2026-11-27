@@ -35,12 +35,23 @@ export function providerRoleCleanup(config: AutoRagConfigSnapshot["config"], pro
 	const visualParse = asRecord(getAt(config, ["visualParse"]));
 	const visualExtractor = asRecord(visualParse?.extractor);
 	const visualModel = asRecord(visualExtractor?.model);
+	const visualOcr = asRecord(visualParse?.ocr);
+	const visualOcrModel = asRecord(visualOcr?.model);
 	const ops: AutoRagConfigUpdate[] = [];
 	if (stringOf(model?.provider) === providerId) ops.push({ path: ["model"], remove: true });
 	if (stringOf(decomposition?.provider) === providerId) ops.push({ path: ["queryDecomposition"], remove: true });
 	if (stringOf(rerank?.provider) === providerId) ops.push({ path: ["rerank"], value: false });
 	if (stringOf(jev?.backend) === jevBackendFor(providerId)) ops.push({ path: ["jev"], remove: true });
-	if (stringOf(visualModel?.provider) === providerId) ops.push({ path: ["visualParse"], value: false });
+	const vlmUses = stringOf(visualModel?.provider) === providerId;
+	const ocrUses = stringOf(visualOcrModel?.provider) === providerId;
+	if (vlmUses || ocrUses) {
+		const nextVisual: Record<string, unknown> = visualParse ? { ...visualParse } : {};
+		if (vlmUses) delete nextVisual.extractor;
+		if (ocrUses) nextVisual.ocr = { engine: "auto" };
+		const hasVlm = asRecord(nextVisual.extractor as never)?.kind === "vlm";
+		const hasOcr = nextVisual.ocr !== false && nextVisual.ocr !== undefined;
+		ops.push({ path: ["visualParse"], value: hasVlm || hasOcr ? (nextVisual as never) : false });
+	}
 	return ops;
 }
 
@@ -64,17 +75,40 @@ export function isVisualParseEnabled(config: AutoRagConfigSnapshot["config"]): b
 	const raw = getAt(config, ["visualParse"]);
 	const record = asRecord(raw);
 	if (raw === undefined || raw === false || record === null) return false;
-	return record.enabled !== false;
+	if (record.enabled === false) return false;
+	const hasVlm = stringOf(asRecord(record.extractor)?.kind) === "vlm";
+	const hasOcr = record.ocr !== false;
+	return hasVlm || hasOcr;
 }
 
 export function visualParseLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
 	if (!isVisualParseEnabled(config)) return t("settingsCore.ai.off");
 	const record = asRecord(getAt(config, ["visualParse"]));
 	const extractor = asRecord(record?.extractor);
-	const kind = stringOf(extractor?.kind);
-	if (kind === "" || kind === "ocr") return t("settingsCore.ai.visualParseOcr");
+	if (stringOf(extractor?.kind) !== "vlm") return t("settingsCore.ai.off");
 	const model = asRecord(extractor?.model);
-	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.visualParseOcr");
+	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.off");
+}
+
+export function visualParseOcrLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
+	if (!isVisualParseEnabled(config)) return t("settingsCore.ai.off");
+	const record = asRecord(getAt(config, ["visualParse"]));
+	if (record === null || record.ocr === false) return t("settingsCore.ai.off");
+	const ocr = asRecord(record.ocr);
+	if (ocr !== null) {
+		const engine = stringOf(ocr.engine);
+		if (engine === "vlm" || ocr.model !== undefined) {
+			const model = asRecord(ocr.model);
+			return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.visualParseOcrAuto");
+		}
+		if (engine === "kordoc") return t("settingsCore.ai.visualParseOcrKordoc");
+		if (engine === "tesseract") return t("settingsCore.ai.visualParseOcrTesseract");
+		return t("settingsCore.ai.visualParseOcrAuto");
+	}
+	const legacyEngine = stringOf(asRecord(record.extractor)?.engine);
+	if (legacyEngine === "kordoc") return t("settingsCore.ai.visualParseOcrKordoc");
+	if (legacyEngine === "tesseract") return t("settingsCore.ai.visualParseOcrTesseract");
+	return t("settingsCore.ai.visualParseOcrAuto");
 }
 
 export function jevLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
@@ -135,12 +169,35 @@ export function roleSelectionFor(
 		if (!isVisualParseEnabled(config)) return { kind: "special", value: "off" };
 		const record = asRecord(getAt(config, ["visualParse"]));
 		const extractor = asRecord(record?.extractor);
-		const kind = stringOf(extractor?.kind);
-		if (kind === "" || kind === "ocr") return { kind: "special", value: "ocr" };
+		if (stringOf(extractor?.kind) !== "vlm") return { kind: "special", value: "off" };
 		const model = asRecord(extractor?.model);
 		const provider = stringOf(model?.provider);
 		const modelId = stringOf(model?.id);
-		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : null;
+		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : { kind: "special", value: "off" };
+	}
+	if (role === "visualParseOcr") {
+		if (!isVisualParseEnabled(config)) return { kind: "special", value: "off" };
+		const record = asRecord(getAt(config, ["visualParse"]));
+		if (record === null || record.ocr === false) return { kind: "special", value: "off" };
+		const ocr = asRecord(record.ocr);
+		if (ocr !== null) {
+			const engine = stringOf(ocr.engine);
+			if (engine === "vlm" || ocr.model !== undefined) {
+				const model = asRecord(ocr.model);
+				const provider = stringOf(model?.provider);
+				const modelId = stringOf(model?.id);
+				return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : { kind: "special", value: "auto" };
+			}
+			if (engine === "kordoc" || engine === "tesseract" || engine === "auto") {
+				return { kind: "special", value: engine };
+			}
+			return { kind: "special", value: "auto" };
+		}
+		const legacyEngine = stringOf(asRecord(record.extractor)?.engine);
+		if (legacyEngine === "kordoc" || legacyEngine === "tesseract" || legacyEngine === "auto") {
+			return { kind: "special", value: legacyEngine };
+		}
+		return { kind: "special", value: "auto" };
 	}
 	return null;
 }

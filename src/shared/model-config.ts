@@ -84,7 +84,7 @@ function modelRefFromEntry(entry: ModelCatalogEntry): Record<string, string> {
 	return model;
 }
 
-/** Enable visual-rich page parsing with a VLM model, keeping any existing gate/limit settings intact. */
+/** Enable visual-rich page parsing with a VLM model, keeping any existing gate/ocr/limit settings intact. */
 export function visualParseVlmConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
 	const base = existingVisualParseObject(currentConfig);
 	return [
@@ -99,8 +99,32 @@ export function visualParseVlmConfigUpdates(entry: ModelCatalogEntry, currentCon
 	];
 }
 
-/** Enable visual-rich page parsing with local OCR, keeping any existing gate/limit settings intact. */
-export function visualParseOcrConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+/**
+ * Turn off the VLM extractor while preserving an active OCR engine if one is configured;
+ * if OCR is also off, turns `visualParse` completely off (`false`).
+ */
+export function visualParseVlmOffConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	if (base.ocr === undefined || base.ocr === false) {
+		return [{ path: ["visualParse"], value: false }];
+	}
+	const { extractor: _extractor, ...rest } = base;
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...rest,
+				enabled: true,
+			} as JsonObject,
+		},
+	];
+}
+
+/** Set the Stage 2 OCR engine to a local engine (`"auto"`, `"kordoc"`, or `"tesseract"`), keeping any VLM/gate settings intact. */
+export function visualParseOcrLocalConfigUpdates(
+	engine: "auto" | "kordoc" | "tesseract",
+	currentConfig?: JsonObject,
+): AutoRagConfigUpdate[] {
 	const base = existingVisualParseObject(currentConfig);
 	return [
 		{
@@ -108,13 +132,55 @@ export function visualParseOcrConfigUpdates(currentConfig?: JsonObject): AutoRag
 			value: {
 				...base,
 				enabled: true,
-				extractor: { kind: "ocr" },
+				ocr: { engine },
 			} as JsonObject,
 		},
 	];
 }
 
-/** Turn visual-rich page parsing off. */
+/** Set the Stage 2 OCR model to a remote vision/OCR model, keeping any VLM/gate settings intact. */
+export function visualParseOcrRemoteConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				ocr: { engine: "vlm", model: modelRefFromEntry(entry) },
+			} as JsonObject,
+		},
+	];
+}
+
+/**
+ * Turn off Stage 2 OCR while preserving a configured VLM extractor if one is active;
+ * if no VLM extractor is set, turns `visualParse` completely off (`false`).
+ */
+export function visualParseOcrOffConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	const extractor = isJsonObject(base.extractor) ? base.extractor : null;
+	if (extractor?.kind === "vlm") {
+		return [
+			{
+				path: ["visualParse"],
+				value: {
+					...base,
+					enabled: true,
+					ocr: false,
+				} as JsonObject,
+			},
+		];
+	}
+	return [{ path: ["visualParse"], value: false }];
+}
+
+/** Legacy helper: enable Stage 2 visual parsing with local auto OCR. */
+export function visualParseOcrConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	return visualParseOcrLocalConfigUpdates("auto", currentConfig);
+}
+
+/** Turn visual-rich page parsing (both VLM and OCR) completely off. */
 export function visualParseOffConfigUpdates(): AutoRagConfigUpdate[] {
 	return [{ path: ["visualParse"], value: false }];
 }

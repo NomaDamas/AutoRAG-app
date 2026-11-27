@@ -32,6 +32,7 @@ import {
 	rerankOptionsFor,
 	roleSelectionFor,
 	visualParseLabel,
+	visualParseOcrLabel,
 	visualParseOptionsFor,
 } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
@@ -42,9 +43,11 @@ import {
 	jevSllmConfigUpdates,
 	modelConfigUpdates,
 	rerankConfigUpdates,
-	visualParseOcrConfigUpdates,
-	visualParseOffConfigUpdates,
+	visualParseOcrLocalConfigUpdates,
+	visualParseOcrOffConfigUpdates,
+	visualParseOcrRemoteConfigUpdates,
 	visualParseVlmConfigUpdates,
+	visualParseVlmOffConfigUpdates,
 } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 import { THINKING_LEVELS } from "../../../../shared/settings-options";
@@ -67,10 +70,14 @@ const DECOMPOSITION_SPECIALS = [
 const RERANK_OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
 /** The decision model is Jev or the small chat model; it cannot be switched off. */
 const JEV_SLLM_SPECIALS = [{ value: JEV_SLLM_BACKEND, labelKey: "settingsCore.ai.jevSllm" }] as const;
-/** Visual page parsing: off, local OCR, or any connected vision-capable VLM. */
-const VISUAL_PARSE_SPECIALS = [
+/** Visual page parsing (VLM): off or any connected vision-capable VLM. */
+const VISUAL_PARSE_VLM_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
+/** Visual page OCR: off, local engines (auto PP-OCRv5/Tesseract, kordoc PP-OCRv5, Tesseract), or any connected remote vision/OCR model. */
+const VISUAL_PARSE_OCR_SPECIALS = [
 	{ value: "off", labelKey: "settingsCore.ai.off" },
-	{ value: "ocr", labelKey: "settingsCore.ai.visualParseOcr" },
+	{ value: "auto", labelKey: "settingsCore.ai.visualParseOcrAuto" },
+	{ value: "kordoc", labelKey: "settingsCore.ai.visualParseOcrKordoc" },
+	{ value: "tesseract", labelKey: "settingsCore.ai.visualParseOcrTesseract" },
 ] as const;
 
 interface MenuState {
@@ -95,6 +102,10 @@ function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string,
 	const visualModel = asRecord(asRecord(visualParse?.extractor)?.model);
 	if (visualParse?.enabled !== false && stringOf(visualModel?.provider) === providerId) {
 		out.push(t("settingsCore.ai.role.visualParse"));
+	}
+	const visualOcrModel = asRecord(asRecord(visualParse?.ocr)?.model);
+	if (visualParse?.enabled !== false && visualParse?.ocr !== false && stringOf(visualOcrModel?.provider) === providerId) {
+		out.push(t("settingsCore.ai.role.visualParseOcr"));
 	}
 	return out;
 }
@@ -245,7 +256,8 @@ export function AiPage({
 		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "jev") return JEV_SLLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "rerank") return RERANK_OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
-		if (role === "visualParse") return VISUAL_PARSE_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "visualParse") return VISUAL_PARSE_VLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "visualParseOcr") return VISUAL_PARSE_OCR_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		return [];
 	}
 
@@ -316,6 +328,16 @@ export function AiPage({
 								: undefined
 						}
 					/>
+					<RoleRow
+						role="visualParseOcr"
+						label={t("settingsCore.ai.visualParseOcrModel")}
+						hint={t("settingsCore.ai.visualParseOcrHint")}
+						current={visualParseOcrLabel(snapshot.config, t)}
+						currentTitle={roleTitle("visualParseOcr", snapshot, t)}
+						broken={roleBroken("visualParseOcr", snapshot.config, connected)}
+						provider={selectedProvider("visualParseOcr", snapshot.config, connected)}
+						onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParseOcr" })}
+					/>
 					<EmbeddingPicker name={t("settingsCore.ai.embeddingModel")} hint={t("settingsCore.ai.embeddingHint")} />
 				</div>
 			</section>
@@ -342,7 +364,7 @@ export function AiPage({
 									? jevOptions
 									: menu.arg === "rerank"
 										? rerankOptions
-										: menu.arg === "visualParse"
+										: menu.arg === "visualParse" || menu.arg === "visualParseOcr"
 											? visualParseOptions
 											: catalogModels
 							}
@@ -354,6 +376,7 @@ export function AiPage({
 								else if (menu.arg === "jev") void run(jevConfigUpdates(entry));
 								else if (menu.arg === "rerank") void run(rerankConfigUpdates(entry));
 								else if (menu.arg === "visualParse") void run(visualParseVlmConfigUpdates(entry, snapshot.config));
+								else if (menu.arg === "visualParseOcr") void run(visualParseOcrRemoteConfigUpdates(entry, snapshot.config));
 								else writeModel(entry);
 							}}
 							onSpecial={(special) => {
@@ -362,8 +385,11 @@ export function AiPage({
 								else if (menu.arg === "decomposition" && special === "default") void run([{ path: ["queryDecomposition"], remove: true }]);
 								else if (menu.arg === "jev" && special === JEV_SLLM_BACKEND) void run(jevSllmConfigUpdates());
 								else if (menu.arg === "rerank" && special === "off") void run([{ path: ["rerank"], value: false }]);
-								else if (menu.arg === "visualParse" && special === "off") void run(visualParseOffConfigUpdates());
-								else if (menu.arg === "visualParse" && special === "ocr") void run(visualParseOcrConfigUpdates(snapshot.config));
+								else if (menu.arg === "visualParse" && special === "off") void run(visualParseVlmOffConfigUpdates(snapshot.config));
+								else if (menu.arg === "visualParseOcr" && special === "off") void run(visualParseOcrOffConfigUpdates(snapshot.config));
+								else if (menu.arg === "visualParseOcr" && (special === "auto" || special === "kordoc" || special === "tesseract")) {
+									void run(visualParseOcrLocalConfigUpdates(special, snapshot.config));
+								}
 							}}
 						/>
 					) : null}
@@ -424,7 +450,7 @@ function formatModelTooltip(name: string, id: string): string | undefined {
 }
 
 function roleTitle(
-	role: "answer" | "decomposition" | "jev" | "rerank" | "visualParse",
+	role: "answer" | "decomposition" | "jev" | "rerank" | "visualParse" | "visualParseOcr",
 	snapshot: AutoRagConfigSnapshot,
 	t: TFunction,
 ): string | undefined {
@@ -448,6 +474,15 @@ function roleTitle(
 			return formatModelTooltip(stringOf(model?.name), stringOf(model?.id)) ?? visualParseLabel(snapshot.config, t);
 		}
 		return visualParseLabel(snapshot.config, t);
+	}
+	if (role === "visualParseOcr") {
+		if (!isVisualParseEnabled(snapshot.config)) return t("settingsCore.ai.off");
+		const ocr = asRecord(asRecord(getAt(snapshot.config, ["visualParse"]))?.ocr);
+		const model = asRecord(ocr?.model);
+		if (model !== null) {
+			return formatModelTooltip(stringOf(model.name), stringOf(model.id)) ?? visualParseOcrLabel(snapshot.config, t);
+		}
+		return visualParseOcrLabel(snapshot.config, t);
 	}
 	return rerankLabel(snapshot.config, t);
 }
