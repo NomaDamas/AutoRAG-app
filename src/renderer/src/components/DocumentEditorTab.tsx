@@ -412,8 +412,8 @@ export function DocumentEditorTab({ filePath, onOpenExternal, onOpenEditorFile }
 					</button>
 				) : null}
 
-				{/* Markup toggle for text/package docs -> opens right-sidebar AI chat when activated */}
-				{loaded !== null && loaded.kind !== "pdf" ? (
+				{/* Markup toggle -> opens right-sidebar AI chat when activated */}
+				{loaded !== null ? (
 					<button
 						type="button"
 						aria-pressed={markupActive}
@@ -449,7 +449,7 @@ export function DocumentEditorTab({ filePath, onOpenExternal, onOpenEditorFile }
 				) : null}
 
 				{/* Right-sidebar AI chat button */}
-				{loaded !== null && loaded.kind !== "pdf" && sidebar !== null ? (
+				{loaded !== null && sidebar !== null ? (
 					<button
 						type="button"
 						onClick={() => sidebar.openRightSidebar()}
@@ -561,7 +561,7 @@ export function DocumentEditorTab({ filePath, onOpenExternal, onOpenEditorFile }
 				) : null}
 
 				{/* Interactive mark-up layer (annotations stream directly into the right-sidebar AI chat) */}
-				{loaded !== null && loaded.kind !== "pdf" ? (
+				{loaded !== null ? (
 					<EditorMarkupOverlay
 						stageRef={stageRef}
 						active={markupActive}

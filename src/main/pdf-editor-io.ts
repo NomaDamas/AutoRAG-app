@@ -18,6 +18,7 @@ import type {
 	PdfApplyRequest,
 	PdfApplyResult,
 	PdfBlankPageSize,
+	PdfChangedEvent,
 	PdfEditOperation,
 	PdfExtractRequest,
 	PdfExtractResult,
@@ -477,6 +478,56 @@ async function applyOperation(pdfDoc: PDFDocument, op: PdfEditOperation): Promis
 			}
 			return;
 		}
+		case "addText": {
+			if (op.pageIndex < 0 || op.pageIndex >= count) throw new Error(`Page index ${op.pageIndex} out of range.`);
+			const page = pdfDoc.getPage(op.pageIndex);
+			const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+			const fontSize = op.fontSize ?? 14;
+			const color = parseHexRgb(op.color ?? "#1D1D1F");
+			const lines = op.text.replace(/\r\n?/g, "\n").split("\n");
+			const lineHeight = fontSize * 1.3;
+			const anchor = visualPointToPdfCoords(page, { x: op.x, y: op.y });
+			lines.forEach((rawLine, idx) => {
+				const safe = toWinAnsiSafe(rawLine);
+				if (safe.length === 0) return;
+				page.drawText(safe, {
+					x: anchor.x,
+					y: anchor.y - fontSize - idx * lineHeight,
+					size: fontSize,
+					font,
+					color,
+				});
+			});
+			return;
+		}
+		case "addTextWatermark": {
+			const targets = resolveTargetPages(count, op.pageIndices);
+			const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+			const safe = toWinAnsiSafe(op.text.trim());
+			if (safe.length === 0) throw new Error("Watermark text must contain printable ASCII/Latin characters (use PNG watermark for CJK).");
+			const fontSize = op.fontSize ?? 54;
+			const opacity = op.opacity ?? 0.22;
+			const angleDeg = op.angleDegrees ?? 35;
+			const color = parseHexRgb(op.color ?? "#64748B");
+			const textW = font.widthOfTextAtSize(safe, fontSize);
+			const rad = (angleDeg * Math.PI) / 180;
+			for (const idx of targets) {
+				const page = pdfDoc.getPage(idx);
+				const box = visibleBox(page);
+				const cx = box.x + box.width / 2;
+				const cy = box.y + box.height / 2;
+				page.drawText(safe, {
+					x: cx - (textW / 2) * Math.cos(rad),
+					y: cy - (textW / 2) * Math.sin(rad),
+					size: fontSize,
+					font,
+					color,
+					opacity,
+					rotate: degrees(angleDeg),
+				});
+			}
+			return;
+		}
 		case "addWatermark": {
 			const targets = resolveTargetPages(count, op.pageIndices);
 			const image = await pdfDoc.embedPng(decodePngDataUrl(op.pngDataUrl));
@@ -593,26 +644,79 @@ function pageRangeLabel(pages: readonly number[]): string {
 	return `p${first}-${last}`;
 }
 
+export interface PdfPageSummary {
+	readonly pageNumber: number;
+	readonly widthPt: number;
+	readonly heightPt: number;
+	readonly rotationDegrees: number;
+	readonly cropBox: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+}
+
+export interface PdfInspection {
+	readonly path: string;
+	readonly pageCount: number;
+	readonly size: number;
+	readonly modifiedAt: string;
+	readonly mtimeMs: number;
+	readonly metadata: PdfMetadata;
+	readonly pages: readonly PdfPageSummary[];
+	readonly formFields: readonly PdfFormField[];
+}
+
 export interface PdfEditorIo {
 	open(filePath: string): Promise<DocumentEditorPdfPayload>;
-	apply(request: PdfApplyRequest): Promise<PdfApplyResult>;
+	inspect(filePath: string): Promise<PdfInspection>;
+	apply(request: PdfApplyRequest, source?: "human" | "ai"): Promise<PdfApplyResult>;
 	extract(request: PdfExtractRequest): Promise<PdfExtractResult>;
 	split(request: PdfSplitRequest): Promise<PdfSplitResult>;
 	readMetadata(filePath: string): Promise<PdfMetadata>;
 	readFormFields(filePath: string): Promise<readonly PdfFormField[]>;
-	saveFormFields(request: PdfFormSaveRequest): Promise<PdfApplyResult>;
+	saveFormFields(request: PdfFormSaveRequest, source?: "human" | "ai"): Promise<PdfApplyResult>;
 	restore(snapshotId: string): Promise<PdfRestoreResult>;
+	/** Returns the raw bytes saved for a snapshot id (before that edit ran), or null if evicted. */
+	readSnapshot(snapshotId: string): Promise<Buffer | null>;
+	/** Run an exclusive read/write callback under the same per-file mutex used by apply/restore. */
+	withLock<T>(filePath: string, fn: () => Promise<T>): Promise<T>;
+	onChanged(listener: (event: PdfChangedEvent) => void): () => void;
 	dispose(): Promise<void>;
 }
 
 /**
  * Main-process PDF editor service backed by `pdf-lib`.
- * Keeps per-edit binary snapshots under `backupDir` so the user can undo
- * signature stamps, annotations, redactions, merges, crops, rotations,
- * reorders, watermarks, page numbers, metadata, form edits, and deletions cleanly.
+ * Serializes mutations per PDF path so simultaneous human UI edits and AI agent
+ * tool calls compose sequentially without overwriting or corrupting each other.
+ * Emits `onChanged` events after every committed write or undo so open editor
+ * tabs live-reload automatically.
  */
 export function createPdfEditorIo(backupDir: string): PdfEditorIo {
 	const snapshots = new Map<string, SnapshotRecord>();
+	const locks = new Map<string, Promise<unknown>>();
+	const listeners = new Set<(event: PdfChangedEvent) => void>();
+
+	function emitChanged(event: PdfChangedEvent): void {
+		for (const listener of listeners) {
+			try {
+				listener(event);
+			} catch {
+				// Never let a listener failure break PDF I/O.
+			}
+		}
+	}
+
+	/** Serializes all read-modify-write operations on the same PDF file path. */
+	function withFileLock<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+		const prev = locks.get(filePath) ?? Promise.resolve();
+		const next = prev.catch(() => undefined).then(fn);
+		const tail = next.then(
+			() => undefined,
+			() => undefined,
+		);
+		locks.set(filePath, tail);
+		void tail.finally(() => {
+			if (locks.get(filePath) === tail) locks.delete(filePath);
+		});
+		return next;
+	}
 
 	async function recordSnapshot(filePath: string, originalBytes: Buffer): Promise<string> {
 		await mkdir(backupDir, { recursive: true });
@@ -628,6 +732,38 @@ export function createPdfEditorIo(backupDir: string): PdfEditorIo {
 			if (oldest !== undefined) await rm(oldest.backupPath, { force: true }).catch(() => undefined);
 		}
 		return id;
+	}
+
+	function extractFormFields(doc: PDFDocument): PdfFormField[] {
+		const form = doc.getForm();
+		const result: PdfFormField[] = [];
+		for (const field of form.getFields()) {
+			const name = field.getName();
+			const readOnly = field.isReadOnly();
+			if (field instanceof PDFTextField) {
+				result.push({ name, kind: "text", value: field.getText() ?? "", readOnly });
+			} else if (field instanceof PDFCheckBox) {
+				result.push({ name, kind: "checkbox", value: field.isChecked(), readOnly });
+			} else if (field instanceof PDFDropdown || field instanceof PDFOptionList) {
+				const selected = field.getSelected();
+				result.push({
+					name,
+					kind: "dropdown",
+					value: selected[0] ?? "",
+					options: field.getOptions(),
+					readOnly,
+				});
+			} else if (field instanceof PDFRadioGroup) {
+				result.push({
+					name,
+					kind: "radio",
+					value: field.getSelected() ?? "",
+					options: field.getOptions(),
+					readOnly,
+				});
+			}
+		}
+		return result;
 	}
 
 	return {
@@ -664,101 +800,155 @@ export function createPdfEditorIo(backupDir: string): PdfEditorIo {
 			};
 		},
 
-		apply: async (request) => {
-			assertPdfPath(request.path);
-			const info = await stat(request.path);
-			if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
-			if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to edit here.");
-			if (request.force !== true && request.expectedMtimeMs !== undefined && Math.abs(info.mtimeMs - request.expectedMtimeMs) > 2) {
-				return { ok: false, reason: "conflict", diskMtimeMs: info.mtimeMs };
-			}
-			const originalBytes = await readFile(request.path);
-			const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
-			for (const op of request.operations) {
-				await applyOperation(pdfDoc, op);
-			}
-			const nextBytes = await pdfDoc.save();
-			const snapshotId = await recordSnapshot(request.path, originalBytes);
-			await writeAtomic(request.path, nextBytes);
-			const saved = await stat(request.path);
+		inspect: async (filePath) => {
+			assertPdfPath(filePath);
+			const info = await stat(filePath);
+			if (!info.isFile()) throw new Error(`${filePath} is not a file.`);
+			if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to inspect here.");
+			const bytes = await readFile(filePath);
+			const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
+			const pages: PdfPageSummary[] = doc.getPages().map((page, idx) => {
+				const { width, height } = page.getSize();
+				const crop = visibleBox(page);
+				return {
+					pageNumber: idx + 1,
+					widthPt: Math.round(width * 100) / 100,
+					heightPt: Math.round(height * 100) / 100,
+					rotationDegrees: ((page.getRotation().angle % 360) + 360) % 360,
+					cropBox: {
+						x: Math.round(crop.x * 100) / 100,
+						y: Math.round(crop.y * 100) / 100,
+						width: Math.round(crop.width * 100) / 100,
+						height: Math.round(crop.height * 100) / 100,
+					},
+				};
+			});
 			return {
-				ok: true,
-				size: saved.size,
-				modifiedAt: saved.mtime.toISOString(),
-				mtimeMs: saved.mtimeMs,
-				pageCount: pdfDoc.getPageCount(),
-				snapshotId,
+				path: filePath,
+				pageCount: doc.getPageCount(),
+				size: info.size,
+				modifiedAt: info.mtime.toISOString(),
+				mtimeMs: info.mtimeMs,
+				metadata: {
+					title: doc.getTitle() ?? "",
+					author: doc.getAuthor() ?? "",
+					subject: doc.getSubject() ?? "",
+					keywords: (doc.getKeywords() ?? "").trim(),
+				},
+				pages,
+				formFields: extractFormFields(doc),
 			};
 		},
 
-		extract: async (request) => {
-			assertPdfPath(request.path);
-			const info = await stat(request.path);
-			if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
-			if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to extract from here.");
-			const originalBytes = await readFile(request.path);
-			const src = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
-			const total = src.getPageCount();
-			const indices = request.pages.map((p) => p - 1);
-			for (const idx of indices) {
-				if (idx < 0 || idx >= total) throw new Error(`Page ${idx + 1} is out of range (1..${total}).`);
-			}
-			const out = await PDFDocument.create();
-			const copied = await out.copyPages(src, indices);
-			for (const page of copied) out.addPage(page);
-			const outputPath = await uniqueSiblingPath(request.path, pageRangeLabel(request.pages));
-			await writeAtomic(outputPath, await out.save());
-			return {
-				outputPath,
-				name: basename(outputPath),
-				pageCount: out.getPageCount(),
-			};
-		},
-
-		split: async (request) => {
-			assertPdfPath(request.path);
-			const info = await stat(request.path);
-			if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
-			if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to split here.");
-			const originalBytes = await readFile(request.path);
-			const src = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
-			const total = src.getPageCount();
-
-			let groups: number[][];
-			if (request.mode === "singlePages") {
-				groups = Array.from({ length: total }, (_v, i) => [i + 1]);
-			} else if (request.mode === "everyN") {
-				const size = Math.max(1, request.chunkSize ?? 1);
-				groups = [];
-				for (let start = 1; start <= total; start += size) {
-					const pages: number[] = [];
-					for (let p = start; p < start + size && p <= total; p += 1) pages.push(p);
-					groups.push(pages);
+		apply: (request, source = "human") =>
+			withFileLock(request.path, async () => {
+				assertPdfPath(request.path);
+				const info = await stat(request.path);
+				if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
+				if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to edit here.");
+				if (request.force !== true && request.expectedMtimeMs !== undefined && Math.abs(info.mtimeMs - request.expectedMtimeMs) > 2) {
+					return { ok: false, reason: "conflict", diskMtimeMs: info.mtimeMs };
 				}
-			} else {
-				groups = parseSplitRanges(request.rangesSpec ?? "", total);
-			}
+				const originalBytes = await readFile(request.path);
+				const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
+				for (const op of request.operations) {
+					await applyOperation(pdfDoc, op);
+				}
+				const nextBytes = await pdfDoc.save();
+				const snapshotId = await recordSnapshot(request.path, originalBytes);
+				await writeAtomic(request.path, nextBytes);
+				const saved = await stat(request.path);
+				const pageCount = pdfDoc.getPageCount();
+				const modifiedAt = saved.mtime.toISOString();
+				emitChanged({
+					path: request.path,
+					size: saved.size,
+					modifiedAt,
+					mtimeMs: saved.mtimeMs,
+					pageCount,
+					source,
+					snapshotId,
+				});
+				return {
+					ok: true,
+					size: saved.size,
+					modifiedAt,
+					mtimeMs: saved.mtimeMs,
+					pageCount,
+					snapshotId,
+				};
+			}),
 
-			const outputs: PdfSplitOutputFile[] = [];
-			for (let i = 0; i < groups.length; i += 1) {
-				const pages = groups[i]!;
+		extract: (request) =>
+			withFileLock(request.path, async () => {
+				assertPdfPath(request.path);
+				const info = await stat(request.path);
+				if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
+				if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to extract from here.");
+				const originalBytes = await readFile(request.path);
+				const src = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
+				const total = src.getPageCount();
+				const indices = request.pages.map((p) => p - 1);
+				for (const idx of indices) {
+					if (idx < 0 || idx >= total) throw new Error(`Page ${idx + 1} is out of range (1..${total}).`);
+				}
 				const out = await PDFDocument.create();
-				const copied = await out.copyPages(
-					src,
-					pages.map((p) => p - 1),
-				);
+				const copied = await out.copyPages(src, indices);
 				for (const page of copied) out.addPage(page);
-				const suffix = groups.length > 1 ? `part${i + 1}-${pageRangeLabel(pages)}` : pageRangeLabel(pages);
-				const outputPath = await uniqueSiblingPath(request.path, suffix);
+				const outputPath = await uniqueSiblingPath(request.path, pageRangeLabel(request.pages));
 				await writeAtomic(outputPath, await out.save());
-				outputs.push({
+				return {
 					outputPath,
 					name: basename(outputPath),
 					pageCount: out.getPageCount(),
-				});
-			}
-			return { outputs };
-		},
+				};
+			}),
+
+		split: (request) =>
+			withFileLock(request.path, async () => {
+				assertPdfPath(request.path);
+				const info = await stat(request.path);
+				if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
+				if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to split here.");
+				const originalBytes = await readFile(request.path);
+				const src = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
+				const total = src.getPageCount();
+
+				let groups: number[][];
+				if (request.mode === "singlePages") {
+					groups = Array.from({ length: total }, (_v, i) => [i + 1]);
+				} else if (request.mode === "everyN") {
+					const size = Math.max(1, request.chunkSize ?? 1);
+					groups = [];
+					for (let start = 1; start <= total; start += size) {
+						const pages: number[] = [];
+						for (let p = start; p < start + size && p <= total; p += 1) pages.push(p);
+						groups.push(pages);
+					}
+				} else {
+					groups = parseSplitRanges(request.rangesSpec ?? "", total);
+				}
+
+				const outputs: PdfSplitOutputFile[] = [];
+				for (let i = 0; i < groups.length; i += 1) {
+					const pages = groups[i]!;
+					const out = await PDFDocument.create();
+					const copied = await out.copyPages(
+						src,
+						pages.map((p) => p - 1),
+					);
+					for (const page of copied) out.addPage(page);
+					const suffix = groups.length > 1 ? `part${i + 1}-${pageRangeLabel(pages)}` : pageRangeLabel(pages);
+					const outputPath = await uniqueSiblingPath(request.path, suffix);
+					await writeAtomic(outputPath, await out.save());
+					outputs.push({
+						outputPath,
+						name: basename(outputPath),
+						pageCount: out.getPageCount(),
+					});
+				}
+				return { outputs };
+			}),
 
 		readMetadata: async (filePath) => {
 			assertPdfPath(filePath);
@@ -776,103 +966,117 @@ export function createPdfEditorIo(backupDir: string): PdfEditorIo {
 			assertPdfPath(filePath);
 			const bytes = await readFile(filePath);
 			const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
-			const form = doc.getForm();
-			const result: PdfFormField[] = [];
-			for (const field of form.getFields()) {
-				const name = field.getName();
-				const readOnly = field.isReadOnly();
-				if (field instanceof PDFTextField) {
-					result.push({ name, kind: "text", value: field.getText() ?? "", readOnly });
-				} else if (field instanceof PDFCheckBox) {
-					result.push({ name, kind: "checkbox", value: field.isChecked(), readOnly });
-				} else if (field instanceof PDFDropdown || field instanceof PDFOptionList) {
-					const selected = field.getSelected();
-					result.push({
-						name,
-						kind: "dropdown",
-						value: selected[0] ?? "",
-						options: field.getOptions(),
-						readOnly,
-					});
-				} else if (field instanceof PDFRadioGroup) {
-					result.push({
-						name,
-						kind: "radio",
-						value: field.getSelected() ?? "",
-						options: field.getOptions(),
-						readOnly,
-					});
-				}
-			}
-			return result;
+			return extractFormFields(doc);
 		},
 
-		saveFormFields: async (request) => {
-			assertPdfPath(request.path);
-			const info = await stat(request.path);
-			if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
-			if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to edit here.");
-			if (request.force !== true && request.expectedMtimeMs !== undefined && Math.abs(info.mtimeMs - request.expectedMtimeMs) > 2) {
-				return { ok: false, reason: "conflict", diskMtimeMs: info.mtimeMs };
-			}
-			const originalBytes = await readFile(request.path);
-			const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
-			const form = pdfDoc.getForm();
-			for (const field of form.getFields()) {
-				const name = field.getName();
-				if (!(name in request.values)) continue;
-				const nextVal = request.values[name];
-				if (field.isReadOnly()) continue;
-				if (field instanceof PDFTextField && typeof nextVal === "string") {
-					field.setText(nextVal);
-				} else if (field instanceof PDFCheckBox && typeof nextVal === "boolean") {
-					if (nextVal) field.check();
-					else field.uncheck();
-				} else if ((field instanceof PDFDropdown || field instanceof PDFOptionList) && typeof nextVal === "string") {
-					if (nextVal === "") field.clear();
-					else field.select(nextVal);
-				} else if (field instanceof PDFRadioGroup && typeof nextVal === "string") {
-					if (nextVal === "") field.clear();
-					else field.select(nextVal);
+		saveFormFields: (request, source = "human") =>
+			withFileLock(request.path, async () => {
+				assertPdfPath(request.path);
+				const info = await stat(request.path);
+				if (!info.isFile()) throw new Error(`${request.path} is not a file.`);
+				if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to edit here.");
+				if (request.force !== true && request.expectedMtimeMs !== undefined && Math.abs(info.mtimeMs - request.expectedMtimeMs) > 2) {
+					return { ok: false, reason: "conflict", diskMtimeMs: info.mtimeMs };
 				}
-			}
-			if (request.flatten === true) {
-				form.flatten();
-			}
-			const nextBytes = await pdfDoc.save();
-			const snapshotId = await recordSnapshot(request.path, originalBytes);
-			await writeAtomic(request.path, nextBytes);
-			const saved = await stat(request.path);
-			return {
-				ok: true,
-				size: saved.size,
-				modifiedAt: saved.mtime.toISOString(),
-				mtimeMs: saved.mtimeMs,
-				pageCount: pdfDoc.getPageCount(),
-				snapshotId,
-			};
-		},
+				const originalBytes = await readFile(request.path);
+				const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: false });
+				const form = pdfDoc.getForm();
+				for (const field of form.getFields()) {
+					const name = field.getName();
+					if (!(name in request.values)) continue;
+					const nextVal = request.values[name];
+					if (field.isReadOnly()) continue;
+					if (field instanceof PDFTextField && typeof nextVal === "string") {
+						field.setText(nextVal);
+					} else if (field instanceof PDFCheckBox && typeof nextVal === "boolean") {
+						if (nextVal) field.check();
+						else field.uncheck();
+					} else if ((field instanceof PDFDropdown || field instanceof PDFOptionList) && typeof nextVal === "string") {
+						if (nextVal === "") field.clear();
+						else field.select(nextVal);
+					} else if (field instanceof PDFRadioGroup && typeof nextVal === "string") {
+						if (nextVal === "") field.clear();
+						else field.select(nextVal);
+					}
+				}
+				if (request.flatten === true) {
+					form.flatten();
+				}
+				const nextBytes = await pdfDoc.save();
+				const snapshotId = await recordSnapshot(request.path, originalBytes);
+				await writeAtomic(request.path, nextBytes);
+				const saved = await stat(request.path);
+				const pageCount = pdfDoc.getPageCount();
+				const modifiedAt = saved.mtime.toISOString();
+				emitChanged({
+					path: request.path,
+					size: saved.size,
+					modifiedAt,
+					mtimeMs: saved.mtimeMs,
+					pageCount,
+					source,
+					snapshotId,
+				});
+				return {
+					ok: true,
+					size: saved.size,
+					modifiedAt,
+					mtimeMs: saved.mtimeMs,
+					pageCount,
+					snapshotId,
+				};
+			}),
 
 		restore: async (snapshotId) => {
 			const record = snapshots.get(snapshotId);
 			if (record === undefined) return { ok: false };
-			const bytes = await readFile(record.backupPath);
-			await writeAtomic(record.path, bytes);
-			snapshots.delete(snapshotId);
-			await rm(record.backupPath, { force: true }).catch(() => undefined);
-			const saved = await stat(record.path);
-			const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-			return {
-				ok: true,
-				size: saved.size,
-				modifiedAt: saved.mtime.toISOString(),
-				mtimeMs: saved.mtimeMs,
-				pageCount: doc.getPageCount(),
+			return withFileLock(record.path, async () => {
+				const active = snapshots.get(snapshotId);
+				if (active === undefined) return { ok: false };
+				const bytes = await readFile(active.backupPath);
+				await writeAtomic(active.path, bytes);
+				snapshots.delete(snapshotId);
+				await rm(active.backupPath, { force: true }).catch(() => undefined);
+				const saved = await stat(active.path);
+				const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+				const pageCount = doc.getPageCount();
+				const modifiedAt = saved.mtime.toISOString();
+				emitChanged({
+					path: active.path,
+					size: saved.size,
+					modifiedAt,
+					mtimeMs: saved.mtimeMs,
+					pageCount,
+					source: "undo",
+				});
+				return {
+					ok: true,
+					size: saved.size,
+					modifiedAt,
+					mtimeMs: saved.mtimeMs,
+					pageCount,
+				};
+			});
+		},
+
+		readSnapshot: async (snapshotId) => {
+			const record = snapshots.get(snapshotId);
+			if (record === undefined) return null;
+			return readFile(record.backupPath).catch(() => null);
+		},
+
+		withLock: withFileLock,
+
+		onChanged: (listener) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
 			};
 		},
 
 		dispose: async () => {
 			snapshots.clear();
+			listeners.clear();
 			await rm(backupDir, { recursive: true, force: true }).catch(() => undefined);
 		},
 	};

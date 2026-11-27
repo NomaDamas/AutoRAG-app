@@ -9,6 +9,7 @@ import { documentEditMessage, documentEditProfile } from "./agents/profiles/docu
 import { subscribeProfileProgress, type ReplyLanguage } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
 import type { WriteJudge } from "./agents/write-gate";
+import type { PdfEditorIo } from "./pdf-editor-io";
 
 /** Files larger than this are not kept for undo, so they are not edited either. */
 const MAX_EDIT_BYTES = 64 * 1024 * 1024;
@@ -24,6 +25,8 @@ export interface DocumentEditServiceDeps {
 	readonly platform?: NodeJS.Platform;
 	readonly homeDir?: string;
 	readonly writeJudge?: WriteJudge;
+	/** Shared PDF editor engine for `pdf` mode so AI and human edits share one mutex & live-sync. */
+	readonly pdfIo?: PdfEditorIo;
 }
 
 /** The Quick Look window a run belongs to: its event sink and a capture of what it shows. */
@@ -106,6 +109,20 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 		const scratchDir = await mkdtemp(join(tmpdir(), "dazzi-document-edit-"));
 		let session: AgentSession | undefined;
 		const unsubscribe: Array<() => void> = [];
+		const aiPdfSnapshotIds: string[] = [];
+		let humanPdfEditedDuringRun = false;
+		if (mode === "pdf" && deps.pdfIo !== undefined) {
+			unsubscribe.push(
+				deps.pdfIo.onChanged((ev) => {
+					if (ev.path !== request.path) return;
+					if (ev.source === "ai" && ev.snapshotId !== undefined) {
+						aiPdfSnapshotIds.push(ev.snapshotId);
+					} else if (ev.source === "human") {
+						humanPdfEditedDuringRun = true;
+					}
+				}),
+			);
+		}
 		try {
 			session = await createProfileSession({
 				profile: documentEditProfile({
@@ -118,6 +135,7 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 					...(deps.platform === undefined ? {} : { platform: deps.platform }),
 					...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
 					...(deps.writeJudge === undefined ? {} : { writeJudge: deps.writeJudge }),
+					...(deps.pdfIo === undefined ? {} : { pdfIo: deps.pdfIo }),
 					cancelled: () => active.cancelled,
 				}),
 				cwd: scratchDir,
@@ -152,11 +170,23 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 			await opened.prompt(documentEditMessage(request), images === undefined ? undefined : { images });
 
 			const after = await readFile(request.path).catch(() => null);
-			const changed = after !== null && !after.equals(before);
-			if (changed) {
+			// In PDF co-editing mode, only count edits performed by the AI (never let a
+			// concurrent human edit falsely mark a failed/no-op AI turn as changed, and
+			// back up the snapshot captured right before the AI's own first mutation so
+			// Undo preserves earlier human edits).
+			const pdfToolMutated = mode === "pdf" && deps.pdfIo !== undefined && aiPdfSnapshotIds.length > 0;
+			const changed =
+				mode === "pdf" && deps.pdfIo !== undefined
+					? pdfToolMutated || (!humanPdfEditedDuringRun && after !== null && !after.equals(before))
+					: after !== null && !after.equals(before);
+			if (changed && after !== null) {
+				const backupBytes =
+					pdfToolMutated && deps.pdfIo !== undefined
+						? ((await deps.pdfIo.readSnapshot(aiPdfSnapshotIds[0]!)) ?? before)
+						: before;
 				await mkdir(deps.backupDir, { recursive: true });
 				const file = join(deps.backupDir, `${runId.replace(/[^A-Za-z0-9_-]/gu, "_")}${extname(request.path)}`);
-				await writeFile(file, before);
+				await writeFile(file, backupBytes);
 				backups.set(runId, { path: request.path, file, after: digest(after) });
 			}
 			if (active.cancelled) {
@@ -197,16 +227,22 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 		undo: async (runId, send) => {
 			const backup = backups.get(runId);
 			if (backup === undefined) return false;
-			const current = await readFile(backup.path).catch(() => null);
-			if (current !== null && digest(current) !== backup.after) {
-				send({ type: "error", runId, message: `${backup.path} changed after the edit, so it was not rolled back.` });
-				return false;
+			const backupWrite = async (): Promise<boolean> => {
+				const current = await readFile(backup.path).catch(() => null);
+				if (current !== null && digest(current) !== backup.after) {
+					send({ type: "error", runId, message: `${backup.path} changed after the edit, so it was not rolled back.` });
+					return false;
+				}
+				await writeFile(backup.path, await readFile(backup.file));
+				backups.delete(runId);
+				await rm(backup.file, { force: true }).catch(() => undefined);
+				send({ type: "undone", runId, path: backup.path });
+				return true;
+			};
+			if (deps.pdfIo !== undefined && extname(backup.path).toLowerCase() === ".pdf") {
+				return deps.pdfIo.withLock(backup.path, backupWrite);
 			}
-			await writeFile(backup.path, await readFile(backup.file));
-			backups.delete(runId);
-			await rm(backup.file, { force: true }).catch(() => undefined);
-			send({ type: "undone", runId, path: backup.path });
-			return true;
+			return backupWrite();
 		},
 		dispose: async () => {
 			for (const active of runs.values()) {

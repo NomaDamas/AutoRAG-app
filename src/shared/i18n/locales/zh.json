@@ -3996,7 +3996,10 @@
       "findMatches": "{{current}} / {{total}}",
       "findNoMatch": "无匹配项",
       "findPrev": "上一处",
-      "findNext": "下一处"
+      "findNext": "下一处",
+      "aiEmptyTitle": "与 AI 协同编辑 PDF",
+      "aiEmptyDesc": "在使用顶部工具栏直接编辑的同时，可让 AI 实时添加水印、页码、涂黑、旋转、填写表单、修改属性或拆分合并，也可先在页面上标记再提问。",
+      "aiPlaceholder": "例如：给所有页面加上 CONFIDENTIAL 水印和页码，并旋转第 2 页…"
     },
     "footer": {
       "lines": "{{count}} 行",

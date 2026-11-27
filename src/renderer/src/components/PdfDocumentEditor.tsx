@@ -584,6 +584,28 @@ export function PdfDocumentEditor({
 		};
 	}, [streamUrl, payload.encrypted]);
 
+	// Live-sync when AI agent tools mutate the PDF concurrently while the user is viewing/editing.
+	const payloadRef = useRef(payload);
+	payloadRef.current = payload;
+	useEffect(() => {
+		if (typeof editorApi.onPdfChanged !== "function") return;
+		return editorApi.onPdfChanged((ev) => {
+			const curr = payloadRef.current;
+			if (ev.path !== curr.path) return;
+			if (ev.mtimeMs === curr.mtimeMs && ev.size === curr.size && ev.pageCount === curr.pageCount) return;
+			if (ev.source === "ai" && ev.snapshotId !== undefined) {
+				setUndoStack((stack) => (stack.includes(ev.snapshotId!) ? stack : [...stack, ev.snapshotId!]));
+			}
+			onPayloadChange({
+				...curr,
+				size: ev.size,
+				modifiedAt: ev.modifiedAt,
+				mtimeMs: ev.mtimeMs,
+				pageCount: ev.pageCount,
+			});
+		});
+	}, [editorApi, onPayloadChange]);
+
 	// Cmd/Ctrl+F opens Find bar inside the PDF editor
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
@@ -645,7 +667,7 @@ export function PdfDocumentEditor({
 				const result = await editorApi.pdfApply({
 					path: payload.path,
 					operations,
-					expectedMtimeMs: payload.mtimeMs,
+					force: true,
 				});
 				if (!result.ok) {
 					setStatusMsg(t("documentEditor.conflict"));
@@ -1912,6 +1934,7 @@ export function PdfDocumentEditor({
 					<div className="relative flex min-h-0 flex-1 items-start justify-center overflow-auto p-24">
 						<div
 							ref={pageFrameRef}
+							data-page={activePage + 1}
 							data-pdf-page-stage={activePage + 1}
 							className={cn(
 								"relative flex-none overflow-hidden rounded-4 bg-white shadow-md ring-1 ring-black/10 select-none",
@@ -2187,7 +2210,7 @@ export function PdfDocumentEditor({
 								path: payload.path,
 								values,
 								flatten,
-								expectedMtimeMs: payload.mtimeMs,
+								force: true,
 							});
 							if (!result.ok) {
 								setStatusMsg(t("documentEditor.conflict"));

@@ -14,6 +14,8 @@ import {
 import type { AgentProfile } from "@autorag/librarian/profiles";
 import { describeMarks, type DocumentEditMode, type DocumentEditRequest } from "../../../preview/shared/annotation";
 import { isSecretKey } from "../../autorag-config-service";
+import type { PdfEditorIo } from "../../pdf-editor-io";
+import { createPdfAgentTools } from "../pdf-edit-tools";
 import { CREDENTIAL_NAME, inside, normalizeFencePath } from "../path-fence";
 import { createWriteGate, type WriteGate, type WriteJudge } from "../write-gate";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
@@ -38,6 +40,8 @@ export interface DocumentEditProfileInput {
 	readonly cancelled?: () => boolean;
 	readonly homeDir?: string;
 	readonly writeJudge?: WriteJudge;
+	/** Shared PDF editor engine used when `mode === "pdf"` so human and AI edits serialize safely. */
+	readonly pdfIo?: PdfEditorIo;
 }
 
 /**
@@ -104,16 +108,25 @@ function documentEditTools(input: DocumentEditProfileInput): readonly ToolDefini
 	};
 	const writeCheck = (params: Record<string, unknown>): Promise<void> => guardWrite(pathOf(params));
 
-	const tools: ToolDefinition[] = [
-		guarded(createReadToolDefinition(cwd), readCheck),
-		guarded(createLsToolDefinition(cwd), readCheck),
-		guarded(createFindToolDefinition(cwd), readCheck),
-		guarded(createGrepToolDefinition(cwd), readCheck),
-		guarded(createEditToolDefinition(cwd), writeCheck),
-		guarded(createWriteToolDefinition(cwd), writeCheck),
-	] as unknown as ToolDefinition[];
+	const tools: ToolDefinition[] =
+		input.mode === "pdf"
+			? ([
+					guarded(createReadToolDefinition(cwd), readCheck),
+					guarded(createLsToolDefinition(cwd), readCheck),
+					guarded(createFindToolDefinition(cwd), readCheck),
+					guarded(createGrepToolDefinition(cwd), readCheck),
+					...(input.pdfIo !== undefined ? createPdfAgentTools({ targetPath: target, pdfIo: input.pdfIo, cancelled }) : []),
+				] as unknown as ToolDefinition[])
+			: ([
+					guarded(createReadToolDefinition(cwd), readCheck),
+					guarded(createLsToolDefinition(cwd), readCheck),
+					guarded(createFindToolDefinition(cwd), readCheck),
+					guarded(createGrepToolDefinition(cwd), readCheck),
+					guarded(createEditToolDefinition(cwd), writeCheck),
+					guarded(createWriteToolDefinition(cwd), writeCheck),
+				] as unknown as ToolDefinition[]);
 
-	if (input.mode === "package") {
+	if (input.mode === "package" || input.mode === "pdf") {
 		const bash = createBashToolDefinition(cwd, {
 			spawnHook: (context) => ({ ...context, env: Object.fromEntries(Object.entries({ ...context.env, ...input.env }).filter(([key]) => !isSecretKey(key))) }),
 		});
@@ -155,14 +168,23 @@ function systemPrompt(input: DocumentEditProfileInput): string {
 	const modeRules =
 		input.mode === "text"
 			? ["- The document is a text file. Read it, then change it with `edit` (small exact replacements); use `write` only when most of the file changes."]
-			: [
-					`- The document is a ${ext.toUpperCase()} package, not plain text. Work in the scratch folder ${input.scratchDir} with \`bash\`:`,
-					"  copy the file there, unpack it (Office Open XML, HWPX and OpenDocument are ZIP archives of XML parts), edit the XML parts that hold the marked text,",
-					"  repack it (keep every other entry byte-identical and in the same order; an HWPX/OpenDocument `mimetype` entry stays first and uncompressed),",
-					`  and copy the result over ${input.path} only once the repacked archive lists cleanly (unzip -l).`,
-					"- A binary .hwp file has no XML inside; use an installed skill or CLI that edits HWP if one is available, otherwise say you cannot edit it.",
-					"- Prefer tools already on the machine (unzip/zip, python3). Do not install anything.",
-				];
+			: input.mode === "pdf"
+				? [
+						"- The document is a PDF file opened in Dazzi's live PDF editor. The person may keep editing pages in the toolbar while you work.",
+						"- ALWAYS prefer the structured PDF tools (`pdf_inspect`, `pdf_apply_ops`, `pdf_fill_form`, `pdf_set_metadata`, `pdf_add_page_numbers`, `pdf_extract_pages`, `pdf_split`) over shell scripts! They run through Dazzi's shared per-file lock so your edits and the user's concurrent UI edits never overwrite each other, and the editor live-reloads after each call.",
+						"- Start with `pdf_inspect` when you need page counts, dimensions, rotations, metadata, or AcroForm field names.",
+						"- In `pdf_apply_ops`, pageIndex is 0-based (page 1 -> 0) and coordinates are normalized 0..1 fractions from the top-left of the visible page.",
+						"- Use the attached screenshot and mark bounds to place highlights, redactions, whiteouts, shapes, or text accurately over marked regions.",
+						"- Only fall back to `bash` (in the scratch folder) for tasks the structured PDF tools cannot do (e.g. extracting text with python3/pdftotext to locate coordinates, or rendering a CJK/Korean PNG stamp with python3/PIL to pass into `pdf_apply_ops` `stampImage`). Never overwrite the target PDF directly via bash when `pdf_apply_ops` can apply the change.",
+					]
+				: [
+						`- The document is a ${ext.toUpperCase()} package, not plain text. Work in the scratch folder ${input.scratchDir} with \`bash\`:`,
+						"  copy the file there, unpack it (Office Open XML, HWPX and OpenDocument are ZIP archives of XML parts), edit the XML parts that hold the marked text,",
+						"  repack it (keep every other entry byte-identical and in the same order; an HWPX/OpenDocument `mimetype` entry stays first and uncompressed),",
+						`  and copy the result over ${input.path} only once the repacked archive lists cleanly (unzip -l).`,
+						"- A binary .hwp file has no XML inside; use an installed skill or CLI that edits HWP if one is available, otherwise say you cannot edit it.",
+						"- Prefer tools already on the machine (unzip/zip, python3). Do not install anything.",
+					];
 	return [
 		"You are Dazzi's document editor. The person opened one document in Dazzi's editor, optionally drew marks on it (pen strokes, boxes, underlines) or selected text, and wrote what should change.",
 		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${LANGUAGE_NAME[input.language]}.`,
@@ -186,7 +208,7 @@ export function documentEditProfile(input: DocumentEditProfileInput): AgentProfi
 		tools: [],
 		customTools: documentEditTools(input),
 		thinking: "low",
-		context: { skills: input.mode === "package" },
+		context: { skills: input.mode === "package" || input.mode === "pdf" },
 	};
 }
 

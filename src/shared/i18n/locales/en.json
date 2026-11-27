@@ -3996,7 +3996,10 @@
       "findMatches": "{{current}} / {{total}}",
       "findNoMatch": "No matches",
       "findPrev": "Previous match",
-      "findNext": "Next match"
+      "findNext": "Next match",
+      "aiEmptyTitle": "Co-edit PDF with AI",
+      "aiEmptyDesc": "Keep editing with the toolbar while AI adds watermarks, page numbers, redactions, rotations, form fills, metadata, splits, or merges in real time—or mark up the page first.",
+      "aiPlaceholder": "e.g. Add CONFIDENTIAL watermark & page numbers, and rotate page 2…"
     },
     "footer": {
       "lines": "{{count}} lines",

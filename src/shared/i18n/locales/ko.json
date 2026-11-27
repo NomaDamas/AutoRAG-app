@@ -3996,7 +3996,10 @@
       "findMatches": "{{current}} / {{total}}",
       "findNoMatch": "결과 없음",
       "findPrev": "이전 결과",
-      "findNext": "다음 결과"
+      "findNext": "다음 결과",
+      "aiEmptyTitle": "AI와 동시에 PDF 편집",
+      "aiEmptyDesc": "상단 도구로 직접 편집하면서 동시에 워터마크·페이지 번호·회전·가리기·양식·속성·분할·병합 등을 AI에게 맡기세요. 페이지에 표시한 뒤 요청할 수도 있습니다.",
+      "aiPlaceholder": "예: 모든 페이지에 대외비 워터마크와 페이지 번호 넣고 2페이지 회전해줘…"
     },
     "footer": {
       "lines": "{{count}}줄",
