@@ -615,6 +615,7 @@
       "agentAccess": "AI access",
       "agentProfile": "AI profile",
       "more": "More",
+      "openResult": "View result",
       "menuEdit": "Edit",
       "menuDelete": "Delete",
       "runDone": "Done",
@@ -789,7 +790,9 @@
       "failed": "Failed",
       "settings": "Settings",
       "history": "Run history",
-      "task": "Task"
+      "task": "Task",
+      "showMore": "Show {{count}} more",
+      "showLess": "Show less"
     },
     "tabs": {
       "rules": "Automations",

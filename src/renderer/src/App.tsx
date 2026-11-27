@@ -49,7 +49,7 @@ import { ShortcutSettingsContext } from "./hooks/useShortcutSettings";
 import type { ShortcutSettings } from "../../shared/shortcuts-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
-import { dismissMagicActionDialog } from "./hooks/useMagicAction";
+import { dismissMagicActionDialog, showMagicActionRun } from "./hooks/useMagicAction";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
 import { useInspectorChats } from "./hooks/useInspectorChats";
 import { useInteractionQueue } from "./hooks/useInteractionQueue";
@@ -913,6 +913,7 @@ export function App(): ReactElement {
 		active: automationsTabActive,
 		openAiDraft,
 		openFolder: (folder) => finder?.openFolder(folder),
+		revealFile: (path) => finder?.revealEvidence(path),
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
 		names: automationNames,
@@ -1254,7 +1255,13 @@ export function App(): ReactElement {
 								imageActions={imageActions}
 								evidenceFolderCount={localEvidencePaths.length}
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
-								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
+								automations={{
+									rules: automationsView.state.rules,
+									onEdit: automations.edit,
+									onDelete: automations.askDelete,
+									onMenu: automations.openRuleMenu,
+									magic: { actions: automations.props.magicActions ?? [], onEdit: automations.editMagic, onDelete: automations.askDeleteMagic, onOpen: showMagicActionRun },
+								}}
 								selectionIndex={selectionIndex}
 								onSetSelectionIndexed={(include) => finder?.setSelectionIndexed(include)}
 								onTrashSelection={() => finder?.trashSelection()}
@@ -1417,6 +1424,17 @@ export function App(): ReactElement {
 					danger
 					onConfirm={() => void automations.confirmDelete()}
 					onCancel={automations.cancelDelete}
+				/>
+			)}
+			{automations.confirmMagic === null ? null : (
+				<ConfirmDialog
+					title={t("settingsCore.contextMenu.removeMagicConfirmTitle", { name: automations.confirmMagic.label })}
+					message={t("automations.confirm.magicMessage")}
+					confirmLabel={t("automations.confirm.action")}
+					cancelLabel={t("common.cancel")}
+					danger
+					onConfirm={automations.confirmDeleteMagic}
+					onCancel={automations.cancelDeleteMagic}
 				/>
 			)}
 			{automations.menu === null ? null : (

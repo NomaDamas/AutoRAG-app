@@ -21,6 +21,8 @@ export interface AutomationsShellDeps {
 	readonly openAiDraft: (draft: string) => void;
 	/** Open a watched folder in a Finder tab. */
 	readonly openFolder: (path: string) => void;
+	/** Show a file selected in its folder (a run's file, from a 실행 기록). */
+	readonly revealFile?: (path: string) => void;
 	/** Focus the 자동화 tab (a rule chosen from a folder inspector). */
 	readonly showInList: (id: string) => void;
 	/** Surface an error the way the window shows one: a toast. */
@@ -66,6 +68,13 @@ export interface AutomationsShell {
 	readonly closeMenu: () => void;
 	/** A rule row's right-click menu from a folder inspector: adds "show in list". */
 	readonly openRuleMenu: (rule: AutomationRule, cursor: { readonly x: number; readonly y: number }) => void;
+	/** 수정 on a right-click action outside the tab (a file's inspector): its own page in the 자동화 tab. */
+	readonly editMagic: (id: string) => void;
+	/** 삭제 on a right-click action outside the tab: asks first, as a rule's 삭제 does. */
+	readonly askDeleteMagic: (id: string) => void;
+	readonly confirmMagic: MagicAction | null;
+	readonly confirmDeleteMagic: () => void;
+	readonly cancelDeleteMagic: () => void;
 }
 
 interface MenuState {
@@ -118,6 +127,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	// The page the 자동화 tab was left on (전체 기록, a right-click action's page), found again when the tab comes back.
 	const [place, setPlace] = useState<AutomationsPlace>(INITIAL_AUTOMATIONS_PLACE);
+	const [confirmMagicId, setConfirmMagicId] = useState<string | null>(null);
 
 	// The right-click actions, listed beside the rules: read once, then kept as Settings (or its assistant) changes them.
 	const [magicActions, setMagicActions] = useState<readonly MagicAction[]>([]);
@@ -454,6 +464,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			setMenuState({ ruleId: id, cursor, fromFolder: false });
 		},
 		onOpenFolder: (path) => latest.current.openFolder(path),
+		onRevealFile: (path) => latest.current.revealFile?.(path),
 	};
 
 	return {
@@ -486,5 +497,23 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		menuSelect,
 		closeMenu,
 		openRuleMenu: (rule, cursor) => setMenuState({ ruleId: rule.id, cursor, fromFolder: true }),
+		editMagic: (id) => {
+			setMenuState(null);
+			setPreviewId(null);
+			setEditingId(null);
+			setPlace({ page: "list", magicId: id, fromAll: false });
+			latest.current.showInList(id);
+		},
+		askDeleteMagic: (id) => setConfirmMagicId(id),
+		confirmMagic: magicActions.find((action) => action.id === confirmMagicId) ?? null,
+		confirmDeleteMagic: () => {
+			const id = confirmMagicId;
+			setConfirmMagicId(null);
+			if (id === null) return;
+			// Its page, if the tab was left on it, goes back to the list, as a delete from the page does.
+			setPlace((current) => (current.magicId === id ? INITIAL_AUTOMATIONS_PLACE : current));
+			void changeMagicActions((actions) => actions.filter((item) => item.id !== id));
+		},
+		cancelDeleteMagic: () => setConfirmMagicId(null),
 	};
 }

@@ -144,9 +144,9 @@ describe("MagicActionDialog & SidebarMagicActionActivity", () => {
 		expect(host.querySelector('[data-testid="magic-action-dialog"]')).not.toBeNull();
 		expect(host.querySelector('[data-testid="magic-action-output"]')?.textContent).toContain("최종 3줄 요약");
 
-		// Figma 568:7807: 대화 기록에 저장 keeps the run as a chat, then reads 저장됨 and stays disabled.
+		// Figma 568:7807: 채팅 기록에 저장 keeps the run as a chat, then reads 저장됨 and stays disabled.
 		const save = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-action="save-magic-action-to-history"]');
-		expect(save()?.textContent).toBe("대화 기록에 저장");
+		expect(save()?.textContent).toBe("채팅 기록에 저장");
 		await act(async () => {
 			save()?.click();
 		});

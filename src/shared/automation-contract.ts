@@ -37,6 +37,8 @@ export interface AutomationRun {
 	 * log only counts them (`eventCount`). Rows name the run by its first file.
 	 */
 	readonly files?: readonly string[];
+	/** What a right-click action's run printed or answered, so its result can be opened again from the log. */
+	readonly output?: string;
 }
 
 /**

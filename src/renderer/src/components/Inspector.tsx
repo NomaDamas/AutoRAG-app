@@ -33,7 +33,8 @@ import { firstPageTile } from "../lib/first-page-tile";
 import { previewLoaderFor } from "../lib/preview-loader";
 import { hostPlatform } from "../lib/shortcuts";
 import type { ActionAnchor, ActionCapabilities, OpenWithApplication } from "../../../shared/actions-contract";
-import type { AutomationRule } from "../../../shared/automation-contract";
+import type { AutomationRule, AutomationRun } from "../../../shared/automation-contract";
+import type { MagicAction } from "../../../shared/context-menu-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
@@ -62,6 +63,7 @@ import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
 import type { ImageActions } from "./AnswerImage";
 import { AutomationRulesSection } from "./AutomationRulesSection";
+import { runTouched, useMagicRunHistory } from "../hooks/useMagicRunHistory";
 import { EvidenceExcerpt } from "./EvidenceBlocks";
 import {
 	CloseIcon,
@@ -150,6 +152,14 @@ export interface InspectorProps {
 		readonly onDelete: (rule: AutomationRule) => void;
 		/** Right click on a rule row: its menu, at the pointer. Absent leaves the browser's menu alone. */
 		readonly onMenu?: (rule: AutomationRule, at: { readonly x: number; readonly y: number }) => void;
+		/** The right-click actions: a file's inspector lists those that ran on it, under the same 자동화 header. */
+		readonly magic?: {
+			readonly actions: readonly MagicAction[];
+			readonly onEdit: (id: string) => void;
+			readonly onDelete: (id: string) => void;
+			/** A click on a card: the result of that action's run on this file. */
+			readonly onOpen?: (action: MagicAction, run: AutomationRun) => void;
+		};
 	};
 	/**
 	 * `entry` is the folder the pane shows, standing in because nothing is selected (see
@@ -215,6 +225,18 @@ const EVIDENCE_ACTION = cn(
 
 /** No source is new: the default of `freshEvidence`, one array so the default never changes identity between renders. */
 const NO_FRESH_EVIDENCE: readonly number[] = [];
+
+/** A file's 자동화 section: the right-click actions that ran on it, newest run first, each with its newest run there. */
+function FileMagicRuns({ path, magic }: { readonly path: string; readonly magic: NonNullable<NonNullable<InspectorProps["automations"]>["magic"]> }): ReactElement | null {
+	const history = useMagicRunHistory(magic.actions.map((action) => action.id));
+	const items = magic.actions
+		.flatMap((action) => {
+			const run = (history[action.id] ?? []).find((candidate) => runTouched(candidate, path));
+			return run === undefined ? [] : [{ action, run }];
+		})
+		.sort((a, b) => b.run.startedAt - a.run.startedAt);
+	return <AutomationRulesSection rules={[]} onEdit={() => undefined} onDelete={() => undefined} magic={{ items, onEdit: magic.onEdit, onDelete: magic.onDelete, onOpen: magic.onOpen === undefined ? undefined : (item) => magic.onOpen?.(item.action, item.run) }} />;
+}
 
 export function Inspector({
 	entry,
@@ -427,6 +449,8 @@ function InfoHalf({
 								onDelete={automations.onDelete}
 								onMenu={automations.onMenu}
 							/>
+						) : entry.kind === "file" && automations?.magic !== undefined ? (
+							<FileMagicRuns path={entry.path} magic={automations.magic} />
 						) : null}
 
 						{family === null ? null : <VersionsSection family={family} entry={entry} onOpenMember={onOpenMember} />}
