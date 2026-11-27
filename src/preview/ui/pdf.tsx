@@ -31,14 +31,48 @@ function ResizeOnReport({ children }: { readonly children: ReactNode }): ReactEl
 	return <ChromeProvider value={value}>{children}</ChromeProvider>;
 }
 
-/** Every page's text runs. pdf.js fetches the ranges it needs; auto-fetch stays off for the drawing. */
+/** Text runs for one 1-based PDF page number. */
+async function pdfPageText(pdf: PDFDocumentProxy, pageNumber: number): Promise<readonly TextRun[]> {
+	const page = await pdf.getPage(pageNumber);
+	return pdfRuns((await page.getTextContent()).items, page.getViewport({ scale: 1 }).transform);
+}
+
+/**
+ * Every page's text runs. pdf.js fetches the ranges it needs; auto-fetch stays off for the drawing.
+ */
 async function pdfText(pdf: PDFDocumentProxy): Promise<readonly (readonly TextRun[])[]> {
 	return Promise.all(
-		Array.from({ length: pdf.numPages }, async (_unused, index) => {
-			const page = await pdf.getPage(index + 1);
-			return pdfRuns((await page.getTextContent()).items, page.getViewport({ scale: 1 }).transform);
-		}),
+		Array.from({ length: pdf.numPages }, (_unused, index) => pdfPageText(pdf, index + 1)),
 	);
+}
+
+/**
+ * Locate anchor excerpts on a candidate subset of 1-based page numbers first (identified in
+ * main by the Rust `lopdf` scanner) so a 900-page PDF highlights in tens of milliseconds
+ * instead of extracting text from every page. Returns null if none of the candidates match,
+ * letting the caller fall back to the full `pdfText` scan with zero accuracy loss.
+ */
+async function locateOnCandidatePages(
+	pdf: PDFDocumentProxy,
+	candidatePages: readonly number[],
+	anchor: readonly string[],
+): Promise<ReturnType<typeof locateMarks>> {
+	const valid = [...new Set(candidatePages.filter((n) => Number.isInteger(n) && n >= 1 && n <= pdf.numPages))];
+	if (valid.length === 0) return null;
+	// Also include the next page after each candidate so an excerpt spanning a page break still resolves whole.
+	const expandedSet = new Set<number>();
+	for (const n of valid) {
+		expandedSet.add(n);
+		if (n + 1 <= pdf.numPages) expandedSet.add(n + 1);
+	}
+	const ordered = [...expandedSet].sort((a, b) => a - b);
+	const subsetRuns = await Promise.all(ordered.map((pageNum) => pdfPageText(pdf, pageNum)));
+	// Build a sparse page array indexed by 0-based PDF page index so `locateMarks` emits real page indices directly.
+	const sparse: (readonly TextRun[])[] = Array.from({ length: pdf.numPages }, () => []);
+	for (let i = 0; i < ordered.length; i += 1) {
+		sparse[ordered[i]! - 1] = subsetRuns[i]!;
+	}
+	return locateMarks(sparse, anchor);
 }
 
 /**
@@ -50,6 +84,7 @@ async function pdfText(pdf: PDFDocumentProxy): Promise<readonly (readonly TextRu
  */
 export function PdfView({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t } = useTranslation();
+	const { bridge } = useChrome();
 	const [opened, setOpened] = useState<{ readonly pdf: PDFDocumentProxy; readonly boxes: readonly Size[] } | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [evidence, setEvidence] = useState<EvidenceMarks | null>(null);
@@ -95,21 +130,36 @@ export function PdfView({ file, anchor = null }: { readonly file: PreviewDocumen
 		}
 		let cancelled = false;
 		setEvidence({ state: "searching" });
-		void pdfText(pdf)
-			.then((pages) => {
+		void (async () => {
+			try {
+				// Fast path for multi-page PDFs: ask main's Rust scanner for candidate pages first
+				// so only those pages need `pdf.js` `getTextContent()`.
+				if (pdf.numPages > 8 && bridge.pdfAnchorPages !== undefined) {
+					const candidates = await bridge.pdfAnchorPages(file.path, anchor).catch(() => [] as readonly number[]);
+					if (cancelled) return;
+					if (candidates.length > 0) {
+						const fastMarks = await locateOnCandidatePages(pdf, candidates, anchor);
+						if (cancelled) return;
+						if (fastMarks !== null) {
+							setEvidence({ state: "found", pages: [fastMarks, ...fastMarks.next] });
+							return;
+						}
+					}
+				}
+				const pages = await pdfText(pdf);
 				if (cancelled) return;
 				const marks = locateMarks(pages, anchor);
 				setEvidence(marks === null ? { state: "missing" } : { state: "found", pages: [marks, ...marks.next] });
-			})
-			.catch((caught: unknown) => {
+			} catch (caught: unknown) {
 				// A page whose text cannot be read still draws; the panel opens at the top.
 				console.warn(`quick-look: PDF text for ${file.path} failed: ${caught instanceof Error ? caught.message : String(caught)}`);
 				if (!cancelled) setEvidence({ state: "missing" });
-			});
+			}
+		})();
 		return () => {
 			cancelled = true;
 		};
-	}, [pdf, anchor, file.path]);
+	}, [pdf, anchor, file.path, bridge]);
 
 	const draw = useCallback<DrawPage>(
 		(index, width, onBox) => {

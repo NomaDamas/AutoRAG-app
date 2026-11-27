@@ -1,6 +1,7 @@
 import { type FileHandle, open } from "node:fs/promises";
 import type * as agPsd from "ag-psd";
 import type { PixelData } from "ag-psd";
+import { loadDazziNativeCore } from "../../main/dazzi-native-core";
 import { withReadableFile } from "./provider-access";
 import type { EmbeddedThumbnail } from "./odf";
 import { encodePng } from "./png-encode";
@@ -362,6 +363,15 @@ export async function readPsdComposite(path: string, options: PsdCompositeOption
 			if (!holdsEverySample(sections.header, sections.large, imageData)) return null;
 			const picture = await decodeComposite(sections, colorModeData, resources, imageData);
 			if (picture === null) return null;
+			const native = loadDazziNativeCore();
+			if (native !== null) {
+				try {
+					const png = native.downscaleAndEncodePngNative(picture.data, picture.width, picture.height, maxSide);
+					return { bytes: new Uint8Array(png.buffer, png.byteOffset, png.byteLength), mime: "image/png" };
+				} catch (error) {
+					console.warn("[dazzi-core] downscaleAndEncodePngNative failed, falling back to JS:", error instanceof Error ? error.message : error);
+				}
+			}
 			const scaled = downscale(picture, maxSide);
 			return { bytes: encodePng(scaled.data, scaled.width, scaled.height), mime: "image/png" };
 		} finally {

@@ -4,6 +4,7 @@ import type { BinaryKind } from "./binary-kind";
 import type { ArchiveEntry } from "./archive-items";
 import type { KeyUsageName } from "./certificate";
 import type { Bounds, QuickLookFit } from "./fit";
+import type { SheetPreview } from "./sheet";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
 import type { VideoAudioPlan } from "./video-audio";
 import type { VideoPlaybackPlan, VideoPlaybackProgress } from "./video-playback";
@@ -67,6 +68,10 @@ export const PREVIEW_CHANNELS = {
 	videoPlaybackProgress: "preview:video-playback-progress",
 	/** Preview window -> main (invoke): tables and first rows of the shown database or Parquet file. */
 	data: "preview:data",
+	/** Preview window -> main (invoke): sheet names and capped first rows of the shown spreadsheet (streamed natively in main). */
+	sheet: "preview:sheet",
+	/** Preview window -> main (invoke): 1-based candidate page numbers in the shown PDF matching AI Search anchor excerpts. */
+	pdfAnchorPages: "preview:pdf-anchor-pages",
 	/** Preview window -> main (invoke): the top-level children of the shown 7z, RAR, ISO, deb, rpm, CAB, or tar.bz2/xz/zst. */
 	archive: "preview:archive",
 	/** Preview window -> main (invoke): the subject, validity, and fingerprints of the shown certificate file, or what kind of container it is. */
@@ -471,6 +476,10 @@ export interface QuickLookWindowBridge {
 	onVideoPlaybackProgress(listener: (progress: VideoPlaybackProgress) => void): () => void;
 	/** Database tables and first rows, or a Parquet file's schema and first rows. `table` picks a database table (null: the first). */
 	dataPreview(path: string, table: string | null): Promise<DataPreview>;
+	/** Sheet names and capped first rows of the shown spreadsheet, streamed natively in the main process. */
+	sheetPreview?(path: string, sheetIndex: number): Promise<SheetPreview>;
+	/** 1-based candidate PDF pages that contain `excerpts`, scanned natively in the main process. */
+	pdfAnchorPages?(path: string, excerpts: readonly string[]): Promise<readonly number[]>;
 	/** The top-level children of a 7z, RAR, tar.bz2/xz/zst, ISO, deb, rpm, or CAB; the page has no engine to read them itself. */
 	archivePreview(path: string): Promise<ArchivePreview>;
 	/** What a certificate or key file holds, read by the main process (`node:crypto`); never any private-key material. */

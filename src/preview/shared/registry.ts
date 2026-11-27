@@ -161,7 +161,6 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 			return "prefix";
 		case "docx":
 		case "legacyDoc":
-		case "sheet":
 		case "pptx":
 		case "legacyPpt":
 		case "odt":
@@ -176,6 +175,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "rtfd":
 		case "iconset":
 			return "whole";
+		case "sheet":
 		case "data":
 		case "archiveList":
 		case "certificate":

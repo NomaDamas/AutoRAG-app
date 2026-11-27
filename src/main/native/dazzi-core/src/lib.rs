@@ -23,6 +23,8 @@ use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use unicode_normalization::UnicodeNormalization;
 
+mod preview;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Path & Glob Exclusion Matching (`path-exclusion.ts`)
 // ─────────────────────────────────────────────────────────────────────────────
