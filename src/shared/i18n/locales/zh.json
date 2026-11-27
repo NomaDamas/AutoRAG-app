@@ -2056,6 +2056,8 @@
       "defaultFileManagerHintWin": "打开文件夹和按下 Win+E 时，将改由 Dazzi 打开。控制面板等系统虚拟文件夹会安全回退至资源管理器。",
       "defaultFileManagerInterceptReveal": "同时接管其他应用的“在文件夹中显示”",
       "defaultFileManagerInterceptRevealHint": "检测 Chrome、VS Code 等应用打开的资源管理器窗口，并在 Dazzi 中直接定位并选中目标文件。",
+      "defaultFileManagerInterceptMac": "桌面文件夹与新建访达窗口也在 Dazzi 中打开",
+      "defaultFileManagerInterceptMacHint": "检测新打开的访达窗口（如双击桌面上的文件夹），自动关闭该窗口并在 Dazzi 中打开。需要 macOS 访达自动化权限。",
       "defaultFileManagerError": "无法更改默认文件管理器设置：{{error}}",
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在后台下载新版本，并在退出应用时安装。",

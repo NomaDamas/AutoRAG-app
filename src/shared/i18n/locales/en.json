@@ -2056,6 +2056,8 @@
       "defaultFileManagerHintWin": "Open folders and Win+E in Dazzi instead of File Explorer. System virtual folders like Control Panel safely fall back to Explorer.",
       "defaultFileManagerInterceptReveal": "Also intercept ‘Show in folder’ from other apps",
       "defaultFileManagerInterceptRevealHint": "Detect File Explorer windows opened by apps like Chrome or VS Code and reveal the selected file in Dazzi instead.",
+      "defaultFileManagerInterceptMac": "Open Desktop folders and new Finder windows in Dazzi",
+      "defaultFileManagerInterceptMacHint": "Detect newly opened Finder windows (such as double-clicking a Desktop folder), close them, and open the folder in Dazzi. Requires macOS Automation permission for Finder.",
       "defaultFileManagerError": "Could not update the default file manager setting: {{error}}",
       "autoUpdates": "Install Updates Automatically",
       "autoUpdatesHint": "Download new versions in the background and install them when you quit the app.",

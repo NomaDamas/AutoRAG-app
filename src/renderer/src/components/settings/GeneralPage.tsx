@@ -59,6 +59,14 @@ export function GeneralPage({
 	const osMenu = platform === "darwin" || platform === "win32";
 	const defaultFileManagerHint =
 		platform === "win32" ? t("settingsCore.general.defaultFileManagerHintWin") : t("settingsCore.general.defaultFileManagerHintMac");
+	const interceptName =
+		platform === "win32"
+			? t("settingsCore.general.defaultFileManagerInterceptReveal")
+			: t("settingsCore.general.defaultFileManagerInterceptMac");
+	const interceptHint =
+		platform === "win32"
+			? t("settingsCore.general.defaultFileManagerInterceptRevealHint")
+			: t("settingsCore.general.defaultFileManagerInterceptMacHint");
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.general")} />
@@ -74,15 +82,12 @@ export function GeneralPage({
 									ariaLabel={t("settingsCore.general.defaultFileManager")}
 								/>
 							</PlainRow>
-							{platform === "win32" && appSettings.defaultFileManager ? (
-								<PlainRow
-									name={t("settingsCore.general.defaultFileManagerInterceptReveal")}
-									hint={t("settingsCore.general.defaultFileManagerInterceptRevealHint")}
-								>
+							{appSettings.defaultFileManager ? (
+								<PlainRow name={interceptName} hint={interceptHint} anchor="default-file-manager-intercept">
 									<Switch
 										checked={appSettings.defaultFileManagerInterceptReveal}
 										onChange={() => void setApp({ defaultFileManagerInterceptReveal: !appSettings.defaultFileManagerInterceptReveal })}
-										ariaLabel={t("settingsCore.general.defaultFileManagerInterceptReveal")}
+										ariaLabel={interceptName}
 									/>
 								</PlainRow>
 							) : null}
