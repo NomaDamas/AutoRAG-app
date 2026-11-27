@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VersionFamilyBanner } from "../src/renderer/src/components/VersionFamilyBanner";
+import { clearBackgroundTasksForTests, getBackgroundTasksSnapshot as getBackgroundTasks } from "../src/renderer/src/hooks/useBackgroundTasks";
 import { setAppLanguage } from "../src/shared/i18n";
 
 let host: HTMLDivElement;
@@ -11,6 +12,7 @@ let root: Root;
 beforeEach(() => {
 	Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 	setAppLanguage("ko");
+	clearBackgroundTasksForTests();
 	host = document.createElement("div");
 	document.body.append(host);
 	root = createRoot(host);
@@ -34,25 +36,29 @@ describe("the duplicate-check notice over a Finder list", () => {
 		expect(host.querySelector("strong")?.textContent).not.toContain("dupey scan failed");
 	});
 
-	it("says it is checking while 다시 확인 runs the scan again, and cannot be pressed twice", async () => {
-		let finish: () => void = () => undefined;
-		const onRetry = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+	it("while 다시 확인 runs, steps back to one line and lists the scan in the sidebar's activity", async () => {
+		let finish: (ok: boolean) => void = () => undefined;
+		const onRetry = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
 		act(() => root.render(<VersionFamilyBanner error={{ code: "scan-failed", message: "dupey timed out.", installCommand: null }} onRetry={onRetry} />));
 		// The last button in the actions row; 자세히 보기 comes first.
 		const button = (): HTMLButtonElement | null => [...host.querySelectorAll<HTMLButtonElement>(".notice-card__actions button")].at(-1) ?? null;
 		expect(button()?.textContent).toBe("다시 확인");
-		act(() => button()?.click());
-		expect(button()?.textContent).toBe("확인하는 중…");
-		expect(button()?.disabled).toBe(true);
-		expect(host.querySelector('[role="status"]')?.textContent).toContain("몇 분 걸릴 수 있습니다");
-		act(() => button()?.click());
-		expect(onRetry).toHaveBeenCalledTimes(1);
 		await act(async () => {
-			finish();
+			button()?.click();
 			await Promise.resolve();
 		});
+		// The one-line notice: no title-and-button card, no second press.
+		expect(host.querySelector("[data-version-recheck]")?.textContent).toContain("왼쪽 아래");
+		expect(host.querySelector(".notice-card__actions")).toBeNull();
+		expect(getBackgroundTasks().some((task) => task.headline === "중복 파일 다시 확인 중" && task.state === "running")).toBe(true);
+		expect(onRetry).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			finish(false);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		// It failed again: the full card is back, and the sidebar task ends as failed.
 		expect(button()?.textContent).toBe("다시 확인");
-		expect(button()?.disabled).toBe(false);
+		expect(getBackgroundTasks().some((task) => task.headline === "중복 파일 다시 확인 중" && task.state === "failed")).toBe(true);
 	});
 
 	it("is cut by the pane under 400px instead of wrapping into a tall column", () => {
