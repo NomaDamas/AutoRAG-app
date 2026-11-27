@@ -157,7 +157,7 @@ export interface FinderKeyboardInput {
 	readonly actions: {
 		dismiss(): void;
 		focusSearch(): void;
-		/** ⌘L: turn the path bar into a text field holding the current path. */
+		/** ⇧⌘G: turn the path bar into a text field holding the current path. */
 		editPath(): void;
 		/** ⌘D: duplicate the selected rows next to themselves. */
 		duplicateSelection(): void;

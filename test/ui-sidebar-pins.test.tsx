@@ -71,6 +71,7 @@ function renderSidebar(sidebar: SidebarSettings, withFavorites = true): Handlers
 				settingsActive={false}
 				showHotkeys={false}
 				onNavigate={vi.fn()}
+				onOpenInNewTab={vi.fn()}
 				onEject={vi.fn()}
 				onHideSidebar={vi.fn()}
 				onOpenIndexing={vi.fn()}

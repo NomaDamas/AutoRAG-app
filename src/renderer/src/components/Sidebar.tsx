@@ -57,6 +57,21 @@ export function placeItemLabel(t: TFunction, item: NavItem): string {
 }
 
 /**
+ * Command-click opens a sidebar folder in a new tab. Control-click does that
+ * off macOS, where Control is the primary modifier; on macOS it is the
+ * secondary click and stays a click. App rows are views, not folders.
+ */
+export function sidebarClickOpensNewTab(
+	item: NavItem,
+	event: { readonly metaKey: boolean; readonly ctrlKey: boolean },
+	platform = hostPlatform(),
+): boolean {
+	if (item.view !== undefined) return false;
+	if (event.metaKey) return true;
+	return platform !== "darwin" && event.ctrlKey;
+}
+
+/**
  * Sidebar (v7 `.sidebar` / `.side-head` / `.side-scroll` / `.side-footer`): the
  * live navigation groups (Favorites / Cloud / Locations, see data/places.ts)
  * plus the two window-head buttons and the Settings row.
@@ -72,6 +87,7 @@ export function Sidebar({
 	settingsActive,
 	showHotkeys,
 	onNavigate,
+	onOpenInNewTab,
 	onEject,
 	onOpenSettings,
 	onOpenUsage,
@@ -98,6 +114,8 @@ export function Sidebar({
 	readonly settingsActive: boolean;
 	readonly showHotkeys: boolean;
 	readonly onNavigate: (item: NavItem) => void;
+	/** A folder row's Command-click (Ctrl-click off macOS). App rows never call it. */
+	readonly onOpenInNewTab: (item: NavItem) => void;
 	readonly onEject: (item: NavItem) => void;
 	readonly onOpenSettings?: (() => void) | undefined;
 	/** The footer's chart icon opens Settings on the AI usage page. */
@@ -204,7 +222,13 @@ export function Sidebar({
 										title={pathTitle}
 										aria-label={item.label}
 										aria-current={active ? "true" : undefined}
-										onClick={() => onNavigate(item)}
+										onClick={(event) => {
+											if (sidebarClickOpensNewTab(item, event)) {
+												onOpenInNewTab(item);
+												return;
+											}
+											onNavigate(item);
+										}}
 										onDragOver={drop?.onDragOver}
 										onDragLeave={
 											drop === null

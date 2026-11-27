@@ -137,10 +137,19 @@ describe("resolveKeyAction", () => {
 		expect(resolveKeyAction(key("d", { meta: true }), { zone: "evidence", typing: false })).toBeNull();
 	});
 
-	it("maps ⌘L to the path field, even from a text field, as a browser's address bar does", () => {
+	it("maps ⇧⌘G to the path field, and keeps ⌘L while that binding is still the default", () => {
+		expect(resolveKeyAction(key("g", { meta: true, shift: true }), finder)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("G", { ctrl: true, shift: true }), finder)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("g", { meta: true, shift: true }), { ...finder, typing: true })).toEqual({ type: "editPath" });
 		expect(resolveKeyAction(key("l", { meta: true }), finder)).toEqual({ type: "editPath" });
 		expect(resolveKeyAction(key("L", { ctrl: true }), finder)).toEqual({ type: "editPath" });
 		expect(resolveKeyAction(key("l", { meta: true }), { ...finder, typing: true })).toEqual({ type: "editPath" });
+		const rebound = { overrides: { editPath: "Mod+Shift+P" } };
+		expect(resolveKeyAction(key("p", { meta: true, shift: true }), finder, rebound)).toEqual({ type: "editPath" });
+		expect(resolveKeyAction(key("l", { meta: true }), finder, rebound)).toBeNull();
+		expect(resolveKeyAction(key("g", { meta: true, shift: true }), finder, rebound)).toBeNull();
+		const taken = { overrides: { duplicate: "Mod+L" } };
+		expect(resolveKeyAction(key("l", { meta: true }), finder, taken)).toEqual({ type: "duplicate" });
 	});
 
 	it("reads the mouse side buttons as Back (3) and Forward (4), and ignores the rest", () => {

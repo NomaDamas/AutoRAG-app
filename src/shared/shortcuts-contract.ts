@@ -80,7 +80,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogItem[] = [
 	{ id: "newTab", group: "window", scope: "window", defaultChord: "Mod+T", allowWhileTyping: true },
 	{ id: "reopenTab", group: "window", scope: "window", defaultChord: "Mod+Shift+T", allowWhileTyping: true },
 	{ id: "closeTab", group: "window", scope: "window", defaultChord: "Mod+W", allowWhileTyping: true },
-	{ id: "editPath", group: "window", scope: "finder", defaultChord: "Mod+L", allowWhileTyping: true },
+	{ id: "editPath", group: "window", scope: "finder", defaultChord: "Mod+Shift+G", allowWhileTyping: true },
 	{ id: "parentFolder", group: "window", scope: "finder", defaultChord: "Alt+ArrowUp", allowWhileTyping: false },
 	// View Modes
 	{ id: "viewIcons", group: "view", scope: "window", defaultChord: "Mod+1", allowWhileTyping: true },
@@ -126,15 +126,21 @@ export const DEFAULT_SHORTCUT_SETTINGS: ShortcutSettings = {
 export type ShortcutPresetId = "default" | "macFinder" | "windowsExplorer";
 
 /**
- * Official macOS Finder bindings mapped onto Dazzi's 26-action catalog:
- * - `editPath`: `⇧⌘G` (`Go > Go to Folder…`)
+ * The address-bar chord `editPath` used before `⇧⌘G` became the default.
+ * It still opens the path bar while `editPath` is on its default chord and
+ * no other action owns this chord.
+ */
+export const EDIT_PATH_LEGACY_CHORD = "Mod+L";
+
+/**
+ * Official macOS Finder bindings that differ from Dazzi's defaults.
+ * `editPath` is already `⇧⌘G` (`Go > Go to Folder…`), so this preset does not rebind it.
  * - `parentFolder`: `⌘↑` (`Go > Enclosing Folder`)
  * - `openItem`: `⌘O` (`File > Open`, freeing Return for Rename)
  * - `rename`: `↩` (`Return` renames the selected item)
  * - `trash`: `⌘⌫` (`File > Move to Trash`)
  */
 export const MAC_FINDER_SHORTCUT_OVERRIDES: Readonly<Partial<Record<ShortcutId, string>>> = {
-	editPath: "Mod+Shift+G",
 	parentFolder: "Mod+ArrowUp",
 	openItem: "Mod+O",
 	rename: "Enter",

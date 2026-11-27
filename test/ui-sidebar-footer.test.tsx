@@ -62,6 +62,7 @@ async function renderSidebar(
 				settingsActive={props.settingsActive ?? false}
 				showHotkeys
 				onNavigate={vi.fn()}
+				onOpenInNewTab={vi.fn()}
 				onEject={vi.fn()}
 				onOpenSettings={props.onOpenSettings ?? vi.fn()}
 				onOpenUsage={props.onOpenUsage ?? vi.fn()}

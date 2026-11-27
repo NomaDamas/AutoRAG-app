@@ -3,7 +3,7 @@ import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { navGroups } from "../src/renderer/src/data/places";
-import { Sidebar } from "../src/renderer/src/components/Sidebar";
+import { Sidebar, sidebarClickOpensNewTab } from "../src/renderer/src/components/Sidebar";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH } from "../src/renderer/src/state/tabs";
 import { setAppLanguage } from "../src/shared/i18n";
 
@@ -35,6 +35,7 @@ function renderSidebar(activePath: string | null, onNavigate = vi.fn()): ReturnT
 				settingsActive={false}
 				showHotkeys={false}
 				onNavigate={onNavigate}
+				onOpenInNewTab={vi.fn()}
 				onEject={vi.fn()}
 				onHideSidebar={vi.fn()}
 				onOpenIndexing={vi.fn()}
@@ -93,6 +94,7 @@ describe("Sidebar tag colours without Full Disk Access", () => {
 					settingsActive={false}
 					showHotkeys={false}
 					onNavigate={vi.fn()}
+					onOpenInNewTab={vi.fn()}
 					onEject={vi.fn()}
 					onHideSidebar={vi.fn()}
 					onOpenIndexing={vi.fn()}
@@ -131,5 +133,82 @@ describe("Sidebar tag colours without Full Disk Access", () => {
 	it("shows no grant row when the colours are readable", () => {
 		renderTags(false);
 		expect(host.querySelector('[data-action="grant-tag-colors"]')).toBeNull();
+	});
+});
+
+describe("Sidebar folder Command-click", () => {
+	const documents = {
+		name: "Documents",
+		path: "/Users/me/Documents",
+		section: "favorites" as const,
+		icon: "documents" as const,
+		available: true,
+		scanned: true,
+		ejectable: false,
+	};
+
+	function renderFolders(onNavigate = vi.fn(), onOpenInNewTab = vi.fn()): { onNavigate: ReturnType<typeof vi.fn>; onOpenInNewTab: ReturnType<typeof vi.fn> } {
+		const drop = { hovered: false, onDragOver: vi.fn(), onDragLeave: vi.fn(), onDrop: vi.fn() };
+		act(() =>
+			root.render(
+				<Sidebar
+					groups={navGroups([documents])}
+					activePath={null}
+					settingsActive={false}
+					showHotkeys={false}
+					onNavigate={onNavigate}
+					onOpenInNewTab={onOpenInNewTab}
+					onEject={vi.fn()}
+					onHideSidebar={vi.fn()}
+					onOpenIndexing={vi.fn()}
+					searchQuery=""
+					searchRef={createRef()}
+					searchFocused={false}
+					onSearchFocus={vi.fn()}
+					onSearchBlur={vi.fn()}
+					onSubmitSearch={vi.fn()}
+					aiSearchDrop={drop}
+				/>,
+			),
+		);
+		return { onNavigate, onOpenInNewTab };
+	}
+
+	it("opens a folder in a new tab on Command-click and keeps a plain click on the current tab", () => {
+		const { onNavigate, onOpenInNewTab } = renderFolders();
+		const folder = host.querySelector<HTMLButtonElement>('button[aria-label="Documents"]');
+		act(() => folder?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ path: "/Users/me/Documents" }));
+		expect(onOpenInNewTab).not.toHaveBeenCalled();
+
+		onNavigate.mockClear();
+		act(() => folder?.dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
+		expect(onOpenInNewTab).toHaveBeenCalledWith(expect.objectContaining({ path: "/Users/me/Documents" }));
+		expect(onNavigate).not.toHaveBeenCalled();
+
+		// On macOS, Control-click is the secondary click, not a new tab.
+		act(() => folder?.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true })));
+		expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ path: "/Users/me/Documents" }));
+		expect(onOpenInNewTab).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps Command-click on AI Chat in the current tab", () => {
+		const { onNavigate, onOpenInNewTab } = renderFolders();
+		const ai = host.querySelector<HTMLButtonElement>('button[aria-label="AI Agent"]');
+		act(() => ai?.dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
+		expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ view: "aiSearch" }));
+		expect(onOpenInNewTab).not.toHaveBeenCalled();
+	});
+
+	it("uses Control-click as the new-tab gesture off macOS", () => {
+		const items = navGroups([documents]).flatMap((group) => group.items);
+		const folder = items.find((item) => item.path === "/Users/me/Documents");
+		const app = items.find((item) => item.view === "aiSearch");
+		expect(folder).toBeDefined();
+		expect(app).toBeDefined();
+		if (folder === undefined || app === undefined) return;
+		expect(sidebarClickOpensNewTab(folder, { metaKey: false, ctrlKey: true }, "win32")).toBe(true);
+		expect(sidebarClickOpensNewTab(folder, { metaKey: false, ctrlKey: true }, "darwin")).toBe(false);
+		expect(sidebarClickOpensNewTab(app, { metaKey: true, ctrlKey: false }, "win32")).toBe(false);
 	});
 });
