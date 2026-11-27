@@ -587,6 +587,7 @@ export function registerDemoIpcHandlers(service: DemoBridge): void {
 	ipcMain.handle(DEMO_CHANNELS.preparePhoto, () => service.preparePhoto());
 	ipcMain.handle(DEMO_CHANNELS.ensureDaemon, () => service.ensureDaemon());
 	ipcMain.handle(DEMO_CHANNELS.prepareMagicAction, () => service.prepareMagicAction());
+	ipcMain.handle(DEMO_CHANNELS.prepareSample, () => service.prepareSample());
 }
 
 /** Learning to rank: read the log's state and the models, fit one now, delete one; a training run is pushed by the main process. */

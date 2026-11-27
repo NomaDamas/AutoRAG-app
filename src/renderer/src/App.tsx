@@ -870,6 +870,14 @@ export function App(): ReactElement {
 						void autorag.demo.ensureDaemon();
 						return { aiTab: openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray })) };
 					}
+					case "askForRightClick": {
+						// "우클릭 자동화 만들어줘" brings the 새 자동화 card at once, set to 우클릭하면: no answer to wait for.
+						const { sample } = await autorag.demo.prepareSample();
+						return { sample, aiTab: openAiDraft(translate("tutorials.automations.askText")) };
+					}
+					case "openSample":
+						if (facts.sample !== undefined) finder?.openFolder(dirname(facts.sample));
+						return {};
 					case "showAutomations":
 						finder?.showAutomations();
 						return {};

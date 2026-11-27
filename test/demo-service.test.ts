@@ -117,6 +117,13 @@ describe("createDemoService magic action", () => {
 		expect(demoAction?.extensions).toContain("txt");
 	});
 
+	it("prepareSample writes the sample file and adds no action", async () => {
+		const { demo, settings } = await fixture();
+		const { sample } = await demo.prepareSample();
+		expect(existsSync(sample)).toBe(true);
+		expect(settings().contextMenu.magicActions.some((action) => action.id === DEMO_MAGIC_ACTION_ID)).toBe(false);
+	});
+
 	it("the action's script prints the size and first lines of the file", async () => {
 		const { demo, settings } = await fixture();
 		const { sample } = await demo.prepareMagicAction();

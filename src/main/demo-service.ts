@@ -61,6 +61,15 @@ export function createDemoService(deps: DemoServiceDeps): DemoBridge {
 		if (!existsSync(path)) await writeFile(path, body, "utf8");
 	};
 
+	const prepareSample = async (): Promise<DemoMagicActionReady> => {
+		const root = rootOf(deps.home);
+		const samples = join(root, t("main.demo.samples"));
+		await mkdir(samples, { recursive: true });
+		const sample = join(samples, t("main.demo.sampleName"));
+		await writeSample(sample, t("main.demo.sampleBody"));
+		return { root, sample };
+	};
+
 	return {
 		preparePhoto: async (): Promise<DemoPhotoReady> => {
 			const folder = join(rootOf(deps.home), t("main.demo.photos"));
@@ -82,11 +91,7 @@ export function createDemoService(deps: DemoServiceDeps): DemoBridge {
 		},
 
 		prepareMagicAction: async (): Promise<DemoMagicActionReady> => {
-			const root = rootOf(deps.home);
-			const samples = join(root, t("main.demo.samples"));
-			await mkdir(samples, { recursive: true });
-			const sample = join(samples, t("main.demo.sampleName"));
-			await writeSample(sample, t("main.demo.sampleBody"));
+			const { root, sample } = await prepareSample();
 			const command = deps.platform === "win32" ? GLANCE_PS : GLANCE_SH;
 			const action: MagicAction = {
 				id: DEMO_MAGIC_ACTION_ID,
@@ -103,5 +108,7 @@ export function createDemoService(deps: DemoServiceDeps): DemoBridge {
 			await deps.settings.set({ contextMenu: { ...current.contextMenu, magicActions: [...others, action] } });
 			return { root, sample };
 		},
+
+		prepareSample,
 	};
 }

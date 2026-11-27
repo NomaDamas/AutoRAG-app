@@ -3700,37 +3700,35 @@
     "waitingHint": "One moment…",
     "rightClickHint": "Right-click the file",
     "automations": {
-      "askText": "When a new photo lands in {{folder}}, save a black-and-white copy of it in {{gray}}. Leave the original alone. Make it a command rule that uses file conversion (the grayscale preset of filee-cli). Turn on appendFiles so the new file paths arrive as command arguments, and exclude everything inside the black-and-white folder so the copies never trigger the rule again.",
+      "askText": "Create a right-click automation",
       "intro": {
-        "title": "Automations are made by talking",
-        "body": "There's no settings form. Tell the AI what you want and it builds the rule. Let's ask for: \"when a photo lands in Downloads, make a black-and-white copy in a Black and White folder.\"",
-        "action": "Ask the AI"
+        "title": "The right-click menu is an automation too",
+        "body": "You can add what Dazzi does to the menu you get when you right-click a file. Let's make one together that sums up a text file in three lines.",
+        "action": "Make one together"
       },
       "send": {
-        "title": "Press send",
-        "body": "We wrote the request for you. Edit it if you like, or send it as it is."
+        "title": "Click Send",
+        "body": "The request to the AI is written for you. Send it and the new automation card appears right away."
       },
-      "asking": {
-        "title": "The AI is making the rule",
-        "body": "It's setting up a rule that watches the folder and saves black-and-white copies. If it asks for approval, allow it."
+      "card": {
+        "title": "Fill in the card and add it",
+        "body": "Right-click is already picked. Change the file type to documents, type \"Sum it up in three lines\" under What Dazzi does, then click Add."
       },
-      "rule": {
-        "title": "The rule is ready",
-        "body": "A new rule appeared in your automations. One line shows the folder it watches, when it runs, and what it does. It keeps watching in the background even when the app is closed.",
-        "action": "Next"
+      "made": {
+        "title": "Your right-click automation is ready",
+        "body": "A new row appeared in My Automations. Turn it on or off, or change it, in the same list as your folder automations."
       },
-      "panes": {
-        "title": "Now let's see it work",
-        "body": "We'll split the window: Downloads on the left, a practice photos folder on the right. Move the photo to the left and watch.",
-        "action": "Split the window"
+      "sample": {
+        "title": "Right-click the practice file",
+        "body": "The Practice Files folder is open. Right-click the file and the item you just made appears in the menu."
       },
-      "drag": {
-        "title": "Drag the photo into Downloads",
-        "body": "Drag IMG_0001.jpg from the right into the Downloads folder on the left. Hold Option (Alt) while dragging to copy instead of move. The rule notices as soon as it lands."
+      "pick": {
+        "title": "Here it is",
+        "body": "Your right-click automations only appear when you right-click a file they fit. Click it to run it."
       },
       "result": {
-        "title": "A black-and-white photo appeared!",
-        "body": "A black-and-white copy is now in the Black and White folder inside Downloads. From now on every photo that lands in Downloads gets one. This rule is just for practice, so feel free to delete it."
+        "title": "The result shows right away",
+        "body": "Dazzi read the file you picked and summed it up. Next time, pick right-click in New automation. This one is just for practice, so feel free to delete it."
       }
     },
     "contextMenu": {
