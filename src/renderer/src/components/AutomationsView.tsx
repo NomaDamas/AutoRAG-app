@@ -156,19 +156,21 @@ const TEMPLATES: readonly Template[] = [
 
 /** A recommendation a right-click starts: the action it would add to the right-click menu. */
 interface RightClickTemplate {
-	readonly id: "translate";
+	readonly id: "summary" | "translate";
 	readonly clickKind: RightClickKind;
 	readonly selection: MagicActionSelectionRule;
 	readonly mode: ModeId;
 }
 
 /**
- * The page's recommendations, in order: two folder automations and one right-click automation, so both kinds of
- * trigger are on offer. 검색 바로 최신화 stays a template for the chat's suggestions but is not recommended here.
+ * The page's recommendations, in order: a right-click automation that only reads (the automations tutorial adds it,
+ * and its result shows at once), two folder automations, and a right-click one that writes, so both kinds of trigger are
+ * on offer. 검색 바로 최신화 stays a template for the chat's suggestions but is not recommended here.
  */
 type Recommendation = { readonly trigger: "folder"; readonly template: Template } | { readonly trigger: "rightClick"; readonly template: RightClickTemplate };
 
 const RECOMMENDATIONS: readonly Recommendation[] = [
+	{ trigger: "rightClick", template: { id: "summary", clickKind: "document", selection: "single", mode: "read" } },
 	{ trigger: "folder", template: TEMPLATES[0]! },
 	{ trigger: "folder", template: TEMPLATES[1]! },
 	{ trigger: "rightClick", template: { id: "translate", clickKind: "document", selection: "single", mode: "write" } },

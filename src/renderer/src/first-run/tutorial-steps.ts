@@ -13,7 +13,7 @@ import { AI_HOST } from "./tour";
 export type TutorialId = "automations" | "contextMenu" | "remoteAccess";
 
 /** What an offer step's button does in the app before the tutorial goes on. */
-export type TutorialEffect = "askAiForRule" | "askForRightClick" | "showNewRightClick" | "openSample" | "showAutomations" | "arrangePhotoPanes" | "showGrayFolder" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
+export type TutorialEffect = "showNewRightClick" | "openSample" | "backToAutomations" | "showAutomations" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
 
 /** What the effects learned about the practice material; later steps point at it. */
 export interface TutorialFacts {
@@ -29,8 +29,7 @@ export interface TutorialFacts {
 	readonly gray?: string;
 	/** The black-and-white copy the rule made. */
 	readonly result?: string;
-	/** The right-click automations there were before the tutorial asked for one, and the one the person then added. */
-	readonly known?: readonly string[];
+	/** The right-click automation the person added from the recommendations. */
 	readonly action?: string;
 }
 
@@ -86,25 +85,26 @@ const aiComposer = (facts: TutorialFacts): string => `${aiHost(facts)} form.comp
 const sendButton = (facts: TutorialFacts): string => `${aiComposer(facts)} button.send[type="submit"]`;
 /** The recommendations a page with no automations opens on (Figma 672:3718). */
 const RECOMMENDATIONS = `${AUTOMATIONS_VIEW} [data-automation-recommendations]`;
-/** The 새 자동화 card the chat answers "우클릭 자동화 만들어줘" with, set to 우클릭하면 (Figma 672:3678), and its 추가하기. */
-const newCard = (facts: TutorialFacts): string => `${aiHost(facts)} [data-automation-request]`;
-const addCard = (facts: TutorialFacts): string => `${newCard(facts)} [data-action="automation-request-add"]`;
+/** The right-click recommendation the tutorial adds (문서 세 줄 요약), and its 추가하기. */
+const SUMMARY_CARD = `${AUTOMATIONS_VIEW} [data-template="summary"]`;
+const SUMMARY_ADD = `${SUMMARY_CARD} [data-action="automation-template-add"]`;
+/** 새 자동화, which opens the chat that makes any other automation. */
+const NEW_AUTOMATION = `${AUTOMATIONS_VIEW} [data-action="automation-composer-open"]`;
 /** The right-click automation the person just added: its row in 내 자동화, and its item in a file's right-click menu. */
 const newRow = (facts: TutorialFacts): string => (facts.action === undefined ? "[data-magic-action-row]:not([data-magic-action-row])" : `${AUTOMATIONS_VIEW} [data-magic-action-row="${attr(facts.action)}"]`);
 const newMenuItem = (facts: TutorialFacts): string => (facts.action === undefined ? "[data-magic-action-id]:not([data-magic-action-id])" : `.menu[role="menu"] [data-magic-action-id="${attr(facts.action)}"]`);
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
-	// Figma 672:3637: the right-click menu is one of the triggers an automation has. The tutorial asks the chat for a
-	// right-click automation, has the person fill in the 새 자동화 card it brings (already on 우클릭하면) and add it,
-	// then right-clicks a practice file and runs it from the menu.
+	// Figma 672:3637: an automation is picked from the recommendations. The tutorial has the person add the right-click
+	// one (문서 세 줄 요약), right-click a practice file and run it from the menu, then points at 새 자동화 for the rest.
 	automations: [
-		{ key: "intro", anchors: [RECOMMENDATIONS, AUTOMATIONS_VIEW], offer: "askForRightClick" },
-		{ key: "send", anchors: [aiComposer], waitFor: sendButton, tap: sendButton },
-		{ key: "card", anchors: [newCard], waitFor: newCard, tap: addCard },
+		{ key: "intro", anchors: [RECOMMENDATIONS, AUTOMATIONS_VIEW] },
+		{ key: "add", anchors: [SUMMARY_CARD], requires: SUMMARY_CARD, tap: SUMMARY_ADD },
 		{ key: "made", anchors: [newRow], enter: "showNewRightClick", waitFor: newRow },
 		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: newMenuItem, hint: "rightClick" },
 		{ key: "pick", anchors: [newMenuItem], tap: newMenuItem },
 		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
+		{ key: "chat", anchors: [NEW_AUTOMATION], enter: "backToAutomations", waitFor: NEW_AUTOMATION },
 	],
 	contextMenu: [
 		{ key: "intro", anchors: ['.menu[role="menu"]'], offer: "createMagicAction" },

@@ -792,6 +792,11 @@
         "desc": "When files in Documents are added or changed, update search right away",
         "task": "Update search right away"
       },
+      "summary": {
+        "title": "Three-line summary",
+        "desc": "Right-click a document to sum it up in three lines",
+        "task": "Sum it up in three lines"
+      },
       "translate": {
         "title": "Translate a document",
         "desc": "Right-click a document to make a copy translated into English",
@@ -3700,35 +3705,33 @@
     "waitingHint": "One moment…",
     "rightClickHint": "Right-click the file",
     "automations": {
-      "askText": "Create a right-click automation",
       "intro": {
-        "title": "The right-click menu is an automation too",
-        "body": "You can add what Dazzi does to the menu you get when you right-click a file. Let's make one together that sums up a text file in three lines.",
-        "action": "Make one together"
+        "title": "Meet one of Dazzi's special features",
+        "body": "Automations let Dazzi take care of file work for you when the moment you set comes."
       },
-      "send": {
-        "title": "Click Send",
-        "body": "The request to the AI is written for you. Send it and the new automation card appears right away."
-      },
-      "card": {
-        "title": "Fill in the card and add it",
-        "body": "Right-click is already picked. Change the file type to documents, type \"Sum it up in three lines\" under What Dazzi does, then click Add."
+      "add": {
+        "title": "Shall we add one?",
+        "body": "This one sums up a document in three lines when you right-click it. Click Add."
       },
       "made": {
-        "title": "Your right-click automation is ready",
-        "body": "A new row appeared in My Automations. Turn it on or off, or change it, in the same list as your folder automations."
+        "title": "Automation added",
+        "body": "Click the row to change its settings or see its run history. The switch turns it on and off."
       },
       "sample": {
-        "title": "Right-click the practice file",
-        "body": "The Practice Files folder is open. Right-click the file and the item you just made appears in the menu."
+        "title": "Want to see how it works?",
+        "body": "Right-click the practice file."
       },
       "pick": {
-        "title": "Here it is",
-        "body": "Your right-click automations only appear when you right-click a file they fit. Click it to run it."
+        "title": "Click the automation you just added",
+        "body": "It's the new item in the menu."
       },
       "result": {
-        "title": "The result shows right away",
-        "body": "Dazzi read the file you picked and summed it up. Next time, pick right-click in New automation. This one is just for practice, so feel free to delete it."
+        "title": "Ta-da! Summed up in three lines",
+        "body": "You can use it every time you right-click a document."
+      },
+      "chat": {
+        "title": "Now try automations yourself",
+        "body": "Whenever you want AI to take care of file work, set it up as an automation."
       }
     },
     "contextMenu": {

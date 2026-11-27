@@ -367,14 +367,17 @@ function TutorialCoach({
 			<div key={rect === null ? "none" : "spot"} className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
 			<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
 			<div ref={bubbleRef} className="fr-coach" data-tutorial-step={step.key} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={t(`${copy}.title` as LocaleKey)}>
-				<CoachCard key={step.key} title={t(`${copy}.title` as LocaleKey)} body={t(`${copy}.body` as LocaleKey)} index={index} count={count} waiting={waiting || busy} note={note}>
+				<CoachCard key={step.key} title={t(`${copy}.title` as LocaleKey)} body={t(`${copy}.body` as LocaleKey)} index={index} count={count} waiting={waiting || busy} note={note}
+					skip={
+						offer !== undefined || (last && hintKey === null) ? null : (
+							<button type="button" className="fr-coach-link" data-action="tutorial-skip" onClick={onEnd}>
+								{t("firstRun.tour.skip")}
+							</button>
+						)
+					}
+				>
 					{offer === undefined ? (
 						<>
-							{last && hintKey === null ? null : (
-								<button type="button" className="fr-coach-link" data-action="tutorial-skip" onClick={onEnd}>
-									{t("firstRun.tour.skip")}
-								</button>
-							)}
 							{hintKey === null ? (
 								<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-next" onClick={last ? onEnd : onNext}>
 									{last ? t("firstRun.tour.finish") : t("firstRun.tour.next")}
