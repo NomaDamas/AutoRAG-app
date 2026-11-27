@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Eye, FilePen, Info, Lock, Pencil, Plus, Sparkles, Terminal, X } from "lucide-react";
+import { Zap, Eye, FilePen, Info, Lock, Pencil, Plus, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
@@ -423,7 +423,8 @@ export function ContextMenuPage({
 	 * item: the name and the on/off switch, nothing else.
 	 */
 	const renderMagicActionRow = (action: MagicAction, index: number, prefix: string, place: "card" | "section"): ReactElement => {
-		const RowIcon = action.execution.kind === "script" ? Terminal : Sparkles;
+		// The bolt every automation has, whether it asks the agent or runs a command.
+		const RowIcon = Zap;
 
 		return (
 			<div
