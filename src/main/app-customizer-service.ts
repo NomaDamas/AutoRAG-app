@@ -194,13 +194,23 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 			case "source": {
 				const kit = createDatasourceConnectionsToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets, ...shellOption });
 				toolkit = kit;
-				profile = datasourceConnectionsProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				profile = datasourceConnectionsProfile({ ...configProfileInput(currentLang, surface, kit, knownSecrets, web), ...platformDep });
 				break;
 			}
 			case "mcp": {
-				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets, ...shellOption });
-				toolkit = kit;
-				profile = connectionsCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				const mcpKit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets, ...shellOption });
+				const dsKit = createDatasourceConnectionsToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
+				// Give the MCP assistant full datasource tools + dynamic setup skills as well so if a user asks to
+				// connect/install/fix a built-in datasource (like Hister) from the MCP tab, it loads its setup skill
+				// and configures `datasources.<alias>` directly instead of mistakenly trying to add it as an MCP server.
+				const mcpToolsOnly = mcpKit.tools.filter((tool) => tool.name !== "update_datasource");
+				const combinedKit: CustomizerToolkit = {
+					tools: [...mcpToolsOnly, ...dsKit.tools],
+					takeChanges: () => [...mcpKit.takeChanges(), ...dsKit.takeChanges()],
+					peekChanges: () => [...mcpKit.peekChanges(), ...dsKit.peekChanges()],
+				};
+				toolkit = combinedKit;
+				profile = connectionsCustomizerProfile({ ...configProfileInput(currentLang, surface, combinedKit, knownSecrets, web), ...platformDep });
 				break;
 			}
 			default: {

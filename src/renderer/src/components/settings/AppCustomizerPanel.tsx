@@ -394,7 +394,16 @@ export function AppCustomizerPanel({
 					}
 				}),
 			);
-			if (event.type !== "progress" && event.type !== "draft" && event.type !== "assistant-message" && event.changes.length > 0) onChangesApplied();
+			// Refresh the adjacent Settings page whenever structured settings changed, OR whenever a turn finishes on
+			// a connections surface (`apps`, `source`, `mcp`) where shell commands (e.g. installing a CLI or starting
+			// Hister) may have changed live connection/install status without writing config.json.
+			const shouldReload =
+				event.type !== "progress" &&
+				event.type !== "draft" &&
+				event.type !== "assistant-message" &&
+				(event.changes.length > 0 ||
+					(event.type === "turn-done" && (surface === "apps" || surface === "source" || surface === "mcp")));
+			if (shouldReload) onChangesApplied();
 			if (event.type === "turn-done") {
 				onSettingsUpdated(event.settings);
 				setActiveRunId((current) => (current === event.runId ? null : current));
@@ -402,7 +411,7 @@ export function AppCustomizerPanel({
 				setActiveRunId((current) => (current === event.runId ? null : current));
 			}
 		});
-	}, [sessionId, onSettingsUpdated, onChangesApplied]);
+	}, [sessionId, surface, onSettingsUpdated, onChangesApplied]);
 
 	const answerPrompt = useCallback((promptId: string, answer: AppCustomizerPromptAnswer): void => {
 		setPrompts((current) => current.filter((entry) => entry.id !== promptId));

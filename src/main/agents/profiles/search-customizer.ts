@@ -17,7 +17,12 @@ import {
 	type JsonValue,
 } from "../../../shared/settings-contract";
 import { evaluateRefreshScheduleHealth } from "../../../shared/refresh-schedule-health";
-import { DUPEY_SCAN_INTERVALS, REFRESH_INTERVALS } from "../../../shared/settings-options";
+import {
+	DUPEY_SCAN_INTERVALS,
+	formatRefreshIntervalHint,
+	REFRESH_INTERVAL_CHOICES,
+	REFRESH_INTERVALS,
+} from "../../../shared/settings-options";
 import type { ReplyLanguage } from "../profile-progress";
 import {
 	createCustomizerKit,
@@ -107,6 +112,7 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 				exclusions: excludePaths.map((entry) => ({ path: entry, glob: isGlobExclusion(entry) })),
 				refreshIntervalMs: numberOf(appIndexing.refreshIntervalMs) ?? 0,
 				refreshIntervalOptionsMs: [0, ...REFRESH_INTERVALS.map((option) => option.ms)],
+				refreshIntervalChoices: REFRESH_INTERVAL_CHOICES,
 				fileNameWatch: boolOf(asRecord(fsearch)?.watch) ?? true,
 				fsearchFalse: fsearch === false,
 				excludeCodeFolders: boolOf(appIndexing.excludeCodeFolders) ?? true,
@@ -211,10 +217,13 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 	const updateIndexOptions = defineTool({
 		name: "update_index_options",
 		label: "Update Indexing Options",
-		description:
-			"Set the local refresh cadence (`appIndexing.refreshIntervalMs`; 0 = manual, otherwise one of the offered millisecond values), file-name watching (`fsearch.watch`), and automatic code-folder exclusion (`appIndexing.excludeCodeFolders`). Changing the cadence also nudges the OS background job to match.",
+		description: `Set the local refresh cadence (\`appIndexing.refreshIntervalMs\`: ${formatRefreshIntervalHint()}), file-name watching (\`fsearch.watch\`), and automatic code-folder exclusion (\`appIndexing.excludeCodeFolders\`). Changing the cadence also nudges the OS background job to match.`,
 		parameters: Type.Object({
-			refreshIntervalMs: Type.Optional(Type.Number({ description: "0 for manual, or one of the offered periodic refresh intervals in milliseconds." })),
+			refreshIntervalMs: Type.Optional(
+				Type.Number({
+					description: `Exact millisecond value from the offered intervals: ${formatRefreshIntervalHint()}. Double-check the unit (5 min = 300000, 15 min = 900000, 30 min = 1800000, 1 hour = 3600000, 6 hours = 21600000, 24 hours = 86400000).`,
+				}),
+			),
 			fileNameWatch: Type.Optional(Type.Boolean({ description: "Keep the name search current as files change (`fsearch.watch`)." })),
 			excludeCodeFolders: Type.Optional(Type.Boolean({ description: "Skip dependency/code folders like node_modules (`appIndexing.excludeCodeFolders`)." })),
 		}),
