@@ -309,7 +309,7 @@ export function MagicActionDialog(): ReactElement | null {
 					</div>
 					<button
 						type="button"
-						className="flex size-24 flex-none cursor-pointer items-center justify-center rounded-6 border-0 bg-transparent p-0 text-ink-muted hover:bg-hover"
+						className="flex size-24 flex-none self-start cursor-pointer items-center justify-center rounded-6 border-0 bg-transparent p-0 text-ink-muted hover:bg-hover"
 						aria-label={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						title={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						onClick={dismissMagicActionDialog}
