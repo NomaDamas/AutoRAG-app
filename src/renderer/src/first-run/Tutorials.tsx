@@ -362,7 +362,7 @@ function TutorialCoach({
 	return (
 		<div className="fr-tour">
 			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} />
+			<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
 			<div ref={bubbleRef} className="fr-coach" data-tutorial-step={step.key} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={t(`${copy}.title` as LocaleKey)}>
 				<CoachCard key={step.key} title={t(`${copy}.title` as LocaleKey)} body={t(`${copy}.body` as LocaleKey)} index={index} count={count} waiting={waiting || busy} note={note}>
 					{offer === undefined ? (

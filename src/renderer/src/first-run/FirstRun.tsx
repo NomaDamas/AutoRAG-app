@@ -838,7 +838,7 @@ function Coach({
 	return (
 		<div className="fr-tour">
 			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			<CoachMarker target={clickRect} spot={clickRect === null ? rect : null} data={{ "data-target-step": step }} />
+			<CoachMarker target={clickRect} spot={clickRect === null ? rect : null} data={{ "data-target-step": step }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
 			<div ref={bubbleRef} className="fr-coach" data-step={step} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={title}>
 				<CoachCard key={step} title={title} body={body} index={index} count={count} waiting={waiting}>
 					{last && showNext ? null : (
