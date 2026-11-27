@@ -1479,6 +1479,11 @@ html[data-appearance="dark"] .fr-reveal-base {
 	}
 }
 
+/* The tour keeps one coach across its steps: its box resizes from one target to the next, at the tutorials' pace. */
+.fr-root[data-screen="tour"] .fr-spot {
+	transition: left 420ms var(--fr-spring), top 420ms var(--fr-spring), width 420ms var(--fr-spring), height 420ms var(--fr-spring), opacity 240ms ease;
+}
+
 /* Beside a ring the sunflower sits a little above the ring's centre. */
 .fr-cursor-ring + .fr-mascot {
 	margin-top: -10px;
