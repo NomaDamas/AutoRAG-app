@@ -57,6 +57,21 @@ export const REFRESH_INTERVALS: readonly { readonly ms: number; readonly label: 
 	{ ms: 24 * 60 * 60_000, label: "settingsSources.cadence.day1" },
 ];
 
+/** Human-readable English mapping for AI tool schemas/prompts so models never confuse 300000 (5m) with 1800000 (30m). */
+export const REFRESH_INTERVAL_CHOICES: readonly { readonly ms: number; readonly duration: string }[] = [
+	{ ms: 0, duration: "manual" },
+	{ ms: 5 * 60_000, duration: "5 minutes" },
+	{ ms: 15 * 60_000, duration: "15 minutes" },
+	{ ms: 30 * 60_000, duration: "30 minutes" },
+	{ ms: 60 * 60_000, duration: "1 hour" },
+	{ ms: 6 * 60 * 60_000, duration: "6 hours" },
+	{ ms: 24 * 60 * 60_000, duration: "24 hours" },
+];
+
+export function formatRefreshIntervalHint(): string {
+	return REFRESH_INTERVAL_CHOICES.map((choice) => `${choice.ms} (${choice.duration})`).join(", ");
+}
+
 /** How often the app re-runs the version-family scan (`AppSettings.dupeyScanIntervalMinutes`). */
 export const DUPEY_SCAN_INTERVALS: readonly { readonly value: number; readonly label: LocaleKey }[] = [
 	{ value: 15, label: "settingsSources.duplicates.intervals.min15" },

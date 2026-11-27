@@ -151,6 +151,7 @@ describe("settings-customizer unified profile & toolkit", () => {
 			"update_index_options",
 			"update_duplicates",
 			"update_refresh_schedule",
+			"run_index_refresh",
 			"get_ltr_settings",
 			"update_ltr_settings",
 			"get_connections",
@@ -158,6 +159,7 @@ describe("settings-customizer unified profile & toolkit", () => {
 			"search_mcp_registry",
 			"install_mcp_server",
 			"get_datasources",
+			"load_datasource_setup_skill",
 			"add_datasource",
 			"update_datasource",
 			"update_datasource_connector",
@@ -172,6 +174,8 @@ describe("settings-customizer unified profile & toolkit", () => {
 		expect(profile.tools).toEqual([]);
 		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
 		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).toContain("<available_skills>");
+		expect(profile.systemPrompt).toContain("datasource-setup-hister");
 		expect(profile.systemPrompt).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
 	});
 

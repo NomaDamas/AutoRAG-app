@@ -9,6 +9,7 @@ import {
 	datasourceConnectionsProfile,
 	DATASOURCE_TEMPLATE_CATALOG,
 } from "../src/main/agents/profiles/datasource-connections-customizer";
+import { DATASOURCE_SETUP_SKILLS } from "../src/main/agents/profiles/datasource-setup-skills";
 import type { RunPrompter } from "../src/main/agents/customizer-prompter";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createProviderCredentialService } from "../src/main/provider-credentials";
@@ -186,6 +187,7 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual([
 			"add_datasource",
 			"get_datasources",
+			"load_datasource_setup_skill",
 			"remove_datasource",
 			"set_datasource_credential",
 			"sync_datasource",
@@ -194,10 +196,50 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		]);
 		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
 		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).toContain("<available_skills>");
+		expect(profile.systemPrompt).toContain("datasource-setup-hister");
 		expect(profile.systemPrompt).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
 		expect(DATASOURCE_TEMPLATE_CATALOG.some((t) => t.id === "slack")).toBe(true);
 		expect(DATASOURCE_TEMPLATE_CATALOG.some((t) => t.id === "obsidian")).toBe(true);
 		expect(DATASOURCE_TEMPLATE_CATALOG.some((t) => t.id === "github")).toBe(true);
+		// Every addable datasource template has a 1-to-1 dynamically loadable setup skill with pure-English content.
+		expect(DATASOURCE_SETUP_SKILLS.map((s) => s.templateId).sort()).toEqual(
+			DATASOURCE_TEMPLATE_CATALOG.map((t) => t.id).sort(),
+		);
+		for (const skill of DATASOURCE_SETUP_SKILLS) {
+			expect(skill.content).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
+		}
+	});
+
+	it("load_datasource_setup_skill dynamically loads setup guides by skill name, template id, CLI binary, or alias", async () => {
+		const harness = createHarness();
+		const kit = createDatasourceConnectionsToolkit({ settings: harness.settings, platform: "darwin" });
+		const loader = kit.tools.find((t) => t.name === "load_datasource_setup_skill")!;
+
+		const runLoad = async (name: string): Promise<string> => {
+			const res = await loader.execute("call-1", { name } as never, undefined, undefined, undefined as never);
+			return res.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
+		};
+
+		const byFullName = await runLoad("datasource-setup-hister");
+		expect(byFullName).toContain('<skill name="datasource-setup-hister" location="dazzi-setup-skill://datasource-setup-hister">');
+		expect(byFullName).toContain("brew install hister");
+		expect(byFullName).toContain("Never");
+
+		const byTemplateId = await runLoad("obsidian");
+		expect(byTemplateId).toContain('name="datasource-setup-obsidian"');
+		expect(byTemplateId).toContain("vaultPath");
+
+		const byCliBinary = await runLoad("slacrawl");
+		expect(byCliBinary).toContain('name="datasource-setup-slack"');
+		expect(byCliBinary).toContain("workspace");
+
+		const byAlias = await runLoad("mail");
+		expect(byAlias).toContain('name="datasource-setup-mailcrawl"');
+
+		const unknown = await runLoad("nonexistent-thing");
+		expect(unknown).toContain("Unknown datasource setup skill");
+		expect(unknown).toContain("datasource-setup-hister");
 	});
 
 	it("get_datasources lists configured connections (with redacted connector fields) and available templates for the platform", async () => {
@@ -387,6 +429,10 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		expect(kit.tools.map((t) => t.name)).toContain("bash");
 		const profile = datasourceConnectionsProfile({ language: "en", surface: "apps", toolkit: kit });
 		expect(profile.systemPrompt).toContain("bash");
+		expect(profile.systemPrompt).toContain("NOT MCP");
+		expect(profile.systemPrompt).toContain("brew install hister");
+		expect(profile.systemPrompt).toContain("end-to-end");
+		expect(profile.systemPrompt).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
 
 		const bash = kit.tools.find((t) => t.name === "bash")!;
 		const res = await bash.execute("call-1", { command: `ls -a ${vault}` } as never, undefined, undefined, undefined as never);
