@@ -84,6 +84,14 @@ const vendoredLibarchiveWasm: Plugin = {
 				source: readFileSync(macRevealHook),
 			});
 		}
+		const dazziCore = resolve(import.meta.dirname, "src/main/vendor/dazzi-core.node");
+		if (existsSync(dazziCore)) {
+			this.emitFile({
+				type: "asset",
+				fileName: "vendor/dazzi-core.node",
+				source: readFileSync(dazziCore),
+			});
+		}
 	},
 };
 

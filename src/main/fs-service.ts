@@ -34,6 +34,7 @@ import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finde
 import { createFinderTags, type FinderTags } from "./finder-tags";
 import { createIconProvider, type IconProvider } from "./file-icon";
 import { copyTree } from "./copy-tree";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, onDiskPath, pathExists, resolveCopyName } from "./fs-entry";
@@ -522,6 +523,43 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			return { path, entries: await recycleBinEntries(path, dirents) };
 		}
 		const visible = dirents.filter((dirent) => !discord.isInternalEntry(path, dirent.name));
+		const native = visible.length >= 128 ? loadDazziNativeCore() : null;
+		if (native !== null) {
+			signal?.throwIfAborted();
+			const result = native.listDirNative(path, platform);
+			signal?.throwIfAborted();
+			// If any entry could not be read natively, fall through to JS so every skipped entry logs its verbatim warning.
+			if (!result.hadSkips) {
+				const entries: FsEntry[] = [];
+				for (const item of result.entries) {
+					if (discord.isInternalEntry(path, item.name)) continue;
+					entries.push(
+						item.birthtimeMs != null && item.birthtimeMs > 0
+							? {
+									name: item.name,
+									path: item.path,
+									kind: item.kind,
+									ext: item.ext,
+									size: item.size,
+									mtimeMs: item.mtimeMs,
+									birthtimeMs: item.birthtimeMs,
+									flags: item.flags,
+								}
+							: {
+									name: item.name,
+									path: item.path,
+									kind: item.kind,
+									ext: item.ext,
+									size: item.size,
+									mtimeMs: item.mtimeMs,
+									flags: item.flags,
+								},
+					);
+				}
+				entries.sort(compareEntries);
+				return { path, entries };
+			}
+		}
 		const entries = await buildListingEntries(visible, path, signal);
 		entries.sort(compareEntries);
 		return { path, entries };

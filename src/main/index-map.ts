@@ -1,7 +1,7 @@
 import { access, opendir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { minSyncDocumentPath, type ParsedMirrorEntry, type ParsedMirrorIndex } from "@autorag/librarian";
-import { findExclusion } from "./path-exclusion";
+import { createExclusionMatcher } from "./path-exclusion";
 import {
 	emptyIndexMapCounts,
 	indexMapFolderState,
@@ -71,7 +71,8 @@ export const INDEX_MAP_NODE_BUDGET = 2400;
 export async function scanIndexScope(context: IndexScopeContext, maxEntries = INDEX_MAP_MAX_ENTRIES): Promise<ScanResult> {
 	let visited = 0;
 	let truncated = false;
-	const excludedBy = (path: string): boolean => findExclusion(context.exclusions, path) !== null;
+	const exclusionMatcher = createExclusionMatcher(context.exclusions);
+	const excludedBy = (path: string): boolean => exclusionMatcher.isExcluded(path);
 
 	async function classify(path: string): Promise<IndexMapState> {
 		// Exclusion wins: an excluded file is out of the index even if the mirror still holds it from before.

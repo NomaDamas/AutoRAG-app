@@ -1,6 +1,7 @@
 import type { Dir } from "node:fs";
 import { opendir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { loadDazziNativeCore, type NativeModifiedSpread } from "./dazzi-native-core";
 import { SCAN_SKIP_DIR_NAMES } from "./onboarding-scan";
 
 /**
@@ -128,11 +129,60 @@ function extensionsOf(buckets: readonly Bucket[], supported: ReadonlySet<string>
 		.sort((a, b) => b.files - a.files || a.extension.localeCompare(b.extension));
 }
 
+function toModifiedSpread(native: NativeModifiedSpread | null | undefined): ModifiedSpread | null {
+	if (native == null) return null;
+	return {
+		oldest: new Date(native.oldestMs),
+		newest: new Date(native.newestMs),
+		spanDays: native.spanDays,
+		sameDayShare: native.sameDayShare,
+	};
+}
+
 /** Gathers the facts about `folder`; `signal` stops the walk early, marking the result partial. */
 export async function measureFolder(folder: string, options: FolderStatsOptions, signal: AbortSignal): Promise<FolderStats> {
 	const skip = options.skipDirNames ?? SCAN_SKIP_DIR_NAMES;
 	const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
 	const sampleSize = options.sampleNames ?? DEFAULT_SAMPLE_NAMES;
+
+	const native = !signal.aborted ? loadDazziNativeCore() : null;
+	if (native !== null) {
+		const control = new native.WalkControl();
+		const onAbort = (): void => control.cancel();
+		signal.addEventListener("abort", onAbort, { once: true });
+		try {
+			const stats = await native.measureFolderNative(
+				folder,
+				[...options.supportedExtensions],
+				Object.keys(skip).map((name) => name.toLowerCase()),
+				options.maxSourceBytes,
+				maxEntries,
+				sampleSize,
+				control,
+			);
+			return {
+				indexedFiles: stats.indexedFiles,
+				totalFiles: stats.totalFiles,
+				indexedBytes: stats.indexedBytes,
+				extensions: stats.extensions,
+				children: stats.children.map((child) => ({
+					name: child.name,
+					indexedFiles: child.indexedFiles,
+					totalFiles: child.totalFiles,
+					extensions: child.extensions,
+					modified: toModifiedSpread(child.modified),
+					sample: child.sample,
+					subfolders: child.subfolders,
+				})),
+				ownFiles: stats.ownFiles,
+				sample: stats.sample,
+				modified: toModifiedSpread(stats.modified),
+				truncated: stats.truncated,
+			};
+		} finally {
+			signal.removeEventListener("abort", onAbort);
+		}
+	}
 	const own = newBucket();
 	const children = new Map<string, Bucket>();
 	let scanned = 0;
