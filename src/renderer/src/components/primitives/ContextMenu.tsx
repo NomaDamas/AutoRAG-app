@@ -13,7 +13,7 @@ import {
 	type FinderMenuTagRow,
 } from "../../state/context-menu";
 import type { NewFileFormatId } from "../../../../shared/new-file-contract";
-import { Check, Minus, Plus, Sparkles } from "lucide-react";
+import { Zap, Check, Minus, Plus } from "lucide-react";
 import { ChevronRightSmallIcon } from "../icons";
 import { TagDotMark } from "./TagDot";
 
@@ -194,9 +194,9 @@ export function ContextMenu({
 						disabled={entry.disabled}
 						onClick={() => onSelect(entry.action, null, null, null, entry.magicActionId ?? null)}
 					>
-						{/* A magic action the person made carries the blue AI mark (the sidebar's AI 에이전트 icon), so it reads apart from the built-in items. */}
+						{/* A right-click automation the person made carries the blue bolt, as every automation does, so it reads apart from the built-in items. */}
 						{entry.magicActionId === undefined ? null : (
-							<Sparkles className="menu__magic-icon flex-none text-accent" size={14} strokeWidth={1.8} aria-hidden="true" />
+							<Zap className="menu__magic-icon flex-none text-accent" size={14} strokeWidth={1.8} aria-hidden="true" />
 						)}
 						<span className="menu__label flex-1">{entry.label}</span>
 						{/* A visual hint only: the item's accessible name stays "Rename", not "Rename⌘R". */}

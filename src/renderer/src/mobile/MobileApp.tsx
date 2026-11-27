@@ -22,7 +22,6 @@ import { useTranslation } from "react-i18next";
 import {
 	ArrowDownUp,
 	BookOpen,
-	Bot,
 	ChevronLeft,
 	Copy,
 	Download,
@@ -51,7 +50,7 @@ import {
 	Tag,
 	Trash2,
 	Upload,
-	WandSparkles,
+	Wrench,
 	Zap,
 } from "lucide-react";
 import type { ActionCapabilities } from "../../../shared/actions-contract";
@@ -871,9 +870,9 @@ export function MobileApp(): ReactElement {
 						case "magic":
 							return (
 								<div key={id} style={{ display: "contents" }}>
-									<MenuItem icon={<WandSparkles size={20} strokeWidth={2} />} label={t("mobile.menu.magic")} submenu open={menu.open === "magic"} onClick={() => toggleOpen("magic")} />
+									<MenuItem icon={<Zap size={20} strokeWidth={2} />} label={t("mobile.menu.magic")} submenu open={menu.open === "magic"} onClick={() => toggleOpen("magic")} />
 									{menu.open === "magic" ? model.magic.map((action) => (
-										<MenuItem key={action.id} sub icon={action.execution.kind === "agent" ? <Bot size={18} strokeWidth={2} /> : <Zap size={18} strokeWidth={2} />} label={action.label} hint={action.execution.kind === "agent" ? t("mobile.menu.agent") : t("mobile.menu.script")} onClick={() => {
+										<MenuItem key={action.id} sub icon={<Zap size={18} strokeWidth={2} />} label={action.label} hint={action.execution.kind === "agent" ? t("mobile.menu.agent") : t("mobile.menu.script")} onClick={() => {
 											close();
 											startMagicActionRun(action, entries.map((entry) => entry.path));
 											showToast(t("mobile.toast.magicStarted", { name: action.label }));
@@ -885,7 +884,7 @@ export function MobileApp(): ReactElement {
 							const tools = toolItems(entries, capabilities.archive);
 							return (
 								<div key={id} style={{ display: "contents" }}>
-									<MenuItem icon={<Zap size={20} strokeWidth={2} />} label={t("mobile.menu.tools")} hint={t("mobile.menu.toolsHint")} submenu open={menu.open === "tools"} onClick={() => toggleOpen("tools")} />
+									<MenuItem icon={<Wrench size={20} strokeWidth={2} />} label={t("mobile.menu.tools")} hint={t("mobile.menu.toolsHint")} submenu open={menu.open === "tools"} onClick={() => toggleOpen("tools")} />
 									{menu.open === "tools" ? tools.map((tool) => {
 										if (tool === "compress") return <MenuItem key={tool} sub icon={<FileArchive size={18} strokeWidth={2} />} label={many ? t("contextMenu.compressCount", { count: entries.length }) : t("contextMenu.compress")} onClick={() => archive("compress", entries)} />;
 										if (tool === "extract") return <MenuItem key={tool} sub icon={<PackageOpen size={18} strokeWidth={2} />} label={t("contextMenu.extract")} onClick={() => archive("extract", entries)} />;

@@ -8,7 +8,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AutomationRule } from "../../../shared/automation-contract";
-import { RefreshIcon, SparklesIcon, ZapIcon } from "./icons";
+import { ZapIcon } from "./icons";
 import { FadedDazziMark } from "./Inspector";
 
 export interface AutomationInspectorProps {
@@ -20,11 +20,8 @@ export interface AutomationInspectorProps {
 	readonly chatHead?: ReactNode;
 }
 
-/** A rule's action as its glyph: the search index refresh, an AI Search run, or any other program. */
-export function AutomationActionGlyph({ rule, size = 20 }: { readonly rule: AutomationRule; readonly size?: number }): ReactElement {
-	if (rule.agent !== undefined) return <SparklesIcon size={size} />;
-	if (rule.run[0] === "autorag" && rule.run[1] === "refresh") return <RefreshIcon size={size} />;
-	if (rule.run[0] === "autorag" && rule.run[1] === "search") return <SparklesIcon size={size} />;
+/** A rule's glyph: the bolt, as every automation has, whatever it runs. */
+export function AutomationActionGlyph({ size = 20 }: { readonly rule: AutomationRule; readonly size?: number }): ReactElement {
 	return <ZapIcon size={size} />;
 }
 

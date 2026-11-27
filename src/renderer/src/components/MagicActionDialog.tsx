@@ -1,4 +1,4 @@
-import { Check, Copy, Minus, Sparkles, Terminal, X } from "lucide-react";
+import { Zap, Check, Copy, Minus, X } from "lucide-react";
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissMagicActionDialog, stopMagicActionRun, useMagicActionSession } from "../hooks/useMagicAction";
@@ -299,7 +299,8 @@ export function MagicActionDialog(): ReactElement | null {
 				{/* Figma 568:7806–7808: the action's mark, its name over the file it ran on, minimise (running) or close. */}
 				<div className="flex items-center gap-8">
 					<span className="flex size-24 flex-none items-center justify-center text-accent" aria-hidden="true">
-						{isScript ? <Terminal size={14} strokeWidth={1.8} /> : <Sparkles size={14} strokeWidth={1.8} />}
+						{/* The bolt every automation has, whether it asks the agent or runs a command. */}
+						<Zap size={14} strokeWidth={1.8} />
 					</span>
 					<div className="flex min-w-0 flex-1 flex-col">
 						<strong className="truncate text-[13px] font-bold text-ink">{title}</strong>
