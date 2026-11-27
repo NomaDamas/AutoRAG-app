@@ -18,7 +18,7 @@ Dazzi powered by [AutoRAG](https://github.com/Marker-Inc-Korea/AutoRAG).
 
 <br>
 
-<img src="https://dazziapp.com/assets/screens/finder-list-2400.webp" width="900" alt="Dazzi Finder list view: a studio folder with a version stack expanded and a PDF preview in the inspector">
+<img src="assets/screens/finder-list.webp" width="900" alt="Dazzi Finder list view: a studio folder with an expanded version stack, PDF preview, and Version History timeline in the inspector">
 
 </div>
 
@@ -33,20 +33,20 @@ Dazzi powered by [AutoRAG](https://github.com/Marker-Inc-Korea/AutoRAG).
 ### 🔎 Just ask
 
 Ask the way you'd ask a teammate. Dazzi reads the files and writes back, with
-every answer linked to the passages behind it. Drag files, folders or links
-into a question to ask about just those.
+every answer linked to the passages behind it in the Evidence inspector. Drag
+files, folders or links into a question to ask about just those.
 
 </td>
 <td width="50%" valign="top">
 
-<img src="https://dazziapp.com/assets/screens/answer-crop-1400.webp" alt="A Dazzi answer summarizing the Seoul office lease terms, with citations">
+<img src="assets/screens/ask.webp" alt="Dazzi AI Agent summarizing the Seoul office lease terms with inline citations and the Evidence inspector">
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-<img src="https://dazziapp.com/assets/screens/versions-crop-1600.webp" alt="Finder list with an invoice and its identical rescan stacked under one row">
+<img src="assets/screens/versions.webp" alt="Finder list with similar and exact duplicate stacks expanded beside the Inspector Version History timeline and AI diff summaries">
 
 </td>
 <td width="50%" valign="top">
@@ -54,8 +54,9 @@ into a question to ask about just those.
 ### 🌻 Spot the twins
 
 `proposal-final`, `proposal-v3`, `proposal (1)`: stacked into one row, newest
-on top, tagged **Latest**, **Similar** or **Identical**. Powered by
-[dupey](https://crates.io/crates/dupey).
+on top, tagged **Latest**, **Similar** or **Exact** — with a chronological
+**Version History** timeline and predecessor diff summaries in the inspector.
+Powered by [dupey](https://crates.io/crates/dupey).
 
 </td>
 </tr>
@@ -71,14 +72,14 @@ Quick Look. HWP pages are drawn locally by
 </td>
 <td width="50%" valign="top">
 
-<img src="https://dazziapp.com/assets/screens/ql-markdown-1400.webp" alt="Quick Look showing Markdown source beside the rendered page">
+<img src="assets/screens/ql-markdown.webp" alt="Quick Look showing Markdown source beside the rendered page in Split view">
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-<img src="https://dazziapp.com/assets/screens/panes-ai-2400.webp" alt="A folder pane beside an AI Chat pane">
+<img src="assets/screens/panes-ai.webp" alt="A folder pane in list view beside an AI Agent pane">
 
 </td>
 <td width="50%" valign="top">
@@ -86,8 +87,8 @@ Quick Look. HWP pages are drawn locally by
 ### 🪟 A real Finder
 
 Tabs and split panes: drag any tab to an edge to split, and every pane keeps
-its own tabs, so a folder and an AI chat can sit side by side. Folders update
-live as other apps change them.
+its own tabs, so a folder and an AI Agent chat can sit side by side. Folders
+update live as other apps change them.
 
 </td>
 </tr>
