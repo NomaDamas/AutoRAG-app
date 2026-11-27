@@ -166,6 +166,13 @@ export interface NativeArchiveListResult {
 	readonly entries: readonly NativeArchiveEntry[];
 }
 
+export interface NativeFinderXattrs {
+	readonly tags?: readonly string[] | null;
+	readonly comment?: string | null;
+	readonly tagsError?: string | null;
+	readonly commentError?: string | null;
+}
+
 export interface DazziNativeCore {
 	canHandleExclusionsNatively(exclusions: readonly string[]): boolean;
 	findExclusionBatch(exclusions: readonly string[], paths: readonly string[]): (NativeExclusionMatch | null)[];
@@ -220,6 +227,13 @@ export interface DazziNativeCore {
 	findPdfAnchorPagesNative(path: string, excerpts: readonly string[], maxCandidates: number): Promise<number[]>;
 	listArchiveNative(path: string, maxOutputBytes: number, maxEntries: number): Promise<NativeArchiveListResult>;
 	listTarBytesNative(bytes: Uint8Array, maxEntries: number): NativeArchiveListResult;
+	readFinderXattrsNative(path: string): NativeFinderXattrs;
+	readFinderTagsNative(path: string): string[];
+	writeFinderTagsNative(path: string, stored: readonly string[]): void;
+	decodePlistToJsonNative(bytes: Uint8Array): string;
+	encodeBinaryPlistStringsNative(values: readonly string[]): Buffer;
+	decodePlistStringsNative(bytes: Uint8Array): string[] | null;
+	lookupWindowsFileKindsNative(extensions: readonly string[]): (string | null)[] | null;
 }
 
 let cachedAddon: DazziNativeCore | null | undefined;

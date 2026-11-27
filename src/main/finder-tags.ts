@@ -29,6 +29,7 @@ import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FsBatchResult, FsOpError, FsTag, FsTagCatalog, FsTagChange, FsTagColor } from "../shared/fs-contract";
 import { t } from "../shared/i18n/core";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 import { errorMessage, hasErrorCode } from "./fs-entry";
 
 /** Runs one OS helper with optional stdin and resolves its raw stdout; rejects with stderr (or the spawn error) verbatim. */
@@ -226,7 +227,19 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 		return colorNames;
 	}
 
+	const useNative = platform === "darwin" && deps.run === undefined;
+
 	async function plistToJson(bytes: Uint8Array): Promise<unknown> {
+		if (useNative) {
+			const native = loadDazziNativeCore();
+			if (native !== null) {
+				try {
+					return JSON.parse(native.decodePlistToJsonNative(bytes));
+				} catch (error) {
+					warnOnce(`[dazzi-core] decodePlistToJsonNative failed, falling back to plutil: ${errorMessage(error)}`);
+				}
+			}
+		}
 		return JSON.parse((await run(PLUTIL, ["-convert", "json", "-o", "-", "--", "-"], bytes)).toString("utf8"));
 	}
 
@@ -311,6 +324,20 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 	}
 
 	async function readStored(path: string): Promise<readonly string[]> {
+		if (useNative) {
+			const native = loadDazziNativeCore();
+			if (native !== null) {
+				try {
+					return native.readFinderTagsNative(path);
+				} catch (error) {
+					const msg = errorMessage(error);
+					// A real unreadable-plist error (non-string array) must surface as main.tags.unreadable,
+					// and real OS errors (ENOENT/EACCES/EPERM) propagate directly without spawning xattr.
+					if (msg.includes("unreadable tag plist")) throw new Error(t("main.tags.unreadable"));
+					throw error;
+				}
+			}
+		}
 		let hex: string;
 		try {
 			hex = (await run(XATTR, ["-p", "-x", TAGS_XATTR, path])).toString("utf8");
@@ -329,6 +356,13 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 	}
 
 	async function writeStored(path: string, stored: readonly string[]): Promise<void> {
+		if (useNative) {
+			const native = loadDazziNativeCore();
+			if (native !== null) {
+				native.writeFinderTagsNative(path, stored);
+				return;
+			}
+		}
 		if (stored.length === 0) {
 			try {
 				await run(XATTR, ["-d", TAGS_XATTR, path]);
