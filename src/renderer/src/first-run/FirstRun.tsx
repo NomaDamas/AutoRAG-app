@@ -537,7 +537,8 @@ type AnswerState = "idle" | "running" | "done" | "failed";
 function anchorFor(step: TourStepId, citeReady: boolean): string | null {
 	switch (step) {
 		case "ask":
-			return `${AI_HOST} form.composer`;
+			// The visible input box, not the composer strip around it (which spans the pane and, on an empty chat, the greeting).
+			return `${AI_HOST} form.composer .compose-box`;
 		case "cite":
 			return citeReady ? `${AI_HOST} .assistant-msg` : `${AI_HOST} .ai-body`;
 		case "evidence":

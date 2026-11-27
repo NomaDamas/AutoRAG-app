@@ -1858,3 +1858,10 @@ html[data-appearance="dark"] .fr-reveal-base {
 	inset: 0;
 	pointer-events: auto;
 }
+
+/* Card text breaks between words (Korean included) and evens out its lines, so no line ends on a stray word. */
+.fr-coach-title,
+.fr-coach-body {
+	word-break: keep-all;
+	text-wrap: pretty;
+}
