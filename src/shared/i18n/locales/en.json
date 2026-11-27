@@ -130,6 +130,8 @@
     },
     "versionBanner": {
       "retry": "Check again",
+      "checking": "Checking…",
+      "checkingHint": "Checking for duplicate files again. A large folder can take a few minutes.",
       "missingTitle": "The duplicate-file checker is missing",
       "missingHint": "Install dupey with the command below to see version stacks.",
       "scanFailedTitle": "The duplicate-file check didn't finish",
