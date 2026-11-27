@@ -669,6 +669,20 @@ function Tour({
 	const citeReady = step === "cite" && answer === "done" && cited;
 	const citeFallbackNext = step === "cite" && answer === "done" && !cited;
 
+	// The question is up in the chat as soon as it is sent: the card moves on to "답을 찾고 있어요" then, not when the
+	// answer's first event arrives (which can take a while).
+	useEffect(() => {
+		if (step !== "ask" || !askReady) return;
+		const onSubmit = (event: Event): void => {
+			if (!(event.target instanceof Element) || event.target.closest(`${AI_HOST} form.composer`) === null) return;
+			window.setTimeout(() => {
+				if (stepRef.current === "ask") setStep("cite");
+			}, 0);
+		};
+		document.addEventListener("submit", onSubmit, true);
+		return () => document.removeEventListener("submit", onSubmit, true);
+	}, [step, askReady]);
+
 	// `cite` with a chip advances only when the user clicks the real control.
 	useEffect(() => {
 		if (step !== "cite" || !citeReady) return;
