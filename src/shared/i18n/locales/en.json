@@ -792,6 +792,11 @@
         "desc": "When files in Documents are added or changed, update search right away",
         "task": "Update search right away"
       },
+      "summary": {
+        "title": "Three-line summary",
+        "desc": "Right-click a document to sum it up in three lines",
+        "task": "Sum it up in three lines"
+      },
       "translate": {
         "title": "Translate a document",
         "desc": "Right-click a document to make a copy translated into English",
@@ -1580,8 +1585,6 @@
       "samples": "Samples",
       "sampleName": "Weekly report (example).txt",
       "sampleBody": "Weekly report (example)\n\nDone this week: QA on the new feature, 3 customer interviews\nNext week: release prep, doc cleanup\nBlockers: none\n",
-      "glanceLabel": "Peek at contents",
-      "glanceDesc": "Shows the size and first lines of the selected text files. (A Dazzi practice example)",
       "photos": "Practice Photos",
       "gray": "Black and White"
     }
@@ -3645,22 +3648,22 @@
       "clickHint": "Click it to try",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "Ask about your files",
+        "title": "Ask Dazzi anything",
         "body": "We drafted something to ask from your own documents.\nClick send to try it.",
         "fallbackTitle": "Try a default question",
         "fallbackBody": "There weren't enough files yet to craft a custom question. Try sending this example, or edit it to ask your own."
       },
       "cite": {
         "title": "Answers show their sources",
-        "body": "Click a number to see, in the info pane on the right, which file that sentence came from.",
+        "body": "Click a source number. The info panel on the right shows which file the sentence came from.",
         "waitingTitle": "Finding the answer",
-        "waitingBody": "Reading what's inside your files.",
-        "noCiteTitle": "Here's your answer",
-        "noCiteBody": "Every answer is grounded in your files only."
+        "waitingBody": "Reading what's inside your files. Just a moment.",
+        "noCiteTitle": "Here's what Dazzi found",
+        "noCiteBody": "Dazzi reads the files on this computer to find its answers. When an answer has sources, you can check them in the panel on the right."
       },
       "evidence": {
-        "title": "Jump to the original file",
-        "body": "Click the source title. The folder holding that file opens in a new tab."
+        "title": "Shall we check the source?",
+        "body": "Click the file to open the folder it's in, in a new tab."
       }
     },
     "signin": {
@@ -3700,61 +3703,33 @@
     "waitingHint": "One moment…",
     "rightClickHint": "Right-click the file",
     "automations": {
-      "askText": "When a new photo lands in {{folder}}, save a black-and-white copy of it in {{gray}}. Leave the original alone. Make it a command rule that uses file conversion (the grayscale preset of filee-cli). Turn on appendFiles so the new file paths arrive as command arguments, and exclude everything inside the black-and-white folder so the copies never trigger the rule again.",
       "intro": {
-        "title": "Automations are made by talking",
-        "body": "There's no settings form. Tell the AI what you want and it builds the rule. Let's ask for: \"when a photo lands in Downloads, make a black-and-white copy in a Black and White folder.\"",
-        "action": "Ask the AI"
+        "title": "Meet one of Dazzi's special features",
+        "body": "Automations let Dazzi take care of file work for you when the moment you set comes."
       },
-      "send": {
-        "title": "Press send",
-        "body": "We wrote the request for you. Edit it if you like, or send it as it is."
+      "add": {
+        "title": "Shall we add one?",
+        "body": "One of the automations that runs when you right-click a file. Click Add."
       },
-      "asking": {
-        "title": "The AI is making the rule",
-        "body": "It's setting up a rule that watches the folder and saves black-and-white copies. If it asks for approval, allow it."
-      },
-      "rule": {
-        "title": "The rule is ready",
-        "body": "A new rule appeared in your automations. One line shows the folder it watches, when it runs, and what it does. It keeps watching in the background even when the app is closed.",
-        "action": "Next"
-      },
-      "panes": {
-        "title": "Now let's see it work",
-        "body": "We'll split the window: Downloads on the left, a practice photos folder on the right. Move the photo to the left and watch.",
-        "action": "Split the window"
-      },
-      "drag": {
-        "title": "Drag the photo into Downloads",
-        "body": "Drag IMG_0001.jpg from the right into the Downloads folder on the left. Hold Option (Alt) while dragging to copy instead of move. The rule notices as soon as it lands."
-      },
-      "result": {
-        "title": "A black-and-white photo appeared!",
-        "body": "A black-and-white copy is now in the Black and White folder inside Downloads. From now on every photo that lands in Downloads gets one. This rule is just for practice, so feel free to delete it."
-      }
-    },
-    "contextMenu": {
-      "intro": {
-        "title": "Add your own button to the right-click menu",
-        "body": "Let's make an automation called \"Peek at contents\". Right-click a text file and it shows the size and first lines right away.",
-        "action": "Create the example"
+      "made": {
+        "title": "Automation added",
+        "body": "Click the item to change its settings or see its run history."
       },
       "sample": {
-        "title": "Right-click the practice file",
-        "body": "We opened the Samples folder. Right-click the file and the button you just made shows up in the menu."
+        "title": "Want to see how it works?",
+        "body": "Right-click the practice file."
       },
       "pick": {
-        "title": "There it is",
-        "body": "A right-click automation you make only appears when you right-click a matching file. Click it to run it."
+        "title": "Click the automation",
+        "body": "It's the automation you just added."
       },
       "result": {
-        "title": "The result is right there",
-        "body": "The script read the size and first lines of the selected file. An AI automation that summarizes works the same way."
+        "title": "Ta-da! Summed up in three lines",
+        "body": "You can use it every time you right-click a document."
       },
-      "more": {
-        "title": "Make more of your own",
-        "body": "In Settings › Right-click menu you can create automations by describing them, hide items, and reorder them. This example is for practice, so feel free to delete it.",
-        "action": "Open Settings"
+      "chat": {
+        "title": "Now you can make your own automations",
+        "body": "Whenever you want AI to handle file work, set it up as an automation."
       }
     },
     "remoteAccess": {

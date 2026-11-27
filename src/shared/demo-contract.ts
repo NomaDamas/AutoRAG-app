@@ -1,8 +1,6 @@
 /**
- * The practice material the tutorials hand a person: a sample photo, and one
- * example Magic Action that peeks into the text files it is run on. The automation example is not made here: the
- * person asks the AI for it in AI Search (that is the point of the lesson), and the tutorial only watches for the rule
- * to appear, then for the sample photo to be renamed once it is dropped in Downloads.
+ * The practice material the tutorials hand a person: a sample photo, and a sample text file to right-click. The
+ * automation itself is not made here: the person adds it from the recommendations (that is the point of the lesson).
  */
 
 export const DEMO_CHANNELS = {
@@ -10,12 +8,9 @@ export const DEMO_CHANNELS = {
 	preparePhoto: "demo:preparePhoto",
 	/** Make sure the background service that runs automations is up; resolves with whether it is. */
 	ensureDaemon: "demo:ensureDaemon",
-	/** Add the example Magic Action (and make sure its sample file exists). */
-	prepareMagicAction: "demo:prepareMagicAction",
+	/** Make sure the sample text file exists, and add nothing: the automations tutorial has the person make the action. */
+	prepareSample: "demo:prepareSample",
 } as const;
-
-/** The Magic Action the right-click tutorial creates. */
-export const DEMO_MAGIC_ACTION_ID = "dazzi-demo-glance";
 
 export interface DemoPhotoReady {
 	/** `~/Dazzi 체험/연습 사진` (localized): the folder the person drags the photo out of. */
@@ -37,5 +32,5 @@ export interface DemoMagicActionReady {
 export interface DemoBridge {
 	preparePhoto(): Promise<DemoPhotoReady>;
 	ensureDaemon(): Promise<boolean>;
-	prepareMagicAction(): Promise<DemoMagicActionReady>;
+	prepareSample(): Promise<DemoMagicActionReady>;
 }

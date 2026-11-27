@@ -537,7 +537,8 @@ type AnswerState = "idle" | "running" | "done" | "failed";
 function anchorFor(step: TourStepId, citeReady: boolean): string | null {
 	switch (step) {
 		case "ask":
-			return `${AI_HOST} form.composer`;
+			// The visible input box, not the composer strip around it (which spans the pane and, on an empty chat, the greeting).
+			return `${AI_HOST} form.composer .compose-box`;
 		case "cite":
 			return citeReady ? `${AI_HOST} .assistant-msg` : `${AI_HOST} .ai-body`;
 		case "evidence":
@@ -668,6 +669,20 @@ function Tour({
 	const citeReady = step === "cite" && answer === "done" && cited;
 	const citeFallbackNext = step === "cite" && answer === "done" && !cited;
 
+	// The question is up in the chat as soon as it is sent: the card moves on to "답을 찾고 있어요" then, not when the
+	// answer's first event arrives (which can take a while).
+	useEffect(() => {
+		if (step !== "ask" || !askReady) return;
+		const onSubmit = (event: Event): void => {
+			if (!(event.target instanceof Element) || event.target.closest(`${AI_HOST} form.composer`) === null) return;
+			window.setTimeout(() => {
+				if (stepRef.current === "ask") setStep("cite");
+			}, 0);
+		};
+		document.addEventListener("submit", onSubmit, true);
+		return () => document.removeEventListener("submit", onSubmit, true);
+	}, [step, askReady]);
+
 	// `cite` with a chip advances only when the user clicks the real control.
 	useEffect(() => {
 		if (step !== "cite" || !citeReady) return;
@@ -739,14 +754,16 @@ function Tour({
 					</div>
 				</div>
 			)}
-			{step === null ? null : (
+			{/* While the question types nothing covers the screen: the spotlight, the card, the sunflower and the ring come
+			    at once when it is all there, the sunflower already on 보내기, so nothing travels into place. */}
+			{step === null || (step === "ask" && !askReady) ? null : (
 				<Coach
 					step={step}
 					selector={anchorFor(step, citeReady)}
 					clickSelector={clickTargetFor(step, clickReady)}
 					last={last}
 					index={index}
-					count={steps.length}
+					count={noCite ? index + 1 : steps.length}
 					title={title}
 					body={body}
 					waiting={waiting}
@@ -834,7 +851,8 @@ function Coach({
 		setSize((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
 	});
 
-	const place = placeBubble(rect, viewport, size, step === "cite" ? "below" : undefined);
+	// While the answer is written the card waits at the window's right middle; the answer itself puts it below.
+	const place = placeBubble(rect, viewport, size, step === "cite" ? (waiting ? "right-middle" : "below") : undefined);
 	const pad = 6;
 	const spot: CSSProperties =
 		rect === null
@@ -842,15 +860,25 @@ function Coach({
 			: { left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
 	return (
 		<div className="fr-tour">
-			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			<CoachMarker target={clickRect} spot={clickRect === null ? rect : null} data={{ "data-target-step": step }} />
+			{/* Drawn anew when it first finds its target, so it opens out from that target's centre (first-run.css). */}
+			<div key={rect === null ? "none" : "spot"} className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
+			<CoachMarker target={clickRect} spot={clickRect === null ? rect : null} data={{ "data-target-step": step }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
 			<div ref={bubbleRef} className="fr-coach" data-step={step} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={title}>
-				<CoachCard key={step} title={title} body={body} index={index} count={count} waiting={waiting}>
-					{last && showNext ? null : (
-						<button type="button" className="fr-coach-link" data-action="tour-skip" onClick={onSkip}>
-							{t("firstRun.tour.skip")}
-						</button>
-					)}
+				<CoachCard
+					key={step}
+					title={title}
+					body={body}
+					index={index}
+					count={count}
+					waiting={waiting}
+					skip={
+						last && showNext ? null : (
+							<button type="button" className="fr-coach-link" data-action="tour-skip" onClick={onSkip}>
+								{t("firstRun.tour.skip")}
+							</button>
+						)
+					}
+				>
 					{showNext ? (
 						<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tour-next" disabled={nextDisabled} onClick={onNext}>
 							{nextLabel}

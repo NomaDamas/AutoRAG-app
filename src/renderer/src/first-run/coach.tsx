@@ -15,6 +15,7 @@ export function CoachCard({
 	count,
 	waiting = false,
 	note,
+	skip,
 	children,
 }: {
 	readonly title: string;
@@ -25,12 +26,15 @@ export function CoachCard({
 	readonly waiting?: boolean;
 	/** A line under the body for what the body cannot say (a right click, a drag). */
 	readonly note?: string | null;
+	/** 건너뛰기, at the card's top right, apart from the step's own action at the bottom. */
+	readonly skip?: ReactNode;
 	/** The links at the bottom right, in reading order: 건너뛰기, then 다음 or 완료. */
 	readonly children: ReactNode;
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<div className="fr-coach-card">
+		<div className={skip === undefined || skip === null ? "fr-coach-card" : "fr-coach-card fr-coach-card--skip"}>
+			{skip === undefined || skip === null ? null : <span className="fr-coach-skip">{skip}</span>}
 			<div className="fr-coach-copy">
 				<h2 className="fr-coach-title">
 					{waiting ? <span className="fr-coach-spinner" aria-hidden="true" /> : null}
@@ -57,24 +61,78 @@ const RING_MAX = 64;
 const ROW_MIN = 400;
 const MASCOT = 60;
 
+/** How far the sunflower keeps from the window edge when it has to move. */
+const EDGE = 4;
+
+type Point = { readonly x: number; readonly y: number };
+
+/** The sunflower drawn centred on `point`, as a box. */
+const mascotBox = (point: Point): Rect => ({ left: point.x - MASCOT / 2, top: point.y - MASCOT / 2, width: MASCOT, height: MASCOT });
+
+const overlaps = (a: Rect, b: Rect): boolean => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+
+const inside = (box: Rect, bounds: { readonly width: number; readonly height: number }): boolean =>
+	box.left >= EDGE && box.top >= EDGE && box.left + box.width <= bounds.width - EDGE && box.top + box.height <= bounds.height - EDGE;
+
+/**
+ * The first of `places` where the whole sunflower is in the window and clear of the coach card; the first one in the
+ * window when none is clear of the card; the first one when nothing is known about the window.
+ */
+function pickPlace(places: readonly Point[], bounds: { readonly width: number; readonly height: number } | undefined, avoid: Rect | null | undefined): Point {
+	const [first] = places as [Point, ...Point[]];
+	if (bounds === undefined) return first;
+	const shown = places.filter((place) => inside(mascotBox(place), bounds));
+	const clear = shown.find((place) => avoid === null || avoid === undefined || !overlaps(mascotBox(place), avoid));
+	return clear ?? shown[0] ?? first;
+}
+
 /**
  * Where the step wants a click: a blue ring around a small target (a send button, a citation number) with the sunflower
  * beside it, or the sunflower alone on the corner of a wider one. Without a click target it sits on the spotlight's
- * top-right corner. Clicks pass through.
+ * top-right corner. Given the window (`bounds`) and the coach card (`avoid`), a sunflower that would be cut by the
+ * window's edge or cover the card goes to the other side instead: left of the ring, or the box's top-left corner.
+ * Clicks pass through.
  */
-export function CoachMarker({ target, spot, data }: { readonly target: Rect | null; readonly spot: Rect | null; readonly data: Readonly<Record<string, string>> }): ReactElement | null {
+export function CoachMarker({
+	target,
+	spot,
+	data,
+	bounds,
+	avoid,
+}: {
+	readonly target: Rect | null;
+	readonly spot: Rect | null;
+	readonly data: Readonly<Record<string, string>>;
+	/** The window's size; without it the sunflower keeps its first place. */
+	readonly bounds?: { readonly width: number; readonly height: number };
+	/** The coach card, which the sunflower must not cover. */
+	readonly avoid?: Rect | null;
+}): ReactElement | null {
 	const box = target ?? spot;
 	if (box === null) return null;
 	const ring = target !== null && target.width <= RING_MAX && target.height <= RING_MAX;
 	const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 	const diameter = Math.max(30, Math.max(box.width, box.height) + 20);
 	// Beside the ring on its right (Figma 156:591); on a row's name (162:1576); else on the box's top-right corner (162:2172, 162:1839).
-	const mascot =
+	// Each has a mirror for when the first place is off the window or under the card.
+	const mascot = pickPlace(
 		ring
-			? { x: centre.x + diameter / 2 + 8, y: centre.y }
+			? [
+					{ x: centre.x + diameter / 2 + 8, y: centre.y },
+					{ x: centre.x - diameter / 2 - 8, y: centre.y },
+				]
 			: target !== null && target.width >= ROW_MIN
-				? { x: target.left + Math.min(176, target.width * 0.34), y: target.top }
-				: { x: box.left + box.width - 13, y: box.top + 9 };
+				? [{ x: target.left + Math.min(176, target.width * 0.34), y: target.top - 12 }]
+				: // Just outside the corner, so the sunflower points at the box without sitting on its words.
+					[
+						{ x: box.left + box.width + 4, y: box.top - 6 },
+						{ x: box.left - 4, y: box.top - 6 },
+						{ x: box.left + box.width + 4, y: box.top + box.height + 6 },
+						{ x: box.left - 4, y: box.top + box.height + 6 },
+					],
+		bounds,
+		avoid,
+	);
 	// The element sits on the point a click lands on (the QA lanes click there), and draws the ring and the sunflower around it.
 	const aim =
 		target === null

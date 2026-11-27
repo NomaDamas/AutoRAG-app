@@ -756,9 +756,10 @@ html[data-appearance="dark"] .fr-dock-ready {
 /* -------------------------------------------------------------------- ready */
 
 /*
- * Ready → Finder Arc/Dia-inspired reveal: one premultiplied-alpha WebGL shader canvas
- * in `.fr-reveal-back` renders the obsidian stage, Dazzi liquid-glass orb, and organic
- * melting aperture, while `.fr-reveal-front` runs the per-letter 3D spring cascade.
+ * Ready → Finder reveal: one premultiplied-alpha WebGL canvas in `.fr-reveal-back` draws
+ * the dusk and the breathing light (src/shared/reveal-light.ts, the same shader the desktop
+ * windows behind the app run), cut along the rising Finder window; `.fr-reveal-front`
+ * springs "Dazzi" in letter by letter.
  */
 .fr-stage--reveal {
 	background: transparent;
@@ -839,15 +840,16 @@ html[data-appearance="dark"] .fr-reveal-base {
 
 .fr-reveal-glyph {
 	display: inline-block;
-	color: #fffdf8;
+	/* Drawn over the reveal's bright light: warm ink with a white halo. */
+	color: #2a2318;
 	font-size: 26px;
 	line-height: 1.1;
 	font-weight: 600;
 	letter-spacing: 0.06em;
-	transform-origin: 0% 100%;
+	transform-origin: 50% 100%;
 	text-shadow:
-		0 2px 14px rgba(6, 10, 24, 0.75),
-		0 0 24px rgba(255, 206, 110, 0.42);
+		0 0 12px rgba(255, 255, 255, 0.9),
+		0 0 28px rgba(255, 250, 236, 0.7);
 	opacity: 0;
 	user-select: none;
 }
@@ -1354,6 +1356,77 @@ html[data-appearance="dark"] .fr-reveal-base {
 	cursor: default;
 }
 
+/* 건너뛰기 at the card's top right (the tutorials); the title keeps clear of it. */
+.fr-coach-card--skip {
+	position: relative;
+}
+
+.fr-coach-card--skip .fr-coach-title {
+	padding-right: 64px;
+}
+
+.fr-coach-skip {
+	position: absolute;
+	top: 20px;
+	right: 20px;
+}
+
+.fr-coach-skip .fr-coach-link {
+	font-size: 12px;
+}
+
+/* 다음 / 완료 is a filled button, like the app's other primary actions; 건너뛰기 stays a quiet link. */
+.fr-coach-link--primary {
+	height: 30px;
+	padding: 0 14px;
+	border-radius: 8px;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+	transition: background-color var(--dur-color) ease-out;
+}
+
+.fr-coach-link--primary:hover {
+	opacity: 1;
+	background: var(--accent-hover);
+}
+
+/* The click ring sends out a ripple, two waves half a beat apart, so the target reads at a glance. */
+.fr-cursor-ring::before,
+.fr-cursor-ring::after {
+	content: "";
+	position: absolute;
+	inset: -3px;
+	border-radius: 50%;
+	border: 2px solid var(--accent);
+	opacity: 0;
+	pointer-events: none;
+	animation: fr-ring-ripple 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+.fr-cursor-ring::after {
+	animation-delay: 0.9s;
+}
+
+@keyframes fr-ring-ripple {
+	0% {
+		transform: scale(1);
+		opacity: 0.55;
+	}
+	100% {
+		transform: scale(1.75);
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fr-cursor-ring::before,
+	.fr-cursor-ring::after {
+		animation: none;
+	}
+}
+
 /* Where to click: the sunflower beside a ring on a small target, or on the corner of a wider one. Clicks pass through. */
 .fr-cursor {
 	position: absolute;
@@ -1392,6 +1465,35 @@ html[data-appearance="dark"] .fr-reveal-base {
 @keyframes fr-mascot-bob {
 	50% {
 		transform: translateY(-4px) rotate(-4deg);
+	}
+}
+
+/* A spotlight opens out from its own centre when it first finds its target (the element is drawn anew then); it
+   slides from one target to the next after that. */
+.fr-spot:not(.fr-spot--none) {
+	animation: fr-spot-open 460ms var(--fr-spring) both;
+}
+
+@keyframes fr-spot-open {
+	from {
+		transform: scale(0.35);
+		opacity: 0;
+	}
+}
+
+/* The tour keeps one coach across its steps: its box resizes from one target to the next, at the tutorials' pace. */
+.fr-root[data-screen="tour"] .fr-spot {
+	transition: left 420ms var(--fr-spring), top 420ms var(--fr-spring), width 420ms var(--fr-spring), height 420ms var(--fr-spring), opacity 240ms ease;
+}
+
+/* Beside a ring the sunflower sits a little above the ring's centre. */
+.fr-cursor-ring + .fr-mascot {
+	margin-top: -10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fr-spot:not(.fr-spot--none) {
+		animation: none;
 	}
 }
 
@@ -1742,4 +1844,24 @@ html[data-appearance="dark"] .fr-reveal-base {
 	.fr-bg {
 		animation: none;
 	}
+}
+
+/* In a tutorial the box resizes from one step's target to the next on the same page, a little slower than the
+   tour's slide so the change of size reads. */
+.fr-root[data-screen="tutorial"] .fr-spot {
+	transition: left 420ms var(--fr-spring), top 420ms var(--fr-spring), width 420ms var(--fr-spring), height 420ms var(--fr-spring), opacity 240ms ease;
+}
+
+/* A guided tutorial (자동화) holds the page still: this layer takes every click but the step's target, cut out of it. */
+.fr-block {
+	position: absolute;
+	inset: 0;
+	pointer-events: auto;
+}
+
+/* Card text breaks between words (Korean included) and evens out its lines, so no line ends on a stray word. */
+.fr-coach-title,
+.fr-coach-body {
+	word-break: keep-all;
+	text-wrap: pretty;
 }

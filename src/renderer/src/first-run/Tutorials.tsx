@@ -1,7 +1,7 @@
 /**
  * The contextual tutorial layer (DESIGN.md §3b): watches where the person goes
- * in the Finder and, the first time they reach automations, a file's
- * right-click menu, or Settings, walks them through it with the same coach
+ * in the Finder and, the first time they reach automations or Settings,
+ * walks them through it with the same coach
  * marks as the first-run tour. Automations and Magic Actions are taught by
  * making a real example and watching it work: an offer step runs an effect
  * (create the example, drop a file), and later steps wait for the real UI to
@@ -30,6 +30,23 @@ import {
 	type TutorialStep,
 } from "./tutorial-steps";
 
+/** Tutorials that guide by hand: while one runs, only the step's own target takes the pointer. */
+const GUIDED: ReadonlySet<TutorialId> = new Set<TutorialId>(["automations"]);
+
+/**
+ * The clip for the layer that holds the page still in a guided tutorial: the whole window, less a hole (4px larger all
+ * round) over the one thing the step asks for. No hole when the step asks for nothing on the page.
+ */
+export function blockerClip(viewport: { readonly width: number; readonly height: number }, hole: Rect | null): string | undefined {
+	if (hole === null) return undefined;
+	const pad = 4;
+	const x = hole.left - pad;
+	const y = hole.top - pad;
+	const w = hole.width + pad * 2;
+	const h = hole.height + pad * 2;
+	return `path(evenodd, "M0 0H${viewport.width}V${viewport.height}H0Z M${x} ${y}h${w}v${h}h${-w}Z")`;
+}
+
 /** A step whose spotlight target stays gone this long ends the tutorial: the person moved on. */
 const ANCHOR_GONE_MS = 4000;
 /** A step waiting for something to appear or finish gives up after this long. */
@@ -40,8 +57,6 @@ const LONG_WAIT_MS = 180_000;
 export interface TutorialTriggers {
 	/** The focused pane shows the 자동화 view. */
 	readonly automations: boolean;
-	/** The right-click menu is open on a file or folder (not empty space). */
-	readonly fileMenu: boolean;
 	/** The focused pane shows Settings. */
 	readonly settings: boolean;
 }
@@ -53,6 +68,8 @@ interface Running {
 	readonly shown: number;
 	/** What the effects learned (the sample file's path, where the sorted file goes). */
 	readonly facts: TutorialFacts;
+	/** Counts the steps that brought a new page: the box resizes within a page and opens anew on the next one. */
+	readonly page: number;
 }
 
 const present = (selector: string): boolean => document.querySelector(selector) !== null;
@@ -96,7 +113,7 @@ export function Tutorials({
 	const [running, setRunning] = useState<Running | null>(null);
 	const runningRef = useRef(running);
 	runningRef.current = running;
-	const previous = useRef<TutorialTriggers>({ automations: false, fileMenu: false, settings: false });
+	const previous = useRef<TutorialTriggers>({ automations: false, settings: false });
 
 	// Start a tutorial on the rising edge of its trigger: one at a time, once per profile.
 	useEffect(() => {
@@ -108,10 +125,9 @@ export function Tutorials({
 			const first = nextStep(TUTORIALS[id], -1, false, present);
 			if (first === null) return false;
 			markTutorialSeen(id);
-			setRunning({ id, index: first, shown: 0, facts: {} });
+			setRunning({ id, index: first, shown: 0, facts: {}, page: 0 });
 			return true;
 		};
-		if (triggers.fileMenu && !before.fileMenu && start("contextMenu")) return;
 		if (triggers.automations && !before.automations && start("automations")) return;
 		if (triggers.settings && !before.settings && typeof window.autorag.remote?.status === "function") start("remoteAccess");
 	}, [enabled, triggers]);
@@ -125,7 +141,8 @@ export function Tutorials({
 			if (current === null) return null;
 			const facts = learned === undefined ? current.facts : { ...current.facts, ...learned };
 			const index = nextStep(TUTORIALS[current.id], current.index, tapped, present, facts);
-			return index === null ? null : { ...current, index, shown: current.shown + 1, facts };
+			const page = index !== null && TUTORIALS[current.id][index]?.newPage === true ? current.page + 1 : current.page;
+			return index === null ? null : { ...current, index, shown: current.shown + 1, facts, page };
 		});
 	}, []);
 	const end = useCallback(() => setRunning(null), []);
@@ -136,9 +153,11 @@ export function Tutorials({
 	const remaining = stepsAfter(TUTORIALS[running.id], running.index, step.tap !== undefined, present, running.facts);
 	return (
 		<div className="fr-root" data-screen="tutorial" data-tutorial={running.id}>
+			{/* One coach for the whole tutorial, so its box can resize from one step's target to the next. */}
 			<TutorialCoach
-				key={`${running.id}:${step.key}`}
+				key={running.id}
 				id={running.id}
+				page={running.page}
 				step={step}
 				facts={running.facts}
 				index={running.shown}
@@ -165,6 +184,7 @@ export function Tutorials({
 
 function TutorialCoach({
 	id,
+	page,
 	step,
 	facts,
 	index,
@@ -178,6 +198,8 @@ function TutorialCoach({
 	onEnd,
 }: {
 	readonly id: TutorialId;
+	/** The page the step is on (see Running.page): a new one draws a new box. */
+	readonly page: number;
 	readonly step: TutorialStep;
 	readonly facts: TutorialFacts;
 	readonly index: number;
@@ -197,11 +219,20 @@ function TutorialCoach({
 	const [cursorRect, setCursorRect] = useState<Rect | null>(null);
 	const [ready, setReady] = useState(step.waitFor === undefined);
 	const [busy, setBusy] = useState(false);
+	/** False while a step's `cardWhen` does not match yet: the box is up, the card and the sunflower are not. */
+	const [cardReady, setCardReady] = useState(true);
 	const [size, setSize] = useState({ width: 320, height: 160 });
 	const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 	const bubbleRef = useRef<HTMLDivElement>(null);
 	const latest = useRef({ onEnd, onTapped, onNext, onLearned, onEnter });
 	latest.current = { onEnd, onTapped, onNext, onLearned, onEnter };
+
+	// What belongs to a step starts over with it; the box (rect) carries on, so it can resize to the next target.
+	useLayoutEffect(() => {
+		setReady(step.waitFor === undefined);
+		setBusy(false);
+		setCardReady(step.cardWhen === undefined);
+	}, [step]);
 
 	// A step with an `enter` effect takes the person there itself (back to the list the new rule shows in).
 	useEffect(() => {
@@ -271,11 +302,13 @@ function TutorialCoach({
 		let finished = false;
 		const waitFor = selectorOf(step.waitFor, facts);
 		const until = selectorOf(step.until, facts);
+		const cardWhen = selectorOf(step.cardWhen, facts);
 		const tap = selectorOf(step.tap, facts);
 		const tick = (now: number): void => {
 			started ??= now;
 			const isReady = waitFor === undefined || present(waitFor);
 			setReady(isReady);
+			setCardReady(cardWhen === undefined || present(cardWhen));
 			const anchor = isReady ? anchorElement(step, facts) : null;
 			if (anchor !== null && !revealed) {
 				revealed = true;
@@ -284,8 +317,11 @@ function TutorialCoach({
 			const nextRect = measure(anchor);
 			const cursorTarget = tap !== undefined ? document.querySelector(tap) : step.hint !== undefined ? anchor : null;
 			const nextCursor = measure(cursorTarget);
-			setRect((prev) => (sameRect(prev, nextRect) ? prev : nextRect));
-			setCursorRect((prev) => (sameRect(prev, nextCursor) ? prev : nextCursor));
+			// While the step waits for its target the last box stays where it is, and moves once the target is there.
+			if (isReady) {
+				setRect((prev) => (sameRect(prev, nextRect) ? prev : nextRect));
+				setCursorRect((prev) => (sameRect(prev, nextCursor) ? prev : nextCursor));
+			}
 			setViewport((prev) => (prev.width === window.innerWidth && prev.height === window.innerHeight ? prev : { width: window.innerWidth, height: window.innerHeight }));
 			if (until !== undefined && isReady && present(until) && !finished) {
 				finished = true;
@@ -340,7 +376,8 @@ function TutorialCoach({
 		setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
 	});
 
-	if (!ready) return null;
+	// A step on a new page starts with nothing on screen; on the same page the last box waits for the new target.
+	if (!ready && (step.newPage === true || rect === null)) return null;
 	const place = placeBubble(rect, viewport, size);
 	const pad = 6;
 	const spot: CSSProperties =
@@ -357,39 +394,52 @@ function TutorialCoach({
 		setBusy(true);
 		void onAccept(offer);
 	};
-	// The card says what to do; only a right click or a drag needs saying on top of it.
-	const note = step.hint === "rightClick" ? t("tutorials.rightClickHint") : step.hint === "drag" ? t("tutorials.dragHint") : null;
+	// The card's own words already say to right-click; only a drag still gets a line on top of them.
+	const note = step.hint === "drag" ? t("tutorials.dragHint") : null;
 	return (
 		<div className="fr-tour">
-			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} />
-			<div ref={bubbleRef} className="fr-coach" data-tutorial-step={step.key} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={t(`${copy}.title` as LocaleKey)}>
-				<CoachCard key={step.key} title={t(`${copy}.title` as LocaleKey)} body={t(`${copy}.body` as LocaleKey)} index={index} count={count} waiting={waiting || busy} note={note}>
-					{offer === undefined ? (
-						<>
-							{last && hintKey === null ? null : (
-								<button type="button" className="fr-coach-link" data-action="tutorial-skip" onClick={onEnd}>
-									{t("firstRun.tour.skip")}
-								</button>
+			{GUIDED.has(id) ? (
+				// Holds the page still: only the step's click target (or the file to right-click) is cut out of it.
+				<div className="fr-block" aria-hidden="true" style={{ clipPath: blockerClip(viewport, step.tap !== undefined ? cursorRect : step.hint === "rightClick" ? rect : null) }} />
+			) : null}
+			{/* One box per page: it resizes from target to target, and is drawn anew (opening from its target's centre) when
+			    it first finds a target or the page changes. */}
+			<div key={`${page}:${rect === null ? "none" : "spot"}`} className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
+			{ready && cardReady ? (
+				<>
+					<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
+					<div ref={bubbleRef} className="fr-coach" data-tutorial-step={step.key} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={t(`${copy}.title` as LocaleKey)}>
+						<CoachCard key={step.key} title={t(`${copy}.title` as LocaleKey)} body={t(`${copy}.body` as LocaleKey)} index={index} count={count} waiting={(waiting && step.hint === undefined) || busy} note={note}
+							skip={
+								offer !== undefined || (last && hintKey === null) ? null : (
+									<button type="button" className="fr-coach-link" data-action="tutorial-skip" onClick={onEnd}>
+										{t("firstRun.tour.skip")}
+									</button>
+								)
+							}
+						>
+							{offer === undefined ? (
+								<>
+									{hintKey === null ? (
+										<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-next" onClick={last ? onEnd : onNext}>
+											{last ? t("firstRun.tour.finish") : t("firstRun.tour.next")}
+										</button>
+									) : null}
+								</>
+							) : (
+								<>
+									<button type="button" className="fr-coach-link" data-action="tutorial-later" onClick={onEnd}>
+										{t("tutorials.later")}
+									</button>
+									<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-accept" disabled={busy} onClick={accept}>
+										{t(`${copy}.action` as LocaleKey)}
+									</button>
+								</>
 							)}
-							{hintKey === null ? (
-								<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-next" onClick={last ? onEnd : onNext}>
-									{last ? t("firstRun.tour.finish") : t("firstRun.tour.next")}
-								</button>
-							) : null}
-						</>
-					) : (
-						<>
-							<button type="button" className="fr-coach-link" data-action="tutorial-later" onClick={onEnd}>
-								{t("tutorials.later")}
-							</button>
-							<button type="button" className="fr-coach-link fr-coach-link--primary" data-action="tutorial-accept" disabled={busy} onClick={accept}>
-								{t(`${copy}.action` as LocaleKey)}
-							</button>
-						</>
-					)}
-				</CoachCard>
-			</div>
+						</CoachCard>
+					</div>
+				</>
+			) : null}
 		</div>
 	);
 }

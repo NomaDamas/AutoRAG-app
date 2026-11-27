@@ -1,19 +1,18 @@
 /**
  * Contextual tutorials: short coach-mark walkthroughs that start the first
- * time a person reaches a feature on their own (the 자동화 sidebar item, a
- * file's right-click menu, Settings), never during the first run. Each one
+ * time a person reaches a feature on their own (the 자동화 sidebar item,
+ * Settings), never during the first run. Each one
  * shows once per profile. Automations and Magic Actions are taught by making
  * a real example with the person and watching it work (`shared/demo-contract.ts`);
  * the React layer (`Tutorials.tsx`) renders them.
  */
 
-import { DEMO_MAGIC_ACTION_ID } from "../../../shared/demo-contract";
 import { AI_HOST } from "./tour";
 
-export type TutorialId = "automations" | "contextMenu" | "remoteAccess";
+export type TutorialId = "automations" | "remoteAccess";
 
 /** What an offer step's button does in the app before the tutorial goes on. */
-export type TutorialEffect = "askAiForRule" | "showAutomations" | "arrangePhotoPanes" | "showGrayFolder" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
+export type TutorialEffect = "showNewRightClick" | "openSample" | "backToAutomations" | "showAutomations" | "showRemoteSettings";
 
 /** What the effects learned about the practice material; later steps point at it. */
 export interface TutorialFacts {
@@ -29,6 +28,8 @@ export interface TutorialFacts {
 	readonly gray?: string;
 	/** The black-and-white copy the rule made. */
 	readonly result?: string;
+	/** The right-click automation the person added from the recommendations. */
+	readonly action?: string;
 }
 
 type Selector = string | ((facts: TutorialFacts) => string);
@@ -42,10 +43,14 @@ export interface TutorialStep {
 	readonly requires?: Selector;
 	/** The step holds back until this appears (something an effect just made); the tutorial ends if it never does. */
 	readonly waitFor?: Selector;
+	/** The step brings a new page (a folder, a Settings page): its box opens anew instead of resizing from the last one. */
+	readonly newPage?: boolean;
 	/** Click-required: the cursor taps this target, and clicking it moves on. */
 	readonly tap?: Selector;
 	/** Shown only right after a click-required step was actually clicked. */
 	readonly followsTap?: boolean;
+	/** The box frames the anchor at once, but the card (and the sunflower) waits until this matches: a result still being made. */
+	readonly cardWhen?: Selector;
 	/** An offer: "later" ends the tutorial, the main button runs the effect and moves on. */
 	readonly offer?: TutorialEffect;
 	/** Waits for something to happen on its own (a run finishing, a menu opening): moves on when this matches. */
@@ -73,7 +78,6 @@ const byPath = (path: string | undefined): string => (path === undefined ? "[dat
 
 const AUTOMATIONS_VIEW = "[data-automations-view]";
 const RULE_ROW = "[data-rule-id]";
-const DEMO_MAGIC_ITEM = `.menu [data-magic-action-id="${DEMO_MAGIC_ACTION_ID}"]`;
 
 const photoRow = (facts: TutorialFacts): string => (facts.photo === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.photo)}"]`);
 const resultRow = (facts: TutorialFacts): string => (facts.result === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.result)}"]`);
@@ -81,27 +85,33 @@ const resultRow = (facts: TutorialFacts): string => (facts.result === undefined 
 const aiHost = (facts: TutorialFacts): string => (facts.aiTab === undefined ? AI_HOST : `[data-ai-tab="${facts.aiTab}"]`);
 const aiComposer = (facts: TutorialFacts): string => `${aiHost(facts)} form.composer`;
 const sendButton = (facts: TutorialFacts): string => `${aiComposer(facts)} button.send[type="submit"]`;
+/** The recommendations a page with no automations opens on (Figma 672:3718). */
+const RECOMMENDATIONS = `${AUTOMATIONS_VIEW} [data-automation-recommendations]`;
+/** The right-click recommendation the tutorial adds (문서 세 줄 요약), and its 추가하기. */
+const SUMMARY_CARD = `${AUTOMATIONS_VIEW} [data-template="summary"]`;
+const SUMMARY_ADD = `${SUMMARY_CARD} [data-action="automation-template-add"]`;
+/** 새 자동화, which opens the chat that makes any other automation. */
+const NEW_AUTOMATION = `${AUTOMATIONS_VIEW} [data-action="automation-composer-open"]`;
+/** The right-click automation the person just added: its row in 내 자동화, and its item in a file's right-click menu. */
+const newRow = (facts: TutorialFacts): string => (facts.action === undefined ? "[data-magic-action-row]:not([data-magic-action-row])" : `${AUTOMATIONS_VIEW} [data-magic-action-row="${attr(facts.action)}"]`);
+const newMenuItem = (facts: TutorialFacts): string => (facts.action === undefined ? "[data-magic-action-id]:not([data-magic-action-id])" : `.menu[role="menu"] [data-magic-action-id="${attr(facts.action)}"]`);
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
+	// Figma 672:3637: an automation is picked from the recommendations. The tutorial has the person add the right-click
+	// one (문서 세 줄 요약), right-click a practice file and run it from the menu, then points at 새 자동화 for the rest.
 	automations: [
-		{ key: "intro", anchors: [AUTOMATIONS_VIEW], offer: "askAiForRule" },
-		{ key: "send", anchors: [aiComposer], waitFor: sendButton, tap: sendButton },
-		{ key: "asking", anchors: [(facts) => `${aiHost(facts)} [role="alertdialog"]`, (facts) => `${aiHost(facts)} .ai-body`], untilEvent: "aiDone" },
-		{ key: "rule", anchors: [RULE_ROW], enter: "showAutomations", waitFor: RULE_ROW },
-		{ key: "panes", anchors: [RULE_ROW], offer: "arrangePhotoPanes" },
-		{ key: "drag", anchors: [photoRow], waitFor: photoRow, watch: "grayCopy", hint: "drag" },
-		{ key: "result", anchors: [resultRow], enter: "showGrayFolder", waitFor: resultRow },
-	],
-	contextMenu: [
-		{ key: "intro", anchors: ['.menu[role="menu"]'], offer: "createMagicAction" },
-		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], waitFor: (facts) => byPath(facts.sample), until: DEMO_MAGIC_ITEM, hint: "rightClick" },
-		{ key: "pick", anchors: [DEMO_MAGIC_ITEM], tap: DEMO_MAGIC_ITEM },
-		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
-		{ key: "more", anchors: ['[data-testid="magic-action-dialog"]'], offer: "openContextMenuSettings" },
+		{ key: "intro", anchors: [RECOMMENDATIONS, AUTOMATIONS_VIEW] },
+		{ key: "add", anchors: [SUMMARY_CARD], requires: SUMMARY_CARD, tap: SUMMARY_ADD },
+		{ key: "made", anchors: [newRow], enter: "showNewRightClick", waitFor: newRow },
+		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], newPage: true, enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: newMenuItem, hint: "rightClick" },
+		{ key: "pick", anchors: [newMenuItem], tap: newMenuItem },
+		// The dialog opens while the summary is still being written: the box frames it then, "짠!" waits for the result.
+		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true, cardWhen: '[data-testid="magic-action-dialog"]:not([data-run-status="running"])' },
+		{ key: "chat", anchors: [NEW_AUTOMATION], newPage: true, enter: "backToAutomations", waitFor: NEW_AUTOMATION },
 	],
 	remoteAccess: [
 		{ key: "offer", anchors: ['[data-settings-nav="remote"]'], offer: "showRemoteSettings" },
-		{ key: "toggle", anchors: ['[data-settings-row="remote-access"]'], waitFor: '[data-settings-row="remote-access"]' },
+		{ key: "toggle", anchors: ['[data-settings-row="remote-access"]'], newPage: true, waitFor: '[data-settings-row="remote-access"]' },
 		{ key: "security", anchors: ['[data-settings-section="remote-access"]'], waitFor: '[data-settings-section="remote-access"]' },
 		{ key: "connect", anchors: ['[data-settings-section="remote-connect"]'], requires: '[data-settings-section="remote-connect"]' },
 	],

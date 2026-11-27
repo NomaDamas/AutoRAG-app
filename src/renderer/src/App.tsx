@@ -73,7 +73,7 @@ import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, editorFilePathOf, SETTIN
 import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { windowColumns } from "./state/window-layout";
 import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
-import { showAiSearchAlone, splitTwoFolders } from "./first-run/tour";
+import { showAiSearchAlone } from "./first-run/tour";
 import { Tutorials } from "./first-run/Tutorials";
 import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
@@ -735,11 +735,10 @@ export function App(): ReactElement {
 		setRightSidebarVisible: setInspectorVisible,
 		settingsFocused: path === SETTINGS_PATH,
 	});
-	const fileMenuOpen = finder?.contextMenu?.onEntry === true;
 	const settingsTabActive = path === SETTINGS_PATH;
 	const tutorialTriggers = useMemo(
-		() => ({ automations: automationsTabActive, fileMenu: fileMenuOpen, settings: settingsTabActive }),
-		[automationsTabActive, fileMenuOpen, settingsTabActive],
+		() => ({ automations: automationsTabActive, settings: settingsTabActive }),
+		[automationsTabActive, settingsTabActive],
 	);
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
@@ -864,37 +863,30 @@ export function App(): ReactElement {
 		async (effect: TutorialEffect, facts: TutorialFacts): Promise<TutorialFacts | null> => {
 			try {
 				switch (effect) {
-					case "askAiForRule": {
-						const { downloads, gray } = await autorag.demo.preparePhoto();
-						// The background service must be up before the rule exists, so the first dropped photo is seen.
-						void autorag.demo.ensureDaemon();
-						return { aiTab: openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray })) };
-					}
-					case "showAutomations":
+					case "showNewRightClick": {
 						finder?.showAutomations();
-						return {};
-					case "arrangePhotoPanes": {
-						const { folder, photo, downloads, gray } = await autorag.demo.preparePhoto();
-						setWorkspace((current) => splitTwoFolders(current, downloads, folder));
-						return { photo, folder, downloads, gray };
+						// 추가하기 saves the action a moment after the click: find the one the recommendation made, by its task.
+						const task = translate("automations.templates.summary.task").trim();
+						for (let attempt = 0; attempt < 20; attempt += 1) {
+							const added = (await autorag.settings.get()).contextMenu.magicActions.find((action) => action.execution.kind === "agent" && action.execution.prompt.trim() === task);
+							if (added !== undefined) return { action: added.id };
+							await new Promise((resolve) => setTimeout(resolve, 250));
+						}
+						return null;
 					}
-					case "showGrayFolder": {
-						// The copy is in a sub-folder of Downloads that no pane shows: bring the left pane there so the person sees it.
-						const { gray, folder } = facts;
-						if (gray !== undefined && folder !== undefined) setWorkspace((current) => splitTwoFolders(current, gray, folder));
-						return {};
-					}
-					case "createMagicAction": {
-						const { sample } = await autorag.demo.prepareMagicAction();
+					case "openSample": {
+						const { sample } = await autorag.demo.prepareSample();
 						finder?.closeContextMenu();
 						finder?.openFolder(dirname(sample));
 						return { sample };
 					}
-					case "openContextMenuSettings":
+					case "backToAutomations":
 						dismissMagicActionDialog();
 						finder?.closeContextMenu();
-						requestSettingsCategory("contextMenu");
-						finder?.openSettings();
+						finder?.showAutomations();
+						return {};
+					case "showAutomations":
+						finder?.showAutomations();
 						return {};
 					case "showRemoteSettings":
 						requestSettingsCategory("remote");

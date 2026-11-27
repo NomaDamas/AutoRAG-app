@@ -27,6 +27,8 @@
  * Account and plan come at the end of the tour, never before the first index.
  */
 
+import type { RevealLightFrame } from "./reveal-light";
+
 /** What `pickPaths` lets the person choose. */
 export type PickPathKind = "folder" | "file" | "any";
 
@@ -168,7 +170,10 @@ export interface OnboardingBridge {
 	 * Empty when cancelled. Absent on a remote browser, which types the path.
 	 */
 	pickPaths?(kind: PickPathKind): Promise<readonly string[]>;
-	/** Controls the OS desktop dimmer backdrop during the Ready → Finder reveal (`0` removes it). Optional on remote browsers. */
-	setRevealBackdrop?(opacity: number): void;
+	/**
+	 * Draws one frame of the Ready → Finder reveal's light on the desktop behind the window (`src/shared/reveal-light.ts`);
+	 * a frame with no dusk and no light, or `null`, removes it. Optional on remote browsers.
+	 */
+	setRevealBackdrop?(frame: RevealLightFrame | null): void;
 	complete(): Promise<void>;
 }

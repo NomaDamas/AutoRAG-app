@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Reveal, cancelPrewarm, prewarmReveal } from "../src/renderer/src/first-run/reveal";
 import { REVEAL_T, revealMs } from "../src/renderer/src/first-run/reveal-timing";
+import type { RevealLightFrame } from "../src/shared/reveal-light";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -23,6 +24,7 @@ function createFake2dContext(): CanvasRenderingContext2D {
 		stroke: vi.fn(),
 		setTransform: vi.fn(),
 		createRadialGradient: vi.fn(() => grad),
+		roundRect: vi.fn(),
 		globalCompositeOperation: "source-over",
 		globalAlpha: 1,
 		fillStyle: "#000",
@@ -32,7 +34,7 @@ function createFake2dContext(): CanvasRenderingContext2D {
 	} as unknown as CanvasRenderingContext2D;
 }
 
-describe("Arc/Dia Reveal component DOM lifecycle", () => {
+describe("Reveal component DOM lifecycle", () => {
 	let host: HTMLDivElement;
 	let desk: HTMLDivElement;
 	let ready: HTMLElement;
@@ -104,14 +106,14 @@ describe("Arc/Dia Reveal component DOM lifecycle", () => {
 		expect(onTour).not.toHaveBeenCalled();
 		expect(onEnd).not.toHaveBeenCalled();
 	});
-	it("drives gather → orb (with staggered glyphs & desktop backdrop spotlight) → melt → settle, fires onTour then onEnd, and releases .desk styles", () => {
+	it("dims, lights, raises the Finder through the light, fires onTour then onEnd, and releases .desk styles", () => {
 		const onTour = vi.fn();
 		const onEnd = vi.fn();
 		const onRelease = vi.fn();
-		const backdropCalls: number[] = [];
+		const backdropCalls: (RevealLightFrame | null)[] = [];
 		Reflect.set(globalThis, "autorag", {
 			onboarding: {
-				setRevealBackdrop: (opacity: number) => backdropCalls.push(opacity),
+				setRevealBackdrop: (frame: RevealLightFrame | null) => backdropCalls.push(frame),
 			},
 		});
 		let now = 1000;
@@ -135,28 +137,31 @@ describe("Arc/Dia Reveal component DOM lifecycle", () => {
 
 		const rootEl = container.querySelector<HTMLElement>(".fr-reveal");
 		expect(rootEl?.getAttribute("data-playing")).toBe("true");
-		expect(rootEl?.getAttribute("data-phase")).toBe("gather");
+		expect(rootEl?.getAttribute("data-backend")).toBe("canvas2d");
+		expect(rootEl?.getAttribute("data-phase")).toBe("dusk");
 
-		act(() => stepTo(REVEAL_T.word[0] + 0.24));
-		expect(rootEl?.getAttribute("data-phase")).toBe("orb");
+		act(() => stepTo(REVEAL_T.word + 0.1));
+		expect(rootEl?.getAttribute("data-phase")).toBe("light");
 		const glyphs = Array.from(container.querySelectorAll<HTMLElement>('[data-reveal="glyph"]'));
 		expect(Number(glyphs[0]?.style.opacity)).toBeGreaterThan(Number(glyphs[4]?.style.opacity));
+		expect(desk.style.opacity).toBe("0");
 
-		act(() => stepTo((REVEAL_T.melt[0] + REVEAL_T.melt[1]) / 2));
-		expect(rootEl?.getAttribute("data-phase")).toBe("melt");
-		expect(Number(desk.style.opacity)).toBeGreaterThan(0.2);
-
-		act(() => stepTo(REVEAL_T.dim[0] + 0.05));
-		expect(rootEl?.getAttribute("data-phase")).toBe("settle");
-		expect(onTour).toHaveBeenCalledTimes(1);
-		expect(onEnd).not.toHaveBeenCalled();
+		act(() => stepTo(4.2));
+		expect(rootEl?.getAttribute("data-phase")).toBe("rise");
+		expect(desk.style.opacity).toBe("1");
+		expect(desk.style.transform).toContain("translateY(");
+		const logo = ready.querySelector<HTMLElement>(".fr-done-mark");
+		expect(logo?.style.transform).toContain("rotate(");
+		expect(logo?.style.filter).toBe("none");
+		expect(onTour).not.toHaveBeenCalled();
 
 		act(() => stepTo(REVEAL_T.end + 0.05));
+		expect(onTour).toHaveBeenCalledTimes(1);
 		expect(onEnd).toHaveBeenCalledTimes(1);
 
 		act(() => root.unmount());
-		expect(backdropCalls.some((v) => v > 0.7)).toBe(true);
-		expect(backdropCalls.at(-1)).toBe(0);
+		expect(backdropCalls.some((frame) => frame !== null && frame.light > 0.9 && frame.dusk > 0.9)).toBe(true);
+		expect(backdropCalls.at(-1)).toBeNull();
 		Reflect.deleteProperty(globalThis, "autorag");
 		expect(desk.style.opacity).toBe("1");
 		act(() => {
