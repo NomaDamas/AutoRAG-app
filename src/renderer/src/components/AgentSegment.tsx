@@ -1,8 +1,8 @@
 /**
- * 채팅 | 내 자동화 at the very middle of the AI 에이전트 tab's head: the two sides of one tab, so it reads as a switch
- * between two screens. Both sides sit in one grey track, each the same width (at least 112px, 28px tall) with a 13px
- * glyph and its name in medium weight; the side shown is raised on a light thumb with a soft shadow, the other is in
- * muted ink, never faint, so it still reads as something to press. It never shrinks or wraps: a narrow head cuts it.
+ * 채팅 | 자동화 at the very middle of the AI 에이전트 tab's head: the two sides of one tab, so it reads as a switch
+ * between two screens. Two plain tabs with no track or box, 22px apart: each a 13px glyph and its name, 32px tall.
+ * The side shown is in ink and semibold over a 2px accent underline; the other is in muted ink, never faint, so it
+ * still reads as something to press, and turns to ink on hover. It never shrinks or wraps: a narrow head cuts it.
  */
 
 import type { ReactElement } from "react";
@@ -19,7 +19,7 @@ export function AgentSegment({ value, onChange }: { readonly value: AgentSide; r
 		{ value: "automations", label: t("aiSearch.segment.automations"), icon: <ZapIcon size={13} /> },
 	];
 	return (
-		<div role="tablist" aria-label={t("aiSearch.segment.label")} className="inline-flex w-max flex-none items-center rounded-9 bg-segment-track p-3" data-agent-segment={value}>
+		<div role="tablist" aria-label={t("aiSearch.segment.label")} className="inline-flex w-max flex-none items-end gap-22" data-agent-segment={value}>
 			{sides.map((side) => (
 				<button
 					key={side.value}
@@ -28,8 +28,8 @@ export function AgentSegment({ value, onChange }: { readonly value: AgentSide; r
 					aria-selected={side.value === value}
 					data-side={side.value}
 					className={cn(
-						"inline-flex h-28 min-w-112 flex-none items-center justify-center gap-6 rounded-7 border-0 px-16 text-[13px] font-medium leading-[20px] whitespace-nowrap cursor-pointer transition-[background,color,box-shadow] duration-(--dur-color) ease-out",
-						side.value === value ? "bg-segment-thumb text-ink shadow-segment-thumb" : "bg-transparent text-ink-muted hover:text-ink",
+						"inline-flex h-32 flex-none items-center justify-center gap-6 border-0 border-b-2 border-solid bg-transparent px-4 text-[13px] leading-[20px] whitespace-nowrap cursor-pointer transition-[color,border-color] duration-(--dur-color) ease-out",
+						side.value === value ? "border-accent font-semibold text-ink" : "border-transparent font-medium text-ink-muted hover:text-ink",
 					)}
 					onClick={() => {
 						if (side.value !== value) onChange(side.value);
