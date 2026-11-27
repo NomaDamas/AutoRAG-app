@@ -25,9 +25,13 @@ export interface MacRevealHookHandle {
 
 function resolveAddonPath(): string | null {
 	const baseDir = import.meta.dirname;
+	const unpackedBase = baseDir.replace(/([\\/])app\.asar([\\/])/u, "$1app.asar.unpacked$2");
 	const candidates = [
+		join(unpackedBase, "vendor", "mac-reveal-hook.node"),
 		join(baseDir, "vendor", "mac-reveal-hook.node"),
+		join(dirname(unpackedBase), "main", "vendor", "mac-reveal-hook.node"),
 		join(dirname(baseDir), "main", "vendor", "mac-reveal-hook.node"),
+		join(process.resourcesPath ?? "", "app.asar.unpacked", "out", "main", "vendor", "mac-reveal-hook.node"),
 		join(process.resourcesPath ?? "", "app", "out", "main", "vendor", "mac-reveal-hook.node"),
 	];
 	for (const candidate of candidates) {

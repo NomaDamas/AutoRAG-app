@@ -103,8 +103,9 @@ const VERSION_ARGS = {
 	mailcrawl: ["--help"],
 };
 
-// The librarian CLI lives in the app (resources/app), not in tools/: it can only be checked in an installed app.
-const hasApp = existsSync(join(toolsDir, "..", "app", "node_modules", "@autorag", "librarian"));
+// The standalone librarian CLI ships inside tools/librarian (for asar: true builds); older unpacked installs kept it in ../app/node_modules.
+const hasStandaloneLibrarian = existsSync(join(toolsDir, "librarian", "dist", "cli", "index.js"));
+const hasApp = hasStandaloneLibrarian || existsSync(join(toolsDir, "..", "app", "node_modules", "@autorag", "librarian"));
 for (const [name, versionArgs] of Object.entries(VERSION_ARGS)) {
 	if (name === "autorag" && !hasApp) {
 		process.stdout.write("skip autorag (checked against an installed app)\n");
@@ -165,7 +166,15 @@ check("minsync reports its embedder commands", join(bin, `minsync${exe}`), ["--h
 // `minsync serve`, which links the same crates; the one process that holds the model weights, serving every
 // embedding consumer over loopback). Prove the bundled build carries that subcommand and its server.
 check("minsync serve is the shared embedding daemon", join(bin, `minsync${exe}`), ["serve", "--help"], { expect: /loopback HTTP[\s\S]*\/v1\/embeddings/ });
-if (hasApp) check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
+if (hasApp) {
+	check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
+	check("autorag automate status runs offline", join(bin, `autorag${exe}`), ["automate", "status", "--json"], { expect: /"ok"\s*:\s*true/ });
+}
+const standaloneMcp = join(toolsDir, "librarian", "dist", "mcp-server.js");
+if (existsSync(standaloneMcp)) {
+	const initReq = `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "verify-bundle", version: "1.0.0" } } })}\n`;
+	check("standalone MCP server answers initialize", node, [standaloneMcp], { input: initReq, expect: /"serverInfo"\s*:\s*\{[^}]*"name"\s*:\s*"autorag-lite"/ });
+}
 probe("transformers.js loads without onnxruntime-web", `import(${JSON.stringify(pathToFileURL(join(modules, "@huggingface", "transformers", "dist", "transformers.node.mjs")).href)}).then((m)=>console.log(typeof m.pipeline==='function'?'loaded':'broken'))`);
 
 // MinSync's SPLADE encoder ships in the installer (`tools/models`): every file at its pinned size and SHA-256, with

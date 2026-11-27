@@ -46,8 +46,8 @@ installs one file and nothing else:
 
 | Component | Source | Notes |
 |---|---|---|
-| Dazzi app | this repo | Electron, unpacked (the bundled CLIs run under plain Node) |
-| `autorag` (agent/CLI) | `@autorag/librarian`, public `origin/main` | built by `scripts/sync-librarian.mjs` |
+| Dazzi app | this repo | Electron, packed into `app.asar` (`asar: true`, with native `.node`/`.dylib`/`.dll`/`.so` addons and runtime skills unpacked in `app.asar.unpacked`) |
+| `autorag` (agent/CLI & MCP) | `@autorag/librarian`, public `origin/main` | built by `scripts/sync-librarian.mjs` and bundled for plain Node under `tools/librarian/` by `scripts/release/bundle-librarian.mjs` so CLI, automation daemon, and external-agent MCP run without unpacking `app.asar` |
 | Node 24 LTS + npm | nodejs.org | runtime of the npm-based CLIs, checked against nodejs.org's SHASUMS |
 | `minsync`, `rhwp`, `himalaya`, `rclone`, `lark-cli`, `discrawl`, `telecrawl`, `wacrawl` | newest GitHub release, per platform | download verified against the sha256 GitHub publishes for the asset. `minsync` also provides the `serve` loopback embedding server the app starts and stops; the stager refuses a build below 0.7.1 (`version-floors.mjs`) |
 | `slacrawl`, `notcrawl` | newest GitHub release (macOS); built from the newest tag with Go (Windows, no archive published) | |
@@ -144,10 +144,12 @@ install directory, temp, and the installer process still took 13 minutes, with 3
 
 The fix is in two parts:
 
-* **One tar instead of 46,000 files.** `afterPack` packs `app/node_modules`, `tools/npm` and
-  `tools/node` into `resources/payload.tar`; `build/installer.nsh` unpacks it with the system
-  `System32\tar.exe` (bsdtar, Windows 10 1803+). The same tree extracted at about 1,000 files/s
-  (46 s). macOS is a single `.app` copy and needs none of this.
+* **One tar for tool trees.** With `asar: true`, `app/node_modules` (~29,000 files) is collapsed into
+  `app.asar`, reducing the total macOS bundle from ~38,300 files to ~10,100 files (making Squirrel.Mac
+  ShipIt copies, macOS codesign, and notarization markedly faster and less prone to partial-copy failures).
+  On Windows, `afterPack` packs the remaining small-file tool trees (`tools/npm`, `tools/node`,
+  `tools/librarian`) into `resources/payload.tar`; `build/installer.nsh` unpacks it with the system
+  `System32\tar.exe` (bsdtar, Windows 10 1803+). macOS is a single `.app` copy and needs none of this.
 * **Fewer files.** Source maps, `.d.ts` files and READMEs are never read at run time and were about
   half of the npm trees: 7,600 files removed from `tools/npm`, and the `files` globs in
   `electron-builder.config.mjs` drop the same kinds from the app. That glob also used to drop every
@@ -384,6 +386,12 @@ per request.
   * A user-initiated download keeps `autoInstallOnAppQuit` armed across
     background settings refreshes so `MacUpdater` always hands the finished zip
     to Squirrel.Mac even when "업데이트 자동 설치" is off.
+  * Squirrel.Mac staging is bounded by `STAGING_TIMEOUT_MS` (5 min) so a silent
+    staging stall transitions to a recoverable error instead of hanging at 100%,
+    manual re-checks from `ready` can discover newer releases published while an
+    older update was staged, and startup (`cleanupStaleShipItCache`) removes a
+    broken `<bundleId>.ShipIt` cache directory left behind by a previously failed
+    ShipIt install (only when no ShipIt process is active).
   Otherwise "지금 재시작" stalls, ShipIt waits for a quit that never comes, and
   the downloaded update is never installed. The live lane asserts the app really
   exits on the restart click and relaunches as a new process.

@@ -18,6 +18,8 @@ import type { AppUpdateMode, AppUpdateSnapshot, AppUpdateState } from "../shared
 
 export const FIRST_CHECK_DELAY_MS = 30_000;
 export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** Upper bound on waiting for Squirrel.Mac to stage an already-downloaded zip before surfacing a recoverable error. */
+export const STAGING_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** What electron-updater's `checkForUpdates` resolves with (null when no update source is configured). */
 export interface UpdateCheckResultLike {
@@ -58,6 +60,7 @@ export interface AppUpdaterDeps {
 	readonly onInstallerStaged?: (listener: () => void) => void;
 	readonly setInterval?: (callback: () => void, ms: number) => { unref?: () => void };
 	readonly setTimeout?: (callback: () => void, ms: number) => { unref?: () => void };
+	readonly clearTimeout?: (handle: { unref?: () => void }) => void;
 	readonly now?: () => Date;
 }
 
@@ -90,6 +93,8 @@ function errorMessage(error: unknown): string {
 export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 	const { updater, mode } = deps;
 	const now = deps.now ?? (() => new Date());
+	const scheduleTimeout = deps.setTimeout ?? ((callback: () => void, ms: number) => setTimeout(callback, ms));
+	const cancelTimeout = deps.clearTimeout ?? ((handle: { unref?: () => void }) => clearTimeout(handle as NodeJS.Timeout));
 	let state: AppUpdateState = { kind: "idle", checkedAt: null };
 	let lastCheckedAt: string | null = null;
 	let available: UpdateInfoLike | null = null;
@@ -103,8 +108,20 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 	/** The version electron-updater downloaded, and whether the platform installer has staged it. */
 	let downloaded: string | null = null;
 	let staged = deps.onInstallerStaged === undefined;
+	/** Bound timer while waiting for Squirrel.Mac to emit its staged event after `update-downloaded`. */
+	let stagingTimer: { unref?: () => void } | null = null;
+	/** Snapshot to restore when a re-check from `ready` finds no newer version or fails. */
+	let readyVersion: string | null = null;
+
+	const clearStagingTimer = (): void => {
+		if (stagingTimer !== null) {
+			cancelTimeout(stagingTimer);
+			stagingTimer = null;
+		}
+	};
 
 	const resetStaged = (): void => {
+		clearStagingTimer();
 		downloaded = null;
 		staged = deps.onInstallerStaged === undefined;
 	};
@@ -120,11 +137,29 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 	});
 	updater.on("update-not-available", () => {
 		lastCheckedAt = now().toISOString();
+		// A re-check from `ready` when the feed has nothing newer keeps the staged update ready to install.
+		if (readyVersion !== null) {
+			set({ kind: "ready", version: readyVersion });
+			return;
+		}
 		available = null;
 		set({ kind: "idle", checkedAt: lastCheckedAt });
 	});
 	updater.on("update-available", (info: UpdateInfoLike) => {
 		lastCheckedAt = now().toISOString();
+		// Re-checking while `ready` for the same version keeps the staged update instead of restarting download.
+		if (readyVersion !== null && info.version === readyVersion) {
+			available = info;
+			set({ kind: "ready", version: readyVersion });
+			return;
+		}
+		// A newer release appeared while an older one was waiting to install: supersede the stale ready state.
+		if (readyVersion !== null && info.version !== readyVersion) {
+			readyVersion = null;
+			installing = false;
+			userRequestedInstall = false;
+			resetStaged();
+		}
 		available = info;
 		const downloadUrl = mode === "notify" ? manualDownloadUrl(info, deps.feedUrl) : null;
 		// With autoDownload on, electron-updater starts downloading right after this event.
@@ -135,12 +170,31 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 		set({ kind: "downloading", version, percent: Math.max(0, Math.min(100, Math.round(progress.percent))) });
 	});
 	const markReady = (): void => {
-		if (downloaded !== null && staged) set({ kind: "ready", version: downloaded });
+		if (downloaded !== null && staged) {
+			clearStagingTimer();
+			readyVersion = downloaded;
+			set({ kind: "ready", version: downloaded });
+		}
 	};
 	updater.on("update-downloaded", (info: UpdateInfoLike) => {
 		downloaded = info.version;
-		// Not yet installable on macOS: hold at 100% until Squirrel.Mac has staged it.
-		if (!staged) set({ kind: "downloading", version: info.version, percent: 100 });
+		// Not yet installable on macOS: hold at 100% until Squirrel.Mac has staged it, bounded by a timeout
+		// so a silent Squirrel staging stall never traps the button at 100% forever.
+		if (!staged) {
+			set({ kind: "downloading", version: info.version, percent: 100 });
+			clearStagingTimer();
+			stagingTimer = scheduleTimeout(() => {
+				stagingTimer = null;
+				if (staged || downloaded === null) return;
+				const stalledVersion = downloaded;
+				deps.log(`error: Squirrel.Mac staging timed out after ${STAGING_TIMEOUT_MS}ms for ${stalledVersion}`);
+				installing = false;
+				userRequestedInstall = false;
+				resetStaged();
+				set({ kind: "error", message: `Update staging timed out for ${stalledVersion}` });
+			}, STAGING_TIMEOUT_MS);
+			stagingTimer.unref?.();
+		}
 		markReady();
 	});
 	deps.onInstallerStaged?.(() => {
@@ -152,8 +206,14 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 		if (state.kind === "downloading" || installing) {
 			installing = false;
 			userRequestedInstall = false;
+			readyVersion = null;
 			resetStaged();
 			set({ kind: "error", message: errorMessage(error) });
+			return;
+		}
+		// A check from `ready` that fails keeps the staged update installable.
+		if (readyVersion !== null) {
+			set({ kind: "ready", version: readyVersion });
 			return;
 		}
 		if (userCheck) {
@@ -174,7 +234,8 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 		updater.autoInstallOnAppQuit = mode === "install" && (auto || keepArmed);
 	};
 	const runCheck = async (fromUser: boolean): Promise<void> => {
-		if (state.kind === "checking" || state.kind === "downloading" || state.kind === "ready") return;
+		if (state.kind === "checking" || state.kind === "downloading") return;
+		if (state.kind === "ready" && !fromUser) return;
 		userCheck = fromUser;
 		try {
 			const result = await updater.checkForUpdates();
@@ -206,6 +267,7 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 			// hands the zip to Squirrel.Mac only when this is on, so without it the update would never become ready).
 			userRequestedInstall = true;
 			installing = false;
+			readyVersion = null;
 			resetStaged();
 			updater.autoInstallOnAppQuit = true;
 			set({ kind: "downloading", version: available.version, percent: 0 });
@@ -226,10 +288,9 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 		start: () => {
 			if (started) return;
 			started = true;
-			const later = deps.setTimeout ?? ((callback: () => void, ms: number) => setTimeout(callback, ms));
 			const every = deps.setInterval ?? ((callback: () => void, ms: number) => setInterval(callback, ms));
 			const backgroundCheck = (): void => void applySettings().then(() => runCheck(false));
-			later(backgroundCheck, FIRST_CHECK_DELAY_MS).unref?.();
+			scheduleTimeout(backgroundCheck, FIRST_CHECK_DELAY_MS).unref?.();
 			every(backgroundCheck, CHECK_INTERVAL_MS).unref?.();
 		},
 	};

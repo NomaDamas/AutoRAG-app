@@ -157,9 +157,11 @@ mkdirSync(join(STANDIN, "Contents", "Resources", "bin"), { recursive: true });
 mkdirSync(join(STANDIN, "Contents", "MacOS"), { recursive: true });
 copyFileSync(join(ROOT, "build", "cli", "dazzi"), join(STANDIN, "Contents", "Resources", "bin", "dazzi"));
 chmodSync(join(STANDIN, "Contents", "Resources", "bin", "dazzi"), 0o755);
-// The bundled `autorag` is a shim that runs `../app/node_modules/@autorag/librarian`: both directories come along.
+// The bundled `autorag` shim runs `tools/librarian/dist/cli/index.js` (asar builds) or `../app/node_modules/...` (legacy unpacked builds).
 symlinkSync(join(INSTALLED, "Contents", "Resources", "tools"), join(STANDIN, "Contents", "Resources", "tools"));
-symlinkSync(join(INSTALLED, "Contents", "Resources", "app"), join(STANDIN, "Contents", "Resources", "app"));
+if (existsSync(join(INSTALLED, "Contents", "Resources", "app"))) {
+	symlinkSync(join(INSTALLED, "Contents", "Resources", "app"), join(STANDIN, "Contents", "Resources", "app"));
+}
 const electron = join(ROOT, "node_modules", "electron", "dist", "Electron.app", "Contents", "MacOS", "Electron");
 // Raycast starts the launcher with its own environment: the lane's profile, config and sign-in ride in here.
 const appEnv = {

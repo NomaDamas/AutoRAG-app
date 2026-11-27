@@ -227,11 +227,17 @@ let loadErrorLogged = false;
 
 function resolveAddonPath(): string | null {
 	const baseDir = import.meta.dirname;
+	const unpackedBase = baseDir.replace(/([\\/])app\.asar([\\/])/u, "$1app.asar.unpacked$2");
+	const resourcesPath = (process as NodeJS.Process & { readonly resourcesPath?: string }).resourcesPath ?? "";
 	const candidates = [
+		join(unpackedBase, "vendor", "dazzi-core.node"),
 		join(baseDir, "vendor", "dazzi-core.node"),
+		join(dirname(unpackedBase), "main", "vendor", "dazzi-core.node"),
 		join(dirname(baseDir), "main", "vendor", "dazzi-core.node"),
+		join(dirname(unpackedBase), "..", "main", "vendor", "dazzi-core.node"),
 		join(dirname(baseDir), "..", "main", "vendor", "dazzi-core.node"),
-		join(process.resourcesPath ?? "", "app", "out", "main", "vendor", "dazzi-core.node"),
+		join(resourcesPath, "app.asar.unpacked", "out", "main", "vendor", "dazzi-core.node"),
+		join(resourcesPath, "app", "out", "main", "vendor", "dazzi-core.node"),
 	];
 	for (const candidate of candidates) {
 		if (candidate && existsSync(candidate)) return candidate;

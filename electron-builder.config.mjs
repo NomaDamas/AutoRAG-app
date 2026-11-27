@@ -51,9 +51,24 @@ const config = {
 	copyright: "Copyright (c) NomaDamas / Marker Inc.",
 	artifactName: "Dazzi-${version}-${arch}.${ext}",
 	directories: { output: "dist", buildResources: "build" },
-	// No asar: the bundled `autorag` CLI runs under plain Node, which cannot read
-	// inside an asar, and the app spawns native helpers that must be real files.
-	asar: false,
+	// Pack the Electron app and its ~29k node_modules files into a single `app.asar` archive so
+	// Squirrel.Mac ShipIt, macOS codesign/notarization, and Windows installs copy one file instead
+	// of tens of thousands. Native addons (`.node`/`.dylib`/`.dll`/`.so`) and runtime files read by
+	// external/native code are unpacked into `app.asar.unpacked`; plain-Node entrypoints (`autorag`
+	// CLI, automation daemon, external-agent MCP server) ship as a compact standalone bundle under
+	// `resources/tools/librarian/` (scripts/release/bundle-librarian.mjs).
+	asar: true,
+	asarUnpack: [
+		"**/*.node",
+		"**/*.dylib",
+		"**/*.dll",
+		"**/*.so",
+		"out/main/vendor/**",
+		"node_modules/@autorag/librarian/vendor/**",
+		"node_modules/@autorag/librarian/skills/**",
+		"node_modules/@autorag/librarian/internal-skills/**",
+		"node_modules/pi-ask-user/**",
+	],
 	// Native modules of the app are N-API prebuilds or WASM; rebuilding for
 	// Electron's ABI would only compile what is not used.
 	npmRebuild: false,
@@ -65,6 +80,25 @@ const config = {
 		// Prose and type declarations are never read at run time. SKILL.md files are (the librarian loads
 		// them as agent skills), so only README/CHANGELOG-style names go, not *.md in general.
 		"!**/node_modules/**/{README*,readme*,CHANGELOG*,HISTORY*,CONTRIBUTING*,*.markdown,*.d.ts,*.d.mts,*.d.cts,*.tsbuildinfo}",
+		// Published package build caches (e.g. `ag-psd/.v8-cache` carries 3,530 binary V8 bytecode cache files
+		// that electron-builder's smartUnpack treats as native binaries and signs one by one).
+		"!**/node_modules/**/.v8-cache/**",
+		"!**/node_modules/**/.v8-cache",
+		// Drop foreign-platform prebuilds before asar packing so `app.asar` and `app.asar.unpacked` never carry them.
+		"!**/node_modules/onnxruntime-web/**",
+		...(platformId === "darwin-arm64"
+			? [
+					"!**/node_modules/**/prebuilds/{linux,win32,android,freebsd}-*/**",
+					"!**/node_modules/**/prebuilds/darwin-x64*/**",
+					"!**/node_modules/**/napi-v*/{linux,win32,android,freebsd}/**",
+					"!**/node_modules/**/napi-v*/darwin/x64/**",
+				]
+			: [
+					"!**/node_modules/**/prebuilds/{darwin,linux,android,freebsd}-*/**",
+					"!**/node_modules/**/prebuilds/win32-arm64*/**",
+					"!**/node_modules/**/napi-v*/{darwin,linux,android,freebsd}/**",
+					"!**/node_modules/**/napi-v*/win32/arm64/**",
+				]),
 	],
 	extraResources: [
 		// The `dazzi` command line launcher (build/cli); the app links it into a PATH directory on start.
@@ -146,11 +180,14 @@ const config = {
 		warningsAsErrors: false,
 	},
 
-	// The app's own node_modules (librarian + its dependency tree) carries every platform's native add-ons.
+	// Prune any remaining foreign native add-ons inside `app.asar.unpacked` (or unpacked `app/`),
+	// keep macOS NFD normalization intact for Finder copies, and tar small-file tool trees on Windows.
 	afterPack: async (context) => {
 		const windows = context.electronPlatformName !== "darwin";
 		const resources = windows ? join(context.appOutDir, "resources") : join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources");
-		pruneNativeForPlatform(join(resources, "app", "node_modules"), PLATFORMS[platformId]);
+		for (const appModules of [join(resources, "app.asar.unpacked", "node_modules"), join(resources, "app", "node_modules")]) {
+			if (existsSync(appModules)) pruneNativeForPlatform(appModules, PLATFORMS[platformId]);
+		}
 		if (!windows) {
 			// macOS 26 draws the Assets.car compiled from build/icon.icon (mac.icon); macOS before 26 reads icon.icns,
 			// and the one actool derives from the .icon stops at 256 px. Ship the full-size set for those.
@@ -161,9 +198,11 @@ const config = {
 			return;
 		}
 		// Windows: the small-file trees ship as one tar that build/installer.nsh unpacks (see the notes there).
+		// With `asar: true`, `app/node_modules` is already collapsed into `app.asar`; only the tool trees
+		// (`tools/npm`, `tools/node`, `tools/librarian`) still have many small files.
 		// bsdtar crashes on a non-ASCII file name, so a directory holding one (kordoc's Korean-named templates)
 		// stays out of the tar and ships loose, where NSIS writes it with its Unicode name.
-		const trees = ["app/node_modules", "tools/npm", "tools/node"];
+		const trees = ["tools/npm", "tools/node", "tools/librarian"].filter((tree) => existsSync(join(resources, tree)));
 		const loose = nonAsciiRoots(resources, trees);
 		if (loose.length > 0) console.log(`  • kept ${loose.length} director${loose.length === 1 ? "y" : "ies"} with non-ASCII file names out of payload.tar: ${loose.join(", ")}`);
 		const tar = spawnSync(systemTar(), ["-cf", join(resources, "payload.tar"), "-C", resources, ...tarExcludeArgs(loose), ...trees], { stdio: "inherit" });

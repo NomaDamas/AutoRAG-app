@@ -211,4 +211,50 @@ describe("the librarian agent's manage_automations tool", () => {
 	it("refuses an agent it cannot guard, instead of leaving the tool on the app's own binary", () => {
 		expect(() => runAutomationToolOnNode({}, () => "/x/node")).toThrow("manage_automations");
 	});
+
+	it("delegates install_service to the standalone tools/librarian CLI when present so packaged asar builds never register an app.asar daemon path", async () => {
+		const toolsRoot = await tempDir();
+		const standaloneCli = join(toolsRoot, "librarian", "dist", "cli", "index.js");
+		await mkdir(join(toolsRoot, "librarian", "dist", "cli"), { recursive: true });
+		await writeFile(standaloneCli, "// standalone cli\n");
+		const bundledNode = join(toolsRoot, "node", "bin", "node");
+		await mkdir(join(toolsRoot, "node", "bin"), { recursive: true });
+		await writeFile(bundledNode, "");
+		await chmod(bundledNode, 0o755);
+
+		const inProcessCalls: string[] = [];
+		const cliCalls: { command: string; args: readonly string[] }[] = [];
+		const fakeAgent = {
+			tools: [
+				{
+					name: "manage_automations",
+					description: "Manage automations",
+					execute: async (_id: string, params: { readonly action: string }) => {
+						inProcessCalls.push(params.action);
+						return { content: [{ type: "text", text: "in-process" }] };
+					},
+				},
+			],
+		};
+
+		runAutomationToolOnNode(
+			fakeAgent,
+			() => bundledNode,
+			undefined,
+			{
+				resourcesPath: "/unused",
+				env: { AUTORAG_TOOLS_DIR: toolsRoot },
+				platform: "darwin",
+				runCli: async (command, args) => {
+					cliCalls.push({ command, args });
+					return { code: 0, stdout: "Installed daemon service com.autorag.automate.", stderr: "" };
+				},
+			},
+		);
+
+		const result = (await fakeAgent.tools[0]!.execute("call-1", { action: "install_service" })) as { content: { text: string }[] };
+		expect(inProcessCalls).toEqual([]);
+		expect(cliCalls).toEqual([{ command: bundledNode, args: [standaloneCli, "automate", "install"] }]);
+		expect(result.content[0]?.text).toContain("Installed daemon service");
+	});
 });
