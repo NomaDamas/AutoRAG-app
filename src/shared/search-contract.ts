@@ -184,12 +184,32 @@ export interface ChatRecord extends ChatSummary {
 	readonly summaryTitle?: string;
 }
 
+/**
+ * Explicit Turn-1 route override chosen by the user (for example clicking Find / Summarize / Organize / Automate
+ * in AI Agent). When provided, the first turn bypasses Jev's initial query-route classification and runs the
+ * matching branch directly.
+ */
+export type SearchRouteOverride = "local" | "organize" | "extra" | "config";
+
+/** Valid values for {@link SearchRouteOverride}, used for IPC payload validation. */
+export function isSearchRouteOverride(value: unknown): value is SearchRouteOverride {
+	return value === "local" || value === "organize" || value === "extra" || value === "config";
+}
+
 export interface SearchBridge {
 	/**
 	 * Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. `viewingFolder` is the folder the
 	 * person has open when they ask from the right sidebar with nothing selected: a hint to the model, never a limit.
+	 * `routeOverride` bypasses Jev's initial branch classification on Turn 1 when the person picked an explicit mode.
 	 */
-	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[], viewingFolder?: string): Promise<void>;
+	start(
+		searchId: string,
+		chatId: string,
+		query: string,
+		attachments: readonly ChatAttachment[],
+		viewingFolder?: string,
+		routeOverride?: SearchRouteOverride,
+	): Promise<void>;
 	/**
 	 * Steer the running search `searchId` with a correction. Resolves true when
 	 * the run took it, false when that run is not running (finished, stopped,

@@ -246,14 +246,14 @@ describe("deleting", () => {
 		});
 		expect(h.shell().deleting).toBe(true);
 		expect(h.shell().confirm).toBeNull();
-		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제하는 중…");
+		expect(h.shell().undoToast?.message).toBe("‘a’ 규칙을 삭제하는 중…");
 		expect(h.shell().undoToast?.onUndo).toBeNull();
 		await act(async () => {
 			finish();
 			await done;
 		});
 		expect(h.shell().deleting).toBe(false);
-		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제했습니다.");
+		expect(h.shell().undoToast?.message).toBe("‘a’ 규칙을 삭제했습니다.");
 		expect(typeof h.shell().undoToast?.onUndo).toBe("function");
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["b"]);
 	});
@@ -298,7 +298,7 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["a", "c"]);
 		expect(h.shell().props.selectedId).toBe("c");
 		expect(h.shell().confirm).toBeNull();
-		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 인덱스 최신화’ 규칙을 삭제했습니다.");
+		expect(h.shell().undoToast?.message).toBe("‘b’ 규칙을 삭제했습니다.");
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(5_100);
 		});

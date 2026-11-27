@@ -970,13 +970,16 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 	const { t } = useTranslation();
 	const [editing, setEditing] = useState(false);
 	const [name, setName] = useState("");
+	const fallbackName = ruleTitle({ ...rule, id: rule.id });
 	const start = (): void => {
 		setName(customRuleName(rule) ?? ruleTitle(rule));
 		setEditing(true);
 	};
 	const finish = (save: boolean): void => {
 		setEditing(false);
-		const next = name.trim() === derivedTitle(rule) ? "" : name.trim();
+		const trimmed = name.trim();
+		const defaultTitle = customRuleName(rule) === null ? ruleTitle(rule) : derivedTitle(rule);
+		const next = trimmed === defaultTitle || trimmed === rule.id || trimmed === derivedTitle(rule) ? "" : trimmed;
 		if (save && next !== (customRuleName(rule) ?? "")) void onRename?.(rule.id, next);
 	};
 	if (editing) {
@@ -985,7 +988,7 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 				autoFocus
 				data-testid="automation-title-input"
 				value={name}
-				placeholder={derivedTitle(rule)}
+				placeholder={fallbackName}
 				aria-label={t("automations.row.rename")}
 				className="h-28 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[17px] font-medium leading-[22px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
 				onFocus={(event) => event.currentTarget.select()}

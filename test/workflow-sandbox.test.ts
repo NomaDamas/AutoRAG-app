@@ -220,6 +220,8 @@ describe("workflow-sandbox shared core", () => {
 		expect(prompt).toContain("temporary sandbox");
 		expect(prompt).toContain("Right-Click Automations");
 		expect(prompt).toContain('never call them "Magic Actions"');
+		expect(prompt).toContain("Script vs. AI Agent Execution Rule");
+		expect(prompt).toContain("deterministic script");
 
 		const winPrompt = buildUnifiedWorkflowsPrompt("win32", { includeMagicActions: true });
 		expect(winPrompt).toContain("powershell.exe");

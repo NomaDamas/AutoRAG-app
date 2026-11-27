@@ -95,10 +95,12 @@ describe("file kinds from include globs", () => {
 });
 
 describe("the sentence a person reads", () => {
-	it("titles a rule by its trigger and its action", () => {
-		expect(ruleTitle(rule())).toBe("새 PDF → Dazzi에게 맡기기");
-		expect(ruleTitle(rule({ events: ["create", "update", "delete"], include: ["**"], run: ["autorag", "refresh"] }))).toBe("바뀐 파일 → 검색 인덱스 최신화");
-		expect(ruleTitle(rule({ include: ["**"], run: ["autorag", "search", "x"] }))).toBe("새 파일 → Dazzi에게 맡기기");
+	it("shows an explicit rule id as the title and falls back to trigger/action for auto-generated rule ids", () => {
+		expect(ruleTitle(rule({ id: "jonyenyeo-photo-sorter" }))).toBe("jonyenyeo-photo-sorter");
+		expect(ruleTitle(rule({ id: "downloads-pdf-summary" }))).toBe("downloads-pdf-summary");
+		expect(ruleTitle(rule({ id: "rule-m9a2k1" }))).toBe("새 PDF → Dazzi에게 맡기기");
+		expect(ruleTitle(rule({ id: "rule-m9a2k1", events: ["create", "update", "delete"], include: ["**"], run: ["autorag", "refresh"] }))).toBe("바뀐 파일 → 검색 인덱스 최신화");
+		expect(ruleTitle(rule({ id: "rule-m9a2k1-2", include: ["**"], run: ["autorag", "search", "x"] }))).toBe("새 파일 → Dazzi에게 맡기기");
 	});
 
 	it("names a script rule by the script, not by the runtime that starts it", () => {
@@ -144,7 +146,8 @@ describe("a rule that runs an AI agent", () => {
 
 	it("names the action as the AI doing it, not as a program called nothing", () => {
 		expect(actionShort(triage)).toBe("AI가 처리하기");
-		expect(ruleTitle(triage)).toBe("새 PDF → AI가 처리하기");
+		expect(ruleTitle(triage)).toBe("downloads-pdf-summary");
+		expect(ruleTitle({ ...triage, id: "rule-abc123" })).toBe("새 PDF → AI가 처리하기");
 	});
 
 	it("says what the agent was asked, in full for a card and cut for a narrow list", () => {

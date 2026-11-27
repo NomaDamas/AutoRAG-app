@@ -132,11 +132,11 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 				Object.defineProperty(this, "planQuery", {
 					configurable: true,
 					writable: true,
-					value: async (query: string, ...rest: unknown[]) => {
-						if (shouldDirectRoute(query)) {
+					value: async (query: string, resolved: unknown, signal: unknown, routeOverride?: unknown) => {
+						if (routeOverride === undefined && shouldDirectRoute(query)) {
 							return { route: "extra", queries: [query], datasources: [], web: false };
 						}
-						return Reflect.apply(basePlanQuery, this, [query, ...rest]);
+						return Reflect.apply(basePlanQuery, this, [query, resolved, signal, routeOverride]);
 					},
 				});
 			}

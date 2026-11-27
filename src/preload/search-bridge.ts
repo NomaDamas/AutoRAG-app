@@ -3,8 +3,8 @@ import { SEARCH_CHANNELS, type SearchBridge, type SearchStreamEvent } from "../s
 
 export function createSearchBridge(ipcRenderer: IpcRenderer): SearchBridge {
 	return {
-		start: (searchId, chatId, query, attachments, viewingFolder) =>
-			ipcRenderer.invoke(SEARCH_CHANNELS.start, searchId, chatId, query, attachments, viewingFolder),
+		start: (searchId, chatId, query, attachments, viewingFolder, routeOverride) =>
+			ipcRenderer.invoke(SEARCH_CHANNELS.start, searchId, chatId, query, attachments, viewingFolder, routeOverride),
 		steer: (searchId, text) => ipcRenderer.invoke(SEARCH_CHANNELS.steer, searchId, text),
 		classifyFollowUp: (searchId, text) => ipcRenderer.invoke(SEARCH_CHANNELS.classifyFollowUp, searchId, text),
 		cancel: (searchId) => ipcRenderer.invoke(SEARCH_CHANNELS.cancel, searchId),

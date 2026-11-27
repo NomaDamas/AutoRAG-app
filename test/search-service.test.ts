@@ -2165,4 +2165,19 @@ describe("createSearchService chat title", () => {
 		expect(events.some((event) => event.type === "title")).toBe(false);
 		expect((await chatStore.get("chat-untitled"))?.title).toBe("refund approval");
 	});
+
+	it("forwards explicit routeOverride to searchDocumentsStream when provided", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-route", "Done", 0) };
+		});
+		const { send } = collectEvents();
+		const chatStore = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore, send, now });
+
+		await service.start("search-route-1", "chat-route-1", "organize Downloads", [], undefined, "organize");
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("organize Downloads", { routeOverride: "organize" });
+
+		await service.start("search-route-2", "chat-route-2", "plain query", []);
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("plain query");
+	});
 });

@@ -470,6 +470,12 @@ export function buildUnifiedWorkflowsPrompt(
 
 	lines.push(
 		"",
+		"### Script vs. AI Agent Execution Rule (Minimize Unnecessary AI Usage)",
+		"- **Default to a deterministic script (`run` command for folder automations, `executionKind: 'script'` for right-click automations) whenever the task does NOT require flexible semantic judgment or dynamic content generation.**",
+		"  - Use a **script** (Node/JS, shell, Python, ffmpeg, sips, pandoc, pdftotext, regex, EXIF/metadata, etc.) for: moving/sorting/renaming by extension, filename pattern, date, size, EXIF, or regex; converting formats (HEIC→PNG, image resize/compress, PDF merge/split, CSV/JSON transform); hashing/checksums; archiving/unzipping; copying/syncing; running `autorag refresh` or other deterministic CLI tools.",
+		"  - Use an **AI agent** (`agent` for folder automations, `executionKind: 'agent'` for right-click automations) ONLY when the task genuinely requires flexible semantic judgment, visual/document understanding, or dynamic natural-language generation (e.g., summarizing or translating a document, classifying images/documents by visual/semantic content that rules cannot express, writing captions/titles from content, drafting replies, or complex multi-step reasoning).",
+		"- Even when a user asks in natural language without mentioning scripts, choose the deterministic script backend whenever rules/code can solve it cleanly and reliably — saving latency, token cost, and unnecessary AI calls. Give every folder automation a clear, descriptive `id` (e.g. `heic-to-png-converter`, `receipt-inbox-sorter`) so it is immediately recognizable in the Automations list.",
+		"",
 		"### Shared Mandatory Verification Loop & Clarify-Only-If-Ambiguous Flow (Applies to Both Folder and Right-Click Automations)",
 		"- Only ask clarifying questions (via `ask_user`) when something essential is genuinely ambiguous or missing (for example, which folder to watch or what the exact desired outcome is). If the user's request already gives enough detail, do NOT ask redundant confirmation questions or re-confirm the form fields — proceed straight to designing, verifying, and saving.",
 		"- Before finalizing ANY new or modified automation (folder or right-click), ALWAYS verify it in an isolated temporary sandbox folder (`test_automation_in_sandbox` for folder automations, `test_magic_action` for right-click automations) with realistic sample fixtures matching the user's goal.",

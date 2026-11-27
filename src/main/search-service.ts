@@ -42,6 +42,7 @@ import type {
 	IndexNotice,
 	SearchBridge,
 	SearchErrorAction,
+	SearchRouteOverride,
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS, type FollowUpKind } from "../shared/search-contract";
@@ -87,7 +88,7 @@ type ChatSession = {
 };
 
 export type SearchAgent = {
-	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
+	readonly searchDocumentsStream: (query: string, options?: { readonly routeOverride?: SearchRouteOverride }) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
 	/** The pictures the next run sends with the question (image files among its attachments). */
@@ -657,7 +658,14 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
-	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[], viewingFolder: string | undefined): Promise<void> {
+	async function consume(
+		run: SearchRun,
+		agent: SearchAgent,
+		query: string,
+		attachments: readonly ChatAttachment[],
+		viewingFolder: string | undefined,
+		routeOverride: SearchRouteOverride | undefined,
+	): Promise<void> {
 		const live = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
@@ -691,7 +699,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			agent.setAttachmentImages?.(images);
 			const hub = deps.interaction;
 			agent.bindRun?.(hub === undefined ? undefined : { open: (body, signal) => hub.open(run.searchId, body, signal) });
-			for await (const event of agent.searchDocumentsStream(query)) {
+			const stream = routeOverride === undefined ? agent.searchDocumentsStream(query) : agent.searchDocumentsStream(query, { routeOverride });
+			for await (const event of stream) {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
@@ -781,7 +790,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			chosenMode = mode;
 			for (const agent of agents.values()) agent.setApprovalMode?.(mode);
 		},
-		start: async (searchId, chatId, query, attachments, viewingFolder) => {
+		start: async (searchId, chatId, query, attachments, viewingFolder, routeOverride) => {
 
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
@@ -870,7 +879,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				return;
 			}
 			run.agent = agent;
-			void consume(run, agent, query, attachments, viewingFolder);
+			void consume(run, agent, query, attachments, viewingFolder, routeOverride);
 			await finish;
 		},
 		steer: async (searchId, text) => {

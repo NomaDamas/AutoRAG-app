@@ -22,6 +22,7 @@ import type {
 	ContextNotice,
 	IndexNotice,
 	SearchErrorAction,
+	SearchRouteOverride,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import type { InteractionRequest } from "../../../shared/interaction-contract";
@@ -84,17 +85,25 @@ import { CompactingStatus, ContextNoticeView } from "./ContextNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
 
 /**
- * The kinds of work the empty AI tab hints at under the composer (Figma 672:3638).
- * A hint only names a direction: picking one reads pressed and changes the composer's
- * placeholder; the question is still whatever the person types.
+ * The kinds of work the empty AI tab offers under the composer (Figma 672:3638).
+ * Picking one sets an explicit Turn-1 route override so the librarian bypasses
+ * Jev's initial branch classification and runs the user's chosen mode directly:
+ * - `find` / `summarize` -> `local` (retrieval + local/datasource search)
+ * - `organize` -> `organize` (direct file-organization turn with organize skill)
+ * - `automate` -> `config` (automation/self-config turn with setup skill & automation tools)
  */
 const CAPABILITIES = [
-	{ id: "find", Icon: SearchIcon },
-	{ id: "summarize", Icon: FileTextIcon },
-	{ id: "organize", Icon: FolderOutlineIcon },
-	{ id: "automate", Icon: ZapIcon },
+	{ id: "find", Icon: SearchIcon, route: "local" as const },
+	{ id: "summarize", Icon: FileTextIcon, route: "local" as const },
+	{ id: "organize", Icon: FolderOutlineIcon, route: "organize" as const },
+	{ id: "automate", Icon: ZapIcon, route: "config" as const },
 ] as const;
 type Capability = (typeof CAPABILITIES)[number]["id"];
+
+export function capabilityRouteOverride(capability: Capability | null): SearchRouteOverride | undefined {
+	if (capability === null) return undefined;
+	return CAPABILITIES.find((item) => item.id === capability)?.route;
+}
 
 const autorag = window.autorag;
 
@@ -644,7 +653,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		};
 	}, [visible]);
 
-	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
+	async function runSearch(text: string, sent: readonly ChatAttachment[], routeOverride?: SearchRouteOverride): Promise<void> {
 		if (searchIdRef.current !== null) return;
 		// Only New chat starts a new chat; any other question continues the current one.
 		const nextChatId = chatIdRef.current ?? crypto.randomUUID();
@@ -694,7 +703,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQuery("");
 		try {
 			// Resolves when the run ends; the answer itself arrives as events.
-			await autorag.search.start(nextSearchId, nextChatId, text, sent);
+			if (routeOverride === undefined) {
+				await autorag.search.start(nextSearchId, nextChatId, text, sent);
+			} else {
+				await autorag.search.start(nextSearchId, nextChatId, text, sent, undefined, routeOverride);
+			}
 		} catch (startError) {
 			if (searchIdRef.current !== nextSearchId) return;
 			setError(startError instanceof Error ? startError.message : String(startError));
@@ -729,7 +742,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				setStarters((current) => [...current, { key: crypto.randomUUID(), ask: text, after: pastTurns.length + (submittedQueryRef.current === null ? 0 : 1), added: false }]);
 				return;
 			}
-			void runSearch(text, attachments);
+			void runSearch(text, attachments, capabilityRouteOverride(capability));
 			return;
 		}
 		if (text.length === 0 || runId === null) return;
@@ -1121,7 +1134,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									const taskText = draft.agent?.task ?? (draft.run ?? []).join(" ");
 									const prompt = `${t("automations.starter.ask")}: ${folder} (${kindText}, ${eventsText}) — ${taskText}`;
 									setStarters((current) => current.filter((item) => item.key !== starter.key));
-									void runSearch(prompt, []);
+									void runSearch(prompt, [], "config");
 									return true;
 								}}
 								onCreateMagicAction={async (action) => {
@@ -1129,7 +1142,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									const target = rightClickSentence(t, action);
 									const prompt = `${t("automations.starter.ask")}: ${target} — ${taskText}`;
 									setStarters((current) => current.filter((item) => item.key !== starter.key));
-									void runSearch(prompt, []);
+									void runSearch(prompt, [], "extra");
 									return true;
 								}}
 							/>

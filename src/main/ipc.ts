@@ -6,7 +6,7 @@ import {
 	isActionRequest,
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
-import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { isSearchRouteOverride, SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
 import type { InteractionHub } from "./interaction-hub";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
@@ -240,8 +240,15 @@ export function registerMagicActionIpcHandlers(service: MagicActionService, chat
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
-	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments, viewingFolder: unknown) =>
-		service.start(searchId, chatId, query, attachments, typeof viewingFolder === "string" ? viewingFolder : undefined),
+	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments, viewingFolder: unknown, routeOverride: unknown) =>
+		service.start(
+			searchId,
+			chatId,
+			query,
+			attachments,
+			typeof viewingFolder === "string" ? viewingFolder : undefined,
+			isSearchRouteOverride(routeOverride) ? routeOverride : undefined,
+		),
 	);
 	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,

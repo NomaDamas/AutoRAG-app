@@ -129,7 +129,7 @@ describe("AutomationsView list", () => {
 		render(props());
 		expect(rows().map((row) => row.dataset.ruleId)).toEqual(["downloads-pdf-summary", "hwp-to-pdf", "screens"]);
 		const first = rows()[0];
-		expect(text(first)).toContain("새 PDF → Dazzi에게 맡기기");
+		expect(text(first)).toContain("downloads-pdf-summary");
 		expect(text(first)).toContain("다운로드에 PDF 파일이 새로 생기면");
 		expect(text(rows()[2])).toContain("데스크탑");
 	});
@@ -369,7 +369,7 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		render(props({ editing, onRename }));
 		await settle();
 		click(host.querySelector('[data-action="automation-rename"]'));
-		expect(titleInput()?.placeholder).toBe("바뀐 PDF → AI가 처리하기");
+		expect(titleInput()?.placeholder).toBe("pdf");
 		act(() => {
 			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 			setter?.call(titleInput(), "PDF 3줄 요약");
@@ -479,7 +479,7 @@ describe("AutomationsView 전체 기록 (Figma 676:646)", () => {
 		expect(text(page()?.querySelector('[data-action="automation-back"]'))).toBe("자동화");
 		expect([...(page()?.querySelectorAll("h2") ?? [])].map((day) => day.textContent)).toEqual(["오늘", "어제"]);
 		const runs = (): Element[] => [...host.querySelectorAll("[data-automation-all-runs] [data-run]")];
-		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("새 PDF → Dazzi에게 맡기기"), expect.stringContaining("hwp5")]);
+		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("downloads-pdf-summary"), expect.stringContaining("hwp-to-pdf")]);
 		// 실패만 보기 is gone: every run shows, with no switch to hide the good ones.
 		expect(page()?.querySelector('[role="switch"]')).toBeNull();
 		click(runs()[1]);

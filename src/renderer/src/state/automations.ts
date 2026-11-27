@@ -170,14 +170,28 @@ export function ruleNamesNow(): Readonly<Record<string, string>> {
 	return ruleNames;
 }
 
-/** The name a person gave the rule, or null when it goes by the derived title. */
+/** Auto-generated ids from the card (`rule-abc123`) have no human meaning; explicit ids (`jonyenyeo-photo-sorter`) do. */
+const GENERATED_RULE_ID = /^rule-[a-z0-9]+(?:-\d+)?$/i;
+
+/** Whether `id` is a meaningful user/agent-chosen name rather than a random `rule-<base36>` slug. */
+export function hasMeaningfulRuleId(id: string): boolean {
+	const trimmed = id.trim();
+	return trimmed.length > 0 && !GENERATED_RULE_ID.test(trimmed);
+}
+
+/** The name a person gave the rule, or null when it goes by its id or derived title. */
 export function customRuleName(rule: AutomationRule): string | null {
 	return ruleNames[rule.id] ?? null;
 }
 
-/** The rule's name: the one a person gave it, else "새 PDF → Dazzi에게 맡기기" from its trigger and action. */
+/**
+ * The rule's title shown in lists, details, breadcrumbs, and Quick Look:
+ * 1. An explicit rename saved in app settings (`automationNames[rule.id]`)
+ * 2. The rule's own meaningful `id` (e.g. `jonyenyeo-photo-sorter`, `receipt-inbox-sorter`)
+ * 3. Fallback sentence derived from its trigger and action (for auto-generated `rule-<ts>` ids).
+ */
 export function ruleTitle(rule: AutomationRule): string {
-	return customRuleName(rule) ?? derivedTitle(rule);
+	return customRuleName(rule) ?? (hasMeaningfulRuleId(rule.id) ? rule.id : derivedTitle(rule));
 }
 
 /** "새 PDF → Dazzi에게 맡기기": the title a rule goes by until a person names it. */
