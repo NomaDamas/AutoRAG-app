@@ -24,12 +24,17 @@ describe("the automations tutorial makes a right-click automation (Figma 672:363
 		expect(selectorOf(step("card")?.tap, facts)).toBe('[data-ai-tab="7"] [data-automation-request] [data-action="automation-request-add"]');
 	});
 
-	it("waits for the new item in the practice file's menu, and never takes the right-click tutorial's own example for it", () => {
+	it("finds the automation the person added by its id, in the list and in the practice file's menu", () => {
+		const added = { ...facts, action: "summary-3" };
+		expect(step("made")?.enter).toBe("showNewRightClick");
+		expect(selectorOf(step("made")?.waitFor, added)).toBe('[data-automations-view] [data-magic-action-row="summary-3"]');
 		const sample = step("sample");
 		expect(sample?.enter).toBe("openSample");
 		expect(sample?.hint).toBe("rightClick");
-		expect(selectorOf(sample?.until, facts)).toContain(':not([data-magic-action-id="dazzi-demo-glance"])');
-		expect(selectorOf(step("pick")?.tap, facts)).toBe(selectorOf(sample?.until, facts));
+		expect(selectorOf(sample?.until, added)).toBe('.menu[role="menu"] [data-magic-action-id="summary-3"]');
+		expect(selectorOf(step("pick")?.tap, added)).toBe('.menu[role="menu"] [data-magic-action-id="summary-3"]');
+		// Until it is known, nothing matches: another action's item is never taken for it.
+		expect(selectorOf(sample?.until, facts)).toBe("[data-magic-action-id]:not([data-magic-action-id])");
 	});
 
 	it("sends, in every language, words the chat answers with the card already on 우클릭하면", async () => {

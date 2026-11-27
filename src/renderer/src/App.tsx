@@ -873,7 +873,19 @@ export function App(): ReactElement {
 					case "askForRightClick": {
 						// "우클릭 자동화 만들어줘" brings the 새 자동화 card at once, set to 우클릭하면: no answer to wait for.
 						const { sample } = await autorag.demo.prepareSample();
-						return { sample, aiTab: openAiDraft(translate("tutorials.automations.askText")) };
+						const known = (await autorag.settings.get()).contextMenu.magicActions.map((action) => action.id);
+						return { sample, known, aiTab: openAiDraft(translate("tutorials.automations.askText")) };
+					}
+					case "showNewRightClick": {
+						finder?.showAutomations();
+						// 추가하기 saves the action a moment after the click: look for the one that was not there before.
+						const before = new Set(facts.known ?? []);
+						for (let attempt = 0; attempt < 20; attempt += 1) {
+							const added = (await autorag.settings.get()).contextMenu.magicActions.find((action) => !before.has(action.id));
+							if (added !== undefined) return { action: added.id };
+							await new Promise((resolve) => setTimeout(resolve, 250));
+						}
+						return null;
 					}
 					case "openSample":
 						if (facts.sample !== undefined) finder?.openFolder(dirname(facts.sample));

@@ -13,7 +13,7 @@ import { AI_HOST } from "./tour";
 export type TutorialId = "automations" | "contextMenu" | "remoteAccess";
 
 /** What an offer step's button does in the app before the tutorial goes on. */
-export type TutorialEffect = "askAiForRule" | "askForRightClick" | "openSample" | "showAutomations" | "arrangePhotoPanes" | "showGrayFolder" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
+export type TutorialEffect = "askAiForRule" | "askForRightClick" | "showNewRightClick" | "openSample" | "showAutomations" | "arrangePhotoPanes" | "showGrayFolder" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
 
 /** What the effects learned about the practice material; later steps point at it. */
 export interface TutorialFacts {
@@ -29,6 +29,9 @@ export interface TutorialFacts {
 	readonly gray?: string;
 	/** The black-and-white copy the rule made. */
 	readonly result?: string;
+	/** The right-click automations there were before the tutorial asked for one, and the one the person then added. */
+	readonly known?: readonly string[];
+	readonly action?: string;
 }
 
 type Selector = string | ((facts: TutorialFacts) => string);
@@ -86,10 +89,9 @@ const RECOMMENDATIONS = `${AUTOMATIONS_VIEW} [data-automation-recommendations]`;
 /** The 새 자동화 card the chat answers "우클릭 자동화 만들어줘" with, set to 우클릭하면 (Figma 672:3678), and its 추가하기. */
 const newCard = (facts: TutorialFacts): string => `${aiHost(facts)} [data-automation-request]`;
 const addCard = (facts: TutorialFacts): string => `${newCard(facts)} [data-action="automation-request-add"]`;
-/** The right-click automation just made: right-click rows come after the folder rules, newest last. */
-const NEW_RIGHT_CLICK_ROW = `${AUTOMATIONS_VIEW} [role="grid"] > [data-magic-action-row]:last-child`;
-/** Its item in the file's right-click menu: the person's own actions come in the order they were made, newest last. */
-const NEW_MENU_ITEM = '.menu[role="menu"] [data-magic-action-id]:not([data-magic-action-id="dazzi-demo-glance"]):last-of-type';
+/** The right-click automation the person just added: its row in 내 자동화, and its item in a file's right-click menu. */
+const newRow = (facts: TutorialFacts): string => (facts.action === undefined ? "[data-magic-action-row]:not([data-magic-action-row])" : `${AUTOMATIONS_VIEW} [data-magic-action-row="${attr(facts.action)}"]`);
+const newMenuItem = (facts: TutorialFacts): string => (facts.action === undefined ? "[data-magic-action-id]:not([data-magic-action-id])" : `.menu[role="menu"] [data-magic-action-id="${attr(facts.action)}"]`);
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
 	// Figma 672:3637: the right-click menu is one of the triggers an automation has. The tutorial asks the chat for a
@@ -99,9 +101,9 @@ export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = 
 		{ key: "intro", anchors: [RECOMMENDATIONS, AUTOMATIONS_VIEW], offer: "askForRightClick" },
 		{ key: "send", anchors: [aiComposer], waitFor: sendButton, tap: sendButton },
 		{ key: "card", anchors: [newCard], waitFor: newCard, tap: addCard },
-		{ key: "made", anchors: [NEW_RIGHT_CLICK_ROW], enter: "showAutomations", waitFor: NEW_RIGHT_CLICK_ROW },
-		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: NEW_MENU_ITEM, hint: "rightClick" },
-		{ key: "pick", anchors: [NEW_MENU_ITEM], tap: NEW_MENU_ITEM },
+		{ key: "made", anchors: [newRow], enter: "showNewRightClick", waitFor: newRow },
+		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: newMenuItem, hint: "rightClick" },
+		{ key: "pick", anchors: [newMenuItem], tap: newMenuItem },
 		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
 	],
 	contextMenu: [
