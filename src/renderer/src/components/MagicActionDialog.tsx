@@ -295,6 +295,7 @@ export function MagicActionDialog(): ReactElement | null {
 				aria-modal="true"
 				aria-label={title}
 				data-testid="magic-action-dialog"
+				data-run-status={run.status}
 			>
 				{/* Figma 568:7806–7808: the action's mark, its name over the file it ran on, minimise (running) or close. */}
 				<div className="flex items-center gap-8">

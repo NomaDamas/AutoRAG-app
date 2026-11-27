@@ -49,6 +49,8 @@ export interface TutorialStep {
 	readonly tap?: Selector;
 	/** Shown only right after a click-required step was actually clicked. */
 	readonly followsTap?: boolean;
+	/** The box frames the anchor at once, but the card (and the sunflower) waits until this matches: a result still being made. */
+	readonly cardWhen?: Selector;
 	/** An offer: "later" ends the tutorial, the main button runs the effect and moves on. */
 	readonly offer?: TutorialEffect;
 	/** Waits for something to happen on its own (a run finishing, a menu opening): moves on when this matches. */
@@ -103,7 +105,8 @@ export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = 
 		{ key: "made", anchors: [newRow], enter: "showNewRightClick", waitFor: newRow },
 		{ key: "sample", anchors: [(facts) => byPath(facts.sample)], newPage: true, enter: "openSample", waitFor: (facts) => byPath(facts.sample), until: newMenuItem, hint: "rightClick" },
 		{ key: "pick", anchors: [newMenuItem], tap: newMenuItem },
-		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true },
+		// The dialog opens while the summary is still being written: the box frames it then, "짠!" waits for the result.
+		{ key: "result", anchors: ['[data-testid="magic-action-dialog"]'], followsTap: true, cardWhen: '[data-testid="magic-action-dialog"]:not([data-run-status="running"])' },
 		{ key: "chat", anchors: [NEW_AUTOMATION], newPage: true, enter: "backToAutomations", waitFor: NEW_AUTOMATION },
 	],
 	remoteAccess: [

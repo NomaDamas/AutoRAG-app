@@ -43,6 +43,11 @@ describe("the automations tutorial adds a right-click recommendation and runs it
 		expect(TUTORIALS.remoteAccess.filter((candidate) => candidate.newPage === true).map((candidate) => candidate.key)).toEqual(["toggle"]);
 	});
 
+	it("frames the result dialog at once but shows 짠! only once the summary is in", () => {
+		const result = step("result");
+		expect(selectorOf(result?.cardWhen, facts)).toBe('[data-testid="magic-action-dialog"]:not([data-run-status="running"])');
+	});
+
 	it("goes back to the automations page for its last step, which points at 새 자동화", () => {
 		const chat = step("chat");
 		expect(chat?.enter).toBe("backToAutomations");

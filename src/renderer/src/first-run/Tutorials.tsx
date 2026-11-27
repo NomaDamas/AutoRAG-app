@@ -219,6 +219,8 @@ function TutorialCoach({
 	const [cursorRect, setCursorRect] = useState<Rect | null>(null);
 	const [ready, setReady] = useState(step.waitFor === undefined);
 	const [busy, setBusy] = useState(false);
+	/** False while a step's `cardWhen` does not match yet: the box is up, the card and the sunflower are not. */
+	const [cardReady, setCardReady] = useState(true);
 	const [size, setSize] = useState({ width: 320, height: 160 });
 	const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 	const bubbleRef = useRef<HTMLDivElement>(null);
@@ -229,6 +231,7 @@ function TutorialCoach({
 	useLayoutEffect(() => {
 		setReady(step.waitFor === undefined);
 		setBusy(false);
+		setCardReady(step.cardWhen === undefined);
 	}, [step]);
 
 	// A step with an `enter` effect takes the person there itself (back to the list the new rule shows in).
@@ -299,11 +302,13 @@ function TutorialCoach({
 		let finished = false;
 		const waitFor = selectorOf(step.waitFor, facts);
 		const until = selectorOf(step.until, facts);
+		const cardWhen = selectorOf(step.cardWhen, facts);
 		const tap = selectorOf(step.tap, facts);
 		const tick = (now: number): void => {
 			started ??= now;
 			const isReady = waitFor === undefined || present(waitFor);
 			setReady(isReady);
+			setCardReady(cardWhen === undefined || present(cardWhen));
 			const anchor = isReady ? anchorElement(step, facts) : null;
 			if (anchor !== null && !revealed) {
 				revealed = true;
@@ -400,7 +405,7 @@ function TutorialCoach({
 			{/* One box per page: it resizes from target to target, and is drawn anew (opening from its target's centre) when
 			    it first finds a target or the page changes. */}
 			<div key={`${page}:${rect === null ? "none" : "spot"}`} className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			{ready ? (
+			{ready && cardReady ? (
 				<>
 					<CoachMarker target={cursorRect} spot={cursorRect === null ? rect : null} data={{ "data-tutorial-tap": step.key }} bounds={viewport} avoid={{ left: place.left, top: place.top, width: size.width, height: size.height }} />
 					<div ref={bubbleRef} className="fr-coach" data-tutorial-step={step.key} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={t(`${copy}.title` as LocaleKey)}>
