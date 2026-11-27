@@ -756,9 +756,10 @@ html[data-appearance="dark"] .fr-dock-ready {
 /* -------------------------------------------------------------------- ready */
 
 /*
- * Ready → Finder Arc/Dia-inspired reveal: one premultiplied-alpha WebGL shader canvas
- * in `.fr-reveal-back` renders the obsidian stage, Dazzi liquid-glass orb, and organic
- * melting aperture, while `.fr-reveal-front` runs the per-letter 3D spring cascade.
+ * Ready → Finder reveal: one premultiplied-alpha WebGL canvas in `.fr-reveal-back` draws
+ * the dusk and the breathing light (src/shared/reveal-light.ts, the same shader the desktop
+ * windows behind the app run), cut along the rising Finder window; `.fr-reveal-front`
+ * springs "Dazzi" in letter by letter.
  */
 .fr-stage--reveal {
 	background: transparent;
@@ -839,15 +840,16 @@ html[data-appearance="dark"] .fr-reveal-base {
 
 .fr-reveal-glyph {
 	display: inline-block;
-	color: #fffdf8;
+	/* Drawn over the reveal's bright light: warm ink with a white halo. */
+	color: #2a2318;
 	font-size: 26px;
 	line-height: 1.1;
 	font-weight: 600;
 	letter-spacing: 0.06em;
-	transform-origin: 0% 100%;
+	transform-origin: 50% 100%;
 	text-shadow:
-		0 2px 14px rgba(6, 10, 24, 0.75),
-		0 0 24px rgba(255, 206, 110, 0.42);
+		0 0 12px rgba(255, 255, 255, 0.9),
+		0 0 28px rgba(255, 250, 236, 0.7);
 	opacity: 0;
 	user-select: none;
 }

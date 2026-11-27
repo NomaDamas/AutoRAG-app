@@ -24,6 +24,7 @@ import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
 import { isPickPathKind, ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isRevealLightFrame, type RevealLightFrame } from "../shared/reveal-light";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
@@ -472,7 +473,7 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 }
 
 /** The first run: load, permissions, folders, start/status/complete. The service validates its own state. */
-export function registerOnboardingIpcHandlers(service: FirstRunService, setRevealBackdrop?: (opacity: number) => void): void {
+export function registerOnboardingIpcHandlers(service: FirstRunService, setRevealBackdrop?: (frame: RevealLightFrame | null) => void): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
@@ -489,8 +490,8 @@ export function registerOnboardingIpcHandlers(service: FirstRunService, setRevea
 		return service.pickPaths(kind);
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
-	ipcMain.on(ONBOARDING_CHANNELS.revealBackdrop, (_event, opacity: unknown) => {
-		if (typeof opacity === "number" && Number.isFinite(opacity)) setRevealBackdrop?.(opacity);
+	ipcMain.on(ONBOARDING_CHANNELS.revealBackdrop, (_event, frame: unknown) => {
+		if (frame === null || isRevealLightFrame(frame)) setRevealBackdrop?.(frame);
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
 }

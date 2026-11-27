@@ -1,39 +1,63 @@
 /**
- * Arc / Dia-inspired Ready → Finder reveal clock and easing curves.
+ * The Ready → Finder reveal's clock and easing curves
+ * (design: design-mockups/onboarding-intro-desktop-v3-fullscreen.html).
  *
- * Four restrained optical acts (4.7 s total at 1.0× speed, handing off to the tour at 4.25 s):
- * 1. `gather` (0.00–1.05 s): Copy dissolves, stage darkens smoothly into obsidian night, the
- *                            Dazzi sunflower glides to center, and a luminous glass orb ignites behind it.
- * 2. `orb`    (1.05–2.35 s): Volumetric liquid-glass orb breathes around the Dazzi logo with subtle
- *                            prismatic caustics; "Dazzi" cascades in letter-by-letter with 3D spring tilt
- *                            and blur settle (Arc/Dia staggered text); silk light sweeps the sunflower.
- * 3. `melt`   (2.35–4.25 s): Organic simplex-warped aperture melts open from behind the Dazzi mark with
- *                            a warm golden-ice Fresnel rim, revealing the real Finder pulling into focus
- *                            (sidebar, toolbar, left pane, right pane + inspector staggered cleanly).
- * 4. `settle` (4.25–4.70 s): Hand-off to the tour's first coach mark; shader layer is completely gone.
+ * 5.6 s at 1.0× speed, in four acts:
+ * 1. `dusk`  (0.00–1.15 s): the ready copy fades, the Dazzi sunflower glides to the centre and the whole desktop
+ *                           dims into dusk.
+ * 2. `light` (1.15–3.60 s): a breathing field of sunflower yellow, cream and sky blue wells up behind the mark and
+ *                           spreads until it covers the desktop; "Dazzi" springs in letter by letter beneath it.
+ * 3. `rise`  (3.60–5.00 s): the word and the mark leave (the mark turns 10° as it fades), and the Finder window rises
+ *                           out of the light, which parts exactly along its outline; the window reads as clear glass,
+ *                           then clears.
+ * 4. `clear` (5.00–5.60 s): the rest of the light and the dusk lift off the desktop; the tour takes over.
  */
 
-export type RevealPhase = "gather" | "orb" | "melt" | "settle" | "done";
+export type RevealPhase = "dusk" | "light" | "rise" | "clear" | "done";
 
 /** Seconds on the reveal clock. */
 export const REVEAL_T = {
-	textOut: [0.0, 0.58],
-	logoMove: [0.06, 0.92],
-	darken: [0.1, 0.96],
-	orbIn: [0.42, 1.38],
-	word: [1.12, 1.98],
-	sweep: [1.68, 2.38],
-	lift: [2.36, 3.16],
-	liftScale: 0.12,
-	liftBlur: 11,
-	melt: [2.35, 3.85],
-	fin: [2.4, 3.72],
-	finScale: 0.05,
-	finBlur: 8,
-	items: 2.65,
+	/** The ready copy and the check badge fade. */
+	textOut: [0.05, 0.5],
+	/** The sunflower glides to the window's centre. */
+	logoMove: [0.1, 0.8],
+	/** The desktop dims. */
+	dusk: [0, 1.15],
+	/** The light wells up behind the mark. */
+	lightIn: [1.15, 1.8],
+	/** It spreads from the mark until it covers the desktop. */
+	spread: [1.15, 3.2],
+	/** The warm glow right behind the mark. */
+	glowIn: [1.15, 1.95],
+	/** Then reaches full strength. */
+	lightFull: [3.2, 3.6],
+	/** "Dazzi", one letter after another. */
+	word: 1.95,
+	letterStep: 0.02,
+	/** The word fades. */
+	wordOut: [3.6, 4.1],
+	/** The warm glow fades with the mark. */
+	glowOut: [3.55, 4.05],
+	/** The mark fades, turning 10°. */
+	markOut: [3.7, 4.3],
+	markTurn: 10,
+	/** The window's outline opens in the light. */
+	open: 3.68,
+	/** The window rises: 22 px low at 95.5 %, settling in place. */
+	rise: [3.7, 5.0],
+	riseOffset: 22,
+	riseScale: 0.045,
+	/** The window comes into focus. */
+	focus: [3.7, 5.1],
+	focusBlur: 10,
+	/** The window's parts arrive one after another. */
+	items: [3.9, 4.8],
 	itemStep: 0.1,
-	dim: [4.25, 4.55],
-	end: 4.7,
+	/** The rest of the light leaves. */
+	lightOut: [4.75, 5.5],
+	/** The dusk lifts. */
+	duskOut: [4.5, 5.5],
+	end: 5.6,
 } as const;
 
 /** Real-time playback speed multiplier. */
@@ -46,10 +70,10 @@ export function revealMs(seconds: number): number {
 
 /** Named choreography phase for clock time `t` (seconds). */
 export function revealPhaseAt(t: number): RevealPhase {
-	if (t < 1.05) return "gather";
-	if (t < REVEAL_T.melt[0]) return "orb";
-	if (t < REVEAL_T.dim[0]) return "melt";
-	if (t < REVEAL_T.end) return "settle";
+	if (t < REVEAL_T.dusk[1]) return "dusk";
+	if (t < REVEAL_T.open) return "light";
+	if (t < REVEAL_T.rise[1]) return "rise";
+	if (t < REVEAL_T.end) return "clear";
 	return "done";
 }
 
@@ -73,10 +97,6 @@ export function bezier(a: number, b: number, c: number, d: number): (x: number) 
 
 export const easeOut = bezier(0.16, 1, 0.3, 1);
 export const easeInOut = bezier(0.45, 0, 0.2, 1);
-export const easeLift = bezier(0.4, 0, 0.2, 1);
-
-/** Gentle Arc/Dia spring curve (subtle overshoot, silky settle — never cartoon bounce). */
-export const easeSpring = bezier(0.22, 1.18, 0.36, 1);
 
 /** Progress of `t` through `[a, b]`, clamped, through `ease` when given. */
 export function progressIn(t: number, range: readonly [number, number], ease?: (x: number) => number): number {
@@ -84,8 +104,15 @@ export function progressIn(t: number, range: readonly [number, number], ease?: (
 	return ease === undefined ? p : ease(p);
 }
 
-/** Per-letter staggered progress (Arc/Dia AnimateText cascade). */
-export function glyphProgress(t: number, index: number, start: number, stagger: number, duration: number): number {
-	const t0 = start + index * stagger;
-	return progressIn(t, [t0, t0 + duration], easeSpring);
+/**
+ * A damped spring from 0 to 1 after `elapsed` seconds, in the duration/bounce terms SwiftUI and Motion use:
+ * `duration` is the perceptual settle time and `bounce` (0..1) how far it overshoots.
+ */
+export function spring(elapsed: number, duration = 0.6, bounce = 0.26): number {
+	if (elapsed <= 0) return 0;
+	const omega = (2 * Math.PI) / duration;
+	const zeta = 1 - bounce;
+	const damped = omega * Math.sqrt(1 - zeta * zeta);
+	const decay = Math.exp(-zeta * omega * elapsed);
+	return 1 - decay * (Math.cos(damped * elapsed) + ((zeta * omega) / damped) * Math.sin(damped * elapsed));
 }
