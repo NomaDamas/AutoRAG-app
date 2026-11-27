@@ -2734,7 +2734,7 @@
     "assistantGreeting": {
       "title": "何をお手伝いしましょうか？",
       "desc": "この画面の設定を言葉で変えたり、わからないことを質問したりできます。",
-      "placeholder": "何でも聞いてください"
+      "placeholder": "Dazziに何でも聞いてください"
     }
   },
   "settingsLtr": {
