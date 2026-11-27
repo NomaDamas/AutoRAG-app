@@ -206,14 +206,28 @@ try {
 	await pdfEditor.locator('[data-pdf-thumb="3"]').waitFor({ timeout: 15_000 });
 	await shot("01-portrait-pdf-opened");
 
-	// In-app Dazzi Image Picker (never opens native OS Finder!)
+	// In-app Real Dazzi Finder Image Picker (2nd view mode = List, with real SidebarSearch!)
 	const sizeBeforeImg = readFileSync(CONTRACT).byteLength;
 	await pdfEditor.locator('button[data-pdf-action="insert-image"]').click();
 	const imgPicker = main.locator('[data-dazzi-file-picker="image"]');
 	await imgPicker.waitFor({ timeout: 10_000 });
-	await imgPicker.locator('button[data-picker-file="stamp-logo.png"]').waitFor({ timeout: 10_000 });
+	check(
+		"In-app Dazzi Finder modal defaults to 2nd view mode (List) with real SidebarSearch",
+		(await imgPicker.getAttribute("data-picker-view-mode")) === "list" &&
+			(await imgPicker.locator(".sidebar-search input").count()) === 1,
+	);
+	await imgPicker.locator(`[role="row"][data-path="${STAMP_LOGO}"]`).waitFor({ timeout: 10_000 });
 	await shot("02-dazzi-in-app-image-picker");
-	await imgPicker.locator('button[data-picker-file="stamp-logo.png"]').click();
+
+	// Exercise live SidebarSearch inside the modal picker
+	const modalSearch = imgPicker.locator(".sidebar-search input");
+	await modalSearch.click();
+	await modalSearch.fill("stamp-logo");
+	await main.keyboard.press("Enter");
+	await imgPicker.locator(`[role="row"][data-path="${STAMP_LOGO}"]`).waitFor({ timeout: 10_000 });
+	check("Modal SidebarSearch found stamp-logo.png via real Finder search", true);
+
+	await imgPicker.locator(`[role="row"][data-path="${STAMP_LOGO}"]`).click();
 	await imgPicker.locator('button[data-dazzi-picker-confirm="true"]').click();
 	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').waitFor({ timeout: 10_000 });
 	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
@@ -309,7 +323,7 @@ try {
 	await pdfEditor.locator('button[data-pdf-action="merge"]').click();
 	const pdfPicker = main.locator('[data-dazzi-file-picker="pdf"]');
 	await pdfPicker.waitFor({ timeout: 10_000 });
-	await pdfPicker.locator('button[data-picker-file="addendum.pdf"]').click();
+	await pdfPicker.locator(`[role="row"][data-path="${ADDENDUM}"]`).click();
 	await pdfPicker.locator('button[data-dazzi-picker-confirm="true"]').click();
 	const countAfterMerge = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 6, 10_000);
 	check("In-app Dazzi PDF Merge picker merged addendum.pdf (5 -> 6 pages)", countAfterMerge === 6, `pages=${countAfterMerge}`);
@@ -358,19 +372,25 @@ try {
 			(await PDFDocument.load(readFileSync(part2))).getPageCount() === 4,
 	);
 
-	// 9. Find text inside PDF (Cmd/Ctrl+F)
+	// 9. Find text inside PDF (Cmd/Ctrl+F) -> verify match highlight box drawn on canvas!
 	await main.keyboard.press(chord("f"));
 	const findInput = pdfEditor.locator('input[data-pdf-find-input="true"]');
 	await findInput.waitFor({ timeout: 10_000 });
 	await findInput.fill("Invoice Clause");
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("1 / 1"), 10_000);
-	check("Find-in-PDF located 'Invoice Clause' match", true);
+	const highlightBox = await pdfEditor.locator('[data-pdf-find-highlight="current"]').first().boundingBox();
+	check(
+		"Find-in-PDF highlighted 'Invoice Clause' directly on the PDF canvas",
+		highlightBox !== null && highlightBox.width > 30 && highlightBox.height > 8,
+		JSON.stringify(highlightBox),
+	);
 	await shot("04-pdf-final-with-find-and-right-rail");
 
-	// 10. Undo restores pre-flatten form fields
-	await pdfEditor.locator('button[data-pdf-undo="true"]').click();
+	// Close Find bar (Escape) so focus leaves the input, then trigger real Cmd/Ctrl+Z keyboard Undo!
+	await main.keyboard.press("Escape");
+	await main.keyboard.press(chord("z"));
 	const fieldsRestored = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getForm().getFields().length, (n) => n >= 2, 10_000);
-	check("Undo restored pre-flatten PDF snapshot", fieldsRestored >= 2, `fields=${fieldsRestored}`);
+	check("Cmd/Ctrl+Z keyboard shortcut restored pre-flatten PDF snapshot", fieldsRestored >= 2, `fields=${fieldsRestored}`);
 } catch (error) {
 	check("the lane ran to the end", false, error instanceof Error ? error.message.split("\n")[0] : String(error));
 	for (const page of app.windows()) {

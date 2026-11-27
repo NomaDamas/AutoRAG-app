@@ -1,24 +1,49 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, FileText, Folder, HardDrive, Loader2, Search, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
-import type { FsEntry, FsLocation } from "../../../shared/fs-contract";
+import { RECENTS_PATH, type FsLocation } from "../../../shared/fs-contract";
+import { entryFromFs, entryFromSearchHit, type FinderEntry } from "../data/entries";
+import { createDirectoryStore, type DirectorySource } from "../data/directory-store";
+import { createEntrySidecar } from "../data/entry-sidecar";
+import { navGroups, type NavItem } from "../data/places";
+import { DirectoryDataContext, useDirectoryData } from "../hooks/useDirectoryData";
+import { useSidebarSettings } from "../hooks/useSidebarSettings";
+import { useTagCatalog } from "../hooks/useTagCatalog";
 import { cn } from "../lib/cn";
+import {
+	DEFAULT_LIST_COLUMNS,
+	listFixedWidth,
+	resetListColumns,
+	setListColumnWidth,
+	toggleListColumn,
+	type ListColumnKey,
+	type ListColumnsState,
+} from "../state/list-columns";
+import { basename, breadcrumbTrail, dirname } from "../state/paths";
+import { cycleSort, sortEntries, type SortKey, type SortState } from "../state/sort";
+import type { TreeRow } from "../state/folder-tree";
+import type { ViewMode } from "../state/view-mode";
+import { ColumnBrowser, type ColumnPaneView } from "./ColumnBrowser";
+import { ColumnHeader } from "./ColumnHeader";
+import { FileList } from "./FileList";
+import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
+import { IconGrid } from "./IconGrid";
+import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./list-scroll";
+import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { PathBar } from "./PathBar";
+import { placeGroupLabel, placeItemLabel } from "./Sidebar";
+import { SidebarSearch } from "./SidebarSearch";
+import { TagDotMark } from "./primitives/TagDot";
+import { ViewModeToggle } from "./ViewModeToggle";
 
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg", "heic", "heif", "tiff", "tif"]);
 
-function parentDirectoryOf(filePath: string): string {
-	const trimmed = filePath.replace(/[\\/]+$/, "");
-	const sepIdx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-	if (sepIdx <= 0) return trimmed.startsWith("/") ? "/" : trimmed;
-	return trimmed.slice(0, sepIdx);
-}
-
-function directoryLabel(dirPath: string): string {
-	const trimmed = dirPath.replace(/[\\/]+$/, "");
-	if (trimmed === "" || trimmed === "/") return "/";
-	const sepIdx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-	return sepIdx >= 0 ? trimmed.slice(sepIdx + 1) : trimmed;
+function isSelectableForMode(entry: FinderEntry, mode: "image" | "pdf", excludePath?: string): boolean {
+	if (entry.kind !== "file") return false;
+	if (excludePath !== undefined && entry.path === excludePath) return false;
+	const ext = entry.ext.toLowerCase();
+	return mode === "image" ? IMAGE_EXTENSIONS.has(ext) : ext === "pdf";
 }
 
 /**
@@ -56,6 +81,37 @@ export async function loadLocalImageAsPngDataUrl(
 	}
 }
 
+/** Fallback DirectoryData when the modal renders outside a FinderPane (e.g. unit tests). */
+function useFallbackDirectoryData(): ReturnType<typeof useDirectoryData> {
+	return useMemo(() => {
+		const sidecar = createEntrySidecar();
+		const noopSource: DirectorySource = {
+			list: async () => [],
+			readEntries: async () => ({ entries: [], removed: [] }),
+			enrich: async () => [],
+			finderMetadata: async () => [],
+			onLive: () => () => undefined,
+			onReconnect: () => () => undefined,
+		};
+		return { store: createDirectoryStore({ source: noopSource, sidecar }), sidecar };
+	}, []);
+}
+
+const NOOP_BG: BackgroundDropHandlers = {
+	onDragOver: () => undefined,
+	onDrop: () => undefined,
+	onDragLeave: () => undefined,
+	onContextMenu: () => undefined,
+};
+
+const PICKER_LIST_COLUMNS: ListColumnsState = {
+	...DEFAULT_LIST_COLUMNS,
+	visible: {
+		...DEFAULT_LIST_COLUMNS.visible,
+		index: false,
+	},
+};
+
 export interface DazziFilePickerModalProps {
 	readonly mode: "image" | "pdf";
 	readonly initialDir: string;
@@ -67,11 +123,14 @@ export interface DazziFilePickerModalProps {
 }
 
 /**
- * In-app Dazzi file picker powered by `window.autorag.fs`.
- * Replaces OS native Finder dialogs when inserting images, signature files, or
- * selecting sibling PDFs to merge.
+ * Real Dazzi Finder modal for choosing local images or PDFs without opening the OS Finder.
+ * Reuses Dazzi's actual Finder components directly:
+ * - Left sidebar with `SidebarSearch` (real live `fs.search` across the machine!) + live Places (`navGroups`)
+ * - Main Finder list view (2nd view mode `"list"` by default, with `ColumnHeader` + `FileList` + `FileRow`,
+ *   plus switchable `"icons"` `IconGrid` via `ViewModeToggle`)
+ * - Real `PathBar`, back/forward history, and OS thumbnails/icons via `DirectoryDataContext`
  */
-export function DazziFilePickerModal({
+function DazziFilePickerInner({
 	mode,
 	initialDir,
 	excludePath,
@@ -81,331 +140,587 @@ export function DazziFilePickerModal({
 }: DazziFilePickerModalProps): ReactElement {
 	const { t } = useTranslation();
 	const fsApi = window.autorag?.fs;
+	const { sidecar } = useDirectoryData();
+	const { catalog: tagCatalog } = useTagCatalog();
+	const sidebarSettings = useSidebarSettings();
 
+	// Navigation history (back/forward just like main Finder)
+	const [history, setHistory] = useState<readonly string[]>(() => [initialDir]);
+	const [historyIdx, setHistoryIdx] = useState(0);
+	const currentDir = history[historyIdx] ?? initialDir;
+
+	// Default to 2nd view mode: List ("list") as requested; user can also toggle Icons ("icons")
+	const [viewMode, setViewMode] = useState<ViewMode>("list");
+	const [sort, setSort] = useState<SortState | null>({ key: "name", dir: 1, flipped: false });
+	const [listColumns, setListColumns] = useState<ListColumnsState>(PICKER_LIST_COLUMNS);
+
+	// Sidebar places & real SidebarSearch
 	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
-	const [currentDir, setCurrentDir] = useState(initialDir);
-	const [entries, setEntries] = useState<readonly FsEntry[]>([]);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [searchFocused, setSearchFocused] = useState(false);
+	const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+	// Listing / search results
+	const [entries, setEntries] = useState<readonly FinderEntry[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [query, setQuery] = useState("");
 	const [selected, setSelected] = useState<readonly string[]>([]);
 
+	const listRef = useRef<HTMLDivElement | null>(null);
+	const headerViewportRef = useRef<HTMLDivElement | null>(null);
+	const requestSeqRef = useRef(0);
+	const enrichedRef = useRef<Set<string>>(new Set());
+
+	const searching = searchQuery.trim() !== "";
+
+	// Sync horizontal scroll between ColumnHeader and FileList
+	useEffect(() => {
+		if (viewMode !== "list") return;
+		const list = listRef.current;
+		const header = headerViewportRef.current;
+		if (list === null || header === null) return;
+		return followScrollLeft(list, header);
+	}, [viewMode, entries.length]);
+
+	// Load real OS sidebar locations
 	useEffect(() => {
 		if (fsApi?.locations === undefined) return;
 		let cancelled = false;
 		void fsApi
 			.locations()
 			.then((list) => {
-				if (!cancelled) {
-					const seen = new Set<string>([initialDir]);
-					const deduped: FsLocation[] = [];
-					for (const loc of list) {
-						if (!loc.available || loc.path === "Recents" || loc.section === "connections") continue;
-						if (seen.has(loc.path)) continue;
-						seen.add(loc.path);
-						deduped.push(loc);
-					}
-					setLocations(deduped);
-				}
+				if (!cancelled) setLocations(list);
 			})
 			.catch(() => undefined);
 		return () => {
 			cancelled = true;
 		};
-	}, [fsApi, initialDir]);
+	}, [fsApi]);
 
-	const loadDir = useCallback(
-		async (dirPath: string) => {
-			if (fsApi?.listDir === undefined) {
-				setLoading(false);
-				return;
-			}
-			setLoading(true);
-			setError(null);
+	const groups = useMemo(() => {
+		const raw = navGroups(locations, tagCatalog.tags, sidebarSettings);
+		return raw
+			.map((group) => ({
+				...group,
+				// Exclude virtual app views (AI Agent / Automations) that aren't file folders
+				items: group.items.filter((item) => item.view === undefined),
+			}))
+			.filter((group) => group.items.length > 0);
+	}, [locations, tagCatalog.tags, sidebarSettings]);
+
+	const navigate = useCallback((nextPath: string) => {
+		setSearchQuery("");
+		setSelected([]);
+		setHistory((prev) => {
+			const trimmed = prev.slice(0, historyIdx + 1);
+			if (trimmed.at(-1) === nextPath) return prev;
+			return [...trimmed, nextPath];
+		});
+		setHistoryIdx((idx) => idx + 1);
+	}, [historyIdx]);
+
+	const goBack = useCallback(() => {
+		setSearchQuery("");
+		setSelected([]);
+		setHistoryIdx((idx) => Math.max(0, idx - 1));
+	}, []);
+
+	const goForward = useCallback(() => {
+		setSearchQuery("");
+		setSelected([]);
+		setHistoryIdx((idx) => Math.min(history.length - 1, idx + 1));
+	}, [history.length]);
+
+	// Enrich visible entries with real OS icons/thumbnails through Dazzi's shared sidecar
+	const enrichVisible = useCallback(
+		(entry: FinderEntry) => {
+			if (fsApi?.enrichEntries === undefined) return;
+			const key = `${entry.path}\0${entry.mtimeMs}`;
+			if (enrichedRef.current.has(key)) return;
+			enrichedRef.current.add(key);
+			void fsApi
+				.enrichEntries([{ path: entry.path, mtimeMs: entry.mtimeMs, ext: entry.ext }], true)
+				.then((result) => {
+					if (result.length > 0) sidecar.applyEnrichment(result);
+				})
+				.catch(() => undefined);
+		},
+		[fsApi, sidecar],
+	);
+
+	// Load folder listing OR execute real Dazzi `fs.search` when searchQuery is committed
+	useEffect(() => {
+		const seq = ++requestSeqRef.current;
+		let cancelled = false;
+		setLoading(true);
+		setError(null);
+
+		const run = async (): Promise<void> => {
 			try {
-				const listing = await fsApi.listDir(dirPath);
-				setCurrentDir(listing.path);
-				setEntries(listing.entries);
+				if (searching) {
+					const trimmed = searchQuery.trim();
+					const lower = trimmed.toLowerCase();
+					const seen = new Set<string>();
+					const combined: FinderEntry[] = [];
+					const add = (entry: FinderEntry): void => {
+						if (seen.has(entry.path)) return;
+						if (!isSelectableForMode(entry, mode, excludePath)) return;
+						seen.add(entry.path);
+						combined.push(entry);
+					};
+					// Real whole-machine Finder search (omitting `scope` searches the entire index)
+					const [globalHits, localListing] = await Promise.all([
+						typeof fsApi?.search === "function" ? fsApi.search(trimmed).catch(() => []) : Promise.resolve([]),
+						typeof fsApi?.listDir === "function" ? fsApi.listDir(currentDir).catch(() => null) : Promise.resolve(null),
+					]);
+					if (cancelled || seq !== requestSeqRef.current) return;
+					for (const hit of globalHits) add(entryFromSearchHit(hit));
+					if (localListing !== null) {
+						for (const raw of localListing.entries) {
+							if (raw.name.toLowerCase().includes(lower)) add(entryFromFs(raw));
+						}
+					}
+					setEntries(combined);
+					return;
+				}
+				if (typeof fsApi?.listDir !== "function") {
+					setEntries([]);
+					return;
+				}
+				const listing = await fsApi.listDir(currentDir);
+				if (cancelled || seq !== requestSeqRef.current) return;
+				const filtered = listing.entries
+					.map(entryFromFs)
+					.filter((entry) => !entry.name.startsWith(".") && (entry.kind === "folder" || isSelectableForMode(entry, mode, excludePath)));
+				setEntries(filtered);
 			} catch (err: unknown) {
+				if (cancelled || seq !== requestSeqRef.current) return;
 				setError(err instanceof Error ? err.message : String(err));
 				setEntries([]);
 			} finally {
-				setLoading(false);
+				if (!cancelled && seq === requestSeqRef.current) setLoading(false);
 			}
-		},
-		[fsApi],
+		};
+
+		void run();
+		return () => {
+			cancelled = true;
+		};
+	}, [currentDir, excludePath, fsApi, mode, searchQuery, searching]);
+
+	// Escape closes modal, Cmd/Ctrl+F focuses modal sidebar search (capture phase so PDF editor behind doesn't steal it)
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") {
+				if (document.activeElement === searchInputRef.current && searchQuery !== "") return;
+				event.preventDefault();
+				event.stopPropagation();
+				onClose();
+			} else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+				event.preventDefault();
+				event.stopPropagation();
+				searchInputRef.current?.focus();
+				searchInputRef.current?.select();
+			}
+		};
+		window.addEventListener("keydown", onKeyDown, true);
+		return () => window.removeEventListener("keydown", onKeyDown, true);
+	}, [onClose, searchQuery]);
+
+	const sortedEntries = useMemo(() => {
+		if (sort === null) return entries;
+		const folders = entries.filter((e) => e.kind === "folder");
+		const files = entries.filter((e) => e.kind !== "folder");
+		return [...sortEntries(folders, sort), ...sortEntries(files, sort)];
+	}, [entries, sort]);
+
+	const treeSections = useMemo(
+		() => [
+			{
+				label: "",
+				rows: sortedEntries.map<TreeRow>((entry) => ({
+					entry,
+					stackCount: 0,
+					stackOpen: false,
+					child: false,
+					relation: null,
+					depth: 0,
+					disclosure: "none",
+				})),
+			},
+		],
+		[sortedEntries],
 	);
 
-	useEffect(() => {
-		void loadDir(initialDir);
-	}, [initialDir, loadDir]);
+	const selectableSelected = useMemo(
+		() => selected.filter((p) => sortedEntries.some((e) => e.path === p && isSelectableForMode(e, mode, excludePath))),
+		[excludePath, mode, selected, sortedEntries],
+	);
 
-	useEffect(() => {
-		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") onClose();
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
-
-	const visibleEntries = useMemo(() => {
-		const needle = query.trim().toLowerCase();
-		const folders: FsEntry[] = [];
-		const files: FsEntry[] = [];
-		for (const entry of entries) {
-			if (entry.name.startsWith(".")) continue;
-			if (excludePath !== undefined && entry.path === excludePath) continue;
-			if (needle !== "" && !entry.name.toLowerCase().includes(needle)) continue;
+	const handleRowClick = useCallback(
+		(entry: FinderEntry, event: React.MouseEvent<HTMLDivElement>) => {
 			if (entry.kind === "folder") {
-				folders.push(entry);
-				continue;
+				setSelected([entry.path]);
+				return;
 			}
-			const ext = entry.ext.toLowerCase();
-			if (mode === "image" ? IMAGE_EXTENSIONS.has(ext) : ext === "pdf") {
-				files.push(entry);
+			if (!isSelectableForMode(entry, mode, excludePath)) return;
+			if (multiple && (event.metaKey || event.ctrlKey)) {
+				setSelected((curr) => (curr.includes(entry.path) ? curr.filter((p) => p !== entry.path) : [...curr, entry.path]));
+			} else {
+				setSelected([entry.path]);
 			}
-		}
-		folders.sort((a, b) => a.name.localeCompare(b.name));
-		files.sort((a, b) => a.name.localeCompare(b.name));
-		return { folders, files };
-	}, [entries, excludePath, mode, query]);
+		},
+		[excludePath, mode, multiple],
+	);
 
-	const toggleSelect = (path: string): void => {
-		if (!multiple) {
-			setSelected([path]);
-			return;
-		}
-		setSelected((curr) => (curr.includes(path) ? curr.filter((p) => p !== path) : [...curr, path]));
-	};
+	const handleRowOpen = useCallback(
+		(entry: FinderEntry) => {
+			if (entry.kind === "folder") {
+				navigate(entry.path);
+				return;
+			}
+			if (isSelectableForMode(entry, mode, excludePath)) {
+				onPick([entry.path]);
+			}
+		},
+		[excludePath, mode, navigate, onPick],
+	);
 
-	const parentDir = parentDirectoryOf(currentDir);
-	const canGoUp = parentDir !== currentDir;
+	const rowCallbacks = useMemo<RowCallbacks>(
+		() => ({
+			onClick: handleRowClick,
+			onOpen: handleRowOpen,
+			onContextMenu: (entry, event) => {
+				event.preventDefault();
+				handleRowClick(entry, event);
+			},
+			onToggleIndex: () => undefined,
+			onPointerDown: () => undefined,
+			onDragOver: () => undefined,
+			onDrop: () => undefined,
+			dropTargetPath: null,
+			onToggleStack: () => undefined,
+			onToggleFolder: (entry) => {
+				if (entry.kind === "folder") navigate(entry.path);
+			},
+			onRenameChange: () => undefined,
+			onRenameCommit: () => undefined,
+			onRenameCancel: () => undefined,
+			onVisible: enrichVisible,
+		}),
+		[enrichVisible, handleRowClick, handleRowOpen, navigate],
+	);
+
 	const title = mode === "image" ? t("documentEditor.pdf.pickerImageTitle") : t("documentEditor.pdf.pickerPdfTitle");
 	const confirmLabel =
 		mode === "image"
 			? t("documentEditor.pdf.pickerInsert")
-			: t("documentEditor.pdf.pickerMergeCount", { count: Math.max(1, selected.length) });
+			: t("documentEditor.pdf.pickerMergeCount", { count: Math.max(1, selectableSelected.length) });
+	const emptyText =
+		error !== null
+			? error
+			: searching
+				? t("quickSearch.noResults")
+				: mode === "image"
+					? t("documentEditor.pdf.pickerEmptyImages")
+					: t("documentEditor.pdf.pickerEmptyPdfs");
+
+	const focusedEntry = useMemo(
+		() => (selected.length === 1 ? (sortedEntries.find((e) => e.path === selected[0]) ?? null) : null),
+		[selected, sortedEntries],
+	);
+
+	const onSidebarNavigate = (item: NavItem): void => {
+		if (!item.available) return;
+		navigate(item.path);
+	};
+
+	const columnPanes = useMemo<readonly ColumnPaneView[]>(
+		() => [
+			{
+				path: currentDir,
+				loaded: !loading,
+				rows: treeSections[0]?.rows ?? [],
+				sections: treeSections,
+			},
+		],
+		[currentDir, loading, treeSections],
+	);
+
+	const currentTitle = searching ? t("finderComponents.searchTitle", { query: searchQuery }) : basename(currentDir) || currentDir;
 
 	return (
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-xs"
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-xs"
 			role="dialog"
 			aria-modal="true"
 			aria-label={title}
 			data-dazzi-file-picker={mode}
-			onClick={(e) => {
-				if (e.target === e.currentTarget) onClose();
+			data-picker-view-mode={viewMode}
+			onClick={(event) => {
+				if (event.target === event.currentTarget) onClose();
 			}}
 		>
-			<div className="flex h-[520px] max-h-[82vh] w-[720px] max-w-[92vw] flex-col overflow-hidden rounded-12 border border-border bg-window shadow-xl">
-				{/* Modal Header */}
-				<div className="flex h-44 flex-none items-center justify-between gap-12 border-b border-divider bg-chrome px-16">
-					<h3 className="m-0 text-body font-semibold text-ink">{title}</h3>
-					<button
-						type="button"
-						aria-label={t("common.close")}
-						className="flex size-24 items-center justify-center rounded-6 border-0 bg-transparent text-ink-muted hover:bg-hover hover:text-ink"
-						onClick={onClose}
-					>
-						<X size={15} />
-					</button>
-				</div>
-
-				{/* Sub-bar: Parent button + current folder path + inline filter */}
-				<div className="flex h-36 flex-none items-center gap-8 border-b border-divider bg-window px-12">
-					<button
-						type="button"
-						disabled={!canGoUp}
-						title={t("documentEditor.pdf.pickerParentFolder")}
-						aria-label={t("documentEditor.pdf.pickerParentFolder")}
-						className="flex size-24 items-center justify-center rounded-6 border-0 bg-transparent text-ink-body hover:bg-hover disabled:opacity-30"
-						onClick={() => void loadDir(parentDir)}
-					>
-						<ArrowUp size={14} />
-					</button>
-					<span className="min-w-0 flex-1 truncate font-mono text-meta text-ink-muted" title={currentDir}>
-						{currentDir}
-					</span>
-					<div className="relative flex w-180 items-center">
-						<Search size={13} className="pointer-events-none absolute left-8 text-ink-muted" />
-						<input
-							type="text"
-							value={query}
-							data-dazzi-picker-filter="true"
-							placeholder={t("documentEditor.pdf.pickerSearchPlaceholder")}
-							className="h-24 w-full rounded-6 border border-border bg-input pr-8 pl-26 text-meta text-ink outline-none focus:border-accent"
-							onChange={(e) => setQuery(e.target.value)}
-						/>
+			<div className="flex h-[620px] max-h-[86vh] w-[920px] max-w-[92vw] overflow-hidden rounded-12 border border-border bg-window shadow-2xl">
+				{/* Left Dazzi Finder Sidebar with live SidebarSearch + Places */}
+				<aside
+					className="sidebar flex w-[204px] flex-none flex-col min-h-0 border-r border-border bg-sidebar backdrop-blur-[18px]"
+					aria-label={t("finderComponents.sidebar")}
+				>
+					<div className="flex h-40 flex-none items-center px-12 text-body font-semibold text-ink">
+						<span className="truncate">{title}</span>
 					</div>
-				</div>
+					<SidebarSearch
+						query={searchQuery}
+						inputRef={searchInputRef}
+						focused={searchFocused}
+						showHotkeys={false}
+						onFocus={() => setSearchFocused(true)}
+						onBlur={() => setSearchFocused(false)}
+						onSubmit={(text) => {
+							setSearchQuery(text.trim());
+							setSelected([]);
+						}}
+					/>
+					<div className="side-scroll flex min-h-0 flex-1 flex-col gap-10 overflow-auto px-10 pt-4 pb-12">
+						{groups.map((group) => (
+							<div key={group.label} className="side-group flex flex-col gap-1">
+								<div className="side-label px-8 pt-4 pb-4 text-badge font-semibold tracking-label text-ink-muted">
+									{placeGroupLabel(t, group.label)}
+								</div>
+								{group.items.map((item) => {
+									const active = !searching && item.path === currentDir;
+									const Icon = item.icon;
+									return (
+										<button
+											key={item.path}
+											type="button"
+											className={cn(
+												"sidebar__item flex h-icon-sm w-full items-center gap-8 rounded-6 border-0 bg-transparent px-8 text-left text-meta text-ink-body transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
+												!item.available && "text-ink-faint",
+												active && "sidebar__item--active bg-selected-nav text-ink",
+											)}
+											title={item.path}
+											aria-current={active ? "true" : undefined}
+											onClick={() => onSidebarNavigate(item)}
+										>
+											{item.tag === undefined ? (
+												<Icon
+													className={cn("sidebar__item-icon flex-none", active ? "text-ink" : "text-ink-muted")}
+													size={14}
+													strokeWidth={1.8}
+												/>
+											) : (
+												<span className="sidebar__item-icon flex size-14 flex-none items-center justify-center">
+													<TagDotMark color={item.tag.color} size={10} />
+												</span>
+											)}
+											<span className="sidebar__item-label min-w-0 flex-1 truncate">{placeItemLabel(t, item)}</span>
+										</button>
+									);
+								})}
+							</div>
+						))}
+					</div>
+				</aside>
 
-				{/* Body: Places sidebar + folder/file browser */}
-				<div className="flex min-h-0 flex-1 overflow-hidden">
-					{/* Places sidebar */}
-					<nav className="flex w-[164px] flex-none flex-col gap-2 overflow-y-auto border-r border-divider bg-chrome/60 p-8">
+				{/* Right Main Finder Column (Toolbar + List/Icon view + PathBar + Action Footer) */}
+				<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-window">
+					{/* Finder Toolbar: Back/Forward + Folder Title + ViewModeToggle (Icons / List) + Close */}
+					<header className="flex h-44 flex-none items-center gap-8 border-b border-divider bg-chrome px-12">
+						<div className="flex flex-none items-center gap-2">
+							<button
+								type="button"
+								disabled={historyIdx <= 0}
+								aria-label={t("toolbar.back")}
+								className="flex size-28 items-center justify-center rounded-6 border-0 bg-transparent text-ink-body enabled:hover:bg-hover-icon disabled:text-ink-faint"
+								onClick={goBack}
+							>
+								<ChevronLeftIcon />
+							</button>
+							<button
+								type="button"
+								disabled={historyIdx >= history.length - 1}
+								aria-label={t("toolbar.forward")}
+								className="flex size-28 items-center justify-center rounded-6 border-0 bg-transparent text-ink-body enabled:hover:bg-hover-icon disabled:text-ink-faint"
+								onClick={goForward}
+							>
+								<ChevronRightIcon />
+							</button>
+						</div>
+						<div className="min-w-0 flex-1 truncate text-body font-semibold text-ink" title={currentDir}>
+							{currentTitle}
+						</div>
+						<ViewModeToggle mode={viewMode} onChange={setViewMode} />
 						<button
 							type="button"
-							className={cn(
-								"flex h-28 items-center gap-8 rounded-6 border-0 px-8 text-left text-meta transition-colors",
-								currentDir === initialDir ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-body hover:bg-hover",
-							)}
-							onClick={() => void loadDir(initialDir)}
+							aria-label={t("common.close")}
+							className="flex size-28 items-center justify-center rounded-6 border-0 bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink"
+							onClick={onClose}
 						>
-							<Folder size={14} className="flex-none text-accent" />
-							<span className="truncate">{t("documentEditor.pdf.pickerCurrentFolder")}</span>
+							<X size={15} />
 						</button>
-						{locations.slice(0, 10).map((loc) => (
-							<button
-								key={loc.path}
-								type="button"
-								className={cn(
-									"flex h-28 items-center gap-8 rounded-6 border-0 px-8 text-left text-meta transition-colors",
-									currentDir === loc.path ? "bg-selected-nav font-medium text-ink" : "bg-transparent text-ink-body hover:bg-hover",
-								)}
-								onClick={() => void loadDir(loc.path)}
-							>
-								{loc.section === "locations" ? (
-									<HardDrive size={14} className="flex-none text-ink-muted" />
-								) : (
-									<Folder size={14} className="flex-none text-ink-muted" />
-								)}
-								<span className="truncate">{loc.name}</span>
-							</button>
-						))}
-					</nav>
+					</header>
 
-					{/* File listing / visual image grid */}
-					<div className="min-h-0 flex-1 overflow-y-auto bg-window p-12">
+					{/* Main Finder View: 2nd view mode (List: ColumnHeader + FileList) by default, plus Icons & Columns */}
+					<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-window">
 						{loading ? (
-							<div className="flex h-full items-center justify-center gap-8 text-meta text-ink-muted">
+							<div className="flex flex-1 items-center justify-center gap-8 text-meta text-ink-muted">
 								<Loader2 size={15} className="animate-spin" />
 								<span>{t("documentEditor.loading")}</span>
 							</div>
-						) : error !== null ? (
-							<div className="flex h-full items-center justify-center text-meta text-error">{error}</div>
-						) : visibleEntries.folders.length === 0 && visibleEntries.files.length === 0 ? (
-							<div className="flex h-full items-center justify-center text-meta text-ink-muted">
-								{mode === "image" ? t("documentEditor.pdf.pickerEmptyImages") : t("documentEditor.pdf.pickerEmptyPdfs")}
-							</div>
+						) : viewMode === "icons" ? (
+							<IconGrid
+								sections={treeSections}
+								listRef={listRef}
+								searching={searching}
+								emptyText={emptyText}
+								selectedKeys={selected}
+								focusedZone
+								flashPath={null}
+								renamePath={null}
+								renameDraft=""
+								versionFamilyError={null}
+								onRetryVersionFamilies={() => undefined}
+								background={NOOP_BG}
+								dropBackground={false}
+								callbacks={rowCallbacks}
+								onMarqueeSelect={(keys) => {
+									const valid = keys.filter((k) => sortedEntries.some((e) => e.path === k && isSelectableForMode(e, mode, excludePath)));
+									setSelected(multiple ? valid : valid.slice(0, 1));
+								}}
+							/>
+						) : viewMode === "columns" ? (
+							<ColumnBrowser
+								panes={columnPanes}
+								listRef={listRef}
+								emptyText={emptyText}
+								selectedKeys={selected}
+								focusedZone
+								flashPath={null}
+								renamePath={null}
+								renameDraft=""
+								versionFamilyError={null}
+								onRetryVersionFamilies={() => undefined}
+								variantColumn={null}
+								onSelectVariant={() => undefined}
+								columnCallbacks={{
+									onClick: (_pane, entry, event) => {
+										if (entry.kind === "folder") navigate(entry.path);
+										else handleRowClick(entry, event);
+									},
+								}}
+								paneBackground={() => NOOP_BG}
+								dropBackgroundDir={null}
+								callbacks={rowCallbacks}
+							/>
 						) : (
-							<div className="flex flex-col gap-12">
-								{visibleEntries.folders.length > 0 ? (
-									<div className="flex flex-wrap gap-6">
-										{visibleEntries.folders.map((folder) => (
-											<button
-												key={folder.path}
-												type="button"
-												data-picker-folder={folder.name}
-												className="inline-flex h-28 max-w-[180px] items-center gap-6 rounded-6 border-0 bg-subtle px-10 text-meta text-ink hover:bg-hover"
-												onClick={() => void loadDir(folder.path)}
-											>
-												<Folder size={14} className="flex-none text-accent" />
-												<span className="truncate">{folder.name}</span>
-											</button>
-										))}
-									</div>
-								) : null}
-
-								{mode === "image" ? (
-									<div className="grid grid-cols-3 gap-10">
-										{visibleEntries.files.map((file) => {
-											const isSelected = selected.includes(file.path);
-											return (
-												<button
-													key={file.path}
-													type="button"
-													data-picker-file={file.name}
-													aria-pressed={isSelected}
-													className={cn(
-														"group flex flex-col gap-6 rounded-8 border p-6 text-left transition-colors",
-														isSelected ? "border-accent bg-accent-soft" : "border-divider bg-subtle/50 hover:bg-hover",
-													)}
-													onClick={() => toggleSelect(file.path)}
-													onDoubleClick={() => onPick([file.path])}
-												>
-													<div className="flex h-88 w-full items-center justify-center overflow-hidden rounded-4 bg-white ring-1 ring-black/5">
-														<img
-															src={previewStreamUrl(file.path, { modifiedAt: String(file.mtimeMs), size: file.size ?? 0 })}
-															alt={file.name}
-															loading="lazy"
-															className="max-h-full max-w-full object-contain"
-														/>
-													</div>
-													<span className="truncate text-badge text-ink">{file.name}</span>
-												</button>
-											);
-										})}
-									</div>
-								) : (
-									<div className="flex flex-col divide-y divide-divider rounded-8 border border-divider">
-										{visibleEntries.files.map((file) => {
-											const isSelected = selected.includes(file.path);
-											return (
-												<button
-													key={file.path}
-													type="button"
-													data-picker-file={file.name}
-													aria-pressed={isSelected}
-													className={cn(
-														"flex h-36 items-center gap-10 border-0 px-12 text-left text-body transition-colors",
-														isSelected ? "bg-accent-soft text-accent" : "bg-window text-ink hover:bg-hover-row",
-													)}
-													onClick={() => toggleSelect(file.path)}
-													onDoubleClick={() => {
-														if (!multiple) onPick([file.path]);
-													}}
-												>
-													<span
-														className={cn(
-															"flex size-16 flex-none items-center justify-center rounded-4 border",
-															isSelected ? "border-accent bg-accent text-on-accent" : "border-border bg-window",
-														)}
-													>
-														{isSelected ? <Check size={11} strokeWidth={2.5} /> : null}
-													</span>
-													<FileText size={15} className="flex-none text-ink-muted" />
-													<span className="min-w-0 flex-1 truncate">{file.name}</span>
-													<span className="flex-none text-badge tabular-nums text-ink-muted">
-														{directoryLabel(currentDir)}
-													</span>
-												</button>
-											);
-										})}
-									</div>
-								)}
+							<div className={LIST_COLUMN_CLASS}>
+								<div ref={headerViewportRef} className={HEADER_VIEWPORT_CLASS}>
+									<ColumnHeader
+										sort={sort}
+										searching={searching}
+										onSort={(key: SortKey) => setSort((curr) => cycleSort(curr, key))}
+										columns={listColumns}
+										minWidth={listFixedWidth(listColumns)}
+										onToggleColumn={(key: ListColumnKey) => setListColumns((curr) => toggleListColumn(curr, key))}
+										onResetColumns={() => setListColumns(() => ({ ...resetListColumns(), visible: { ...PICKER_LIST_COLUMNS.visible } }))}
+										onResizeColumn={(key: string, px: number) => setListColumns((curr) => setListColumnWidth(curr, key, px))}
+									/>
+								</div>
+								<FileList
+									sections={treeSections}
+									listPath={currentDir}
+									columns={listColumns}
+									minWidth={listFixedWidth(listColumns)}
+									versionFamilyError={null}
+									onRetryVersionFamilies={() => undefined}
+									listRef={listRef}
+									searching={searching}
+									{...(searching ? { highlight: searchQuery } : {})}
+									emptyText={emptyText}
+									selectedKeys={selected}
+									focusedZone
+									flashPath={null}
+									renamePath={null}
+									renameDraft=""
+									background={NOOP_BG}
+									dropBackground={false}
+									callbacks={rowCallbacks}
+								/>
 							</div>
 						)}
 					</div>
-				</div>
 
-				{/* Footer */}
-				<div className="flex h-48 flex-none items-center justify-between gap-8 border-t border-divider bg-chrome px-16">
-					<span className="text-meta tabular-nums text-ink-muted">
-						{selected.length > 0 ? directoryLabel(selected[0]!) + (selected.length > 1 ? ` (+${selected.length - 1})` : "") : ""}
-					</span>
-					<div className="flex items-center gap-8">
-						<button
-							type="button"
-							className="h-28 rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink hover:bg-hover-row"
-							onClick={onClose}
-						>
-							{t("common.cancel")}
-						</button>
-						<button
-							type="button"
-							disabled={selected.length === 0}
-							data-dazzi-picker-confirm="true"
-							className="inline-flex h-28 items-center gap-4 rounded-6 border-0 bg-accent px-14 text-meta font-medium text-on-accent hover:opacity-90 disabled:opacity-35"
-							onClick={() => {
-								if (selected.length > 0) onPick(selected);
-							}}
-						>
-							<Check size={13} />
-							{confirmLabel}
-						</button>
-					</div>
+					{/* Real Finder PathBar */}
+					<PathBar
+						path={currentDir}
+						crumbs={currentDir === RECENTS_PATH ? [{ label: t("places.recents"), path: currentDir, separator: false, isLast: true }] : breadcrumbTrail(currentDir, Number.MAX_SAFE_INTEGER)}
+						selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
+						selectedPath={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.path : null}
+						onNavigate={navigate}
+						onCopyPath={() => undefined}
+						onGoToPath={(target) => {
+							const dir = target.endsWith("/") ? target : target;
+							navigate(dir);
+						}}
+						completePath={async () => ({ items: [], dir: dirname(currentDir) })}
+						openEditor={0}
+						onEditorClosed={() => undefined}
+					/>
+
+					{/* Modal Action Footer */}
+					<footer className="flex h-48 flex-none items-center justify-between gap-10 border-t border-divider bg-chrome px-16">
+						<span className="min-w-0 flex-1 truncate text-meta tabular-nums text-ink-muted">
+							{selectableSelected.length > 0
+								? basename(selectableSelected[0]!) + (selectableSelected.length > 1 ? ` (+${selectableSelected.length - 1})` : "")
+								: ""}
+						</span>
+						<div className="flex flex-none items-center gap-8">
+							<button
+								type="button"
+								className="h-28 rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink hover:bg-hover-row"
+								onClick={onClose}
+							>
+								{t("common.cancel")}
+							</button>
+							<button
+								type="button"
+								disabled={selectableSelected.length === 0}
+								data-dazzi-picker-confirm="true"
+								className="inline-flex h-28 items-center gap-4 rounded-6 border-0 bg-accent px-14 text-meta font-medium text-on-accent hover:opacity-90 disabled:opacity-35"
+								onClick={() => {
+									if (selectableSelected.length > 0) onPick(selectableSelected);
+								}}
+							>
+								<Check size={13} />
+								{confirmLabel}
+							</button>
+						</div>
+					</footer>
 				</div>
 			</div>
 		</div>
 	);
+}
+
+export function DazziFilePickerModal(props: DazziFilePickerModalProps): ReactElement {
+	const existing = useContextOrNull();
+	const fallback = useFallbackDirectoryData();
+	if (existing !== null) {
+		return <DazziFilePickerInner {...props} />;
+	}
+	return (
+		<DirectoryDataContext value={fallback}>
+			<DazziFilePickerInner {...props} />
+		</DirectoryDataContext>
+	);
+}
+
+function useContextOrNull(): ReturnType<typeof useDirectoryData> | null {
+	try {
+		return useDirectoryData();
+	} catch {
+		return null;
+	}
 }
