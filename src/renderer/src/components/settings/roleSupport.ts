@@ -5,7 +5,7 @@
  */
 
 import type { TFunction } from "i18next";
-import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, ocrModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { asRecord, getAt, stringOf } from "./configSupport";
 import type { RolePickerSelection } from "./ModelPicker";
@@ -71,6 +71,20 @@ export function visualParseOptionsFor(connected: readonly ProviderSummary[]): Ro
 	);
 }
 
+/**
+ * Official remote OCR / document-parsing models served by connected providers
+ * (Mistral OCR, NVIDIA Nemotron Parse, Upstage Document Parse, Z.AI GLM-OCR).
+ * General chat LLMs are excluded; local OCR engines are always offered via specials.
+ */
+export function visualParseOcrOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
+	return connected.flatMap((provider) =>
+		ocrModelsFor(provider.id).map((model) => ({
+			provider,
+			model: staticCatalogEntry(provider, model.id, model.label),
+		})),
+	);
+}
+
 export function isVisualParseEnabled(config: AutoRagConfigSnapshot["config"]): boolean {
 	const raw = getAt(config, ["visualParse"]);
 	const record = asRecord(raw);
@@ -97,7 +111,7 @@ export function visualParseOcrLabel(config: AutoRagConfigSnapshot["config"], t: 
 	const ocr = asRecord(record.ocr);
 	if (ocr !== null) {
 		const engine = stringOf(ocr.engine);
-		if (engine === "vlm" || ocr.model !== undefined) {
+		if (engine === "api" || engine === "vlm" || ocr.model !== undefined) {
 			const model = asRecord(ocr.model);
 			return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.visualParseOcrAuto");
 		}
@@ -182,7 +196,7 @@ export function roleSelectionFor(
 		const ocr = asRecord(record.ocr);
 		if (ocr !== null) {
 			const engine = stringOf(ocr.engine);
-			if (engine === "vlm" || ocr.model !== undefined) {
+			if (engine === "api" || engine === "vlm" || ocr.model !== undefined) {
 				const model = asRecord(ocr.model);
 				const provider = stringOf(model?.provider);
 				const modelId = stringOf(model?.id);

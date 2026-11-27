@@ -91,6 +91,39 @@ const RERANK_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModelSpec[
 	],
 };
 
+/**
+ * Dedicated official remote OCR / document-parsing model ids each provider serves.
+ *
+ * Unlike general chat LLMs (which belong in the VLM role), the OCR picker only
+ * lists purpose-built OCR / document-parsing API models for connected providers,
+ * alongside the always-available local engines (PP-OCRv5 / Tesseract).
+ */
+const OCR_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModelSpec[]>> = {
+	mistral: [
+		{ id: "mistral-ocr-latest", label: "Mistral OCR (latest)" },
+		{ id: "mistral-ocr-2512", label: "Mistral OCR 3 (2512)" },
+	],
+	nvidia: [{ id: "nvidia/nemotron-parse", label: "NVIDIA Nemotron Parse" }],
+	upstage: [
+		{ id: "document-parse", label: "Upstage Document Parse" },
+		{ id: "ocr", label: "Upstage Document OCR" },
+	],
+	zai: [{ id: "glm-ocr", label: "GLM-OCR (Z.AI)" }],
+};
+
+export function ocrModelsFor(providerId: string): readonly RoleModel[] {
+	const specs = OCR_MODELS_BY_PROVIDER[providerId];
+	if (specs === undefined) return [];
+	return specs.map(({ id, label, labelKey }) => ({
+		id,
+		label: labelKey === undefined ? (label ?? id) : t(labelKey),
+	}));
+}
+
+export function isOfficialOcrModel(providerId: string, modelId: string): boolean {
+	return (OCR_MODELS_BY_PROVIDER[providerId] ?? []).some((spec) => spec.id === modelId);
+}
+
 export function jevBackendFor(providerId: string): JevBackend | undefined {
 	return JEV_BACKEND_BY_PROVIDER[providerId];
 }

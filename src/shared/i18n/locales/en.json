@@ -2488,7 +2488,7 @@
       "visualParseModel": "Advanced visual parsing (VLM)",
       "visualParseHint": "Keeps base mirrors intact; parses pages routed as charts, diagrams, or complex tables with a VLM into a supplementary mirror.",
       "visualParseOcrModel": "OCR model",
-      "visualParseOcrHint": "Reads scanned pages, handwriting, or text missed by the base parser. Choose local OCR or opt into a remote vision/OCR model.",
+      "visualParseOcrHint": "Reads scanned pages, handwriting, or text missed by the base parser. Shows local OCR engines plus official provider OCR APIs (Mistral OCR, Nemotron Parse, Upstage Document Parse, GLM-OCR).",
       "visualParseOcrAuto": "Auto (Local PP-OCRv5 / Tesseract)",
       "visualParseOcrKordoc": "Local PP-OCRv5 (kordoc)",
       "visualParseOcrTesseract": "Local Tesseract",

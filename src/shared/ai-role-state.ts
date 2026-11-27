@@ -117,7 +117,7 @@ export function roleSelectionFromConfig(role: RoleId, config: JsonObject, connec
 		const ocr = asRecord(record.ocr);
 		if (ocr !== null) {
 			const engine = stringOf(ocr.engine);
-			if (engine === "vlm" || ocr.model !== undefined) {
+			if (engine === "api" || engine === "vlm" || ocr.model !== undefined) {
 				const model = asRecord(ocr.model);
 				const provider = stringOf(model?.provider);
 				const modelId = stringOf(model?.id);

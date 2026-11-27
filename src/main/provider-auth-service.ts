@@ -145,11 +145,22 @@ export function rankConnectionProbeModels<T extends { readonly cost: { readonly 
 /** Hosts that mean "this device" for local-server validation. */
 const LOOPBACK_HOSTS: Record<string, true> = { localhost: true, "127.0.0.1": true, "::1": true, "[::1]": true };
 
-/** Providers whose resolved key also feeds the env-driven Jev/rerank backends. */
+/** Providers whose resolved key also feeds the env-driven Jev/rerank/OCR backends. */
 const ENV_BRIDGES: ReadonlyArray<{ readonly providerId: string; readonly envName: string }> = [
 	{ providerId: "openrouter", envName: "OPENROUTER_API_KEY" },
 	{ providerId: "vercel-ai-gateway", envName: "AI_GATEWAY_API_KEY" },
+	{ providerId: "mistral", envName: "MISTRAL_API_KEY" },
+	{ providerId: "nvidia", envName: "NVIDIA_API_KEY" },
+	{ providerId: "zai", envName: "ZAI_API_KEY" },
 ];
+
+/** Dedicated non-LLM API providers surfaced in Settings (e.g. Upstage Document Parse) via encrypted credentials. */
+const CREDENTIAL_ONLY_PROVIDERS: ReadonlyArray<{
+	readonly id: string;
+	readonly name: string;
+	readonly baseUrl: string;
+	readonly apiKeyEnv: string;
+}> = [{ id: "upstage", name: "Upstage", baseUrl: "https://api.upstage.ai", apiKeyEnv: "UPSTAGE_API_KEY" }];
 
 function authKinds(provider: Provider): ProviderAuthKind[] {
 	const kinds: ProviderAuthKind[] = [];
@@ -362,7 +373,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		const raw = await readModelsJson(modelsPath);
 		const customProviders = modelsJsonProviders(raw);
 		const available = new Set(runtime.getAvailableSnapshot().map((model) => `${model.provider}/${model.id}`));
-		return autoragFirst(runtime.getProviders().map((provider): ProviderSummary => {
+		const runtimeProviders = runtime.getProviders().map((provider): ProviderSummary => {
 			const status = runtime.getProviderAuthStatus(provider.id);
 			const rawCustom = customProviders[provider.id];
 			const custom = isJsonObject(rawCustom) ? rawCustom : undefined;
@@ -402,7 +413,32 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 					...(Array.isArray(model.input) ? { supportsImage: model.input.includes("image") } : {}),
 				})),
 			};
-		}));
+		});
+		const seenIds = new Set(runtimeProviders.map((provider) => provider.id));
+		const storedStatuses = await deps.credentials.list(CREDENTIAL_ONLY_PROVIDERS.map((entry) => entry.apiKeyEnv));
+		const statusByEnv = new Map(storedStatuses.map((entry) => [entry.envName, entry]));
+		const extraProviders: ProviderSummary[] = [];
+		for (const spec of CREDENTIAL_ONLY_PROVIDERS) {
+			if (seenIds.has(spec.id)) continue;
+			const cred = statusByEnv.get(spec.apiKeyEnv);
+			const ambient = deps.env[spec.apiKeyEnv];
+			const hasAmbient = typeof ambient === "string" && ambient.length > 0;
+			const authSource: ProviderSummary["authSource"] =
+				cred?.source === "stored" ? "stored" : cred?.source === "env" || hasAmbient ? "environment" : "none";
+			extraProviders.push({
+				id: spec.id,
+				name: spec.name,
+				baseUrl: spec.baseUrl,
+				kind: "runtime",
+				authKinds: ["api_key"],
+				subscription: false,
+				authConfigured: authSource !== "none",
+				authSource,
+				apiKeyEnv: spec.apiKeyEnv,
+				models: [],
+			});
+		}
+		return autoragFirst([...runtimeProviders, ...extraProviders]);
 	}
 
 	async function start(providerId: string, authType: ProviderAuthKind): Promise<ProviderLoginStartResult> {
@@ -460,6 +496,11 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 	async function logout(providerId: string): Promise<void> {
 		for (const [sessionId, session] of sessions) {
 			if (session.providerId === providerId) await cancel(sessionId);
+		}
+		const credentialOnly = CREDENTIAL_ONLY_PROVIDERS.find((entry) => entry.id === providerId);
+		if (credentialOnly !== undefined) {
+			await deps.credentials.remove(credentialOnly.apiKeyEnv);
+			return;
 		}
 		await (await runtimePromise).logout(providerId);
 		releaseEnv(providerId);
@@ -647,6 +688,11 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 				if (summary.baseUrl === null) return { ok: false };
 				const stored = summary.apiKeyEnv === null ? undefined : deps.env[summary.apiKeyEnv];
 				return { ok: (await probe(summary.baseUrl, stored === undefined || stored.length === 0 ? undefined : stored)).ok };
+			}
+			const credentialOnly = CREDENTIAL_ONLY_PROVIDERS.find((entry) => entry.id === id);
+			if (credentialOnly !== undefined) {
+				const key = deps.env[credentialOnly.apiKeyEnv];
+				return { ok: typeof key === "string" && key.trim().length > 0 };
 			}
 			const runtime = await runtimePromise;
 			if ((await runtime.getAuth(id)) === undefined) return { ok: false };

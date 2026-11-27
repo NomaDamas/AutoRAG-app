@@ -27,8 +27,10 @@ const bridge = vi.hoisted(() => {
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 const { AiPage } = await import("../src/renderer/src/components/settings/AiPage");
-const { providerRoleCleanup, roleSelectionFor } = await import("../src/renderer/src/components/settings/roleSupport");
-const { jevBackendFor, jevModelsFor } = await import("../src/shared/ai-roles");
+const { providerRoleCleanup, roleSelectionFor, visualParseOcrOptionsFor } = await import(
+	"../src/renderer/src/components/settings/roleSupport"
+);
+const { jevBackendFor, jevModelsFor, ocrModelsFor } = await import("../src/shared/ai-roles");
 const {
 	visualParseOcrConfigUpdates,
 	visualParseOcrLocalConfigUpdates,
@@ -175,6 +177,28 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 			},
 		]);
 
+		const nemotronEntry = model("nvidia", "nvidia/nemotron-parse", {
+			name: "NVIDIA Nemotron Parse",
+			api: "",
+		});
+		expect(visualParseOcrRemoteConfigUpdates(nemotronEntry, existing)).toEqual([
+			{
+				path: ["visualParse"],
+				value: {
+					enabled: true,
+					threshold: 0.65,
+					ocr: {
+						engine: "api",
+						model: {
+							provider: "nvidia",
+							id: "nvidia/nemotron-parse",
+							name: "NVIDIA Nemotron Parse",
+						},
+					},
+				},
+			},
+		]);
+
 		expect(
 			visualParseVlmOffConfigUpdates({
 				visualParse: {
@@ -265,5 +289,45 @@ describe("visual parse settings integration (unified Jev decision model)", () =>
 		expect(
 			roleSelectionFor("visualParseOcr", { visualParse: { enabled: true, ocr: { engine: "kordoc" } } }, [openrouter]),
 		).toEqual({ kind: "special", value: "kordoc" });
+	});
+
+	it("OCR picker excludes general chat LLMs and exposes only official OCR API models alongside always-available local engines", async () => {
+		const openrouter = provider("openrouter", "OpenRouter", {
+			models: [
+				model("openrouter", "google/gemini-3.5-flash-lite", { supportsImage: true }),
+				model("openrouter", "anthropic/claude-sonnet-5.5", { supportsImage: true }),
+			],
+		});
+		const nvidia = provider("nvidia", "NVIDIA", {
+			models: [model("nvidia", "nvidia/nemotron-3.5-super-vl-120b-a12b", { supportsImage: true })],
+		});
+		const upstage = provider("upstage", "Upstage", { models: [] });
+
+		expect(ocrModelsFor("openrouter")).toEqual([]);
+		expect(ocrModelsFor("nvidia").map((m) => m.id)).toEqual(["nvidia/nemotron-parse"]);
+		expect(ocrModelsFor("upstage").map((m) => m.id)).toEqual(["document-parse", "ocr"]);
+		expect(ocrModelsFor("mistral").map((m) => m.id)).toEqual(["mistral-ocr-latest", "mistral-ocr-2512"]);
+		expect(ocrModelsFor("zai").map((m) => m.id)).toEqual(["glm-ocr"]);
+
+		// OpenRouter has no official OCR API, so only NVIDIA and Upstage appear in remote OCR options.
+		const options = visualParseOcrOptionsFor([openrouter, nvidia, upstage]);
+		expect(options.map((opt) => `${opt.provider.id}:${opt.model.id}`)).toEqual([
+			"nvidia:nvidia/nemotron-parse",
+			"upstage:document-parse",
+			"upstage:ocr",
+		]);
+
+		// When only general LLM providers are connected, opening the OCR picker still shows local engines cleanly (and no general LLMs).
+		await render([openrouter], {});
+		const ocrTrigger = host.querySelector<HTMLButtonElement>('[data-role="visualParseOcr"]');
+		expect(ocrTrigger).not.toBeNull();
+		await act(async () => {
+			ocrTrigger!.click();
+		});
+		expect(document.body.querySelector('[data-provider-trigger="openrouter"]')).toBeNull();
+		expect(document.body.querySelector('[data-special-value="auto"]')).not.toBeNull();
+		expect(document.body.querySelector('[data-special-value="kordoc"]')).not.toBeNull();
+		expect(document.body.querySelector('[data-special-value="tesseract"]')).not.toBeNull();
+		expect(document.body.querySelector('[data-special-value="off"]')).not.toBeNull();
 	});
 });

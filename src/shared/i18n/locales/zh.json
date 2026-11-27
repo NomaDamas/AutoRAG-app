@@ -2488,7 +2488,7 @@
       "visualParseModel": "高级视觉解析 (VLM)",
       "visualParseHint": "保留基础解析镜像，将判定模型识别为图表、示意图或复杂表格的页面交给 VLM 生成补充镜像。",
       "visualParseOcrModel": "OCR 模型",
-      "visualParseOcrHint": "识别扫描件、手写体或基础解析遗漏的文字页面，可选本地 OCR 或远程视觉/OCR 模型。",
+      "visualParseOcrHint": "识别扫描件、手写体或基础解析遗漏的文字页面，仅显示本地 OCR 与已连接服务商的官方 OCR API（Mistral OCR、Nemotron Parse、Upstage Document Parse、GLM-OCR）。",
       "visualParseOcrAuto": "自动（本地 PP-OCRv5 / Tesseract）",
       "visualParseOcrKordoc": "本地 PP-OCRv5 (kordoc)",
       "visualParseOcrTesseract": "本地 Tesseract",

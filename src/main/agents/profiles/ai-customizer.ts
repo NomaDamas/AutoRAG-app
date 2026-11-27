@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { defineTool, type AgentToolResult, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { JEV_SLLM_BACKEND, jevModelsFor, rerankModelsFor } from "../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevModelsFor, ocrModelsFor, rerankModelsFor } from "../../../shared/ai-roles";
 import { maskSecret } from "../../../shared/secret-guard";
 import {
 	catalogModelEntry,
@@ -108,6 +108,7 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 			);
 			const jevChoices = connected.flatMap((provider) => jevModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
 			const rerankChoices = connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
+			const ocrChoices = connected.flatMap((provider) => ocrModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
 			return textResult({
 				ok: true,
 				providers: connected.map((provider) => ({
@@ -123,7 +124,7 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					visualParse: { current: roleSelectionFromConfig("visualParse", snapshot.config, connected), choices: visualModelChoices, specials: ["off"] },
 					visualParseOcr: {
 						current: roleSelectionFromConfig("visualParseOcr", snapshot.config, connected),
-						choices: visualModelChoices,
+						choices: ocrChoices,
 						specials: ["off", "auto", "kordoc", "tesseract"],
 					},
 				},
@@ -257,7 +258,9 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						? connected.flatMap((item) => jevModelsFor(item.id).map((model) => `${item.id}:${model.id}`))
 						: role === "rerank"
 							? connected.flatMap((item) => rerankModelsFor(item.id).map((model) => `${item.id}:${model.id}`))
-							: connected.flatMap((item) => item.models.map((model) => `${item.id}:${model.id}`));
+							: role === "visualParseOcr"
+								? connected.flatMap((item) => ocrModelsFor(item.id).map((model) => `${item.id}:${model.id}`))
+								: connected.flatMap((item) => item.models.map((model) => `${item.id}:${model.id}`));
 				return textResult({
 					ok: false,
 					error: `Provider '${providerId}' is not connected. Connect it from the AI models page, then try again.`,
@@ -269,8 +272,8 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 			let entry: ModelCatalogEntry;
 			let updates: readonly AutoRagConfigUpdate[];
 			let summary: Localized;
-			if (role === "jev" || role === "rerank") {
-				const models = role === "jev" ? jevModelsFor(providerId) : rerankModelsFor(providerId);
+			if (role === "jev" || role === "rerank" || role === "visualParseOcr") {
+				const models = role === "jev" ? jevModelsFor(providerId) : role === "rerank" ? rerankModelsFor(providerId) : ocrModelsFor(providerId);
 				const match = models.find((model) => model.id === modelId);
 				if (match === undefined) {
 					return textResult({
@@ -281,11 +284,18 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					});
 				}
 				entry = staticCatalogEntry(provider, match.id, match.label);
-				updates = role === "jev" ? jevConfigUpdates(entry) : rerankConfigUpdates(entry);
+				updates =
+					role === "jev"
+						? jevConfigUpdates(entry)
+						: role === "rerank"
+							? rerankConfigUpdates(entry)
+							: visualParseOcrRemoteConfigUpdates(entry, snapshot.config);
 				summary =
 					role === "jev"
 						? localized(`Jev 모델을 ${match.label}로 변경`, `Changed the Jev model to ${match.label}`, `Jev モデルを ${match.label} に変更`, `已将 Jev 模型更改为 ${match.label}`)
-						: localized(`리랭커를 ${match.label}로 설정`, `Set the reranker to ${match.label}`, `リランカーを ${match.label} に設定`, `已将重排器设为 ${match.label}`);
+						: role === "rerank"
+							? localized(`리랭커를 ${match.label}로 설정`, `Set the reranker to ${match.label}`, `リランカーを ${match.label} に設定`, `已将重排器设为 ${match.label}`)
+							: localized(`OCR 모델을 ${match.label}로 변경`, `Changed the OCR model to ${match.label}`, `OCR モデルを ${match.label} に変更`, `已将 OCR 模型更改为 ${match.label}`);
 			} else {
 				const match = catalogModelEntry(provider, modelId);
 				if (match === null) {
@@ -302,18 +312,14 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						? modelConfigUpdates(entry)
 						: role === "visualParse"
 							? visualParseVlmConfigUpdates(entry, snapshot.config)
-							: role === "visualParseOcr"
-								? visualParseOcrRemoteConfigUpdates(entry, snapshot.config)
-								: decompositionConfigUpdates(entry);
+							: decompositionConfigUpdates(entry);
 				const name = entry.name.trim().length > 0 ? entry.name.trim() : entry.id;
 				summary =
 					role === "answer"
 						? localized(`답변 모델을 ${name}로 변경`, `Changed the answer model to ${name}`, `回答モデルを ${name} に変更`, `已将回答模型更改为 ${name}`)
 						: role === "visualParse"
 							? localized(`시각 파싱(VLM) 모델을 ${name}로 변경`, `Changed the visual VLM model to ${name}`, `視覚パース (VLM) モデルを ${name} に変更`, `已将视觉解析 (VLM) 模型更改为 ${name}`)
-							: role === "visualParseOcr"
-								? localized(`OCR 모델을 ${name}로 변경`, `Changed the OCR model to ${name}`, `OCR モデルを ${name} に変更`, `已将 OCR 模型更改为 ${name}`)
-								: localized(`질문 분해 모델을 ${name}로 변경`, `Changed the decomposition model to ${name}`, `質問分解モデルを ${name} に変更`, `已将问题分解模型更改为 ${name}`);
+							: localized(`질문 분해 모델을 ${name}로 변경`, `Changed the decomposition model to ${name}`, `質問分解モデルを ${name} に変更`, `已将问题分解模型更改为 ${name}`);
 			}
 			return apply(
 				updates,

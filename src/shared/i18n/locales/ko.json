@@ -2488,7 +2488,7 @@
       "visualParseModel": "고급 시각 파싱 (VLM)",
       "visualParseHint": "기본 파싱을 유지한 채, 판별 모델이 차트·도표·복잡한 표로 분류한 페이지를 VLM으로 별도 미러본에 추가 파싱합니다.",
       "visualParseOcrModel": "고급 OCR 모델",
-      "visualParseOcrHint": "스캔본·손글씨·기본 파서가 놓친 텍스트 페이지를 인식합니다. 로컬 OCR 또는 원격 비전·OCR 모델을 선택할 수 있습니다.",
+      "visualParseOcrHint": "스캔본·손글씨·기본 파서가 놓친 텍스트 페이지를 인식합니다. 로컬 OCR과 연결된 공식 OCR API(Mistral OCR, Nemotron Parse, Upstage Document Parse, GLM-OCR)만 표시됩니다.",
       "visualParseOcrAuto": "자동 (로컬 PP-OCRv5 / Tesseract)",
       "visualParseOcrKordoc": "로컬 PP-OCRv5 (kordoc)",
       "visualParseOcrTesseract": "로컬 Tesseract",

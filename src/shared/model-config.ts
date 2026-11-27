@@ -1,4 +1,4 @@
-import { JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
+import { isOfficialOcrModel, JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
 import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type ModelCatalogEntry } from "./settings-contract";
 
 /**
@@ -138,16 +138,21 @@ export function visualParseOcrLocalConfigUpdates(
 	];
 }
 
-/** Set the Stage 2 OCR model to a remote vision/OCR model, keeping any VLM/gate settings intact. */
+/**
+ * Set the Stage 2 OCR model to a remote official OCR API model (e.g. Mistral OCR,
+ * NVIDIA Nemotron Parse, Upstage Document Parse, Z.AI GLM-OCR) or legacy VLM OCR,
+ * keeping any VLM/gate settings intact.
+ */
 export function visualParseOcrRemoteConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
 	const base = existingVisualParseObject(currentConfig);
+	const engine = isOfficialOcrModel(entry.provider, entry.id) ? "api" : "vlm";
 	return [
 		{
 			path: ["visualParse"],
 			value: {
 				...base,
 				enabled: true,
-				ocr: { engine: "vlm", model: modelRefFromEntry(entry) },
+				ocr: { engine, model: modelRefFromEntry(entry) },
 			} as JsonObject,
 		},
 	];

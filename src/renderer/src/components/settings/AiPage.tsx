@@ -33,6 +33,7 @@ import {
 	roleSelectionFor,
 	visualParseLabel,
 	visualParseOcrLabel,
+	visualParseOcrOptionsFor,
 	visualParseOptionsFor,
 } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
@@ -149,6 +150,7 @@ export function AiPage({
 	const jevOptions = useMemo(() => jevOptionsFor(connected), [connected]);
 	const rerankOptions = useMemo(() => rerankOptionsFor(connected), [connected]);
 	const visualParseOptions = useMemo(() => visualParseOptionsFor(connected), [connected]);
+	const visualParseOcrOptions = useMemo(() => visualParseOcrOptionsFor(connected), [connected]);
 	const visualParseActive = isVisualParseEnabled(snapshot.config);
 
 	async function runVisualParseStage(): Promise<void> {
@@ -364,9 +366,11 @@ export function AiPage({
 									? jevOptions
 									: menu.arg === "rerank"
 										? rerankOptions
-										: menu.arg === "visualParse" || menu.arg === "visualParseOcr"
+										: menu.arg === "visualParse"
 											? visualParseOptions
-											: catalogModels
+											: menu.arg === "visualParseOcr"
+												? visualParseOcrOptions
+												: catalogModels
 							}
 							specials={specialsFor(menu.arg ?? "answer")}
 							selected={roleSelectionFor(menu.arg ?? "answer", snapshot.config, connected)}
