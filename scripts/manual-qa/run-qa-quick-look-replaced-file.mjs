@@ -15,7 +15,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? "/tmp/autorag-quicklook-replaced-file";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -126,12 +126,8 @@ const describe = (view) => (view === null ? "nothing decoded" : `${view.size.joi
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1", HOME: home } });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	let preview;
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((item) => item.webContents.getURL().includes("quick-look.html") && item.isVisible()));
 
 	const row = (name) => main.getByRole("row", { name: new RegExp(`${name}\\.png`) }).first();
@@ -139,6 +135,7 @@ try {
 	const open = async (name) => {
 		await row(name).click();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		const view = await poll(() => shown(app, preview), (value) => matches(value, RED), 8000);
 		if (!matches(view, RED)) throw new Error(`${name}: the first open showed ${describe(view)}`);
 	};

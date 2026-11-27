@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
@@ -19,8 +19,9 @@ import { searchGroups, type SearchGroupKey } from "../state/whole-search";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
 import { AutomationsTab } from "./AutomationsTab";
 import { ColumnBrowser } from "./ColumnBrowser";
-import { DocumentEditorTab } from "./DocumentEditorTab";
 import { ColumnHeader } from "./ColumnHeader";
+
+const DocumentEditorTab = lazy(() => import("./DocumentEditorTab").then((m) => ({ default: m.DocumentEditorTab })));
 import { FileList } from "./FileList";
 import type { BackgroundDropHandlers, RowCallbacks } from "./FileRow";
 import { IconGrid } from "./IconGrid";
@@ -384,12 +385,14 @@ export const FinderPane = memo(function FinderPane({
 					// The tab's chat is mounted by the workspace over this body, so it survives moving panes.
 					<div className="min-h-0 flex-1 bg-subtle-alt" />
 				) : editorFilePathOf(finder.path) !== null ? (
-					<DocumentEditorTab
-						key={finder.path}
-						filePath={editorFilePathOf(finder.path)!}
-						onOpenExternal={(targetPath) => void shell.source.open(targetPath)}
-						onOpenEditorFile={finder.openDocumentEditor}
-					/>
+					<Suspense fallback={<div className="min-h-0 flex-1 bg-window" />}>
+						<DocumentEditorTab
+							key={finder.path}
+							filePath={editorFilePathOf(finder.path)!}
+							onOpenExternal={(targetPath) => void shell.source.open(targetPath)}
+							onOpenEditorFile={finder.openDocumentEditor}
+						/>
+					</Suspense>
 				) : (
 					<>
 						{/* Figma 428:1845: the group tabs sit right on the results; no scope row, no ask button. */}

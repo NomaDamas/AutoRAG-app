@@ -313,6 +313,44 @@ describe("createLibrarianClient", () => {
 		expect(h.terminated()).toBe(0);
 	});
 
+	it("terminates an idle thread after idleTimeoutMs and transparently respawns on the next call", async () => {
+		let spawned = 0;
+		let terminated = 0;
+		const client = createLibrarianClient({
+			idleTimeoutMs: 40,
+			spawn: (): LibrarianThread => {
+				spawned += 1;
+				const { port1, port2 } = new MessageChannel();
+				port2.on("message", (message: { id?: number }) => {
+					if (message.id !== undefined) port2.postMessage({ id: message.id, ok: true, value: { dir: "/d", families: [] } });
+				});
+				closers.push(() => {
+					port1.close();
+					port2.close();
+				});
+				return {
+					port: adaptNodePort(port1),
+					onExit: () => {},
+					terminate: async () => {
+						terminated += 1;
+						port1.close();
+					},
+				};
+			},
+			locations: async () => [],
+			onIndexRefreshed: () => {},
+			onReport: () => {},
+		});
+
+		await client.scanDuplicates("/d");
+		expect(spawned).toBe(1);
+		await expect.poll(() => terminated, { timeout: 1000 }).toBe(1);
+		// Next call transparently respawns a fresh thread.
+		await client.scanDuplicates("/d");
+		expect(spawned).toBe(2);
+		await client.dispose();
+	});
+
 	it("does not start a thread just to shut down", async () => {
 		const h = harness();
 

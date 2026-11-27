@@ -46,6 +46,10 @@ const ICON_REQUEST_MEMORY = 20_000;
 const ENRICH_WAVE_SIZE = 24;
 /** Max rows per viewport thumbnail IPC call so scrolled rows paint progressively every few icons instead of waiting for the whole overscan window. */
 const ICON_FLUSH_CHUNK_SIZE = 8;
+/** Max rows per viewport Finder-metadata IPC call (on macOS each file spawns xattr/mdls helpers). */
+const METADATA_FLUSH_CHUNK_SIZE = 16;
+/** File versions remembered as already asked for Finder metadata. */
+const METADATA_REQUEST_MEMORY = 20_000;
 
 export interface DirectorySource {
 	list(dir: string): Promise<readonly FinderEntry[]>;
@@ -93,6 +97,8 @@ export interface DirectoryStore {
 	enrich(entries: readonly FinderEntry[]): void;
 	/** A mounted row still has no icon: coalesce it into the next viewport batch. */
 	requestIcon(entry: FinderEntry): void;
+	/** A mounted or focused row still has no Finder metadata: coalesce it into the next viewport batch. */
+	requestMetadata(entry: FinderEntry): void;
 	/**
 	 * A trash or move just took `removed` out of their folders: drop those rows
 	 * (and anything nested under a removed folder) from every cached folder at
@@ -133,6 +139,9 @@ export function createDirectoryStore(options: {
 	const iconQueue = new Map<string, FinderEntry>();
 	const iconRequested = new Set<string>();
 	let iconFlushPending = false;
+	const metadataQueue = new Map<string, FinderEntry>();
+	const metadataRequested = new Set<string>();
+	let metadataFlushPending = false;
 	let sequence = 0;
 	let generation = 0;
 	let version = 0;
@@ -226,8 +235,13 @@ export function createDirectoryStore(options: {
 			}
 		}
 		if (needMetadata.length > 0) {
+			// Only eagerly fetch Finder metadata for the first screenful: on macOS each file spawns xattr/mdls
+			// helpers, so eagerly walking thousands of off-screen rows saturates low-core CPUs even after leaving
+			// the folder. Off-screen rows request metadata on demand when mounted (`requestMetadata`) or selected.
+			const firstWave = needMetadata.slice(0, ENRICH_WAVE_SIZE);
+			for (const entry of firstWave) metadataRequested.add(thumbnailKey(entry));
 			void runWaves(
-				needMetadata,
+				firstWave,
 				isActive,
 				(wave) => source.finderMetadata(wave),
 				(enriched, wave) => sidecar.applyMetadata(enriched, wave),
@@ -239,6 +253,15 @@ export function createDirectoryStore(options: {
 	const enrich = (entries: readonly FinderEntry[]): void => {
 		enrichFor(entries);
 	};
+
+	/**
+	 * A folder stays eligible for background enrichment waves only while it is still the active record
+	 * AND (if a view ever retained it) at least one view is still showing it. Leaving a folder moves its
+	 * record into the LRU cache (`refs === 0`), so checking `refs > 0` stops off-screen waves immediately
+	 * instead of burning CPU/helpers for folders the user already navigated away from.
+	 */
+	const isWaveActive = (dir: string, record: DirectoryRecord, wasRetained: boolean): boolean =>
+		records.get(dir) === record && (!wasRetained || record.refs > 0);
 
 	const create = (dir: string): DirectoryRecord => {
 		generation += 1;
@@ -253,7 +276,8 @@ export function createDirectoryStore(options: {
 				read: (path, paths) => source.readEntries(path, paths),
 				apply: (path, patch) => {
 					publish(path, record, { ...record.snapshot, entries: applyEntryPatch(record.snapshot.entries, patch) });
-					enrichFor(patch.entries, () => records.get(dir) === record);
+					const wasRetained = record.refs > 0;
+					enrichFor(patch.entries, () => isWaveActive(dir, record, wasRetained));
 				},
 				isCurrent: () => records.get(dir) === record,
 				onError: (error) => {
@@ -277,6 +301,7 @@ export function createDirectoryStore(options: {
 
 	const load = async (dir: string, mode: ListingLoadMode): Promise<LoadOutcome> => {
 		const record = records.get(dir) ?? createReleased(dir);
+		const wasRetained = record.refs > 0;
 		sequence += 1;
 		const request = sequence;
 		record.pendingFull += 1;
@@ -288,7 +313,7 @@ export function createDirectoryStore(options: {
 			record.applied = request;
 			const entries = reconcileListing(record.snapshot.entries, result.entries);
 			publish(dir, record, { entries, loaded: true, loading: false, error: null });
-			enrichFor(entries, () => records.get(dir) === record);
+			enrichFor(entries, () => isWaveActive(dir, record, wasRetained || record.refs > 0));
 		} else if (current && result.kind === "error" && mode === "navigate") {
 			record.applied = request;
 			publish(dir, record, { entries: [], loaded: true, loading: false, error: result.error });
@@ -298,6 +323,27 @@ export function createDirectoryStore(options: {
 			return { kind: "error", error: result.error };
 		}
 		return current && result.kind === "loaded" ? { kind: "loaded" } : { kind: "stale" };
+	};
+
+	const flushMetadata = (): void => {
+		metadataFlushPending = false;
+		const batch = [...metadataQueue.values()].filter((entry) => hasFileVersion(entry) && !sidecar.hasMetadata(entry));
+		metadataQueue.clear();
+		if (batch.length === 0) return;
+		for (const entry of batch) {
+			metadataRequested.add(thumbnailKey(entry));
+			if (metadataRequested.size > METADATA_REQUEST_MEMORY) {
+				const oldest = metadataRequested.values().next();
+				if (oldest.done !== true) metadataRequested.delete(oldest.value);
+			}
+		}
+		for (let offset = 0; offset < batch.length; offset += METADATA_FLUSH_CHUNK_SIZE) {
+			const chunk = batch.slice(offset, offset + METADATA_FLUSH_CHUNK_SIZE);
+			source
+				.finderMetadata(chunk)
+				.then((enriched) => sidecar.applyMetadata(enriched, chunk))
+				.catch((error: unknown) => console.error("viewport metadata enrichment failed", error));
+		}
 	};
 
 	const flushIcons = (): void => {
@@ -387,6 +433,15 @@ export function createDirectoryStore(options: {
 			if (iconFlushPending) return;
 			iconFlushPending = true;
 			setTimeout(flushIcons, iconFlushMs);
+		},
+		requestMetadata(entry) {
+			if (!hasFileVersion(entry) || sidecar.hasMetadata(entry)) return;
+			const key = thumbnailKey(entry);
+			if (metadataRequested.has(key) || metadataQueue.has(key)) return;
+			metadataQueue.set(key, entry);
+			if (metadataFlushPending) return;
+			metadataFlushPending = true;
+			setTimeout(flushMetadata, iconFlushMs);
 		},
 		onGone(listener) {
 			goneListeners.add(listener);

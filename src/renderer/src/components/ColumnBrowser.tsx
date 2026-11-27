@@ -309,7 +309,7 @@ function ColumnRow({
 	const { entry } = useEntrySidecar(useDirectoryData().sidecar, row.entry);
 	const { colors: tagColors } = useTagCatalog();
 	useEffect(() => {
-		if (entry.kind === "file" && entry.iconUrl === undefined) {
+		if (entry.kind === "file") {
 			callbacks.onVisible(entry);
 		}
 	}, [callbacks.onVisible, entry]);

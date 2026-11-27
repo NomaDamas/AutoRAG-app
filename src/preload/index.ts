@@ -11,6 +11,8 @@ import { createDefaultFileManagerBridge } from "./default-file-manager-bridge";
 import { contextBridge, ipcRenderer, webUtils, type IpcRenderer, type IpcRendererEvent } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
+import { isAppLanguage, LANGUAGE_FLAG } from "../shared/language-contract";
+import type { AppSettings } from "../shared/settings-contract";
 import { createPreviewBridge } from "../preview/node/bridge";
 import { REMOTE_CHANNELS, type RemoteAccessBridge, type RemoteAccessStatus } from "../shared/remote-contract";
 import { QUICK_SEARCH_CHANNELS, type QuickSearchSettingsBridge } from "../shared/quick-search-contract";
@@ -46,10 +48,15 @@ function readDevLabelArg(): DevLabel | null {
 	}
 }
 
+function readLanguageArg(): AppSettings["language"] | undefined {
+	const raw = process.argv.find((value) => value.startsWith(LANGUAGE_FLAG))?.slice(LANGUAGE_FLAG.length);
+	return isAppLanguage(raw) ? raw : undefined;
+}
+
 installAppearancePreload(ipcRenderer);
 const fsWorker = connectFsWorker(ipcRenderer);
 contextBridge.exposeInMainWorld("autorag", {
-	...createBridge(readDevLabelArg(), process.platform),
+	...createBridge(readDevLabelArg(), process.platform, readLanguageArg()),
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
 	analytics: createAnalyticsBridge(ipcRenderer),

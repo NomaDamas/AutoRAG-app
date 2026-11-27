@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { pdfDocumentSource } from "../../../preview/ui/pdf-config";
-import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
 import type { FinderEntry } from "../data/entries";
 import { hasFileVersion } from "../data/entries";
 import { hostPlatform } from "./shortcuts";
@@ -62,6 +61,7 @@ async function pdfFirstPage(path: string, width: number): Promise<string | null>
 
 /** rhwp draws SVG; a tile is a few KB of PNG instead of a 100KB+ SVG data URL per row. */
 async function hwpFirstPage(path: string, width: number): Promise<string | null> {
+	const { hwpFirstPageUrl } = await import("../../../preview/ui/rhwp");
 	const svg = await hwpFirstPageUrl(path);
 	if (svg === null) return null;
 	const image = new Image();

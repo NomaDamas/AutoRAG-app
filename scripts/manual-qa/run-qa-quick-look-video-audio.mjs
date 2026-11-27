@@ -25,7 +25,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 
 if (spawnSync("ffmpeg", ["-version"]).status !== 0) {
 	console.log("SKIP  ffmpeg is not installed");
@@ -66,15 +66,12 @@ async function session(root, items) {
 	const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" } });
 	try {
 		const main = await finderWindow(app, OPEN_MS);
-		const preview = await poll(
-			() => app.windows().find((candidate) => candidate.url().includes("quick-look.html")),
-			(candidate) => candidate !== undefined,
-			OPEN_MS,
-		);
-		if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
-
-		// Observe only: remember every `new Audio()` the panel makes so its decoder counters can be read.
-		await preview.evaluate(() => {
+		let preview;
+		// Install the `window.Audio` observer via `addInitScript` on the context so
+		// it runs before any page script when the Quick Look window is lazily
+		// created on the first Space press.
+		await main.context().addInitScript(() => {
+			if (!location.href.includes("quick-look.html")) return;
 			const Original = window.Audio;
 			window.__sidecars = [];
 			window.Audio = function Audio(...args) {
@@ -84,6 +81,7 @@ async function session(root, items) {
 			};
 			window.Audio.prototype = Original.prototype;
 		});
+		const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: OPEN_MS }));
 
 		const snapshot = () =>
 			preview
@@ -100,9 +98,11 @@ async function session(root, items) {
 				.catch(() => null);
 
 		for (const { name, expectation } of items) {
-			await preview.evaluate(() => {
-				window.__sidecars.length = 0;
-			});
+			if (preview !== undefined) {
+				await preview.evaluate(() => {
+					window.__sidecars.length = 0;
+				});
+			}
 			const row = main.getByRole("row", { name: new RegExp(escapeRegExp(name)) }).first();
 			await row.waitFor({ timeout: 60_000 }).catch(() => undefined);
 			if ((await row.count()) === 0) {
@@ -111,6 +111,7 @@ async function session(root, items) {
 			}
 			await row.click();
 			await main.keyboard.press("Space");
+			await ensurePreview();
 
 			const playing = await poll(snapshot, (state) => state !== null && !state.video.paused && state.video.time > 1, DECODE_MS);
 			await preview.screenshot({ path: join(EVIDENCE, `${name}.png`) });

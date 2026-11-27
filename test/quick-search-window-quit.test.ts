@@ -193,4 +193,28 @@ describe("quick-search launcher dismiss", () => {
 		expect(window.isVisible()).toBe(false);
 		expect(electron.app.hides).toBe(0);
 	});
+
+	it("defers creating the BrowserWindow until first toggle when lazy: true", () => {
+		electron.BrowserWindow.all.length = 0;
+		const controller = createQuickSearchWindow({
+			preload: "preload.js",
+			appearance: "light",
+			language: "en",
+			loadPage: () => undefined,
+			revealInApp: async () => undefined,
+			ask: () => undefined,
+			attach: async () => undefined,
+			status: () => ({}) as never,
+			setRecording: () => undefined,
+			attachPreview: () => null,
+			lazy: true,
+		});
+		expect(electron.BrowserWindow.all).toHaveLength(0);
+		controller.toggle();
+		expect(electron.BrowserWindow.all).toHaveLength(1);
+		expect(electron.BrowserWindow.all[0]?.isVisible()).toBe(true);
+		controller.toggle();
+		expect(electron.BrowserWindow.all[0]?.isVisible()).toBe(false);
+		controller.destroy();
+	});
 });

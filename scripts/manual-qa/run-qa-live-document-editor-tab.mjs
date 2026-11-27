@@ -206,9 +206,14 @@ try {
 	console.log(`live model: ${MODEL_ID}`);
 
 	const finderPreview = createFinderPreview(app, main);
-	const preview = await poll(() => finderPreview.page().catch(() => undefined), (page) => page !== undefined, 30_000);
-	if (preview === undefined) throw new Error("Finder Quick Look window did not pre-warm");
-	preview.setDefaultTimeout(60_000);
+	let preview;
+	const ensurePreview = async () => {
+		if (preview !== undefined) return preview;
+		preview = await poll(() => finderPreview.page().catch(() => undefined), (page) => page !== undefined, 30_000);
+		if (preview === undefined) throw new Error("Finder Quick Look window did not appear");
+		preview.setDefaultTimeout(60_000);
+		return preview;
+	};
 	const previewVisible = async () => (await finderPreview.state())?.visible ?? false;
 	const shotMain = async (name) => {
 		await sleep(350);
@@ -231,6 +236,7 @@ try {
 	// 1. Quick Look pen button -> closes Quick Look and opens Document Editor tab in Finder.
 	await rowFor("plan.md").click();
 	await main.keyboard.press("Space");
+	await ensurePreview();
 	if ((await poll(previewVisible, Boolean, 15_000)) !== true) {
 		await main.keyboard.press("Space");
 		await poll(previewVisible, Boolean, 10_000);

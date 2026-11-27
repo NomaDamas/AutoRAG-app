@@ -998,9 +998,17 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			creep.stop();
 		}
 		abandonHunt();
-		// The tour and the app open on a question that was proven against this person's own files. Without one the run stops here, on
-		// the retry screen (the index is kept; a retry only looks for the question again) instead of opening on an empty tour.
-		if (demo === null && deps.requireQuestion !== false) throw new Error(t("main.onboarding.noQuestion"));
+		if (demo === null && deps.requireQuestion !== false) {
+			// Indexing itself finished cleanly, but too few readable files (or no qualifying candidate)
+			// prevented synthesizing a personalized question — e.g. a brand-new or lightly populated PC.
+			// Fall back to a localized default example question instead of stranding the user on "Setup paused".
+			demo = {
+				question: t("main.onboarding.fallbackQuestion", { lng: deps.language() }),
+				sourcePath: "",
+				latencyMs: 0,
+				fallback: true,
+			};
+		}
 		setProgress(PREPARING_END);
 		emitStatus();
 	}

@@ -1155,7 +1155,8 @@
     "onboarding": {
       "indexingFailed": "Indexing failed.",
       "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}",
-      "noQuestion": "Couldn't finish getting ready. Trying again skips the files already read and carries on."
+      "noQuestion": "Couldn't finish getting ready. Trying again skips the files already read and carries on.",
+      "fallbackQuestion": "Summarize the files I saved recently"
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",
@@ -3464,7 +3465,9 @@
       "progress": "{{index}} / {{count}}",
       "ask": {
         "title": "Here is how to ask",
-        "body": "Let's try it on the files we just read. Click send, or change the text and ask your own."
+        "body": "Let's try it on the files we just read. Click send, or change the text and ask your own.",
+        "fallbackTitle": "Try a default question",
+        "fallbackBody": "There weren't enough files yet to craft a custom question. Try sending this example, or edit it to ask your own."
       },
       "cite": {
         "title": "Got an answer — click the citation number",

@@ -182,7 +182,9 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	// Content and datasource searches get a second lazy thread so synchronous AutoRAGLite / SQLite sidecar work can
 	// never stall file-name search, index badges, or dupey scans.
 	const librarian: LibrarianClient = createLibrarianClient(librarianDeps);
-	const searchLibrarian: LibrarianClient = createLibrarianClient(librarianDeps);
+	// Content/datasource search runs in its own thread so synchronous queries never stall Finder badges;
+	// reap it after 60 s of inactivity so low-RAM machines do not keep two ~150 MB librarian heaps forever.
+	const searchLibrarian: LibrarianClient = createLibrarianClient({ ...librarianDeps, idleTimeoutMs: 60_000 });
 	const places =
 		deps.places ??
 		createPlaces({

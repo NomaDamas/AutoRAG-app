@@ -16,7 +16,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { strToU8, unzipSync, zipSync } from "fflate";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, waitForQuickLookPage } from "./launch-finder.mjs";
 import { convertImage } from "./platform.mjs";
 
 const EVIDENCE = process.argv[2] ?? "/tmp/autorag-quicklook-pptx";
@@ -214,12 +214,8 @@ async function regionVariance(page, clip) {
 
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
+	let preview;
+	const ensurePreview = async () => (preview ??= await waitForQuickLookPage(app, { timeoutMs: 30_000 }));
 	const bounds = () =>
 		app.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
@@ -231,6 +227,7 @@ try {
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await main.keyboard.press("Space");
+		await ensurePreview();
 		await poll(() => preview.evaluate(ready, arg).catch(() => false), Boolean, 15_000);
 		await poll(async () => (await bounds())?.visible === true, Boolean);
 		await new Promise((resolve) => setTimeout(resolve, 600));

@@ -222,8 +222,8 @@ async function pass(appearance) {
 				{ width: workArea.width, height: workArea.height },
 				"clamp",
 			);
-		// The app pre-warms two Quick Look panels (the Finder's and the quick-search
-		// launcher's); the shared helper maps the Finder's, by owner/workspace, and
+		// Quick Look panels are created lazily on first preview; `createFinderPreview`
+		// resolves the Finder's panel by owner/workspace (whether 1 or 2 exist) and
 		// reads its window through `browserWindow(page)` — never the first one found.
 		const finderPreview = createFinderPreview(app, main);
 		await main.emulateMedia({ colorScheme: appearance });
@@ -241,7 +241,6 @@ async function pass(appearance) {
 			}, appearance);
 			return preview;
 		}
-		await previewPage();
 		const windowState = () => finderPreview.state();
 		const settled = () => {
 			const page = preview;
