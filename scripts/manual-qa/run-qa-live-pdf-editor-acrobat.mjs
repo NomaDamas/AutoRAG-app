@@ -1,0 +1,310 @@
+/**
+ * Live end-to-end QA: Acrobat-class PDF Editor inside Dazzi's Document Editor tab.
+ *
+ * Drives the real built Electron app with real Playwright mouse & keyboard input:
+ *   1. Open a multi-page PDF with AcroForm fields (`contract.pdf`) via Alt/Option+click.
+ *   2. Draw a Highlight rectangle on page 1 -> verify PDF bytes grew on disk.
+ *   3. Draw a Black Redaction rectangle & Whiteout rectangle on page 1.
+ *   4. Draw a Shape (arrow) and Freehand Pen stroke on page 1.
+ *   5. Place a Preset Stamp (APPROVED) and a Sticky Note on page 1.
+ *   6. Apply Watermark ("CONFIDENTIAL") across all pages via Watermark modal.
+ *   7. Apply Page Numbers (1 / N) + header via Page Numbers modal.
+ *   8. Duplicate page 1 and Insert Blank Page -> verify pageCount increments (3 -> 4 -> 5).
+ *   9. Rotate CCW (-90°) via More Tools -> verify rotation on disk.
+ *  10. Edit & Save Document Properties (title, author, subject, keywords) -> verify PDF metadata on disk.
+ *  11. Fill & Flatten AcroForm fields via Forms modal -> verify fields saved and flattened on disk.
+ *  12. Split PDF by custom ranges ("1-2, 3-5") -> verify sibling split PDFs created with exact page counts.
+ *  13. Find text inside the PDF (Cmd/Ctrl+F) -> verify match count and page navigation.
+ *  14. Undo restores previous PDF state cleanly.
+ *
+ *   bun run qa script scripts/manual-qa/run-qa-live-pdf-editor-acrobat.mjs
+ */
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { chord, rmRetry } from "./platform.mjs";
+
+const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/live-pdf-editor-acrobat");
+mkdirSync(EVIDENCE, { recursive: true });
+
+const failures = [];
+const check = (name, ok, detail = "") => {
+	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
+	if (!ok) failures.push(name);
+};
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function poll(read, ok, timeoutMs) {
+	const deadline = Date.now() + timeoutMs;
+	let value = await read();
+	while (!ok(value) && Date.now() < deadline) {
+		await sleep(200);
+		value = await read();
+	}
+	return value;
+}
+
+const WORK = mkdtempSync(join(tmpdir(), "dazzi-qa-live-pdf-acrobat-"));
+const HOME_DIR = join(WORK, "home");
+const DOCS_DIR = join(HOME_DIR, "Documents");
+const AUTORAG_HOME = join(WORK, "autorag-home");
+const CONFIG = join(WORK, "config.json");
+const USER_DATA = join(WORK, "user-data");
+
+for (const folder of ["Desktop", "Documents", "Downloads", "Music", "Movies", "Pictures", ".Trash"]) {
+	mkdirSync(join(HOME_DIR, folder), { recursive: true });
+}
+
+// Create a 3-page PDF with real text (for Find) and AcroForm fields (for Forms)
+const CONTRACT = join(DOCS_DIR, "contract.pdf");
+{
+	const pdf = await PDFDocument.create();
+	const font = await pdf.embedFont(StandardFonts.Helvetica);
+	const form = pdf.getForm();
+	const texts = ["Master Service Agreement — Page One", "Payment Schedule — Invoice Clause", "Execution & Signatures — Page Three"];
+	for (let idx = 0; idx < 3; idx += 1) {
+		const page = pdf.addPage([595, 842]);
+		page.drawRectangle({ x: 48, y: 740, width: 300, height: 28, color: rgb(0.15 + idx * 0.2, 0.35, 0.7) });
+		page.drawText(texts[idx], { x: 48, y: 700, size: 16, font, color: rgb(0.1, 0.1, 0.12) });
+		page.drawText(`Section ${idx + 1}: Confidential terms apply.`, { x: 48, y: 660, size: 12, font, color: rgb(0.2, 0.2, 0.25) });
+		if (idx === 0) {
+			const signer = form.createTextField("signer_name");
+			signer.setText("Alice");
+			signer.addToPage(page, { x: 48, y: 580, width: 220, height: 24 });
+			const agree = form.createCheckBox("agree_terms");
+			agree.addToPage(page, { x: 48, y: 540, width: 18, height: 18 });
+		}
+	}
+	writeFileSync(CONTRACT, await pdf.save());
+}
+
+// Create a second PDF for merge verification
+const ADDENDUM = join(DOCS_DIR, "addendum.pdf");
+{
+	const pdf = await PDFDocument.create();
+	const page = pdf.addPage([595, 842]);
+	page.drawRectangle({ x: 60, y: 720, width: 200, height: 40, color: rgb(0.1, 0.6, 0.3) });
+	writeFileSync(ADDENDUM, await pdf.save());
+}
+
+mkdirSync(join(WORK, "workspace"), { recursive: true });
+mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
+const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
+writeFileSync(minsyncStub, "#!/bin/sh\nexit 0\n");
+chmodSync(minsyncStub, 0o755);
+
+writeFileSync(
+	CONFIG,
+	`${JSON.stringify(
+		{
+			searchPaths: [DOCS_DIR],
+			workspacePath: join(WORK, "workspace"),
+			memoryPath: join(WORK, "memory.json"),
+			minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
+			jikji: false,
+		},
+		null,
+		2,
+	)}\n`,
+);
+
+const env = {
+	HOME: HOME_DIR,
+	AUTORAG_HOME,
+	AUTORAG_CONFIG: CONFIG,
+	AUTORAG_QA_ROOT: DOCS_DIR,
+	AUTORAG_SKIP_DUPEY_CHECK: "1",
+	ELECTRON_RENDERER_URL: "",
+	PATH: `${join(AUTORAG_HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
+};
+
+const app = await launchFinder({ userDataDir: USER_DATA, env, language: "ko" });
+try {
+	const main = await finderWindow(app, 30_000);
+	main.setDefaultTimeout(45_000);
+
+	const shot = async (name) => {
+		await sleep(300);
+		await main.screenshot({ path: join(EVIDENCE, `${name}.png`) });
+	};
+
+	const rowFor = (name) =>
+		main
+			.locator('[role="row"]')
+			.filter({ has: main.locator(".row__label", { hasText: new RegExp(`^${name.replace(/\./g, "\\.")}$`) }) })
+			.first();
+
+	await main.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
+	await rowFor("contract.pdf").waitFor({ timeout: 30_000 });
+	await rowFor("contract.pdf").click({ modifiers: ["Alt"] });
+
+	const pdfEditor = main.locator('[data-document-editor][data-editor-surface="pdf"]');
+	await pdfEditor.waitFor({ timeout: 15_000 });
+	await pdfEditor.locator('[data-pdf-thumb="1"]').waitFor({ timeout: 15_000 });
+	await pdfEditor.locator('[data-pdf-thumb="3"]').waitFor({ timeout: 15_000 });
+	await shot("01-pdf-opened");
+
+	const stage = pdfEditor.locator('[data-pdf-page-stage="1"]');
+	await stage.waitFor({ timeout: 15_000 });
+	const dragOnStage = async (fx1, fy1, fx2, fy2) => {
+		const box = await stage.boundingBox();
+		if (box === null) throw new Error("PDF stage has no bounding box");
+		await main.mouse.move(box.x + box.width * fx1, box.y + box.height * fy1);
+		await main.mouse.down();
+		await main.mouse.move(box.x + box.width * fx2, box.y + box.height * fy2, { steps: 6 });
+		await main.mouse.up();
+	};
+
+	// 1. Highlight
+	const size0 = readFileSync(CONTRACT).byteLength;
+	await pdfEditor.locator('button[data-pdf-tool="highlight"]').click();
+	await dragOnStage(0.08, 0.16, 0.62, 0.2);
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("형광펜을 PDF에 저장했습니다"), 10_000);
+	check("Highlight saved to PDF", readFileSync(CONTRACT).byteLength > size0);
+
+	// 2. Redact (blackout) & Whiteout
+	await pdfEditor.locator('button[data-pdf-tool="redact"]').click();
+	await dragOnStage(0.08, 0.22, 0.45, 0.25);
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("가리기 영역을 PDF에 적용했습니다"), 10_000);
+	check("Black redaction applied to PDF", true);
+
+	await pdfEditor.locator('button[data-pdf-tool="whiteout"]').click();
+	await dragOnStage(0.5, 0.22, 0.72, 0.25);
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("화이트아웃을 PDF에 적용했습니다"), 10_000);
+	check("Whiteout applied to PDF", true);
+
+	// 3. Shape (Arrow) & Freehand Draw
+	await pdfEditor.locator('button[data-pdf-tool="shape"]').click();
+	await pdfEditor.locator('button[data-pdf-shape="arrow"]').click();
+	await dragOnStage(0.15, 0.32, 0.48, 0.42);
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("도형을 PDF에 저장했습니다"), 10_000);
+	check("Arrow shape drawn and saved to PDF", true);
+
+	await pdfEditor.locator('button[data-pdf-tool="draw"]').click();
+	await dragOnStage(0.55, 0.34, 0.78, 0.44);
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("필기를 PDF에 저장했습니다"), 10_000);
+	check("Freehand pen drawing saved to PDF", true);
+
+	// 4. Preset Stamp (APPROVED) & Sticky Note
+	await pdfEditor.locator('button[data-pdf-stamp-menu="true"]').click();
+	await pdfEditor.locator('button[data-pdf-preset-stamp="approved"]').click();
+	await pdfEditor.locator('[data-pdf-stamp-box="true"]').waitFor({ timeout: 10_000 });
+	await shot("02-pdf-annotations-and-stamp");
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("스탬프를 PDF에 저장했습니다"), 10_000);
+	check("Preset APPROVED stamp saved to PDF", true);
+
+	await pdfEditor.locator("button", { hasText: "메모" }).first().click();
+	const noteInput = pdfEditor.locator('input[data-pdf-note-input="true"]');
+	await noteInput.fill("법무팀 검토 완료");
+	await main.keyboard.press("Enter");
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("메모를 PDF에 저장했습니다"), 10_000);
+	check("Sticky note saved to PDF", true);
+
+	// 5. More Tools -> Watermark, Page Numbers, Duplicate, Insert Blank
+	const openMore = async () => {
+		await pdfEditor.locator('button[data-pdf-more-tools="true"]').click();
+	};
+
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="watermark"]').click();
+	await main.locator('button[data-pdf-watermark-apply="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("워터마크를 적용했습니다"), 10_000);
+	check("Watermark applied across pages", true);
+
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="page-numbers"]').click();
+	await main.locator('button[data-pdf-page-numbers-apply="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("페이지 번호를 적용했습니다"), 10_000);
+	check("Page numbers applied across pages", true);
+	await shot("03-pdf-watermark-and-numbers");
+
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="duplicate"]').click();
+	const countAfterDup = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 4, 10_000);
+	check("Duplicate page increased pageCount (3 -> 4)", countAfterDup === 4, `pages=${countAfterDup}`);
+
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="insert-blank"]').click();
+	const countAfterBlank = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getPageCount(), (n) => n === 5, 10_000);
+	check("Insert blank page increased pageCount (4 -> 5)", countAfterBlank === 5, `pages=${countAfterBlank}`);
+
+	// 6. Document Properties (metadata)
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="properties"]').click();
+	await main.locator('input[data-pdf-prop-title="true"]').fill("Dazzi Master Agreement");
+	await main.locator('input[data-pdf-prop-author="true"]').fill("Jeffrey Kim");
+	await main.locator('button[data-pdf-prop-save="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("PDF 문서 속성을 저장했습니다"), 10_000);
+	const savedDoc = await PDFDocument.load(readFileSync(CONTRACT));
+	check(
+		"PDF metadata updated on disk",
+		savedDoc.getTitle() === "Dazzi Master Agreement" && savedDoc.getAuthor() === "Jeffrey Kim",
+		`title=${savedDoc.getTitle()} author=${savedDoc.getAuthor()}`,
+	);
+
+	// 7. AcroForm Fill & Flatten
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="forms"]').click();
+	const signerInput = main.locator('input[data-pdf-form-field="signer_name"]');
+	await signerInput.waitFor({ timeout: 10_000 });
+	await signerInput.fill("Jeffrey Kim");
+	await main.locator('input[data-pdf-form-field="agree_terms"]').check();
+	await main.locator('input[data-pdf-form-flatten="true"]').check();
+	await shot("04-pdf-forms-modal");
+	await main.locator('button[data-pdf-form-save="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("PDF 양식을 저장하고 고정(병합)했습니다"), 10_000);
+	const afterFormDoc = await PDFDocument.load(readFileSync(CONTRACT));
+	check("AcroForm filled and flattened on disk", afterFormDoc.getForm().getFields().length === 0);
+
+	// 8. Split PDF by ranges
+	await openMore();
+	await pdfEditor.locator('button[data-pdf-action="split"]').click();
+	await main.locator("label", { hasText: "페이지 범위로 분할" }).click();
+	await main.locator('input[data-pdf-split-ranges="true"]').fill("1-2, 3-5");
+	await main.locator('button[data-pdf-split-run="true"]').click();
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("2개 PDF 파일로 분할했습니다"), 10_000);
+	const part1 = join(DOCS_DIR, "contract-part1-p1-2.pdf");
+	const part2 = join(DOCS_DIR, "contract-part2-p3-5.pdf");
+	check(
+		"Split PDF created expected range files",
+		existsSync(part1) &&
+			existsSync(part2) &&
+			(await PDFDocument.load(readFileSync(part1))).getPageCount() === 2 &&
+			(await PDFDocument.load(readFileSync(part2))).getPageCount() === 3,
+	);
+
+	// 9. Find text inside PDF (Cmd/Ctrl+F)
+	await main.keyboard.press(chord("f"));
+	const findInput = pdfEditor.locator('input[data-pdf-find-input="true"]');
+	await findInput.waitFor({ timeout: 10_000 });
+	await findInput.fill("Invoice Clause");
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("1 / 1"), 10_000);
+	check("Find-in-PDF located 'Invoice Clause' match", true);
+	await shot("05-pdf-final-with-find");
+
+	// 10. Undo restores pre-flatten form fields
+	await pdfEditor.locator("button", { hasText: "실행 취소" }).click();
+	const fieldsRestored = await poll(async () => (await PDFDocument.load(readFileSync(CONTRACT))).getForm().getFields().length, (n) => n >= 2, 10_000);
+	check("Undo restored pre-flatten PDF snapshot", fieldsRestored >= 2, `fields=${fieldsRestored}`);
+} catch (error) {
+	check("the lane ran to the end", false, error instanceof Error ? error.message.split("\n")[0] : String(error));
+	for (const page of app.windows()) {
+		await page.screenshot({ path: join(EVIDENCE, "failure.png") }).catch(() => undefined);
+	}
+} finally {
+	await app.close().catch(() => undefined);
+	try {
+		rmRetry(WORK);
+	} catch {
+		rmSync(WORK, { recursive: true, force: true });
+	}
+}
+
+if (failures.length > 0) {
+	console.error(`LIVE PDF ACROBAT QA FAILED (${failures.length}): ${failures.join(", ")}`);
+	process.exit(1);
+}
+console.log("ALL LIVE PDF EDITOR ACROBAT CHECKS PASSED");

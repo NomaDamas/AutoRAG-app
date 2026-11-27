@@ -199,6 +199,7 @@ export const REMOTE_NATIVE_ONLY_METHODS: Readonly<Record<string, readonly string
 	appUpdate: ["install", "download", "check"],
 	toolVersions: ["restartDaemon"],
 	account: ["signIn", "cancelSignIn", "sendEmailOtp", "verifyEmailOtp", "checkout", "useManagedModel", "signOut", "refresh"],
+	documentEditor: ["pdfPickMergeFiles"],
 };
 
 export const REMOTE_PREVIEW_UNSUPPORTED_CODE = "remote-preview-unsupported";

@@ -47,7 +47,12 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 		}),
 		pdfApply: vi.fn(async () => ({ ok: true as const, size: 100, modifiedAt: new Date().toISOString(), mtimeMs: initial.mtimeMs + 20, pageCount: 1, snapshotId: "snap-1" })),
 		pdfExtract: vi.fn(async () => ({ outputPath: "/tmp/out.pdf", name: "out.pdf", pageCount: 1 })),
+		pdfSplit: vi.fn(async () => ({ outputs: [{ outputPath: "/tmp/out-p1.pdf", name: "out-p1.pdf", pageCount: 1 }] })),
+		pdfPickMergeFiles: vi.fn(async () => []),
 		pdfRestore: vi.fn(async () => ({ ok: true })),
+		pdfReadMetadata: vi.fn(async () => ({ title: "", author: "", subject: "", keywords: "" })),
+		pdfReadFormFields: vi.fn(async () => []),
+		pdfSaveFormFields: vi.fn(async () => ({ ok: true as const, size: 100, modifiedAt: new Date().toISOString(), mtimeMs: initial.mtimeMs + 25, pageCount: 1, snapshotId: "snap-form-1" })),
 		aiStart: vi.fn(async (runId, request) => {
 			aiStarts.push({ runId, instruction: request.instruction, marksCount: request.marks.length });
 			return { changed: true };

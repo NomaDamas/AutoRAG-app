@@ -1337,7 +1337,22 @@ app.whenReady().then(async () => {
 	});
 	setQuickLookDocumentEdit(documentEditService);
 	const pdfEditorIo = createPdfEditorIo(join(app.getPath("userData"), "pdf-editor-backups"));
-	registerDocumentEditorIpcHandlers(documentEditService, pdfEditorIo, (event) => sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.aiEvent, event));
+	registerDocumentEditorIpcHandlers(
+		documentEditService,
+		pdfEditorIo,
+		(event) => sendToMainWindow(DOCUMENT_EDITOR_CHANNELS.aiEvent, event),
+		async () => {
+			const options: OpenDialogOptions = {
+				title: t("documentEditor.pdf.mergePickerTitle"),
+				buttonLabel: t("documentEditor.pdf.mergeAction"),
+				properties: ["openFile", "multiSelections"],
+				filters: [{ name: "PDF", extensions: ["pdf"] }],
+			};
+			const parent = mainWindow;
+			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
+			return result.canceled ? [] : result.filePaths;
+		},
+	);
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;
 	const getDeviceId = (): Promise<string> => {

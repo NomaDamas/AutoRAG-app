@@ -144,4 +144,229 @@ describe("pdf editor I/O (pdf-lib)", () => {
 		const srcPdf = await PDFDocument.load(readFileSync(pdfPath));
 		expect(srcPdf.getPageCount()).toBe(3);
 	});
+
+	it("duplicates a page and inserts blank pages (match, a4, letter)", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "pages.pdf");
+		await createSamplePdf(pdfPath, [
+			[500, 700],
+			[600, 800],
+		]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+
+		const res = await io.apply({
+			path: pdfPath,
+			operations: [
+				{ kind: "duplicatePage", pageIndex: 0 },
+				{ kind: "insertBlankPage", insertAtIndex: 3, size: "a4" },
+				{ kind: "insertBlankPage", insertAtIndex: 0, size: "letter" },
+			],
+		});
+		expect(res.ok).toBe(true);
+		if (!res.ok) return;
+		expect(res.pageCount).toBe(5);
+
+		const loaded = await PDFDocument.load(readFileSync(pdfPath));
+		expect(loaded.getPage(0).getSize()).toEqual({ width: 612, height: 792 }); // letter
+		expect(loaded.getPage(1).getSize()).toEqual({ width: 500, height: 700 }); // original 0
+		expect(loaded.getPage(2).getSize()).toEqual({ width: 500, height: 700 }); // duplicate of 0
+		expect(loaded.getPage(3).getSize()).toEqual({ width: 600, height: 800 }); // original 1
+		expect(loaded.getPage(4).getSize().width).toBeCloseTo(595.28, 1); // a4
+		expect(loaded.getPage(4).getSize().height).toBeCloseTo(841.89, 1);
+	});
+
+	it("merges another PDF into the active PDF at a given insertAtIndex and supports undo", async () => {
+		const dir = makeWorkDir();
+		const basePdf = join(dir, "base.pdf");
+		const appendPdf = join(dir, "append.pdf");
+		await createSamplePdf(basePdf, [
+			[600, 800],
+			[600, 800],
+		]);
+		await createSamplePdf(appendPdf, [
+			[300, 400],
+			[350, 450],
+		]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+
+		const res = await io.apply({
+			path: basePdf,
+			operations: [{ kind: "mergePdfs", sourcePaths: [appendPdf], insertAtIndex: 1 }],
+		});
+		expect(res.ok).toBe(true);
+		if (!res.ok) return;
+		expect(res.pageCount).toBe(4);
+
+		const merged = await PDFDocument.load(readFileSync(basePdf));
+		expect(merged.getPage(0).getSize()).toEqual({ width: 600, height: 800 });
+		expect(merged.getPage(1).getSize()).toEqual({ width: 300, height: 400 });
+		expect(merged.getPage(2).getSize()).toEqual({ width: 350, height: 450 });
+		expect(merged.getPage(3).getSize()).toEqual({ width: 600, height: 800 });
+
+		const undone = await io.restore(res.snapshotId);
+		expect(undone.ok).toBe(true);
+		expect(undone.pageCount).toBe(2);
+	});
+
+	it("splits a PDF by chunkSize, by custom ranges, and into single pages", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "book.pdf");
+		await createSamplePdf(pdfPath, [
+			[500, 700],
+			[510, 700],
+			[520, 700],
+			[530, 700],
+			[540, 700],
+		]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+
+		const everyTwo = await io.split({ path: pdfPath, mode: "everyN", chunkSize: 2 });
+		expect(everyTwo.outputs.map((o) => o.pageCount)).toEqual([2, 2, 1]);
+		const firstChunk = await PDFDocument.load(readFileSync(everyTwo.outputs[0]!.outputPath));
+		expect(firstChunk.getPage(0).getSize().width).toBe(500);
+		expect(firstChunk.getPage(1).getSize().width).toBe(510);
+
+		const byRanges = await io.split({ path: pdfPath, mode: "ranges", rangesSpec: "1-2, 4-5" });
+		expect(byRanges.outputs.map((o) => o.pageCount)).toEqual([2, 2]);
+		const secondRange = await PDFDocument.load(readFileSync(byRanges.outputs[1]!.outputPath));
+		expect(secondRange.getPage(0).getSize().width).toBe(530);
+		expect(secondRange.getPage(1).getSize().width).toBe(540);
+
+		const singles = await io.split({ path: pdfPath, mode: "singlePages" });
+		expect(singles.outputs).toHaveLength(5);
+		expect(singles.outputs.every((o) => o.pageCount === 1)).toBe(true);
+	});
+
+	it("applies highlight, redaction/whiteout, shapes, freehand strokes, watermark, and page numbers", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "annotate.pdf");
+		await createSamplePdf(pdfPath, [
+			[600, 800],
+			[600, 800],
+		]);
+		const originalSize = readFileSync(pdfPath).byteLength;
+		const io = createPdfEditorIo(join(dir, "backups"));
+
+		const res = await io.apply({
+			path: pdfPath,
+			operations: [
+				{ kind: "highlightRect", pageIndex: 0, x: 0.1, y: 0.1, width: 0.4, height: 0.05, color: "#FDE047", opacity: 0.35 },
+				{ kind: "redactRect", pageIndex: 0, x: 0.1, y: 0.2, width: 0.3, height: 0.04, color: "#000000" },
+				{ kind: "drawShape", pageIndex: 0, shape: "rect", x1: 0.1, y1: 0.3, x2: 0.4, y2: 0.4, strokeColor: "#DC2626", strokeWidthPt: 2 },
+				{ kind: "drawShape", pageIndex: 0, shape: "ellipse", x1: 0.5, y1: 0.3, x2: 0.8, y2: 0.45, strokeColor: "#2563EB", strokeWidthPt: 2 },
+				{ kind: "drawShape", pageIndex: 0, shape: "arrow", x1: 0.1, y1: 0.5, x2: 0.6, y2: 0.6, strokeColor: "#16A34A", strokeWidthPt: 2.5 },
+				{
+					kind: "freehandPath",
+					pageIndex: 1,
+					points: [
+						{ x: 0.1, y: 0.1 },
+						{ x: 0.2, y: 0.15 },
+						{ x: 0.35, y: 0.12 },
+					],
+					strokeColor: "#111827",
+					strokeWidthPt: 2,
+				},
+				{ kind: "addWatermark", pngDataUrl: ONE_PX_PNG, opacity: 0.2, scale: 0.6 },
+				{
+					kind: "addPageNumbers",
+					position: "bottom-center",
+					format: "ofTotal",
+					startNumber: 1,
+					fontSize: 10,
+					color: "#334155",
+					headerText: "CONFIDENTIAL",
+				},
+			],
+		});
+		expect(res.ok).toBe(true);
+		if (!res.ok) return;
+		expect(res.pageCount).toBe(2);
+		expect(res.size).toBeGreaterThan(originalSize);
+		const reloaded = await PDFDocument.load(readFileSync(pdfPath));
+		expect(reloaded.getPageCount()).toBe(2);
+	});
+
+	it("reads and updates PDF document metadata (title, author, subject, keywords)", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "meta.pdf");
+		await createSamplePdf(pdfPath, [[600, 800]]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+
+		const before = await io.readMetadata(pdfPath);
+		expect(before.title).toBe("");
+
+		const res = await io.apply({
+			path: pdfPath,
+			operations: [
+				{
+					kind: "setMetadata",
+					metadata: {
+						title: "Q4 Contract",
+						author: "Jeffrey Kim",
+						subject: "Partnership Agreement",
+						keywords: "contract, legal, 2026",
+					},
+				},
+			],
+		});
+		expect(res.ok).toBe(true);
+
+		const after = await io.readMetadata(pdfPath);
+		expect(after).toEqual({
+			title: "Q4 Contract",
+			author: "Jeffrey Kim",
+			subject: "Partnership Agreement",
+			keywords: "contract, legal, 2026",
+		});
+	});
+
+	it("reads, fills, and optionally flattens AcroForm fields", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "form.pdf");
+		const doc = await PDFDocument.create();
+		const page = doc.addPage([600, 800]);
+		const form = doc.getForm();
+		const nameField = form.createTextField("applicant_name");
+		nameField.setText("Alice");
+		nameField.addToPage(page, { x: 50, y: 700, width: 200, height: 24 });
+		const agreeField = form.createCheckBox("agree_terms");
+		agreeField.addToPage(page, { x: 50, y: 650, width: 18, height: 18 });
+		const roleField = form.createDropdown("role");
+		roleField.addOptions(["Manager", "Engineer", "Designer"]);
+		roleField.select("Engineer");
+		roleField.addToPage(page, { x: 50, y: 600, width: 160, height: 24 });
+		writeFileSync(pdfPath, await doc.save());
+
+		const io = createPdfEditorIo(join(dir, "backups"));
+		const fields = await io.readFormFields(pdfPath);
+		expect(fields).toHaveLength(3);
+		expect(fields.find((f) => f.name === "applicant_name")).toMatchObject({ kind: "text", value: "Alice" });
+		expect(fields.find((f) => f.name === "agree_terms")).toMatchObject({ kind: "checkbox", value: false });
+		expect(fields.find((f) => f.name === "role")).toMatchObject({
+			kind: "dropdown",
+			value: "Engineer",
+			options: ["Manager", "Engineer", "Designer"],
+		});
+
+		const saved = await io.saveFormFields({
+			path: pdfPath,
+			values: { applicant_name: "Bob", agree_terms: true, role: "Designer" },
+			flatten: false,
+		});
+		expect(saved.ok).toBe(true);
+
+		const updated = await io.readFormFields(pdfPath);
+		expect(updated.find((f) => f.name === "applicant_name")?.value).toBe("Bob");
+		expect(updated.find((f) => f.name === "agree_terms")?.value).toBe(true);
+		expect(updated.find((f) => f.name === "role")?.value).toBe("Designer");
+
+		const flattened = await io.saveFormFields({
+			path: pdfPath,
+			values: { applicant_name: "Bob", agree_terms: true, role: "Designer" },
+			flatten: true,
+		});
+		expect(flattened.ok).toBe(true);
+		const afterFlatten = await io.readFormFields(pdfPath);
+		expect(afterFlatten).toHaveLength(0);
+	});
 });
