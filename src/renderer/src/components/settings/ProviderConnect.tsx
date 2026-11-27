@@ -24,8 +24,9 @@ import { defaultEnvName, errorText } from "./configSupport";
 
 const settings = window.autorag.settings;
 
-/** TypeSafe only exposes a key env var; it has no interactive Pi /login. */
-const CREDENTIAL_ONLY_ENV = "TYPESAFE_API_KEY";
+/** Providers that store only an API key env var and have no interactive Pi /login. */
+const CREDENTIAL_ONLY_ENVS = new Set(["TYPESAFE_API_KEY", "UPSTAGE_API_KEY"]);
+const CREDENTIAL_ONLY_PROVIDERS = new Set(["typesafe", "upstage"]);
 
 interface LoginState {
 	readonly sessionId: string;
@@ -196,7 +197,7 @@ export function useProviderConnect({ reload, onNotice, guided = false }: Provide
 
 	return {
 		connect: (provider, authType) => {
-			if (authType === "api_key" && (provider.apiKeyEnv === CREDENTIAL_ONLY_ENV || provider.id === "typesafe")) setKeyModal(provider);
+			if (authType === "api_key" && (CREDENTIAL_ONLY_PROVIDERS.has(provider.id) || (provider.apiKeyEnv !== null && CREDENTIAL_ONLY_ENVS.has(provider.apiKeyEnv)))) setKeyModal(provider);
 			else startLogin(provider, authType);
 		},
 		openServer: (kind, provider) => setServerModal({ kind, provider }),

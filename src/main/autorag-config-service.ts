@@ -812,6 +812,7 @@ export function createAutoRagConfigService(deps: AutoRagConfigServiceDeps): Auto
 						available: available.has(`${model.provider}/${model.id}`),
 						baseUrl: model.baseUrl ?? provider.baseUrl ?? null,
 						apiKeyEnv: envKeys?.[0] ?? null,
+						...(Array.isArray(model.input) ? { supportsImage: model.input.includes("image") } : {}),
 					}));
 					return {
 						id: provider.id,

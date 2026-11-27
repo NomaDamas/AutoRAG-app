@@ -157,7 +157,7 @@ export function RolePicker({
 
 	const emptyText = isSearching
 		? t("settingsCore.ai.emptySearchModels")
-		: role === "jev" || role === "rerank"
+		: role === "jev" || role === "rerank" || role === "visualParseOcr"
 			? t("settingsCore.ai.emptyRoleModels")
 			: t("settingsCore.ai.emptyModels");
 
@@ -198,7 +198,7 @@ export function RolePicker({
 				) : (
 					<>
 						{allBuckets.length === 0 ? (
-							<p className="settings-menu-empty">{emptyText}</p>
+							role === "visualParseOcr" && specials.length > 0 ? null : <p className="settings-menu-empty">{emptyText}</p>
 						) : (
 							allBuckets.map((bucket) => {
 								const isOpen = activeBucket?.provider.id === bucket.provider.id;
@@ -237,7 +237,7 @@ export function RolePicker({
 						)}
 						{specials.length > 0 ? (
 							<>
-								<div className="settings-menu-sep" />
+								{allBuckets.length > 0 || role !== "visualParseOcr" ? <div className="settings-menu-sep" /> : null}
 								{specials.map((special) => {
 									const checked = selected?.kind === "special" && selected.value === special.value;
 									return (

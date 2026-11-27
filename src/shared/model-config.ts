@@ -1,5 +1,5 @@
-import { JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
-import type { AutoRagConfigUpdate, ModelCatalogEntry } from "./settings-contract";
+import { isOfficialOcrModel, JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
+import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type ModelCatalogEntry } from "./settings-contract";
 
 /**
  * Wire protocols accepted by the shared AutoRAG config for `model.api` (upstream
@@ -65,4 +65,127 @@ export function jevSllmConfigUpdates(): AutoRagConfigUpdate[] {
 /** The leaf write that enables the reranker on the provider and model `entry` names. */
 export function rerankConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
 	return [{ path: ["rerank"], value: { enabled: true, provider: entry.provider, model: entry.id } }];
+}
+
+function existingVisualParseObject(config: JsonObject | undefined): Record<string, unknown> {
+	const raw = config?.visualParse;
+	return isJsonObject(raw) ? { ...raw } : {};
+}
+
+function modelRefFromEntry(entry: ModelCatalogEntry): Record<string, string> {
+	const model: Record<string, string> = { provider: entry.provider, id: entry.id };
+	const name = entry.name.trim();
+	const baseUrl = (entry.baseUrl ?? "").trim();
+	const env = (entry.apiKeyEnv ?? "").trim();
+	if (name.length > 0) model.name = name;
+	if (entry.api.length > 0 && isAllowedAgentApi(entry.api)) model.api = entry.api;
+	if (baseUrl.length > 0) model.baseUrl = baseUrl;
+	if (env.length > 0) model.apiKeyEnv = env;
+	return model;
+}
+
+/** Enable visual-rich page parsing with a VLM model, keeping any existing gate/ocr/limit settings intact. */
+export function visualParseVlmConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				extractor: { kind: "vlm", model: modelRefFromEntry(entry) },
+			} as JsonObject,
+		},
+	];
+}
+
+/**
+ * Turn off the VLM extractor while preserving an active OCR engine if one is configured;
+ * if OCR is also off, turns `visualParse` completely off (`false`).
+ */
+export function visualParseVlmOffConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	if (base.ocr === undefined || base.ocr === false) {
+		return [{ path: ["visualParse"], value: false }];
+	}
+	const { extractor: _extractor, ...rest } = base;
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...rest,
+				enabled: true,
+			} as JsonObject,
+		},
+	];
+}
+
+/** Set the Stage 2 OCR engine to a local engine (`"auto"`, `"kordoc"`, or `"tesseract"`), keeping any VLM/gate settings intact. */
+export function visualParseOcrLocalConfigUpdates(
+	engine: "auto" | "kordoc" | "tesseract",
+	currentConfig?: JsonObject,
+): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				ocr: { engine },
+			} as JsonObject,
+		},
+	];
+}
+
+/**
+ * Set the Stage 2 OCR model to a remote official OCR API model (e.g. Mistral OCR,
+ * NVIDIA Nemotron Parse, Upstage Document Parse, Z.AI GLM-OCR) or legacy VLM OCR,
+ * keeping any VLM/gate settings intact.
+ */
+export function visualParseOcrRemoteConfigUpdates(entry: ModelCatalogEntry, currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	const engine = isOfficialOcrModel(entry.provider, entry.id) ? "api" : "vlm";
+	return [
+		{
+			path: ["visualParse"],
+			value: {
+				...base,
+				enabled: true,
+				ocr: { engine, model: modelRefFromEntry(entry) },
+			} as JsonObject,
+		},
+	];
+}
+
+/**
+ * Turn off Stage 2 OCR while preserving a configured VLM extractor if one is active;
+ * if no VLM extractor is set, turns `visualParse` completely off (`false`).
+ */
+export function visualParseOcrOffConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	const base = existingVisualParseObject(currentConfig);
+	const extractor = isJsonObject(base.extractor) ? base.extractor : null;
+	if (extractor?.kind === "vlm") {
+		return [
+			{
+				path: ["visualParse"],
+				value: {
+					...base,
+					enabled: true,
+					ocr: false,
+				} as JsonObject,
+			},
+		];
+	}
+	return [{ path: ["visualParse"], value: false }];
+}
+
+/** Legacy helper: enable Stage 2 visual parsing with local auto OCR. */
+export function visualParseOcrConfigUpdates(currentConfig?: JsonObject): AutoRagConfigUpdate[] {
+	return visualParseOcrLocalConfigUpdates("auto", currentConfig);
+}
+
+/** Turn visual-rich page parsing (both VLM and OCR) completely off. */
+export function visualParseOffConfigUpdates(): AutoRagConfigUpdate[] {
+	return [{ path: ["visualParse"], value: false }];
 }

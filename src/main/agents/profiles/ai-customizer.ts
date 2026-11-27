@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { defineTool, type AgentToolResult, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { JEV_SLLM_BACKEND, jevModelsFor, rerankModelsFor } from "../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevModelsFor, ocrModelsFor, rerankModelsFor } from "../../../shared/ai-roles";
 import { maskSecret } from "../../../shared/secret-guard";
 import {
 	catalogModelEntry,
@@ -29,7 +29,18 @@ import { createGuardedBashTool } from "../guarded-bash";
 import { readOmpProviders, resolveOmpProviderKey, type OmpInputs, type OmpProviderDefinition } from "../../omp-config";
 import { isAllowedAgentApi, ALLOWED_AGENT_APIS } from "../../../shared/model-config";
 import type { CustomProviderImport } from "../../provider-auth-service";
-import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../shared/model-config";
+import {
+	decompositionConfigUpdates,
+	jevConfigUpdates,
+	jevSllmConfigUpdates,
+	modelConfigUpdates,
+	rerankConfigUpdates,
+	visualParseOcrLocalConfigUpdates,
+	visualParseOcrOffConfigUpdates,
+	visualParseOcrRemoteConfigUpdates,
+	visualParseVlmConfigUpdates,
+	visualParseVlmOffConfigUpdates,
+} from "../../../shared/model-config";
 import { THINKING_LEVELS, WEBSEARCH_PROVIDERS } from "../../../shared/settings-options";
 import type { AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../shared/settings-contract";
 import {
@@ -92,8 +103,12 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 			const snapshot = await deps.settings.configGet();
 			const connected = connectedProviders(await deps.settings.providersList());
 			const modelChoices = connected.flatMap((provider) => provider.models.map((model) => `${provider.id}:${model.id}`));
+			const visualModelChoices = connected.flatMap((provider) =>
+				provider.models.filter((model) => model.supportsImage !== false).map((model) => `${provider.id}:${model.id}`),
+			);
 			const jevChoices = connected.flatMap((provider) => jevModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
 			const rerankChoices = connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
+			const ocrChoices = connected.flatMap((provider) => ocrModelsFor(provider.id).map((model) => `${provider.id}:${model.id}`));
 			return textResult({
 				ok: true,
 				providers: connected.map((provider) => ({
@@ -106,6 +121,12 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					decomposition: { current: roleSelectionFromConfig("decomposition", snapshot.config, connected), choices: modelChoices, specials: ["same", "default"] },
 					jev: { current: roleSelectionFromConfig("jev", snapshot.config, connected), choices: jevChoices, specials: [JEV_SLLM_BACKEND] },
 					rerank: { current: roleSelectionFromConfig("rerank", snapshot.config, connected), choices: rerankChoices, specials: ["off"] },
+					visualParse: { current: roleSelectionFromConfig("visualParse", snapshot.config, connected), choices: visualModelChoices, specials: ["off"] },
+					visualParseOcr: {
+						current: roleSelectionFromConfig("visualParseOcr", snapshot.config, connected),
+						choices: ocrChoices,
+						specials: ["off", "auto", "kordoc", "tesseract"],
+					},
 				},
 				thinking: { current: thinkingLevelOf(snapshot.config), levels: THINKING_LEVELS.map((level) => level.value) },
 				webSearch: { ...webSearchStateOf(snapshot.config), providers: WEBSEARCH_PROVIDERS.map((provider) => provider.id) },
@@ -119,18 +140,39 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 		description:
 			"Point one of the four AI roles (answer, decomposition, jev, rerank) at a model of a CONNECTED provider, or use one of its specials (decomposition `same`/`default`, jev `sllm`, rerank `off`). Model ids must come from `get_ai_settings`; unconnected providers and unknown ids are refused with the valid choices.",
 		parameters: Type.Object({
-			role: Type.Union([Type.Literal("answer"), Type.Literal("decomposition"), Type.Literal("jev"), Type.Literal("rerank")], {
-				description: "Which role to change.",
-			}),
+			role: Type.Union(
+				[
+					Type.Literal("answer"),
+					Type.Literal("decomposition"),
+					Type.Literal("jev"),
+					Type.Literal("rerank"),
+					Type.Literal("visualParse"),
+					Type.Literal("visualParseOcr"),
+				],
+				{
+					description: "Which role to change.",
+				},
+			),
 			provider: Type.Optional(
 				Type.String({ description: "A connected provider id from `get_ai_settings`; the provider must actually serve the role for jev/rerank." }),
 			),
 			modelId: Type.Optional(Type.String({ description: "The exact model id from that provider's catalog (or its jev/rerank list)." })),
 			special: Type.Optional(
-				Type.Union([Type.Literal("same"), Type.Literal("default"), Type.Literal("sllm"), Type.Literal("off")], {
-					description:
-						"A non-model choice: decomposition `same` (decompose with the answer model), decomposition `default` (the documented default), jev `sllm` (use the small chat model as the decision model), rerank `off` (no reranker).",
-				}),
+				Type.Union(
+					[
+						Type.Literal("same"),
+						Type.Literal("default"),
+						Type.Literal("sllm"),
+						Type.Literal("off"),
+						Type.Literal("auto"),
+						Type.Literal("kordoc"),
+						Type.Literal("tesseract"),
+					],
+					{
+						description:
+							"A non-model choice: decomposition `same`/`default`, jev `sllm`, rerank `off`, visualParse `off`, visualParseOcr `off`/`auto`/`kordoc`/`tesseract`.",
+					},
+				),
 			),
 		}),
 		execute: async (_callId, params) => {
@@ -174,6 +216,30 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						warnings,
 					);
 				}
+				if (role === "visualParse" && special === "off") {
+					return apply(
+						visualParseVlmOffConfigUpdates(snapshot.config),
+						localized("시각 문서 파싱(VLM)을 사용 안 함으로 설정", "Turned visual VLM parsing off", "視覚パース (VLM) をオフに設定", "已停用视觉解析 (VLM)"),
+						["visualParse"],
+						warnings,
+					);
+				}
+				if (role === "visualParseOcr" && special === "off") {
+					return apply(
+						visualParseOcrOffConfigUpdates(snapshot.config),
+						localized("OCR 모델을 사용 안 함으로 설정", "Turned OCR model off", "OCR モデルをオフに設定", "已停用 OCR 模型"),
+						["visualParse"],
+						warnings,
+					);
+				}
+				if (role === "visualParseOcr" && (special === "auto" || special === "kordoc" || special === "tesseract")) {
+					return apply(
+						visualParseOcrLocalConfigUpdates(special, snapshot.config),
+						localized(`OCR 모델을 로컬(${special})로 설정`, `Set OCR engine to local (${special})`, `OCR モデルをローカル (${special}) に設定`, `已将 OCR 引擎设为本地 (${special})`),
+						["visualParse"],
+						warnings,
+					);
+				}
 				warnings.push(`'${special}' is not a valid option for the '${role}' role.`);
 				if (params.provider === undefined || params.modelId === undefined) {
 					return textResult({ ok: false, error: `'${special}' is not a valid option for the '${role}' role.`, warnings });
@@ -192,7 +258,9 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 						? connected.flatMap((item) => jevModelsFor(item.id).map((model) => `${item.id}:${model.id}`))
 						: role === "rerank"
 							? connected.flatMap((item) => rerankModelsFor(item.id).map((model) => `${item.id}:${model.id}`))
-							: connected.flatMap((item) => item.models.map((model) => `${item.id}:${model.id}`));
+							: role === "visualParseOcr"
+								? connected.flatMap((item) => ocrModelsFor(item.id).map((model) => `${item.id}:${model.id}`))
+								: connected.flatMap((item) => item.models.map((model) => `${item.id}:${model.id}`));
 				return textResult({
 					ok: false,
 					error: `Provider '${providerId}' is not connected. Connect it from the AI models page, then try again.`,
@@ -204,8 +272,8 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 			let entry: ModelCatalogEntry;
 			let updates: readonly AutoRagConfigUpdate[];
 			let summary: Localized;
-			if (role === "jev" || role === "rerank") {
-				const models = role === "jev" ? jevModelsFor(providerId) : rerankModelsFor(providerId);
+			if (role === "jev" || role === "rerank" || role === "visualParseOcr") {
+				const models = role === "jev" ? jevModelsFor(providerId) : role === "rerank" ? rerankModelsFor(providerId) : ocrModelsFor(providerId);
 				const match = models.find((model) => model.id === modelId);
 				if (match === undefined) {
 					return textResult({
@@ -216,11 +284,18 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					});
 				}
 				entry = staticCatalogEntry(provider, match.id, match.label);
-				updates = role === "jev" ? jevConfigUpdates(entry) : rerankConfigUpdates(entry);
+				updates =
+					role === "jev"
+						? jevConfigUpdates(entry)
+						: role === "rerank"
+							? rerankConfigUpdates(entry)
+							: visualParseOcrRemoteConfigUpdates(entry, snapshot.config);
 				summary =
 					role === "jev"
 						? localized(`Jev 모델을 ${match.label}로 변경`, `Changed the Jev model to ${match.label}`, `Jev モデルを ${match.label} に変更`, `已将 Jev 模型更改为 ${match.label}`)
-						: localized(`리랭커를 ${match.label}로 설정`, `Set the reranker to ${match.label}`, `リランカーを ${match.label} に設定`, `已将重排器设为 ${match.label}`);
+						: role === "rerank"
+							? localized(`리랭커를 ${match.label}로 설정`, `Set the reranker to ${match.label}`, `リランカーを ${match.label} に設定`, `已将重排器设为 ${match.label}`)
+							: localized(`OCR 모델을 ${match.label}로 변경`, `Changed the OCR model to ${match.label}`, `OCR モデルを ${match.label} に変更`, `已将 OCR 模型更改为 ${match.label}`);
 			} else {
 				const match = catalogModelEntry(provider, modelId);
 				if (match === null) {
@@ -232,12 +307,19 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 					});
 				}
 				entry = match;
-				updates = role === "answer" ? modelConfigUpdates(entry) : decompositionConfigUpdates(entry);
+				updates =
+					role === "answer"
+						? modelConfigUpdates(entry)
+						: role === "visualParse"
+							? visualParseVlmConfigUpdates(entry, snapshot.config)
+							: decompositionConfigUpdates(entry);
 				const name = entry.name.trim().length > 0 ? entry.name.trim() : entry.id;
 				summary =
 					role === "answer"
 						? localized(`답변 모델을 ${name}로 변경`, `Changed the answer model to ${name}`, `回答モデルを ${name} に変更`, `已将回答模型更改为 ${name}`)
-						: localized(`질문 분해 모델을 ${name}로 변경`, `Changed the decomposition model to ${name}`, `質問分解モデルを ${name} に変更`, `已将问题分解模型更改为 ${name}`);
+						: role === "visualParse"
+							? localized(`시각 파싱(VLM) 모델을 ${name}로 변경`, `Changed the visual VLM model to ${name}`, `視覚パース (VLM) モデルを ${name} に変更`, `已将视觉解析 (VLM) 模型更改为 ${name}`)
+							: localized(`질문 분해 모델을 ${name}로 변경`, `Changed the decomposition model to ${name}`, `質問分解モデルを ${name} に変更`, `已将问题分解模型更改为 ${name}`);
 			}
 			return apply(
 				updates,

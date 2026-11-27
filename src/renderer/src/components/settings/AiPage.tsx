@@ -23,10 +23,33 @@ import { FloatingMenu, ModalActions, ModalShell, Note, Row, SettingsPageHead } f
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
-import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
+import {
+	isVisualParseEnabled,
+	jevLabel,
+	jevOptionsFor,
+	providerRoleCleanup,
+	rerankLabel,
+	rerankOptionsFor,
+	roleSelectionFor,
+	visualParseLabel,
+	visualParseOcrLabel,
+	visualParseOcrOptionsFor,
+	visualParseOptionsFor,
+} from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
 import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition } from "../../../../shared/ai-roles";
-import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import {
+	decompositionConfigUpdates,
+	jevConfigUpdates,
+	jevSllmConfigUpdates,
+	modelConfigUpdates,
+	rerankConfigUpdates,
+	visualParseOcrLocalConfigUpdates,
+	visualParseOcrOffConfigUpdates,
+	visualParseOcrRemoteConfigUpdates,
+	visualParseVlmConfigUpdates,
+	visualParseVlmOffConfigUpdates,
+} from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 import { THINKING_LEVELS } from "../../../../shared/settings-options";
 
@@ -48,6 +71,15 @@ const DECOMPOSITION_SPECIALS = [
 const RERANK_OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
 /** The decision model is Jev or the small chat model; it cannot be switched off. */
 const JEV_SLLM_SPECIALS = [{ value: JEV_SLLM_BACKEND, labelKey: "settingsCore.ai.jevSllm" }] as const;
+/** Visual page parsing (VLM): off or any connected vision-capable VLM. */
+const VISUAL_PARSE_VLM_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
+/** Visual page OCR: off, local engines (auto PP-OCRv5/Tesseract, kordoc PP-OCRv5, Tesseract), or any connected remote vision/OCR model. */
+const VISUAL_PARSE_OCR_SPECIALS = [
+	{ value: "off", labelKey: "settingsCore.ai.off" },
+	{ value: "auto", labelKey: "settingsCore.ai.visualParseOcrAuto" },
+	{ value: "kordoc", labelKey: "settingsCore.ai.visualParseOcrKordoc" },
+	{ value: "tesseract", labelKey: "settingsCore.ai.visualParseOcrTesseract" },
+] as const;
 
 interface MenuState {
 	readonly kind: "connect" | "provider" | "picker" | "thinking";
@@ -67,6 +99,15 @@ function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string,
 	const jev = asRecord(getAt(snapshot.config, ["jev"]));
 	const jevBackend = jevBackendFor(providerId);
 	if (jevBackend !== undefined && stringOf(jev?.backend) === jevBackend) out.push(t("settingsCore.ai.role.jev"));
+	const visualParse = asRecord(getAt(snapshot.config, ["visualParse"]));
+	const visualModel = asRecord(asRecord(visualParse?.extractor)?.model);
+	if (visualParse?.enabled !== false && stringOf(visualModel?.provider) === providerId) {
+		out.push(t("settingsCore.ai.role.visualParse"));
+	}
+	const visualOcrModel = asRecord(asRecord(visualParse?.ocr)?.model);
+	if (visualParse?.enabled !== false && visualParse?.ocr !== false && stringOf(visualOcrModel?.provider) === providerId) {
+		out.push(t("settingsCore.ai.role.visualParseOcr"));
+	}
 	return out;
 }
 
@@ -84,6 +125,7 @@ export function AiPage({
 	const { run, error } = useConfigWriter(onSaved);
 	const [providers, setProviders] = useState<readonly ProviderSummary[] | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
+	const [visualRunning, setVisualRunning] = useState(false);
 	const [menu, setMenu] = useState<MenuState | null>(null);
 	const [disconnect, setDisconnect] = useState<ProviderSummary | null>(null);
 	const reload = useCallback(async (): Promise<void> => {
@@ -107,6 +149,27 @@ export function AiPage({
 	// plan comes first because `connected` is already ordered that way.
 	const jevOptions = useMemo(() => jevOptionsFor(connected), [connected]);
 	const rerankOptions = useMemo(() => rerankOptionsFor(connected), [connected]);
+	const visualParseOptions = useMemo(() => visualParseOptionsFor(connected), [connected]);
+	const visualParseOcrOptions = useMemo(() => visualParseOcrOptionsFor(connected), [connected]);
+	const visualParseActive = isVisualParseEnabled(snapshot.config);
+
+	async function runVisualParseStage(): Promise<void> {
+		if (visualRunning) return;
+		setVisualRunning(true);
+		setNotice(t("settingsCore.ai.visualParseRunning"));
+		try {
+			const result = await settings.configRefresh(["visual", "minsync"]);
+			setNotice(
+				result.ok
+					? t("settingsCore.ai.visualParseDone", { written: result.written })
+					: (result.error ?? t("settingsCore.ai.visualParseFailed")),
+			);
+		} catch (cause) {
+			setNotice(errorText(cause));
+		} finally {
+			setVisualRunning(false);
+		}
+	}
 
 	function closeMenu(): void {
 		setMenu(null);
@@ -195,6 +258,8 @@ export function AiPage({
 		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "jev") return JEV_SLLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "rerank") return RERANK_OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "visualParse") return VISUAL_PARSE_VLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "visualParseOcr") return VISUAL_PARSE_OCR_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		return [];
 	}
 
@@ -246,6 +311,35 @@ export function AiPage({
 					<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} currentTitle={roleTitle("decomposition", snapshot, t)} broken={roleBroken("decomposition", snapshot.config, connected)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
 					<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} currentTitle={roleTitle("jev", snapshot, t)} broken={roleBroken("jev", snapshot.config, connected)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
 					<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} currentTitle={roleTitle("rerank", snapshot, t)} broken={roleBroken("rerank", snapshot.config, connected)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+					<RoleRow
+						role="visualParse"
+						label={t("settingsCore.ai.visualParseModel")}
+						hint={t("settingsCore.ai.visualParseHint")}
+						current={visualParseLabel(snapshot.config, t)}
+						currentTitle={roleTitle("visualParse", snapshot, t)}
+						broken={roleBroken("visualParse", snapshot.config, connected)}
+						provider={selectedProvider("visualParse", snapshot.config, connected)}
+						onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParse" })}
+						action={
+							visualParseActive
+								? {
+										label: visualRunning ? t("settingsCore.ai.visualParseRunningBtn") : t("settingsCore.ai.visualParseRunBtn"),
+										disabled: visualRunning,
+										onClick: () => void runVisualParseStage(),
+									}
+								: undefined
+						}
+					/>
+					<RoleRow
+						role="visualParseOcr"
+						label={t("settingsCore.ai.visualParseOcrModel")}
+						hint={t("settingsCore.ai.visualParseOcrHint")}
+						current={visualParseOcrLabel(snapshot.config, t)}
+						currentTitle={roleTitle("visualParseOcr", snapshot, t)}
+						broken={roleBroken("visualParseOcr", snapshot.config, connected)}
+						provider={selectedProvider("visualParseOcr", snapshot.config, connected)}
+						onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "visualParseOcr" })}
+					/>
 					<EmbeddingPicker name={t("settingsCore.ai.embeddingModel")} hint={t("settingsCore.ai.embeddingHint")} />
 				</div>
 			</section>
@@ -267,7 +361,17 @@ export function AiPage({
 					{menu.kind === "picker" ? (
 						<RolePicker
 							role={menu.arg ?? "answer"}
-							models={menu.arg === "jev" ? jevOptions : menu.arg === "rerank" ? rerankOptions : catalogModels}
+							models={
+								menu.arg === "jev"
+									? jevOptions
+									: menu.arg === "rerank"
+										? rerankOptions
+										: menu.arg === "visualParse"
+											? visualParseOptions
+											: menu.arg === "visualParseOcr"
+												? visualParseOcrOptions
+												: catalogModels
+							}
 							specials={specialsFor(menu.arg ?? "answer")}
 							selected={roleSelectionFor(menu.arg ?? "answer", snapshot.config, connected)}
 							onPick={(entry) => {
@@ -275,6 +379,8 @@ export function AiPage({
 								if (menu.arg === "decomposition") writeDecomposition(entry);
 								else if (menu.arg === "jev") void run(jevConfigUpdates(entry));
 								else if (menu.arg === "rerank") void run(rerankConfigUpdates(entry));
+								else if (menu.arg === "visualParse") void run(visualParseVlmConfigUpdates(entry, snapshot.config));
+								else if (menu.arg === "visualParseOcr") void run(visualParseOcrRemoteConfigUpdates(entry, snapshot.config));
 								else writeModel(entry);
 							}}
 							onSpecial={(special) => {
@@ -283,6 +389,11 @@ export function AiPage({
 								else if (menu.arg === "decomposition" && special === "default") void run([{ path: ["queryDecomposition"], remove: true }]);
 								else if (menu.arg === "jev" && special === JEV_SLLM_BACKEND) void run(jevSllmConfigUpdates());
 								else if (menu.arg === "rerank" && special === "off") void run([{ path: ["rerank"], value: false }]);
+								else if (menu.arg === "visualParse" && special === "off") void run(visualParseVlmOffConfigUpdates(snapshot.config));
+								else if (menu.arg === "visualParseOcr" && special === "off") void run(visualParseOcrOffConfigUpdates(snapshot.config));
+								else if (menu.arg === "visualParseOcr" && (special === "auto" || special === "kordoc" || special === "tesseract")) {
+									void run(visualParseOcrLocalConfigUpdates(special, snapshot.config));
+								}
 							}}
 						/>
 					) : null}
@@ -342,7 +453,11 @@ function formatModelTooltip(name: string, id: string): string | undefined {
 	return trimmedName || trimmedId || undefined;
 }
 
-function roleTitle(role: "answer" | "decomposition" | "jev" | "rerank", snapshot: AutoRagConfigSnapshot, t: TFunction): string | undefined {
+function roleTitle(
+	role: "answer" | "decomposition" | "jev" | "rerank" | "visualParse" | "visualParseOcr",
+	snapshot: AutoRagConfigSnapshot,
+	t: TFunction,
+): string | undefined {
 	if (role === "answer") {
 		const model = asRecord(getAt(snapshot.config, ["model"]));
 		return formatModelTooltip(stringOf(model?.name), stringOf(model?.id));
@@ -355,6 +470,24 @@ function roleTitle(role: "answer" | "decomposition" | "jev" | "rerank", snapshot
 		return formatModelTooltip(stringOf(model?.name), stringOf(model?.id)) ?? t("settingsCore.ai.defaultModel");
 	}
 	if (role === "jev") return jevLabel(snapshot.config, t);
+	if (role === "visualParse") {
+		if (!isVisualParseEnabled(snapshot.config)) return t("settingsCore.ai.off");
+		const extractor = asRecord(asRecord(getAt(snapshot.config, ["visualParse"]))?.extractor);
+		if (stringOf(extractor?.kind) === "vlm") {
+			const model = asRecord(extractor?.model);
+			return formatModelTooltip(stringOf(model?.name), stringOf(model?.id)) ?? visualParseLabel(snapshot.config, t);
+		}
+		return visualParseLabel(snapshot.config, t);
+	}
+	if (role === "visualParseOcr") {
+		if (!isVisualParseEnabled(snapshot.config)) return t("settingsCore.ai.off");
+		const ocr = asRecord(asRecord(getAt(snapshot.config, ["visualParse"]))?.ocr);
+		const model = asRecord(ocr?.model);
+		if (model !== null) {
+			return formatModelTooltip(stringOf(model.name), stringOf(model.id)) ?? visualParseOcrLabel(snapshot.config, t);
+		}
+		return visualParseOcrLabel(snapshot.config, t);
+	}
 	return rerankLabel(snapshot.config, t);
 }
 
@@ -395,6 +528,7 @@ function RoleRow({
 	provider,
 	onOpen,
 	thinking,
+	action,
 }: {
 	readonly role: string;
 	readonly label: string;
@@ -406,11 +540,12 @@ function RoleRow({
 	readonly provider?: ProviderSummary | null;
 	readonly onOpen: (anchor: HTMLElement) => void;
 	readonly thinking?: { readonly onOpen: (anchor: HTMLElement) => void };
+	readonly action?: { readonly label: string; readonly disabled?: boolean; readonly onClick: () => void } | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
 		<Row name={label} hint={hint}>
-			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
+			<span className={`settings-split${thinking === undefined && action === undefined ? " is-solo" : ""}`}>
 				{broken ? (
 					<span className="ai-role-alert" role="img" aria-label={t("settingsCore.ai.roleBroken")} title={t("settingsCore.ai.roleBroken")}>
 						!
@@ -420,6 +555,11 @@ function RoleRow({
 				{thinking !== undefined ? (
 					<button type="button" className="settings-icon-btn" aria-label={t("settingsCore.ai.thinkingDepthFor", { label })} title={t("settingsCore.ai.thinkingDepth")} onClick={(event) => thinking.onOpen(event.currentTarget)}>
 						<Ellipsis size={16} aria-hidden="true" focusable="false" />
+					</button>
+				) : null}
+				{action !== undefined ? (
+					<button type="button" className="linear-btn settings-btn-quiet" data-action={`run-${role}`} disabled={action.disabled} onClick={action.onClick}>
+						{action.label}
 					</button>
 				) : null}
 				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} title={unset ? undefined : currentTitle} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>

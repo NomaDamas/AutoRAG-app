@@ -10,7 +10,7 @@ export { providerConnectRoute, withoutAutorag } from "./account-contract";
  * account service read one source.
  */
 
-export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel-ai-gateway";
+export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel-ai-gateway" | "bivia" | "openai" | "cloudflare-workers-ai";
 
 /**
  * `jev.backend` that makes the small chat model (`jev.sllm.model`, else the question-decomposition model) the decision
@@ -41,19 +41,40 @@ const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, JevBackend>> = {
 	typesafe: "typesafe",
 	openrouter: "openrouter",
 	"vercel-ai-gateway": "vercel-ai-gateway",
+	bivia: "bivia",
+	openai: "openai",
+	"cloudflare-workers-ai": "cloudflare-workers-ai",
 };
 
-/** The Jev model ids each backend accepts. */
+/**
+ * Decision model ids each backend accepts. The single decision model serves both
+ * search/routing decisions and visual-rich page gating; Jev (`jev-1.13` /
+ * `typesafe/jev-1.13`) remains the default first choice.
+ */
 const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModelSpec[]>> = {
-	dazzi: [{ id: "jev-1.13", label: "Jev 1.13" }],
+	dazzi: [
+		{ id: "jev-1.13", label: "Jev 1.13" },
+		{ id: "typesafe/jev-1.14", label: "Jev 1.14" },
+		{ id: "openai/gpt-6-luna-decisions", label: "GPT-6 Luna Decisions" },
+		{ id: "cloudflare/clef-omni", label: "Clef Omni" },
+	],
 	typesafe: [{ id: "jev-latest", labelKey: "finderState.roles.jevLatest" }],
 	openrouter: [
 		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
+		{ id: "typesafe/jev-1.14", label: "Jev 1.14" },
+		{ id: "openai/gpt-6-luna-decisions", label: "GPT-6 Luna Decisions" },
+		{ id: "cloudflare/clef-omni", label: "Clef Omni" },
 		{ id: "~typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" },
 	],
 	"vercel-ai-gateway": [
 		{ id: "typesafe-ai/jev-1.13.0", label: "Jev 1.13" },
 		{ id: "typesafe-ai/jev", labelKey: "finderState.roles.jevLatest" },
+	],
+	bivia: [{ id: "dec-1", label: "Bivia (dec-1)" }],
+	openai: [{ id: "gpt-6-luna", label: "GPT-6 Luna" }],
+	"cloudflare-workers-ai": [
+		{ id: "@cf/cloudflare/clef-omni", label: "Clef Omni" },
+		{ id: "typesafe/jev-1.14.0", label: "Jev 1.14" },
 	],
 };
 
@@ -69,6 +90,39 @@ const RERANK_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModelSpec[
 		{ id: "cohere/rerank-4-fast", label: "Cohere Rerank 4 Fast" },
 	],
 };
+
+/**
+ * Dedicated official remote OCR / document-parsing model ids each provider serves.
+ *
+ * Unlike general chat LLMs (which belong in the VLM role), the OCR picker only
+ * lists purpose-built OCR / document-parsing API models for connected providers,
+ * alongside the always-available local engines (PP-OCRv5 / Tesseract).
+ */
+const OCR_MODELS_BY_PROVIDER: Readonly<Record<string, readonly RoleModelSpec[]>> = {
+	mistral: [
+		{ id: "mistral-ocr-latest", label: "Mistral OCR (latest)" },
+		{ id: "mistral-ocr-2512", label: "Mistral OCR 3 (2512)" },
+	],
+	nvidia: [{ id: "nvidia/nemotron-parse", label: "NVIDIA Nemotron Parse" }],
+	upstage: [
+		{ id: "document-parse", label: "Upstage Document Parse" },
+		{ id: "ocr", label: "Upstage Document OCR" },
+	],
+	zai: [{ id: "glm-ocr", label: "GLM-OCR (Z.AI)" }],
+};
+
+export function ocrModelsFor(providerId: string): readonly RoleModel[] {
+	const specs = OCR_MODELS_BY_PROVIDER[providerId];
+	if (specs === undefined) return [];
+	return specs.map(({ id, label, labelKey }) => ({
+		id,
+		label: labelKey === undefined ? (label ?? id) : t(labelKey),
+	}));
+}
+
+export function isOfficialOcrModel(providerId: string, modelId: string): boolean {
+	return (OCR_MODELS_BY_PROVIDER[providerId] ?? []).some((spec) => spec.id === modelId);
+}
 
 export function jevBackendFor(providerId: string): JevBackend | undefined {
 	return JEV_BACKEND_BY_PROVIDER[providerId];

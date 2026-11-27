@@ -39,14 +39,21 @@ export interface AutoragRefreshDeps {
 	readonly preflightFetch?: typeof fetch;
 }
 
-export const REFRESH_METHODS: Record<RefreshMethod, true> = {
+export const REFRESH_METHODS: Record<string, true> = {
 	parsed: true,
+	visual: true,
 	minsync: true,
 	datasources: true,
 	jikji: true,
 	everything: true,
 	fsearch: true,
 };
+
+/** Stage 1 (default/onboarding) refresh: fast base parsing + MinSync only. */
+export const LOCAL_REFRESH_METHODS: readonly RefreshMethod[] = ["parsed", "minsync"];
+
+/** Stage 2 (opt-in) advanced visual parsing: keeps Stage 1 mirrors intact and builds VLM/OCR mirrors on top. */
+export const VISUAL_REFRESH_METHODS: readonly string[] = ["visual", "minsync"];
 
 /** The config resolver input shared by every helper here. */
 export function configInput(deps: AutoragRefreshDeps): { flags: Record<string, never>; env: NodeJS.ProcessEnv; cwd: string } {
@@ -68,9 +75,6 @@ export async function resolveEffectiveConfig(
 	return { configPath, raw, config };
 }
 
-/** What a plain "refresh my folders" run covers: the parsed mirror and its vector index. */
-export const LOCAL_REFRESH_METHODS: readonly RefreshMethod[] = ["parsed", "minsync"];
-
 /**
  * Manual index refresh from Settings; returns diagnostics instead of throwing for known failures.
  * A failed run is reported here, so every caller (Settings, onboarding, the Finder checkbox in the
@@ -90,7 +94,7 @@ async function runRefresh(
 	context?: { excludePathsCount?: number; failedPhase?: string },
 ): Promise<ConfigRefreshResult> {
 	const requested = methods ?? LOCAL_REFRESH_METHODS;
-	const invalid = requested.filter((method) => REFRESH_METHODS[method as RefreshMethod] !== true);
+	const invalid = requested.filter((method) => REFRESH_METHODS[method] !== true);
 	if (invalid.length > 0) throw new Error(`Unknown refresh method(s): ${invalid.join(", ")}`);
 	if (requested.length === 0) throw new Error("At least one refresh method is required");
 	const input = configInput(deps);
@@ -127,7 +131,7 @@ async function runRefresh(
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	// A root that cannot be listed, or reads as empty although it was full, would make this
 	// refresh delete everything indexed from it; leave the index alone until it returns.
-	if (selected.includes("parsed") || selected.includes("minsync")) {
+	if (selected.includes("parsed") || selected.includes("minsync") || (selected as readonly string[]).includes("visual")) {
 		const problems = await findUnavailableRoots(effective.searchPaths, effective.workspacePath);
 		if (problems.length > 0) {
 			const message = problems.map((problem) => t("main.refresh.rootUnavailable", { folder: problem.root, indexed: problem.indexed })).join(" ");

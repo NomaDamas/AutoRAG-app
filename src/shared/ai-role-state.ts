@@ -9,8 +9,8 @@
 import { jevBackendFor, JEV_SLLM_BACKEND } from "./ai-roles";
 import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type JsonValue, type ModelCatalogEntry, type ProviderSummary } from "./settings-contract";
 
-/** The four model roles Settings → AI 모델 edits. */
-export type RoleId = "answer" | "decomposition" | "jev" | "rerank";
+/** The model roles Settings → AI 모델 edits. */
+export type RoleId = "answer" | "decomposition" | "jev" | "rerank" | "visualParse" | "visualParseOcr";
 
 /**
  * Default API-key env-var name for a provider id (`foo-bar` → `FOO_BAR_API_KEY`).
@@ -93,6 +93,47 @@ export function roleSelectionFromConfig(role: RoleId, config: JsonObject, connec
 		const provider = stringOf(record?.provider);
 		const modelId = stringOf(record?.model);
 		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : null;
+	}
+	if (role === "visualParse") {
+		const raw = getAt(config, ["visualParse"]);
+		const record = asRecord(raw);
+		if (raw === undefined || raw === false || record === null || boolOf(record.enabled) === false) {
+			return { kind: "special", value: "off" };
+		}
+		const extractor = asRecord(record.extractor);
+		if (stringOf(extractor?.kind) !== "vlm") return { kind: "special", value: "off" };
+		const model = asRecord(extractor?.model);
+		const provider = stringOf(model?.provider);
+		const modelId = stringOf(model?.id);
+		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : { kind: "special", value: "off" };
+	}
+	if (role === "visualParseOcr") {
+		const raw = getAt(config, ["visualParse"]);
+		const record = asRecord(raw);
+		if (raw === undefined || raw === false || record === null || boolOf(record.enabled) === false) {
+			return { kind: "special", value: "off" };
+		}
+		if (record.ocr === false) return { kind: "special", value: "off" };
+		const ocr = asRecord(record.ocr);
+		if (ocr !== null) {
+			const engine = stringOf(ocr.engine);
+			if (engine === "api" || engine === "vlm" || ocr.model !== undefined) {
+				const model = asRecord(ocr.model);
+				const provider = stringOf(model?.provider);
+				const modelId = stringOf(model?.id);
+				return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : { kind: "special", value: "auto" };
+			}
+			if (engine === "kordoc" || engine === "tesseract" || engine === "auto") {
+				return { kind: "special", value: engine };
+			}
+			return { kind: "special", value: "auto" };
+		}
+		const extractor = asRecord(record.extractor);
+		const legacyEngine = stringOf(extractor?.engine);
+		if (legacyEngine === "kordoc" || legacyEngine === "tesseract" || legacyEngine === "auto") {
+			return { kind: "special", value: legacyEngine };
+		}
+		return { kind: "special", value: "auto" };
 	}
 	const raw = getAt(config, ["jev"]);
 	if (raw === false) return null;

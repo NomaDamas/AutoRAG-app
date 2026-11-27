@@ -5,7 +5,7 @@
  */
 
 import type { TFunction } from "i18next";
-import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, ocrModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { asRecord, getAt, stringOf } from "./configSupport";
 import type { RolePickerSelection } from "./ModelPicker";
@@ -32,11 +32,26 @@ export function providerRoleCleanup(config: AutoRagConfigSnapshot["config"], pro
 	const decomposition = asRecord(getAt(config, ["queryDecomposition", "model"]));
 	const rerank = asRecord(getAt(config, ["rerank"]));
 	const jev = asRecord(getAt(config, ["jev"]));
+	const visualParse = asRecord(getAt(config, ["visualParse"]));
+	const visualExtractor = asRecord(visualParse?.extractor);
+	const visualModel = asRecord(visualExtractor?.model);
+	const visualOcr = asRecord(visualParse?.ocr);
+	const visualOcrModel = asRecord(visualOcr?.model);
 	const ops: AutoRagConfigUpdate[] = [];
 	if (stringOf(model?.provider) === providerId) ops.push({ path: ["model"], remove: true });
 	if (stringOf(decomposition?.provider) === providerId) ops.push({ path: ["queryDecomposition"], remove: true });
 	if (stringOf(rerank?.provider) === providerId) ops.push({ path: ["rerank"], value: false });
 	if (stringOf(jev?.backend) === jevBackendFor(providerId)) ops.push({ path: ["jev"], remove: true });
+	const vlmUses = stringOf(visualModel?.provider) === providerId;
+	const ocrUses = stringOf(visualOcrModel?.provider) === providerId;
+	if (vlmUses || ocrUses) {
+		const nextVisual: Record<string, unknown> = visualParse ? { ...visualParse } : {};
+		if (vlmUses) delete nextVisual.extractor;
+		if (ocrUses) nextVisual.ocr = { engine: "auto" };
+		const hasVlm = asRecord(nextVisual.extractor as never)?.kind === "vlm";
+		const hasOcr = nextVisual.ocr !== false && nextVisual.ocr !== undefined;
+		ops.push({ path: ["visualParse"], value: hasVlm || hasOcr ? (nextVisual as never) : false });
+	}
 	return ops;
 }
 
@@ -46,6 +61,68 @@ export function jevOptionsFor(connected: readonly ProviderSummary[]): RoleOption
 
 export function rerankOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
 	return connected.flatMap((provider) => rerankModelsFor(provider.id).map((model) => ({ provider, model: staticCatalogEntry(provider, model.id, model.label) })));
+}
+
+export function visualParseOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
+	return connected.flatMap((provider) =>
+		provider.models
+			.filter((model) => model.supportsImage !== false)
+			.map((model) => ({ provider, model })),
+	);
+}
+
+/**
+ * Official remote OCR / document-parsing models served by connected providers
+ * (Mistral OCR, NVIDIA Nemotron Parse, Upstage Document Parse, Z.AI GLM-OCR).
+ * General chat LLMs are excluded; local OCR engines are always offered via specials.
+ */
+export function visualParseOcrOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
+	return connected.flatMap((provider) =>
+		ocrModelsFor(provider.id).map((model) => ({
+			provider,
+			model: staticCatalogEntry(provider, model.id, model.label),
+		})),
+	);
+}
+
+export function isVisualParseEnabled(config: AutoRagConfigSnapshot["config"]): boolean {
+	const raw = getAt(config, ["visualParse"]);
+	const record = asRecord(raw);
+	if (raw === undefined || raw === false || record === null) return false;
+	if (record.enabled === false) return false;
+	const hasVlm = stringOf(asRecord(record.extractor)?.kind) === "vlm";
+	const hasOcr = record.ocr !== false;
+	return hasVlm || hasOcr;
+}
+
+export function visualParseLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
+	if (!isVisualParseEnabled(config)) return t("settingsCore.ai.off");
+	const record = asRecord(getAt(config, ["visualParse"]));
+	const extractor = asRecord(record?.extractor);
+	if (stringOf(extractor?.kind) !== "vlm") return t("settingsCore.ai.off");
+	const model = asRecord(extractor?.model);
+	return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.off");
+}
+
+export function visualParseOcrLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
+	if (!isVisualParseEnabled(config)) return t("settingsCore.ai.off");
+	const record = asRecord(getAt(config, ["visualParse"]));
+	if (record === null || record.ocr === false) return t("settingsCore.ai.off");
+	const ocr = asRecord(record.ocr);
+	if (ocr !== null) {
+		const engine = stringOf(ocr.engine);
+		if (engine === "api" || engine === "vlm" || ocr.model !== undefined) {
+			const model = asRecord(ocr.model);
+			return stringOf(model?.name) || stringOf(model?.id) || t("settingsCore.ai.visualParseOcrAuto");
+		}
+		if (engine === "kordoc") return t("settingsCore.ai.visualParseOcrKordoc");
+		if (engine === "tesseract") return t("settingsCore.ai.visualParseOcrTesseract");
+		return t("settingsCore.ai.visualParseOcrAuto");
+	}
+	const legacyEngine = stringOf(asRecord(record.extractor)?.engine);
+	if (legacyEngine === "kordoc") return t("settingsCore.ai.visualParseOcrKordoc");
+	if (legacyEngine === "tesseract") return t("settingsCore.ai.visualParseOcrTesseract");
+	return t("settingsCore.ai.visualParseOcrAuto");
 }
 
 export function jevLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
@@ -101,6 +178,40 @@ export function roleSelectionFor(
 		if (backend.length === 0 || modelId.length === 0) return null;
 		const matched = connected.find((provider) => jevBackendFor(provider.id) === backend);
 		return matched === undefined ? null : { kind: "model", provider: matched.id, modelId };
+	}
+	if (role === "visualParse") {
+		if (!isVisualParseEnabled(config)) return { kind: "special", value: "off" };
+		const record = asRecord(getAt(config, ["visualParse"]));
+		const extractor = asRecord(record?.extractor);
+		if (stringOf(extractor?.kind) !== "vlm") return { kind: "special", value: "off" };
+		const model = asRecord(extractor?.model);
+		const provider = stringOf(model?.provider);
+		const modelId = stringOf(model?.id);
+		return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : { kind: "special", value: "off" };
+	}
+	if (role === "visualParseOcr") {
+		if (!isVisualParseEnabled(config)) return { kind: "special", value: "off" };
+		const record = asRecord(getAt(config, ["visualParse"]));
+		if (record === null || record.ocr === false) return { kind: "special", value: "off" };
+		const ocr = asRecord(record.ocr);
+		if (ocr !== null) {
+			const engine = stringOf(ocr.engine);
+			if (engine === "api" || engine === "vlm" || ocr.model !== undefined) {
+				const model = asRecord(ocr.model);
+				const provider = stringOf(model?.provider);
+				const modelId = stringOf(model?.id);
+				return provider.length > 0 && modelId.length > 0 ? { kind: "model", provider, modelId } : { kind: "special", value: "auto" };
+			}
+			if (engine === "kordoc" || engine === "tesseract" || engine === "auto") {
+				return { kind: "special", value: engine };
+			}
+			return { kind: "special", value: "auto" };
+		}
+		const legacyEngine = stringOf(asRecord(record.extractor)?.engine);
+		if (legacyEngine === "kordoc" || legacyEngine === "tesseract" || legacyEngine === "auto") {
+			return { kind: "special", value: legacyEngine };
+		}
+		return { kind: "special", value: "auto" };
 	}
 	return null;
 }

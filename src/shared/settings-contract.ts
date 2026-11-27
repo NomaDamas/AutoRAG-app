@@ -326,6 +326,8 @@ export interface ModelCatalogEntry {
 	readonly baseUrl: string | null;
 	/** Env var holding this provider's API key, when one is known (never the secret). */
 	readonly apiKeyEnv: string | null;
+	/** True when the model accepts image input (VLM); undefined when modality metadata is unavailable. */
+	readonly supportsImage?: boolean;
 }
 
 export interface ModelCatalogProvider {

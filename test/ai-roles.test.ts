@@ -31,8 +31,10 @@ describe("jev and rerank roles", () => {
 		expect(jevBackendFor("anthropic")).toBeUndefined();
 	});
 
-	it("offers the plan's Jev model and its rerankers only for the AutoRAG provider", () => {
-		expect(jevModelsFor("dazzi").map((model) => model.id)).toEqual(["jev-1.13"]);
+	it("offers the plan's Jev models (defaulting to jev-1.13 first) and its rerankers only for the AutoRAG provider", () => {
+		expect(jevModelsFor("dazzi")[0]?.id).toBe("jev-1.13");
+		expect(jevModelsFor("dazzi").map((model) => model.id)).toContain("typesafe/jev-1.14");
+		expect(jevModelsFor("bivia").map((model) => model.id)).toEqual(["dec-1"]);
 		expect(rerankModelsFor("dazzi").map((model) => model.id)).toEqual(["qwen/qwen3-reranker-8b"]);
 		expect(rerankModelsFor("openrouter").length).toBeGreaterThan(0);
 		expect(rerankModelsFor("anthropic")).toEqual([]);
