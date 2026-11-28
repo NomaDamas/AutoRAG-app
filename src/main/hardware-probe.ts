@@ -1,7 +1,15 @@
 import { execFile } from "node:child_process";
 import { cpus, totalmem } from "node:os";
 import { promisify } from "node:util";
-import { evaluateLocalEmbeddingSpec, isHardwareProfile, type GpuInfo, type HardwareProfile, type LocalSpecVerdict } from "../shared/local-embedding-spec";
+import {
+	evaluateIndexingTier,
+	evaluateLocalEmbeddingSpec,
+	isHardwareProfile,
+	type GpuInfo,
+	type HardwareProfile,
+	type IndexingTierVerdict,
+	type LocalSpecVerdict,
+} from "../shared/local-embedding-spec";
 
 const execFileAsync = promisify(execFile);
 
@@ -41,11 +49,13 @@ async function readCudaGpus(platform: string): Promise<readonly GpuInfo[]> {
 
 export async function readHardware(): Promise<HardwareProfile> {
 	const platform = process.platform;
+	const cpuList = cpus();
 	return {
 		platform,
 		arch: process.arch,
-		cpuModel: cpus()[0]?.model ?? "",
+		cpuModel: cpuList[0]?.model ?? "",
 		memoryBytes: totalmem(),
+		cores: Math.max(1, cpuList.length),
 		gpus: platform === "win32" || platform === "linux" ? await readCudaGpus(platform) : [],
 	};
 }
@@ -89,4 +99,56 @@ export function createLocalSpecProbe(deps: LocalSpecProbeDeps): () => Promise<Lo
 		})();
 		return verdict;
 	};
+}
+
+/**
+ * Cached indexing-tier probe (`bm25-only` / `sparse+bm25` / `full`) from the same host hardware
+ * snapshot. Falls back safely to `bm25-only` if hardware cannot be probed.
+ */
+export function createIndexingTierProbe(deps: LocalSpecProbeDeps): () => Promise<IndexingTierVerdict> {
+	let verdict: Promise<IndexingTierVerdict> | null = null;
+	return () => {
+		verdict ??= (async (): Promise<IndexingTierVerdict> => {
+			const override = deps.allowOverride ? overrideFrom(deps.env) : null;
+			try {
+				return evaluateIndexingTier(override ?? (await (deps.readHardware ?? readHardware)()));
+			} catch {
+				return {
+					tier: "bm25-only",
+					denseEligible: false,
+					sparseEnabled: false,
+					bm25Enabled: true,
+					reason: "hardware-unreadable: falling back to zero-ML BM25 only",
+				};
+			}
+		})();
+		return verdict;
+	};
+}
+
+let cachedTierVerdict: Promise<IndexingTierVerdict> | null = null;
+
+/** Resolve the current host's indexing tier, honoring `AUTORAG_HARDWARE_OVERRIDE` when set. */
+export async function readCurrentIndexingTier(env: NodeJS.ProcessEnv = process.env): Promise<IndexingTierVerdict> {
+	const raw = env.AUTORAG_HARDWARE_OVERRIDE?.trim() || env.AUTORAG_QA_HARDWARE?.trim();
+	if (raw !== undefined && raw.length > 0) {
+		try {
+			const parsed: unknown = JSON.parse(raw);
+			if (isHardwareProfile(parsed)) return evaluateIndexingTier(parsed);
+		} catch {
+			// Ignore malformed override and probe the real host.
+		}
+	}
+	cachedTierVerdict ??= readHardware()
+		.then(evaluateIndexingTier)
+		.catch(
+			(): IndexingTierVerdict => ({
+				tier: "bm25-only",
+				denseEligible: false,
+				sparseEnabled: false,
+				bm25Enabled: true,
+				reason: "hardware-unreadable: falling back to zero-ML BM25 only",
+			}),
+		);
+	return cachedTierVerdict;
 }
