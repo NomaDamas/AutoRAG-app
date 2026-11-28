@@ -43,6 +43,21 @@ export function renderTextStampPng(
 	return { dataUrl: canvas.toDataURL("image/png"), aspect: logicalW / logicalH };
 }
 
+/** Local calendar date as YYYY-MM-DD (stamps and the "Today" button). */
+export function todayIso(): string {
+	const now = new Date();
+	return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** The Stamp menu's presets; the AI agent's `pdf_add_stamp` uses the same table, so both look identical. */
+export const PRESET_STAMPS = [
+	{ id: "approved", labelKey: "documentEditor.pdf.stampApproved", color: "#15803D" },
+	{ id: "confidential", labelKey: "documentEditor.pdf.stampConfidential", color: "#B91C1C" },
+	{ id: "draft", labelKey: "documentEditor.pdf.stampDraft", color: "#475569" },
+	{ id: "reviewed", labelKey: "documentEditor.pdf.stampReviewed", color: "#1D4ED8" },
+	{ id: "urgent", labelKey: "documentEditor.pdf.stampUrgent", color: "#C2410C" },
+] as const;
+
 /** Font stack shared by on-canvas text/note boxes and their committed PNGs, so both wrap identically. */
 export const BOX_FONT_FAMILY = '"Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 export const BOX_LINE_HEIGHT = 1.32;

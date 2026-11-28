@@ -9,6 +9,7 @@ import { createDocumentEditService } from "../src/main/document-edit-service";
 import { createPdfEditorIo } from "../src/main/pdf-editor-io";
 import { encodePng } from "../src/preview/node/png-encode";
 import type { DocumentEditEvent, DocumentEditRequest } from "../src/preview/shared/annotation";
+import type { PdfAssetRequest, PdfAssetResult } from "../src/shared/document-editor-contract";
 
 const cleanups: Array<() => Promise<void> | void> = [];
 let root: string;
@@ -418,5 +419,122 @@ describe("document-edit service", () => {
 		expect(outcome.changed).toBe(true);
 		const done = events.find((e) => e.type === "done");
 		expect(done && done.type === "done" ? done.reply : "").toContain("visually verified");
+	});
+
+	it("gives the PDF agent every toolbar capability: find text, text boxes, notes, stamps, images, Korean watermarks", async () => {
+		const registration = register(["text", "image"]);
+		const pdfPath = join(docsDir, "parity.pdf");
+		const initialDoc = await PDFDocument.create();
+		initialDoc.addPage([600, 800]);
+		initialDoc.addPage([800, 600]);
+		await writeFile(pdfPath, await initialDoc.save());
+		const imagePath = join(docsDir, "logo.png");
+		await writeFile(imagePath, PNG);
+
+		const pdfIo = createPdfEditorIo(join(root, "pdf-backups"));
+		cleanups.push(() => pdfIo.dispose());
+
+		// Without an open editor the content tools are absent (nothing to render them with).
+		const bare = documentEditProfile({ language: "en", path: pdfPath, mode: "pdf", scratchDir: root, agentDir, env: { ...process.env }, pdfIo });
+		expect(bare.customTools?.some((tool) => tool.name === "pdf_add_note")).toBe(false);
+
+		const assetCalls: PdfAssetRequest[] = [];
+		const pngUrl = `data:image/png;base64,${PNG.toString("base64")}`;
+		const renderAsset = async (asset: PdfAssetRequest): Promise<PdfAssetResult> => {
+			assetCalls.push(asset);
+			if (asset.kind === "findText") {
+				return { kind: "textHits", hits: [{ pageNumber: 1, pageIndex: 0, rects: [{ x: 0.2, y: 0.3, width: 0.25, height: 0.02 }] }] };
+			}
+			if (asset.kind === "textBox" || asset.kind === "note") return { kind: "png", dataUrl: pngUrl, aspect: 4, widthPt: asset.widthPt, heightPt: asset.widthPt / 4 };
+			return { kind: "png", dataUrl: pngUrl, aspect: 2 };
+		};
+		const withAssets = documentEditProfile({
+			language: "en", path: pdfPath, mode: "pdf", scratchDir: root, agentDir, env: { ...process.env }, pdfIo, renderAsset,
+		});
+		const names = withAssets.customTools?.map((tool) => tool.name) ?? [];
+		for (const name of ["pdf_find_text", "pdf_add_text_box", "pdf_add_note", "pdf_add_stamp", "pdf_insert_image", "pdf_add_watermark"]) {
+			expect(names).toContain(name);
+		}
+		expect(withAssets.systemPrompt).toContain("pdf_find_text");
+		const find = withAssets.customTools!.find((tool) => tool.name === "pdf_find_text")!;
+		const found = (await (find.execute as unknown as (id: string, params: Record<string, unknown>) => Promise<{ content: Array<{ text?: string }> }>)(
+			"find-1",
+			{ i: "find", query: "Account SSN" },
+		)) as { content: Array<{ text?: string }> };
+		const hit = JSON.parse(found.content[0]!.text!).hits[0];
+		const { x1, y1, x2, y2 } = hit.ellipse;
+		const [cx, cy, rx, ry] = [(x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1) / 2, (y2 - y1) / 2];
+		for (const [px, py] of [[hit.box.x, hit.box.y], [hit.box.x + hit.box.width, hit.box.y], [hit.box.x, hit.box.y + hit.box.height], [hit.box.x + hit.box.width, hit.box.y + hit.box.height]]) {
+			// Every corner of the text box lies strictly inside the ellipse, so the outline never crosses the text.
+			expect(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2).toBeLessThan(1);
+		}
+		assetCalls.length = 0;
+
+		const svc = createDocumentEditService({
+			resolveModel: async () => ({ model: registration.getModel() }),
+			agentDir,
+			env: { ...process.env },
+			language: () => "en",
+			backupDir,
+			pdfIo,
+		});
+		cleanups.push(() => svc.dispose());
+
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("pdf_find_text", { i: "Locate the SSN line", query: "Account SSN" })),
+			fauxAssistantMessage(
+				fauxToolCall("pdf_apply_ops", {
+					i: "Circle it and point an arrow",
+					operations: [
+						{ kind: "drawShape", pageIndex: 0, shape: "ellipse", x1: 0.18, y1: 0.28, x2: 0.47, y2: 0.34, strokeColor: "#DC2626", strokeWidthPt: 2 },
+						{ kind: "drawShape", pageIndex: 0, shape: "arrow", x1: 0.7, y1: 0.45, x2: 0.49, y2: 0.33, strokeColor: "#DC2626", strokeWidthPt: 2 },
+					],
+				}),
+			),
+			fauxAssistantMessage(fauxToolCall("pdf_add_note", { i: "Add a note", pageIndex: 0, x: 0.62, y: 0.46, text: "확인 필요", color: "pink" })),
+			fauxAssistantMessage(fauxToolCall("pdf_add_stamp", { i: "Stamp", pageIndex: 0, x: 0.65, y: 0.05, preset: "reviewed" })),
+			fauxAssistantMessage(fauxToolCall("pdf_add_text_box", { i: "Caption", pageIndex: 1, x: 0.1, y: 0.1, width: 0.5, text: "검토 의견: 3조 수정" })),
+			fauxAssistantMessage(fauxToolCall("pdf_insert_image", { i: "Logo", path: imagePath, pageIndex: 1, x: 0.7, y: 0.7, width: 0.2 })),
+			fauxAssistantMessage(fauxToolCall("pdf_add_watermark", { i: "Watermark", text: "대외비" })),
+			fauxAssistantMessage(fauxToolCall("pdf_render_page", { i: "Visual QA", pages: [1, 2] })),
+			fauxAssistantMessage("Done and visually verified both pages."),
+		]);
+
+		const outcome = await svc.start(
+			"run-parity",
+			{ path: pdfPath, instruction: "Circle the SSN, point at it, add a note, stamp, caption, logo and watermark", marks: [] },
+			{ ...io(null), renderAsset },
+		);
+		expect(outcome.changed).toBe(true);
+		expect(assetCalls.map((call) => call.kind)).toEqual(["findText", "note", "stamp", "textBox", "image", "watermark"]);
+		// Widths are handed to the renderer in points of the page as viewed: 0.3 x 600pt and 0.5 x 800pt.
+		const note = assetCalls.find((call) => call.kind === "note");
+		expect(note?.kind === "note" ? note.widthPt : 0).toBeCloseTo(180, 5);
+		const box = assetCalls.find((call) => call.kind === "textBox");
+		expect(box?.kind === "textBox" ? box.widthPt : 0).toBeCloseTo(400, 5);
+		const stamp = assetCalls.find((call) => call.kind === "stamp");
+		expect(stamp).toMatchObject({ kind: "stamp", preset: "reviewed", withDate: true });
+
+		const saved = await PDFDocument.load(await readFile(pdfPath));
+		expect(saved.getPageCount()).toBe(2);
+		expect(events.some((event) => event.type === "done" && event.reply.includes("visually verified"))).toBe(true);
+	});
+
+	it("refuses to insert credential files or non-images through pdf_insert_image", async () => {
+		const pdfPath = join(docsDir, "guard.pdf");
+		const doc = await PDFDocument.create();
+		doc.addPage([600, 800]);
+		await writeFile(pdfPath, await doc.save());
+		const pdfIo = createPdfEditorIo(join(root, "pdf-backups"));
+		cleanups.push(() => pdfIo.dispose());
+		const profile = documentEditProfile({
+			language: "en", path: pdfPath, mode: "pdf", scratchDir: root, agentDir, env: { ...process.env }, pdfIo,
+			renderAsset: async () => ({ kind: "png", dataUrl: `data:image/png;base64,${PNG.toString("base64")}`, aspect: 1 }),
+		});
+		const insert = profile.customTools!.find((tool) => tool.name === "pdf_insert_image")!;
+		const run = insert.execute as unknown as (id: string, params: Record<string, unknown>) => Promise<unknown>;
+		await expect(run("c1", { i: "x", path: join(docsDir, "notes.txt"), pageIndex: 0, x: 0.1, y: 0.1 })).rejects.toThrow(/Unsupported image type/);
+		await expect(run("c2", { i: "x", path: "relative.png", pageIndex: 0, x: 0.1, y: 0.1 })).rejects.toThrow(/absolute path/);
+		await expect(run("c3", { i: "x", path: join(agentDir, "auth.png"), pageIndex: 0, x: 0.1, y: 0.1 })).rejects.toThrow(/Refused/);
 	});
 });

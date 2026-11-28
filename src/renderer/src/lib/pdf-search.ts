@@ -1,4 +1,4 @@
-import type { MarkRect, TextRun } from "../../../preview/shared/text-marks";
+import type { CharEdgeMeasure, MarkRect, TextRun } from "../../../preview/shared/text-marks";
 
 export interface PdfSearchHit {
 	/** 0-based PDF page index. */
@@ -122,4 +122,28 @@ export function findPageTextMatches(
 	}
 
 	return hits;
+}
+
+/**
+ * Per-character edges for pdf.js text runs, measured on a canvas in the run's font family (pdf.js reports
+ * a generic family per font in `content.styles`). Only proportions matter: `pdfRuns` scales them to the
+ * run's real width, so a near-match font still places each character accurately.
+ */
+export function canvasCharEdges(styles: Readonly<Record<string, { readonly fontFamily?: string }>> | undefined): CharEdgeMeasure | undefined {
+	const ctx = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+	if (ctx === null) return undefined;
+	return (text, item) => {
+		const fontName = typeof item === "object" && item !== null ? (item as { fontName?: unknown }).fontName : undefined;
+		const family = (typeof fontName === "string" ? styles?.[fontName]?.fontFamily : undefined) ?? "sans-serif";
+		ctx.font = `100px ${family}`;
+		const edges = [0];
+		let prefix = "";
+		for (const ch of text) {
+			prefix += ch;
+			// Surrogate pairs advance two UTF-16 units: repeat the edge so indices stay aligned with `text`.
+			const width = ctx.measureText(prefix).width;
+			for (let i = 0; i < ch.length; i += 1) edges.push(width);
+		}
+		return edges;
+	};
 }

@@ -105,6 +105,18 @@ export function DocumentEditorSidebarProvider({
 		});
 	}, [updateTurn]);
 
+	// Serve the PDF agent's render / find-text requests with the editor's own renderers (loaded on first use).
+	useEffect(() => {
+		const api = window.autorag?.documentEditor;
+		if (api?.onPdfAssetRequest === undefined) return;
+		return api.onPdfAssetRequest((id, request) => {
+			void import("../lib/pdf-asset-render")
+				.then((mod) => mod.renderPdfAsset(request))
+				.then((result) => api.pdfAssetReply(id, { ok: true, result }))
+				.catch((error: unknown) => api.pdfAssetReply(id, { ok: false, error: error instanceof Error ? error.message : String(error) }));
+		});
+	}, []);
+
 	const registerTab = useCallback((reg: DocumentEditorTabRegistration) => {
 		setTabs((current) => {
 			const next = new Map(current);

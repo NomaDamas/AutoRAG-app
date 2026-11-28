@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from "pdfjs-dist";
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 import {
 	ArrowDown,
 	ArrowUp,
@@ -55,8 +54,9 @@ import type {
 	PdfPointFraction,
 } from "../../../shared/document-editor-contract";
 import { cn } from "../lib/cn";
-import { findPageTextMatches, type PdfSearchHit } from "../lib/pdf-search";
+import { canvasCharEdges, findPageTextMatches, type PdfSearchHit } from "../lib/pdf-search";
 import { loadLocalImageAsPngDataUrl } from "../lib/pdf-image-load";
+import { ensurePdfWorker } from "../lib/pdf-worker";
 import { DazziFilePickerModal } from "./DazziFilePickerModal";
 import {
 	BOX_FONT_FAMILY,
@@ -69,21 +69,17 @@ import {
 	PageNumbersModal,
 	PdfFormsModal,
 	PdfPropertiesModal,
+	PRESET_STAMPS,
 	renderNoteBoxPng,
 	renderPresetStampPng,
 	renderTextBoxPng,
 	renderWatermarkPng,
 	SplitPdfModal,
 	TEXT_BOX_PAD,
+	todayIso,
 	WatermarkModal,
 } from "./PdfEditorTools";
 
-let pdfWorkerReady = false;
-function ensurePdfWorker(): void {
-	if (pdfWorkerReady) return;
-	GlobalWorkerOptions.workerSrc = workerUrl;
-	pdfWorkerReady = true;
-}
 
 const SAVED_SIGNATURES_KEY = "dazzi.pdfEditor.signatures";
 const MAX_SAVED_SIGNATURES = 6;
@@ -174,13 +170,6 @@ interface DrawDraft {
 const HIGHLIGHT_COLORS = ["#FDE047", "#86EFAC", "#93C5FD", "#F9A8D4", "#FDBA74"] as const;
 const INK_COLORS = ["#1D1D1F", "#DC2626", "#2563EB", "#16A34A", "#9333EA"] as const;
 
-function todayIso(): string {
-	const now = new Date();
-	const y = now.getFullYear();
-	const m = String(now.getMonth() + 1).padStart(2, "0");
-	const d = String(now.getDate()).padStart(2, "0");
-	return `${y}-${m}-${d}`;
-}
 
 /**
  * Renders one PDF page either at an explicit `scale` (main stage) or fitted
@@ -700,7 +689,7 @@ export function PdfDocumentEditor({
 					const page = await pdf.getPage(p);
 					const content = await page.getTextContent();
 					const viewport = page.getViewport({ scale: 1 });
-					const runs = pdfRuns(content.items, viewport.transform ?? [1, 0, 0, -1, 0, viewport.height]);
+					const runs = pdfRuns(content.items, viewport.transform ?? [1, 0, 0, -1, 0, viewport.height], canvasCharEdges(content.styles));
 					const pageHits = findPageTextMatches(p - 1, runs, findQuery);
 					allHits.push(...pageHits);
 				} catch {
@@ -1403,13 +1392,7 @@ export function PdfDocumentEditor({
 		});
 	};
 
-	const presetStamps = [
-		{ id: "approved", label: t("documentEditor.pdf.stampApproved"), color: "#15803D" },
-		{ id: "confidential", label: t("documentEditor.pdf.stampConfidential"), color: "#B91C1C" },
-		{ id: "draft", label: t("documentEditor.pdf.stampDraft"), color: "#475569" },
-		{ id: "reviewed", label: t("documentEditor.pdf.stampReviewed"), color: "#1D4ED8" },
-		{ id: "urgent", label: t("documentEditor.pdf.stampUrgent"), color: "#C2410C" },
-	] as const;
+	const presetStamps = PRESET_STAMPS.map((stamp) => ({ id: stamp.id, label: t(stamp.labelKey), color: stamp.color }));
 
 	const zoomInTarget = ZOOM_STEPS.find((step) => step > effectiveScale + 0.01);
 	const zoomOutTarget = [...ZOOM_STEPS].reverse().find((step) => step < effectiveScale - 0.01);

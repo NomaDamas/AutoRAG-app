@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { resizeImage } from "@earendil-works/pi-coding-agent";
 import {
 	degrees,
+	LineCapStyle,
 	PDFCheckBox,
 	PDFDocument,
 	PDFDropdown,
@@ -558,33 +559,25 @@ async function applyOperation(pdfDoc: PDFDocument, op: PdfEditOperation): Promis
 			}
 			const start = visualPointToPdfCoords(page, { x: op.x1, y: op.y1 });
 			const end = visualPointToPdfCoords(page, { x: op.x2, y: op.y2 });
-			page.drawLine({
-				start,
-				end,
-				thickness: op.strokeWidthPt,
-				color: strokeColor,
-				opacity,
-			});
-			if (op.shape === "arrow") {
-				const dx = end.x - start.x;
-				const dy = end.y - start.y;
-				const len = Math.hypot(dx, dy);
-				if (len > 2) {
-					const angle = Math.atan2(dy, dx);
-					const headLen = Math.min(len * 0.35, Math.max(8, op.strokeWidthPt * 4.5));
-					const spread = Math.PI / 6;
-					const wing1 = {
-						x: end.x - headLen * Math.cos(angle - spread),
-						y: end.y - headLen * Math.sin(angle - spread),
-					};
-					const wing2 = {
-						x: end.x - headLen * Math.cos(angle + spread),
-						y: end.y - headLen * Math.sin(angle + spread),
-					};
-					page.drawLine({ start: end, end: wing1, thickness: op.strokeWidthPt, color: strokeColor, opacity });
-					page.drawLine({ start: end, end: wing2, thickness: op.strokeWidthPt, color: strokeColor, opacity });
-				}
+			const dx = end.x - start.x;
+			const dy = end.y - start.y;
+			const len = Math.hypot(dx, dy);
+			if (op.shape === "arrow" && len > 2) {
+				// A filled triangular head; the shaft stops inside its base so the stroke never pokes through the tip.
+				const angle = Math.atan2(dy, dx);
+				const headLen = Math.min(len * 0.4, Math.max(9, op.strokeWidthPt * 4.2));
+				const halfWidth = Math.max(4.5, headLen * 0.55);
+				const base = { x: end.x - headLen * Math.cos(angle), y: end.y - headLen * Math.sin(angle) };
+				const nx = -Math.sin(angle) * halfWidth;
+				const ny = Math.cos(angle) * halfWidth;
+				const shaftEnd = { x: end.x - headLen * 0.85 * Math.cos(angle), y: end.y - headLen * 0.85 * Math.sin(angle) };
+				page.drawLine({ start, end: shaftEnd, thickness: op.strokeWidthPt, color: strokeColor, opacity, lineCap: LineCapStyle.Round });
+				// drawSvgPath maps path (sx, sy) to page (x + sx, y - sy): pass PDF coordinates with y negated.
+				const pts = [end, { x: base.x + nx, y: base.y + ny }, { x: base.x - nx, y: base.y - ny }];
+				page.drawSvgPath(`M ${pts.map((pt) => `${pt.x} ${-pt.y}`).join(" L ")} Z`, { x: 0, y: 0, color: strokeColor, opacity });
+				return;
 			}
+			page.drawLine({ start, end, thickness: op.strokeWidthPt, color: strokeColor, opacity, lineCap: LineCapStyle.Round });
 			return;
 		}
 		case "freehandPath": {
@@ -601,6 +594,7 @@ async function applyOperation(pdfDoc: PDFDocument, op: PdfEditOperation): Promis
 					thickness: op.strokeWidthPt,
 					color: strokeColor,
 					opacity,
+					lineCap: LineCapStyle.Round,
 				});
 				prev = curr;
 			}
@@ -812,6 +806,8 @@ export interface PdfEditorIo {
 	open(filePath: string): Promise<DocumentEditorPdfPayload>;
 	inspect(filePath: string): Promise<PdfInspection>;
 	renderPageToPng(filePath: string, pageNumber: number, options?: PdfRenderPageOptions): Promise<PdfRenderedPage>;
+	/** The page's visible size in points as the viewer shows it (crop box, rotation applied). */
+	pageVisualSize(filePath: string, pageIndex: number): Promise<{ readonly widthPt: number; readonly heightPt: number; readonly pageCount: number }>;
 	apply(request: PdfApplyRequest, source?: "human" | "ai"): Promise<PdfApplyResult>;
 	extract(request: PdfExtractRequest): Promise<PdfExtractResult>;
 	split(request: PdfSplitRequest): Promise<PdfSplitResult>;
@@ -1209,6 +1205,20 @@ export function createPdfEditorIo(backupDir: string): PdfEditorIo {
 			const record = snapshots.get(snapshotId);
 			if (record === undefined) return null;
 			return readFile(record.backupPath).catch(() => null);
+		},
+
+		pageVisualSize: async (filePath, pageIndex) => {
+			assertPdfPath(filePath);
+			const doc = await PDFDocument.load(await readFile(filePath), { ignoreEncryption: false });
+			const pageCount = doc.getPageCount();
+			if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pageCount) {
+				throw new Error(`Page index ${pageIndex} is out of range (PDF has ${pageCount} page${pageCount === 1 ? "" : "s"}; pageIndex is 0-based).`);
+			}
+			const page = doc.getPage(pageIndex);
+			const box = visibleBox(page);
+			const rotation = ((page.getRotation().angle % 360) + 360) % 360;
+			const swap = rotation === 90 || rotation === 270;
+			return { widthPt: swap ? box.height : box.width, heightPt: swap ? box.width : box.height, pageCount };
 		},
 
 		renderPageToPng: async (filePath, pageNumber, options) => {

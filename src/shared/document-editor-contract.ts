@@ -31,6 +31,8 @@ export const DOCUMENT_EDITOR_CHANNELS = {
 	pdfReadFormFields: "documentEditor:pdfReadFormFields",
 	pdfSaveFormFields: "documentEditor:pdfSaveFormFields",
 	pdfDecodeImage: "documentEditor:pdfDecodeImage",
+	pdfAssetRequest: "documentEditor:pdfAssetRequest",
+	pdfAssetReply: "documentEditor:pdfAssetReply",
 	pdfChanged: "documentEditor:pdfChanged",
 	aiStart: "documentEditor:aiStart",
 	aiCancel: "documentEditor:aiCancel",
@@ -397,6 +399,82 @@ export interface DocumentEditorAiCapture {
 	readonly rect?: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 }
 
+export type PdfNoteColor = "yellow" | "pink" | "blue" | "green";
+export type PdfStampPreset = "approved" | "confidential" | "draft" | "reviewed" | "urgent";
+export const PDF_NOTE_COLORS: readonly PdfNoteColor[] = ["yellow", "pink", "blue", "green"];
+export const PDF_STAMP_PRESETS: readonly PdfStampPreset[] = ["approved", "confidential", "draft", "reviewed", "urgent"];
+
+/**
+ * Content the PDF agent asks the open editor to produce, so agent edits use the very same
+ * renderers (fonts, Korean wrapping, note cards, stamps, image decoding, text search) as the toolbar.
+ */
+export type PdfAssetRequest =
+	| { readonly kind: "textBox"; readonly text: string; readonly widthPt: number; readonly fontSizePt: number; readonly color: string }
+	| { readonly kind: "note"; readonly text: string; readonly widthPt: number; readonly fontSizePt: number; readonly noteColor: PdfNoteColor }
+	| { readonly kind: "stamp"; readonly preset?: PdfStampPreset; readonly label?: string; readonly color?: string; readonly withDate: boolean }
+	| { readonly kind: "watermark"; readonly text: string; readonly color: string; readonly angleDeg: number }
+	| { readonly kind: "image"; readonly path: string }
+	| { readonly kind: "findText"; readonly path: string; readonly query: string; readonly pages?: readonly number[] };
+
+/** A text match: 1-based page number plus normalized (0..1, top-left origin) boxes in the page as viewed. */
+export interface PdfTextHit {
+	readonly pageNumber: number;
+	readonly pageIndex: number;
+	readonly rects: readonly { readonly x: number; readonly y: number; readonly width: number; readonly height: number }[];
+}
+
+export type PdfAssetResult =
+	| { readonly kind: "png"; readonly dataUrl: string; readonly aspect: number; readonly widthPt?: number; readonly heightPt?: number }
+	| { readonly kind: "textHits"; readonly hits: readonly PdfTextHit[] };
+
+export type PdfAssetReply = { readonly ok: true; readonly result: PdfAssetResult } | { readonly ok: false; readonly error: string };
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const isFinitePositive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+export function isPdfAssetRequest(value: unknown): value is PdfAssetRequest {
+	if (!isRecord(value)) return false;
+	switch (value.kind) {
+		case "textBox":
+			return typeof value.text === "string" && isFinitePositive(value.widthPt) && isFinitePositive(value.fontSizePt) && typeof value.color === "string";
+		case "note":
+			return (
+				typeof value.text === "string" &&
+				isFinitePositive(value.widthPt) &&
+				isFinitePositive(value.fontSizePt) &&
+				PDF_NOTE_COLORS.includes(value.noteColor as PdfNoteColor)
+			);
+		case "stamp":
+			return (
+				typeof value.withDate === "boolean" &&
+				(value.preset === undefined || PDF_STAMP_PRESETS.includes(value.preset as PdfStampPreset)) &&
+				(value.label === undefined || typeof value.label === "string") &&
+				(value.color === undefined || typeof value.color === "string")
+			);
+		case "watermark":
+			return typeof value.text === "string" && typeof value.color === "string" && typeof value.angleDeg === "number";
+		case "image":
+			return typeof value.path === "string" && value.path.length > 0;
+		case "findText":
+			return (
+				typeof value.path === "string" &&
+				typeof value.query === "string" &&
+				(value.pages === undefined || (Array.isArray(value.pages) && value.pages.every((page) => Number.isInteger(page) && page >= 1)))
+			);
+		default:
+			return false;
+	}
+}
+
+export function isPdfAssetReply(value: unknown): value is PdfAssetReply {
+	if (!isRecord(value)) return false;
+	if (value.ok === false) return typeof value.error === "string";
+	if (value.ok !== true || !isRecord(value.result)) return false;
+	const result = value.result;
+	if (result.kind === "png") return typeof result.dataUrl === "string" && result.dataUrl.startsWith("data:image/png;base64,") && isFinitePositive(result.aspect);
+	return result.kind === "textHits" && Array.isArray(result.hits);
+}
+
 export interface DocumentEditorBridge {
 	open(path: string): Promise<DocumentEditorLoad>;
 	save(request: DocumentEditorSaveRequest): Promise<DocumentEditorSaveResult>;
@@ -411,6 +489,9 @@ export interface DocumentEditorBridge {
 	/** Decodes a TIFF/HEIC picture Chromium cannot read (PNG keeps alpha; raw bytes when only the renderer can decode). */
 	pdfDecodeImage(path: string): Promise<{ readonly mime: "image/png" | "image/jpeg" | "image/tiff" | "image/heic"; readonly bytes: Uint8Array }>;
 	onPdfChanged(listener: (event: PdfChangedEvent) => void): () => void;
+	/** The PDF agent asks the open editor to render content or find text; answer with `pdfAssetReply`. */
+	onPdfAssetRequest(listener: (id: string, request: PdfAssetRequest) => void): () => void;
+	pdfAssetReply(id: string, reply: PdfAssetReply): Promise<void>;
 	aiStart(runId: string, request: DocumentEditRequest, capture?: DocumentEditorAiCapture): Promise<{ readonly changed: boolean }>;
 	aiCancel(runId: string): Promise<void>;
 	aiUndo(runId: string): Promise<boolean>;

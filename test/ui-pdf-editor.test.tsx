@@ -20,8 +20,10 @@ import {
 	isPdfSplitRequest,
 } from "../src/shared/document-editor-contract";
 import { PdfDocumentEditor } from "../src/renderer/src/components/PdfDocumentEditor";
+import { renderPdfAsset } from "../src/renderer/src/lib/pdf-asset-render";
 import { loadLocalImageAsPngDataUrl } from "../src/renderer/src/lib/pdf-image-load";
 import { findPageTextMatches } from "../src/renderer/src/lib/pdf-search";
+import { pdfRuns } from "../src/preview/shared/text-marks";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -109,6 +111,8 @@ function createMockBridge() {
 			return () => changedListeners.delete(listener);
 		},
 		pdfDecodeImage: vi.fn(async () => ({ mime: "image/png" as const, bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) })),
+		onPdfAssetRequest: () => () => undefined,
+		pdfAssetReply: vi.fn(async () => undefined),
 		aiStart: vi.fn(async () => ({ changed: false })),
 		aiCancel: vi.fn(async () => undefined),
 		aiUndo: vi.fn(async () => false),
@@ -627,7 +631,51 @@ describe("PDF memo and image insertion", () => {
 	});
 });
 
+describe("PDF agent asset requests", () => {
+	it("finds text with the Find bar's matcher and returns page-normalized boxes", async () => {
+		await mountEditor();
+		const result = await renderPdfAsset({ kind: "findText", path: "/tmp/sample.pdf", query: "revenue" });
+		expect(result.kind).toBe("textHits");
+		if (result.kind !== "textHits") return;
+		// 2 matches per page across 3 mocked pages.
+		expect(result.hits).toHaveLength(6);
+		expect(result.hits.map((hit) => hit.pageNumber)).toEqual([1, 1, 2, 2, 3, 3]);
+		const rect = result.hits[0]!.rects[0]!;
+		for (const value of [rect.x, rect.y, rect.width, rect.height]) {
+			expect(value).toBeGreaterThan(0);
+			expect(value).toBeLessThan(1);
+		}
+		const only2 = await renderPdfAsset({ kind: "findText", path: "/tmp/sample.pdf", query: "revenue", pages: [2] });
+		expect(only2.kind === "textHits" ? only2.hits.map((hit) => hit.pageIndex) : []).toEqual([1, 1]);
+	});
+
+	it("renders preset stamps with the toolbar's label and color, and custom stamps", async () => {
+		const stamp = await renderPdfAsset({ kind: "stamp", preset: "approved", withDate: true });
+		expect(stamp).toMatchObject({ kind: "png", dataUrl: MOCK_PNG });
+		const custom = await renderPdfAsset({ kind: "stamp", label: "검토 완료", color: "#1D4ED8", withDate: false });
+		expect(custom.kind).toBe("png");
+		await expect(renderPdfAsset({ kind: "stamp", withDate: true })).rejects.toThrow(/preset or a label/);
+	});
+});
+
 describe("findPageTextMatches", () => {
+	it("places a match inside a long pdf.js run by measured character widths, not even spacing", () => {
+		// Wide capitals then narrow letters in one run, as in "Account SSN: 900101-…".
+		const widths: Record<string, number> = { W: 20, i: 2.5, " ": 5 };
+		const measure = (text: string): number[] => {
+			const edges = [0];
+			for (const ch of text) edges.push(edges[edges.length - 1]! + widths[ch]!);
+			return edges;
+		};
+		const item = { str: "WWWW iiii", transform: [10, 0, 0, 10, 0, 100], width: 90, height: 10, fontName: "f1" };
+		const measured = findPageTextMatches(0, pdfRuns([item], [1, 0, 0, -1, 0, 200], measure), "iiii");
+		// Measured: "WWWW " is 85 of 95 units -> x = 85/95 * 90 ≈ 80.5; the 4 i's span 10/95 * 90 ≈ 9.5.
+		expect(measured[0]!.rects[0]!.x).toBeCloseTo(80.53, 1);
+		expect(measured[0]!.rects[0]!.width).toBeCloseTo(9.47, 1);
+		// Even spacing (no measure) would put it at 5/9 of the run: x = 50.
+		expect(findPageTextMatches(0, pdfRuns([item], [1, 0, 0, -1, 0, 200]), "iiii")[0]!.rects[0]!.x).toBeCloseTo(50, 1);
+	});
+
 	it("computes merged highlight rectangles across adjacent runs and multiple hits per page", () => {
 		const runs = [
 			{ text: "Invoice ", x: 40, y: 100, width: 60, height: 14 },

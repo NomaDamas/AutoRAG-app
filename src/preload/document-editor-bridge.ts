@@ -2,6 +2,7 @@ import type { IpcRenderer, IpcRendererEvent } from "electron";
 import { isDocumentEditEvent } from "../preview/shared/annotation";
 import {
 	DOCUMENT_EDITOR_CHANNELS,
+	isPdfAssetRequest,
 	isPdfChangedEvent,
 	type DocumentEditorBridge,
 } from "../shared/document-editor-contract";
@@ -28,6 +29,18 @@ export function createDocumentEditorBridge(ipcRenderer: IpcRenderer): DocumentEd
 				ipcRenderer.removeListener(DOCUMENT_EDITOR_CHANNELS.pdfChanged, handler);
 			};
 		},
+		onPdfAssetRequest: (listener) => {
+			const handler = (_event: IpcRendererEvent, payload: unknown): void => {
+				if (typeof payload !== "object" || payload === null) return;
+				const { id, request } = payload as { id?: unknown; request?: unknown };
+				if (typeof id === "string" && isPdfAssetRequest(request)) listener(id, request);
+			};
+			ipcRenderer.on(DOCUMENT_EDITOR_CHANNELS.pdfAssetRequest, handler);
+			return () => {
+				ipcRenderer.removeListener(DOCUMENT_EDITOR_CHANNELS.pdfAssetRequest, handler);
+			};
+		},
+		pdfAssetReply: (id, reply) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfAssetReply, id, reply),
 		aiStart: (runId, request, capture) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.aiStart, runId, request, capture),
 		aiCancel: (runId) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.aiCancel, runId),
 		aiUndo: (runId) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.aiUndo, runId),
