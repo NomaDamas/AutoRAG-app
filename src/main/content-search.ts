@@ -12,8 +12,13 @@ import { basename } from "node:path";
 import { AutoRAGLite, type RetrievalDiagnostic, type RetrievalOptions, type RetrievalResult, type RetrievalSelection, type RetrievalUnsearchedSurface } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { CONTENT_SEARCH_MAX_HITS, type ContentHit, type ContentSearchOutcome } from "../shared/content-search-contract";
+import { t } from "../shared/i18n/core";
+import { isJsonObject } from "../shared/settings-contract";
 import { readAppIndexing } from "./app-indexing";
+import { readCurrentIndexingTier } from "./hardware-probe";
+import { withIndexingPoliciesApplied } from "./indexing-policy";
 import { createDefaultSearchRelevanceGate, matchesQueryLexicallyOrApprox, type SearchRelevanceGate } from "./search-relevance-gate";
+import { withSemanticPolicyApplied } from "./semantic-policy";
 
 /** The slice of `AutoRAGLite` a content search drives. */
 export interface ContentSearchRuntime {
@@ -63,6 +68,18 @@ function lineOf(result: RetrievalResult): number | null {
 	return typeof line === "number" && Number.isInteger(line) && line > 0 ? line : null;
 }
 
+function hasLexicalOrVisualContentIndex(raw: Record<string, unknown>, indexing: ReturnType<typeof readAppIndexing>): boolean {
+	if (indexing.semanticSearch) return true;
+	if (indexing.indexingMode === "bm25-only" || indexing.indexingMode === "sparse+bm25") return true;
+	const minSync = isJsonObject(raw.minSync) ? raw.minSync : undefined;
+	if (minSync !== undefined && isJsonObject(minSync.bm25) && minSync.bm25.enabled === true) return true;
+	const visualParse = isJsonObject(raw.visualParse) ? raw.visualParse : undefined;
+	if (visualParse !== undefined && visualParse.enabled !== false && (visualParse.extractor !== undefined || visualParse.ocr !== undefined)) {
+		return true;
+	}
+	return false;
+}
+
 export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
 	let cached: { readonly key: string; readonly runtime: ContentSearchRuntime } | null = null;
 	return {
@@ -70,8 +87,10 @@ export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
 			const text = query.trim();
 			if (text.length === 0) return { state: "ok", hits: [] };
 			const { raw, key } = await deps.loadConfig();
-			// Keyword-only mode embeds nothing, so there is no MinSync index to search.
-			if (!readAppIndexing(raw).semanticSearch) return { state: "off", hits: [] };
+			// Keyword-only mode without BM25 / visualParse has no content index to search; when BM25,
+			// hardware-tiered lexical indexing, or opt-in VLM/OCR visual parsing is active, search MinSync
+			// via BM25 / SPLADE even with dense embeddings turned off.
+			if (!hasLexicalOrVisualContentIndex(raw, readAppIndexing(raw))) return { state: "off", hits: [] };
 			if (cached?.key !== key) cached = { key, runtime: deps.open(raw) };
 			const answer = await cached.runtime.searchSelected(text, LOCAL_HYBRID, { topK: limit * CHUNKS_PER_HIT, ...(signal === undefined ? {} : { signal }) });
 			if (answer.results.length === 0 && answer.unsearched.some((surface) => surface.surface === LOCAL_SURFACE)) return { state: "unavailable", hits: [] };
@@ -86,16 +105,37 @@ export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
 					byFile.set(result.source, { chunk: result, lexical: true });
 				}
 			}
-			const candidates = [...byFile.values()].map(({ chunk }) => ({
-				id: chunk.source,
-				sourceLabel: "local-document",
-				title: basename(chunk.source),
-				subtitle: null,
-				content: chunk.content,
-				hit: { path: chunk.source, snippet: contentSnippet(chunk.content, text), line: lineOf(chunk), score: chunk.score } satisfies ContentHit,
-			}));
-			const filtered = deps.relevanceGate === undefined ? candidates : await deps.relevanceGate.filter(text, candidates, signal);
-			return { state: "ok", hits: filtered.map((entry) => entry.hit) };
+			const ordered = [...byFile.values()].map(({ chunk }) => {
+				const directVisualOnly = chunk.metadata?.mirrorKind === "image" && chunk.metadata?.hasVisualComplement !== true;
+				return {
+					id: chunk.source,
+					sourceLabel: "local-document",
+					title: basename(chunk.source),
+					subtitle: null,
+					content: chunk.content,
+					directVisualOnly,
+					hit: {
+						path: chunk.source,
+						snippet: directVisualOnly ? t("main.contentSearch.visualImageMatch") : contentSnippet(chunk.content, text),
+						line: lineOf(chunk),
+						score: chunk.score,
+					} satisfies ContentHit,
+				};
+			});
+			if (deps.relevanceGate === undefined) {
+				return { state: "ok", hits: ordered.map((entry) => entry.hit) };
+			}
+			// Direct multimodal image hits without an OCR/VLM text mirror cannot be evaluated by a text-only Jev gate
+			// because Jev only sees the placeholder text, never the pixels; keep them in original score order while
+			// gating all text documents and OCR/VLM-described images normally.
+			const gateable = ordered.filter((entry) => !entry.directVisualOnly);
+			const directVisual = ordered.filter((entry) => entry.directVisualOnly);
+			const gated = gateable.length === 0 ? [] : await deps.relevanceGate.filter(text, gateable, signal);
+			if (directVisual.length === 0) {
+				return { state: "ok", hits: gated.map((entry) => entry.hit) };
+			}
+			const combined = [...gated, ...directVisual].sort((a, b) => b.hit.score - a.hit.score);
+			return { state: "ok", hits: combined.map((entry) => entry.hit) };
 		},
 	};
 }
@@ -121,7 +161,18 @@ export function createDefaultContentSearch(
 ): ContentSearch {
 	return createContentSearch({
 		loadConfig: sharedConfigLoader(env, cwd),
-		open: () => new AutoRAGLite({ ...resolveConfigReadOnly({ flags: {}, env, cwd }), datasources: {} }),
+		open: (raw) => {
+			const indexing = readAppIndexing(raw);
+			const base = resolveConfigReadOnly({ flags: {}, env, cwd });
+			const resolvedPromise = (async () => {
+				const tier = indexing.indexingMode === "auto" ? (await readCurrentIndexingTier()).tier : indexing.indexingMode;
+				const effective = withSemanticPolicyApplied(withIndexingPoliciesApplied(base), indexing.semanticSearch, tier);
+				return new AutoRAGLite({ ...effective, datasources: {} });
+			})();
+			return {
+				searchSelected: async (query, selection, options) => (await resolvedPromise).searchSelected(query, selection, options),
+			};
+		},
 		relevanceGate,
 	});
 }

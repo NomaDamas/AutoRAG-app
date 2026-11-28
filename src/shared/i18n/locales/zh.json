@@ -1347,6 +1347,9 @@
       "skipped": "刷新时已跳过 ({{reason}})",
       "notIndexed": "尚未建立索引"
     },
+    "contentSearch": {
+      "visualImageMatch": "按图像视觉相似度匹配"
+    },
     "archive": {
       "corrupt": "压缩文件已损坏。",
       "encrypted": "无法解压受密码保护的压缩文件。",
@@ -1445,6 +1448,10 @@
         "local": {
           "label": "本机(MinSync 本地服务器)",
           "description": "Dazzi 运行期间,在本机运行 MinSync 嵌入服务器。嵌入时不会将文档发送到外部。"
+        },
+        "localMultimodal": {
+          "label": "本机 — 多模态图像+文本 (EmbeddingGemma 2)",
+          "description": "在本地运行 EmbeddingGemma 2,将文档和独立图像(PNG/JPG/WebP)直接嵌入同一语义空间进行检索。"
         },
         "dazzi": {
           "label": "Dazzi 云",
@@ -2587,6 +2594,7 @@
       "preview": "查看计划",
       "apply": "应用",
       "dimensionFixed": "模型:Qwen3 Embedding 0.6B(1024 维)。无法更改模型。",
+      "dimensionMultimodal": "模型:EmbeddingGemma 2(768 维) — 将文档和图像(PNG/JPG/WebP)直接嵌入同一语义空间。",
       "serverUrl": "服务器地址",
       "serverUrlPlaceholder": "https://embed.example.com",
       "serverType": "服务器类型",

@@ -208,7 +208,20 @@ export async function applyAppIndexing(
 	// A hard kill needs the parse to run on a thread: only a caller-supplied parse (a function, never from the JSON config) stays in-process.
 	const inProcess = withFileTimeout(typeof kordoc.parse === "function" ? (kordoc.parse as typeof kordocDefaultParse) : kordocDefaultParse, settings.fileTimeoutMs);
 	const parse = typeof kordoc.parse === "function" ? inProcess : sharedParsePool(settings.fileTimeoutMs, inProcess).parse;
-	const parserOptions = { ...config.parserOptions, kordoc: { ...kordoc, parse } };
+	// Include standalone images in the parser registry (and therefore Finder index badges + Index Map) whenever
+	// multimodal embeddings (`native-multimodal:*`) or opt-in Stage-2 visual parsing is enabled, unless explicitly opted out.
+	const embedderId = config.minSync?.embedder?.id;
+	const multimodalEmbedder = typeof embedderId === "string" && embedderId.startsWith("native-multimodal:");
+	const visualParseRaw = raw.visualParse;
+	const visualParseEnabled =
+		isJsonObject(visualParseRaw) && visualParseRaw.enabled !== false && (visualParseRaw.extractor !== undefined || visualParseRaw.ocr !== undefined);
+	const autoIncludeImages =
+		(config.parserOptions as Record<string, unknown> | undefined)?.images === undefined && (multimodalEmbedder || visualParseEnabled);
+	const parserOptions = {
+		...config.parserOptions,
+		...(autoIncludeImages ? { images: true } : {}),
+		kordoc: { ...kordoc, parse },
+	};
 	const withExcludes = jikji === undefined ? { ...config, excludePaths, parserOptions } : { ...config, excludePaths, parserOptions, jikji };
 	return configPath === undefined ? withExcludes : withLearnedEmbeddingBatch(withExcludes, configPath);
 }

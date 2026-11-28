@@ -65,10 +65,16 @@ export interface EmbeddingSettingsDeps {
 	readonly cloudEmbeddings: () => Promise<boolean | null>;
 }
 
-/** The model is fixed: Qwen3-Embedding-0.6B at 1024 dimensions, whichever server runs it. Changing it is not offered. */
+/** The default text model is Qwen3-Embedding-0.6B at 1024 dimensions; the multimodal local profile uses EmbeddingGemma 2 at 768 dimensions. */
 const MODEL = "Qwen/Qwen3-Embedding-0.6B";
 const DIMENSION = 1024;
 const LOCAL_ID = `native:${MODEL}`;
+const MULTIMODAL_MODEL = "google/embeddinggemma-2";
+const MULTIMODAL_DIMENSION = 768;
+const MULTIMODAL_LOCAL_ID = `native-multimodal:${MULTIMODAL_MODEL}`;
+const MULTIMODAL_PROFILE_ID = "local-multimodal";
+const MULTIMODAL_QUERY_PREFIX = "task: search result | query: ";
+const MULTIMODAL_PASSAGE_PREFIX = "title: none | text: ";
 /** The hosted model the Dazzi cloud serves for the same Qwen3-Embedding-0.6B. */
 const DAZZI_MODEL = "qwen/qwen3-embedding-0.6b";
 const DAZZI_KEY_ENV = "OPENAI_API_KEY";
@@ -118,6 +124,18 @@ export function embeddingProfiles(spec: LocalSpecVerdict = { eligible: true }, c
 			unavailable: spec.eligible ? null : localSpecMessage(spec, tByName),
 			...fixed,
 		},
+		{
+			id: MULTIMODAL_PROFILE_ID,
+			kind: "local",
+			label: t("main.embedding.profiles.localMultimodal.label"),
+			description: t("main.embedding.profiles.localMultimodal.description"),
+			model: MULTIMODAL_MODEL,
+			dimension: MULTIMODAL_DIMENSION,
+			queryPrefix: MULTIMODAL_QUERY_PREFIX,
+			passagePrefix: MULTIMODAL_PASSAGE_PREFIX,
+			baseUrl: null,
+			unavailable: spec.eligible ? null : localSpecMessage(spec, tByName),
+		},
 		{ id: "dazzi", kind: "dazzi", label: t("main.embedding.profiles.dazzi.label"), description: t("main.embedding.profiles.dazzi.description"), baseUrl: DEFAULT_ACCOUNT_BASE_URL, unavailable: cloudEmbeddings === false ? t("main.embedding.profiles.dazzi.planRequired") : null, ...fixed },
 		{ id: "byok", kind: "byok", label: t("main.embedding.profiles.byok.label"), description: t("main.embedding.profiles.byok.description"), baseUrl: null, unavailable: null, ...fixed },
 	];
@@ -156,6 +174,14 @@ function normalizeBaseUrl(value: string): string {
 
 /** The `minSync.embedder` value the shared config should hold for a choice. */
 function deriveEmbedder(choice: EmbeddingChoice, accountBaseUrl: string): JsonObject {
+	if (choice.profile.id === MULTIMODAL_PROFILE_ID) {
+		return {
+			id: MULTIMODAL_LOCAL_ID,
+			dimension: MULTIMODAL_DIMENSION,
+			queryPrefix: MULTIMODAL_QUERY_PREFIX,
+			passagePrefix: MULTIMODAL_PASSAGE_PREFIX,
+		};
+	}
 	switch (choice.profile.kind) {
 		case "dazzi":
 			return { id: `openai:${DAZZI_MODEL}`, baseUrl: accountBaseUrl, dimension: DIMENSION, apiKeyEnv: DAZZI_KEY_ENV };
@@ -181,7 +207,10 @@ function currentProfileId(embedder: unknown, semantic: boolean, accountBaseUrl: 
 	if (embedder.profile !== undefined && embedder.id === undefined) return "local";
 	const id = typeof embedder.id === "string" ? embedder.id : "";
 	const baseUrl = typeof embedder.baseUrl === "string" ? embedder.baseUrl : "";
-	if (baseUrl.length === 0) return id.startsWith("native:") ? "local" : null;
+	if (baseUrl.length === 0) {
+		if (id.startsWith("native-multimodal:")) return MULTIMODAL_PROFILE_ID;
+		return id.startsWith("native:") ? "local" : null;
+	}
 	try {
 		const host = new URL(baseUrl).hostname.toLowerCase();
 		if (host === new URL(accountBaseUrl).hostname.toLowerCase() && id.startsWith("openai:")) return "dazzi";
@@ -323,7 +352,7 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 
 	/** What stops this choice before anything is sent or written, or null. */
 	const preflight = async (choice: EmbeddingChoice, request: EmbeddingChangeRequest): Promise<{ readonly error: string | null; readonly key: string | null }> => {
-		if (choice.profile.kind === "local" && !deps.modelReady()) return { error: t("main.embedding.errors.modelMissing"), key: null };
+		if (choice.profile.id === "local" && !deps.modelReady()) return { error: t("main.embedding.errors.modelMissing"), key: null };
 		if (choice.profile.kind === "dazzi") {
 			const token = await readDazziPlanCredential(deps.env.PI_CODING_AGENT_DIR ?? getAgentDir());
 			if (token === null) return { error: t("main.embedding.errors.dazziSignIn"), key: null };

@@ -1,18 +1,17 @@
 import { isJsonObject } from "../shared/settings-contract";
-import { DEFAULT_LOCAL_EMBEDDING_MODEL, localEmbeddingModel, type EmbeddingDaemonState } from "./embedding-daemon";
-
-/**
- * Where text is embedded right now, for everything that embeds: the librarian's memory and chat sidecars,
- * the gist index, and the datasource CLIs that embed for themselves (mailcrawl, lazykatok, discrawl).
- * One answer, derived from `minSync.embedder` in the shared config: the local shared inl embedding daemon the
- * app runs, or the server the user configured. Nothing here loads a model or starts a process; the local
- * server is asked for through `local`, which the app wires to its embedding daemon.
- *
- * The librarian has the same logic, but it exports none of it, so the app keeps its own small copy.
- */
+import {
+	DEFAULT_LOCAL_EMBEDDING_MODEL,
+	localEmbeddingModel,
+	MULTIMODAL_LOCAL_EMBEDDING_MODEL,
+	parseLocalDaemonTarget,
+	type EmbeddingDaemonState,
+} from "./embedding-daemon";
 
 /** Qwen3-Embedding embeds a query as `Instruct: {task}\nQuery:{query}` and a document raw (model card). */
 export const QWEN3_QUERY_PREFIX = "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:";
+/** EmbeddingGemma 2 retrieval prompts (model card). */
+export const EMBEDDINGGEMMA2_QUERY_PREFIX = "task: search result | query: ";
+export const EMBEDDINGGEMMA2_PASSAGE_PREFIX = "title: none | text: ";
 
 const OPENAI_DEFAULT_BASE_URL = "https://api.openai.com";
 const LOCAL_KEY_ENV = "AUTORAG_LOCAL_EMBEDDING_KEY";
@@ -45,19 +44,23 @@ export async function resolveEmbeddingEndpoint(raw: Record<string, unknown>, dep
 	const embedder = isJsonObject(raw.minSync) && isJsonObject(raw.minSync.embedder) ? raw.minSync.embedder : {};
 	const queryPrefix = typeof embedder.queryPrefix === "string" ? embedder.queryPrefix : undefined;
 	const passagePrefix = typeof embedder.passagePrefix === "string" ? embedder.passagePrefix : "";
-	const model = localEmbeddingModel(raw);
-	if (model !== null) {
-		const server = await deps.local(model);
+	const target = localEmbeddingModel(raw);
+	if (target !== null) {
+		const server = await deps.local(target);
 		if (server.state !== "running") return undefined;
-		const defaultQuery = model.toLowerCase() === DEFAULT_LOCAL_EMBEDDING_MODEL.toLowerCase() ? QWEN3_QUERY_PREFIX : "";
+		const parsed = parseLocalDaemonTarget(target);
+		const isQwen3 = parsed.model.toLowerCase() === DEFAULT_LOCAL_EMBEDDING_MODEL.toLowerCase();
+		const isGemma2 = parsed.model.toLowerCase() === MULTIMODAL_LOCAL_EMBEDDING_MODEL.toLowerCase();
+		const defaultQuery = isQwen3 ? QWEN3_QUERY_PREFIX : isGemma2 ? EMBEDDINGGEMMA2_QUERY_PREFIX : "";
+		const defaultPassage = isGemma2 ? EMBEDDINGGEMMA2_PASSAGE_PREFIX : "";
 		return {
 			backend: "daemon",
 			protocol: "openai",
 			baseUrl: server.baseUrl,
-			model,
+			model: parsed.model,
 			dimension: server.dimension,
 			queryPrefix: queryPrefix ?? defaultQuery,
-			passagePrefix,
+			passagePrefix: typeof embedder.passagePrefix === "string" ? embedder.passagePrefix : defaultPassage,
 		};
 	}
 	const id = typeof embedder.id === "string" ? embedder.id : "";

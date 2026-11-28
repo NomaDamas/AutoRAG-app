@@ -1347,6 +1347,9 @@
       "skipped": "Skipped on refresh ({{reason}})",
       "notIndexed": "Not indexed yet"
     },
+    "contentSearch": {
+      "visualImageMatch": "Matched by visual image similarity"
+    },
     "archive": {
       "corrupt": "The archive is corrupted.",
       "encrypted": "Password-protected archives cannot be extracted.",
@@ -1445,6 +1448,10 @@
         "local": {
           "label": "This computer (MinSync local server)",
           "description": "Dazzi runs the MinSync embedding server on this computer while it is open, so documents are not sent anywhere for embedding."
+        },
+        "localMultimodal": {
+          "label": "This computer — Multimodal images + text (EmbeddingGemma 2)",
+          "description": "Runs EmbeddingGemma 2 locally to embed both documents and standalone images (PNG/JPG/WebP) into one shared semantic search space."
         },
         "dazzi": {
           "label": "Dazzi cloud",
@@ -2587,6 +2594,7 @@
       "preview": "Review Plan",
       "apply": "Apply",
       "dimensionFixed": "Model: Qwen3 Embedding 0.6B (1024 dimensions). The model cannot be changed.",
+      "dimensionMultimodal": "Model: EmbeddingGemma 2 (768 dimensions) — embeds documents and images (PNG/JPG/WebP) into one shared semantic space.",
       "serverUrl": "Server address",
       "serverUrlPlaceholder": "https://embed.example.com",
       "serverType": "Server type",

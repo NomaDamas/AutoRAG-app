@@ -130,16 +130,45 @@ function signedIn(fixture: Fixture, token = "dazzi-plan-token"): void {
 const BYOK = { baseUrl: "https://embed.example.com", protocol: "openai" } as const;
 
 describe("createEmbeddingSettingsService", () => {
-	it("offers keyword-only, the local server, Dazzi cloud and the user's own server, and nothing else", async () => {
+	it("offers keyword-only, the local text & multimodal servers, Dazzi cloud and the user's own server, and nothing else", async () => {
 		const fixture = await createFixture({});
 		const { embedding } = buildService(fixture);
 
 		const profiles = (await embedding.get()).profiles;
 
-		expect(profiles.map((profile) => [profile.id, profile.kind])).toEqual([["none", "none"], ["local", "local"], ["dazzi", "dazzi"], ["byok", "byok"]]);
-		// The model is not a choice: every profile that embeds is Qwen3-Embedding-0.6B at 1024 dimensions.
-		expect(profiles.filter((profile) => profile.kind !== "none").map((profile) => profile.dimension)).toEqual([QWEN3_DIMENSION, QWEN3_DIMENSION, QWEN3_DIMENSION]);
+		expect(profiles.map((profile) => [profile.id, profile.kind])).toEqual([
+			["none", "none"],
+			["local", "local"],
+			["local-multimodal", "local"],
+			["dazzi", "dazzi"],
+			["byok", "byok"],
+		]);
+		expect(profiles.filter((profile) => profile.kind !== "none").map((profile) => profile.dimension)).toEqual([
+			QWEN3_DIMENSION,
+			768,
+			QWEN3_DIMENSION,
+			QWEN3_DIMENSION,
+		]);
+		expect(profiles.find((profile) => profile.id === "local-multimodal")?.model).toBe("google/embeddinggemma-2");
 		expect(profiles.find((profile) => profile.id === "byok")?.model).toBe("Qwen/Qwen3-Embedding-0.6B");
+	});
+
+	it("applies the local-multimodal EmbeddingGemma 2 profile and detects it on reload", async () => {
+		const fixture = await createFixture({ mail: { type: "mailcrawl", connector: {} } });
+		const { embedding } = buildService(fixture);
+
+		const result = await embedding.apply({ profileId: "local-multimodal" });
+		expect(result.ok).toBe(true);
+		expect(result.applied).toBe(true);
+
+		const saved = await readConfig(fixture);
+		expect((saved.minSync as Record<string, unknown>).embedder).toEqual({
+			id: "native-multimodal:google/embeddinggemma-2",
+			dimension: 768,
+			queryPrefix: "task: search result | query: ",
+			passagePrefix: "title: none | text: ",
+		});
+		expect((await embedding.get()).current.profileId).toBe("local-multimodal");
 	});
 
 	it("offers Dazzi cloud only on a plan with embeddings, and refuses to apply it on Free or Air", async () => {
@@ -427,16 +456,16 @@ describe("the local embedding spec guard", () => {
 	const message = localSpecMessage(weak, tByName);
 	const below = (fixture: Fixture, fetchImpl?: typeof fetch) => buildService(fixture, fetchImpl, () => true, weak).embedding;
 
-	it("lists every profile but marks only the on-device model unavailable, with the reason, on a machine below the spec", async () => {
+	it("lists every profile but marks only the on-device models unavailable, with the reason, on a machine below the spec", async () => {
 		const profiles = (await below(await createFixture({})).get()).profiles;
-		expect(profiles.map((profile) => profile.id)).toEqual(["none", "local", "dazzi", "byok"]);
-		expect(profiles.map((profile) => profile.unavailable)).toEqual([null, message, null, null]);
+		expect(profiles.map((profile) => profile.id)).toEqual(["none", "local", "local-multimodal", "dazzi", "byok"]);
+		expect(profiles.map((profile) => profile.unavailable)).toEqual([null, message, message, null, null]);
 		expect(message).toContain("Apple M2");
 	});
 
 	it("marks nothing unavailable on a machine that meets the spec", async () => {
 		const { embedding } = buildService(await createFixture({}));
-		expect((await embedding.get()).profiles.map((profile) => profile.unavailable)).toEqual([null, null, null, null]);
+		expect((await embedding.get()).profiles.map((profile) => profile.unavailable)).toEqual([null, null, null, null, null]);
 	});
 
 	it("refuses to apply the on-device model below the spec: nothing is written and nothing is rebuilt", async () => {

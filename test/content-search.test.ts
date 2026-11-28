@@ -124,6 +124,64 @@ describe("content search", () => {
 		expect(outcome.state).toBe("ok");
 		expect(outcome.hits.map((hit) => hit.path)).toEqual(["/d/exact.md", "/d/ticket.md"]);
 	});
+
+	it("preserves direct multimodal visual-only image hits past the text-only Jev relevance gate", async () => {
+		const gate = createSearchRelevanceGate({
+			resolveBackends: async () => ({
+				primary: {
+					name: "jev",
+					judge: async (req) => ({
+						model: "jev-1.13",
+						answers: req.questions.map(() => ({ answer: 0.05 })),
+					}),
+				},
+			}),
+			coalesceMs: 0,
+		});
+		const recorded: Recorded = { queries: [], opened: 0 };
+		const search = createContentSearch({
+			loadConfig: async () => ({ raw: {}, key: "k" }),
+			open: () =>
+				runtime(recorded, {
+					results: [
+						{
+							id: "/d/img_01.png:0.88",
+							content: "Image file: img_01.png (direct multimodal visual embedding match)",
+							source: "/d/img_01.png",
+							score: 0.88,
+							metadata: { mirrorKind: "image" },
+						},
+						chunk("/d/noise.md", "unrelated text document", 0.91),
+					],
+				}),
+			relevanceGate: gate,
+		});
+
+		const outcome = await search.search("red apple");
+
+		expect(outcome.state).toBe("ok");
+		expect(outcome.hits.map((hit) => hit.path)).toEqual(["/d/img_01.png"]);
+	});
+
+	it("searches BM25/visual mirrors even when dense semanticSearch is false if visualParse or bm25-only tier is active", async () => {
+		const { search: visualSearch, recorded: rec1 } = service(
+			{ results: [chunk("/d/chart.png", "Q3 revenue growth bar chart showing $4.2M", 12.4)] },
+			{ appIndexing: { semanticSearch: false }, visualParse: { enabled: true, ocr: { engine: "auto" } } },
+		);
+		const visualOutcome = await visualSearch.search("Q3 revenue");
+		expect(visualOutcome.state).toBe("ok");
+		expect(visualOutcome.hits.map((hit) => hit.path)).toEqual(["/d/chart.png"]);
+		expect(rec1.opened).toBe(1);
+
+		const { search: bm25Search, recorded: rec2 } = service(
+			{ results: [chunk("/d/receipt.png", "INV-2026-8842 Orion Robotics", 18.2)] },
+			{ appIndexing: { semanticSearch: false, indexingMode: "bm25-only" } },
+		);
+		const bm25Outcome = await bm25Search.search("INV-2026-8842");
+		expect(bm25Outcome.state).toBe("ok");
+		expect(bm25Outcome.hits.map((hit) => hit.path)).toEqual(["/d/receipt.png"]);
+		expect(rec2.opened).toBe(1);
+	});
 });
 
 describe("contentSnippet", () => {
