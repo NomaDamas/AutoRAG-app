@@ -3950,8 +3950,15 @@
       "stampDraft": "草稿",
       "stampReviewed": "已审核",
       "stampUrgent": "紧急",
-      "notePlaceholder": "输入要粘贴到页面的便签内容…",
-      "placeNote": "放置便签",
+      "noteBoxHint": "点击或拖动页面以放置便签并直接输入，按 ⌘Enter 或点击空白处应用。",
+      "noteBoxPlaceholder": "输入便签内容…",
+      "noteColor": "便签颜色",
+      "noteColors": {
+        "yellow": "黄色",
+        "pink": "粉色",
+        "blue": "蓝色",
+        "green": "绿色"
+      },
       "watermarkTitle": "添加水印",
       "watermarkText": "水印文字",
       "watermarkPlaceholder": "例如：机密、CONFIDENTIAL、草稿",

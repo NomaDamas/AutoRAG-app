@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2, X } from "lucide-react";
-import { previewStreamUrl } from "../../../preview/shared/contract";
 import { RECENTS_PATH, type FsLocation } from "../../../shared/fs-contract";
 import { entryFromFs, entryFromSearchHit, type FinderEntry } from "../data/entries";
 import { createDirectoryStore, type DirectorySource } from "../data/directory-store";
@@ -44,41 +43,6 @@ function isSelectableForMode(entry: FinderEntry, mode: "image" | "pdf", excludeP
 	if (excludePath !== undefined && entry.path === excludePath) return false;
 	const ext = entry.ext.toLowerCase();
 	return mode === "image" ? IMAGE_EXTENSIONS.has(ext) : ext === "pdf";
-}
-
-/**
- * Loads a local image path through Dazzi's `autorag-preview://` stream protocol
- * and converts it into a bounded crisp PNG data URL for `pdf-lib` embedding.
- * Never opens a native OS Finder file picker.
- */
-export async function loadLocalImageAsPngDataUrl(
-	filePath: string,
-	maxDim = 1600,
-): Promise<{ readonly dataUrl: string; readonly aspect: number }> {
-	const response = await fetch(previewStreamUrl(filePath));
-	if (!response.ok) throw new Error(`Could not read image (${response.status}).`);
-	const blob = await response.blob();
-	const objectUrl = URL.createObjectURL(blob);
-	try {
-		const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-			const el = new Image();
-			el.onload = () => resolve(el);
-			el.onerror = () => reject(new Error("Could not decode image."));
-			el.src = objectUrl;
-		});
-		const natW = Math.max(1, img.naturalWidth);
-		const natH = Math.max(1, img.naturalHeight);
-		const scale = Math.min(1, maxDim / Math.max(natW, natH));
-		const w = Math.max(1, Math.round(natW * scale));
-		const h = Math.max(1, Math.round(natH * scale));
-		const canvas = document.createElement("canvas");
-		canvas.width = w;
-		canvas.height = h;
-		canvas.getContext("2d")?.drawImage(img, 0, 0, w, h);
-		return { dataUrl: canvas.toDataURL("image/png"), aspect: w / Math.max(1, h) };
-	} finally {
-		URL.revokeObjectURL(objectUrl);
-	}
 }
 
 /** Fallback DirectoryData when the modal renders outside a FinderPane (e.g. unit tests). */

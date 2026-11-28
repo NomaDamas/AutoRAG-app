@@ -1,3 +1,4 @@
+import { extname, isAbsolute } from "node:path";
 import { app, BrowserWindow, ipcMain, nativeImage, type WebContents } from "electron";
 import {
 	ACTIONS_CHANNELS,
@@ -66,6 +67,7 @@ import type { DocumentEditService } from "./document-edit-service";
 import { isVersionDiffSummaryRequest, type VersionDiffSummaryService } from "./version-diff-summary";
 import { openDocumentForEditor, saveDocumentText } from "./document-editor-io";
 import type { PdfEditorIo } from "./pdf-editor-io";
+import { decodeImageForPdf, MAIN_DECODED_IMAGE_EXTENSIONS } from "./pdf-image-decode";
 import { isDocumentEditRequest, type DocumentEditEvent } from "../preview/shared/annotation";
 import {
 	DOCUMENT_EDITOR_CHANNELS,
@@ -668,6 +670,11 @@ export function registerDocumentEditorIpcHandlers(
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfSaveFormFields, (_event, request: unknown) => {
 		if (!isPdfFormSaveRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
 		return pdfIo.saveFormFields(request);
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfDecodeImage, (_event, filePath: unknown) => {
+		if (typeof filePath !== "string" || !isAbsolute(filePath) || filePath.includes("\0")) throw new Error(t("main.ipc.invalidPaths"));
+		if (!MAIN_DECODED_IMAGE_EXTENSIONS.has(extname(filePath).slice(1).toLowerCase())) throw new Error(t("main.ipc.invalidPaths"));
+		return decodeImageForPdf(filePath);
 	});
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiStart, async (event, runId: unknown, request: unknown, capture: unknown) => {
 		if (typeof runId !== "string" || runId === "" || !isDocumentEditRequest(request)) {

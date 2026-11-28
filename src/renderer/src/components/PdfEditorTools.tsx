@@ -43,10 +43,88 @@ export function renderTextStampPng(
 	return { dataUrl: canvas.toDataURL("image/png"), aspect: logicalW / logicalH };
 }
 
+/** Font stack shared by on-canvas text/note boxes and their committed PNGs, so both wrap identically. */
+export const BOX_FONT_FAMILY = '"Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+export const BOX_LINE_HEIGHT = 1.32;
+/** Inner padding (PDF points) of a plain text box. */
+export const TEXT_BOX_PAD = { x: 4, y: 3 } as const;
+/** Inner padding (PDF points) and corner radius of a sticky-note card. */
+export const NOTE_BOX_PAD = { x: 10, y: 8 } as const;
+export const NOTE_BOX_RADIUS = 5;
+
+export type NotePaletteId = "yellow" | "pink" | "blue" | "green";
+
+export interface NotePalette {
+	readonly id: NotePaletteId;
+	readonly fill: string;
+	readonly stroke: string;
+	readonly ink: string;
+}
+
+export const NOTE_PALETTES: readonly NotePalette[] = [
+	{ id: "yellow", fill: "#FEF3A0", stroke: "#E2C33F", ink: "#3F2E06" },
+	{ id: "pink", fill: "#FBD5E5", stroke: "#E39BBC", ink: "#4A1630" },
+	{ id: "blue", fill: "#D6E8FD", stroke: "#93BDEB", ink: "#10304F" },
+	{ id: "green", fill: "#D5F2D9", stroke: "#8FCB9A", ink: "#123A1C" },
+];
+
+export function notePalette(id: NotePaletteId): NotePalette {
+	return NOTE_PALETTES.find((palette) => palette.id === id) ?? NOTE_PALETTES[0]!;
+}
+
+/**
+ * Word-aware wrapping that mirrors the on-canvas textarea (`white-space: pre-wrap;
+ * word-break: keep-all; overflow-wrap: anywhere`): lines break at spaces, and only a
+ * word wider than the box is split between characters. Works for Korean/CJK/Latin.
+ */
+export function wrapBoxText(measure: (text: string) => number, text: string, maxWidth: number): string[] {
+	const fits = (candidate: string): boolean => measure(candidate.trimEnd()) <= maxWidth;
+	const lines: string[] = [];
+	for (const raw of text.split("\n")) {
+		if (raw === "") {
+			lines.push("");
+			continue;
+		}
+		const tokens = raw.match(/\S+\s*|\s+/gu) ?? [raw];
+		let curr = "";
+		for (const token of tokens) {
+			if (fits(curr + token)) {
+				curr += token;
+				continue;
+			}
+			if (curr.trim() !== "") {
+				lines.push(curr.trimEnd());
+				curr = "";
+			}
+			if (fits(token)) {
+				curr = token;
+				continue;
+			}
+			for (const ch of token) {
+				if (curr !== "" && !fits(curr + ch)) {
+					lines.push(curr.trimEnd());
+					curr = /\s/u.test(ch) ? "" : ch;
+				} else {
+					curr += ch;
+				}
+			}
+		}
+		lines.push(curr.trimEnd());
+	}
+	return lines;
+}
+
+function wrapWithFont(text: string, font: string, maxWidth: number): string[] {
+	const mctx = document.createElement("canvas").getContext("2d");
+	if (mctx === null) return text.split("\n");
+	mctx.font = font;
+	return wrapBoxText((candidate) => mctx.measureText(candidate).width, text, maxWidth);
+}
+
 /**
  * Renders a Keynote / PowerPoint-style on-canvas text box into a crisp 3x-DPI
  * transparent PNG whose logical width matches `boxWidthPt` (PDF points) and whose
- * line wrapping matches the on-canvas textarea 1:1 (supports Korean/CJK/emoji).
+ * line wrapping matches the on-canvas textarea (supports Korean/CJK/emoji).
  */
 export function renderTextBoxPng(
 	text: string,
@@ -55,41 +133,12 @@ export function renderTextBoxPng(
 	color = "#1D1D1F",
 ): { readonly dataUrl: string; readonly widthPt: number; readonly heightPt: number } {
 	const dpr = 3;
-	const padX = 4;
-	const padY = 3;
 	const logicalW = Math.max(40, Math.round(boxWidthPt));
-	const lineHeight = fontSizePt * 1.32;
-	const font = `500 ${fontSizePt}px "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-
-	const measureCanvas = document.createElement("canvas");
-	const mctx = measureCanvas.getContext("2d");
-	const maxLineW = Math.max(20, logicalW - padX * 2);
-	const wrapped: string[] = [];
-
-	if (mctx !== null) {
-		mctx.font = font;
-		for (const rawLine of text.split("\n")) {
-			if (rawLine === "") {
-				wrapped.push("");
-				continue;
-			}
-			let curr = "";
-			for (const ch of rawLine) {
-				if (mctx.measureText(curr + ch).width > maxLineW && curr.length > 0) {
-					wrapped.push(curr);
-					curr = ch;
-				} else {
-					curr += ch;
-				}
-			}
-			if (curr.length > 0) wrapped.push(curr);
-		}
-	} else {
-		wrapped.push(...text.split("\n"));
-	}
-
+	const lineHeight = fontSizePt * BOX_LINE_HEIGHT;
+	const font = `500 ${fontSizePt}px ${BOX_FONT_FAMILY}`;
+	const wrapped = wrapWithFont(text, font, Math.max(20, logicalW - TEXT_BOX_PAD.x * 2));
 	const lineCount = Math.max(1, wrapped.length);
-	const logicalH = Math.max(Math.ceil(lineHeight + padY * 2), Math.ceil(lineCount * lineHeight + padY * 2));
+	const logicalH = Math.ceil(lineCount * lineHeight + TEXT_BOX_PAD.y * 2);
 
 	const canvas = document.createElement("canvas");
 	canvas.width = Math.max(1, Math.round(logicalW * dpr));
@@ -101,7 +150,50 @@ export function renderTextBoxPng(
 		ctx.fillStyle = color;
 		ctx.textBaseline = "top";
 		wrapped.forEach((line, idx) => {
-			ctx.fillText(line, padX, padY + idx * lineHeight);
+			ctx.fillText(line, TEXT_BOX_PAD.x, TEXT_BOX_PAD.y + idx * lineHeight);
+		});
+	}
+	return { dataUrl: canvas.toDataURL("image/png"), widthPt: logicalW, heightPt: logicalH };
+}
+
+/**
+ * Renders an on-canvas sticky-note card (colored fill, hairline border, rounded corners)
+ * into a crisp 3x-DPI PNG matching the box the person placed and typed into: same width,
+ * same wrapping, and at least the height they dragged out.
+ */
+export function renderNoteBoxPng(
+	text: string,
+	boxWidthPt: number,
+	fontSizePt: number,
+	palette: NotePalette,
+	minHeightPt = 0,
+): { readonly dataUrl: string; readonly widthPt: number; readonly heightPt: number } {
+	const dpr = 3;
+	const logicalW = Math.max(60, Math.round(boxWidthPt));
+	const lineHeight = fontSizePt * BOX_LINE_HEIGHT;
+	const font = `500 ${fontSizePt}px ${BOX_FONT_FAMILY}`;
+	const wrapped = wrapWithFont(text, font, Math.max(20, logicalW - NOTE_BOX_PAD.x * 2));
+	const lineCount = Math.max(1, wrapped.length);
+	const logicalH = Math.max(Math.ceil(minHeightPt), Math.ceil(lineCount * lineHeight + NOTE_BOX_PAD.y * 2));
+
+	const canvas = document.createElement("canvas");
+	canvas.width = Math.max(1, Math.round(logicalW * dpr));
+	canvas.height = Math.max(1, Math.round(logicalH * dpr));
+	const ctx = canvas.getContext("2d");
+	if (ctx !== null) {
+		ctx.scale(dpr, dpr);
+		ctx.fillStyle = palette.fill;
+		ctx.strokeStyle = palette.stroke;
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.roundRect(0.5, 0.5, logicalW - 1, logicalH - 1, NOTE_BOX_RADIUS);
+		ctx.fill();
+		ctx.stroke();
+		ctx.font = font;
+		ctx.fillStyle = palette.ink;
+		ctx.textBaseline = "top";
+		wrapped.forEach((line, idx) => {
+			ctx.fillText(line, NOTE_BOX_PAD.x, NOTE_BOX_PAD.y + idx * lineHeight);
 		});
 	}
 	return { dataUrl: canvas.toDataURL("image/png"), widthPt: logicalW, heightPt: logicalH };
@@ -155,65 +247,6 @@ export function renderPresetStampPng(
 		ctx.font = subFont;
 		ctx.fillText(dateStr, logicalW / 2, logicalH / 2 + 18);
 	}
-	return { dataUrl: canvas.toDataURL("image/png"), aspect: logicalW / logicalH };
-}
-
-/** Renders a yellow sticky-note card (supports multi-line Korean/CJK text) as a crisp PNG. */
-export function renderStickyNotePng(text: string): { readonly dataUrl: string; readonly aspect: number } {
-	const dpr = 3;
-	const logicalW = 240;
-	const pad = 16;
-	const font = `500 15px "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
-	const measure = document.createElement("canvas").getContext("2d")!;
-	measure.font = font;
-
-	const maxLineW = logicalW - pad * 2;
-	const wrapped: string[] = [];
-	for (const rawLine of text.split("\n")) {
-		if (rawLine === "") {
-			wrapped.push("");
-			continue;
-		}
-		let curr = "";
-		for (const ch of rawLine) {
-			if (measure.measureText(curr + ch).width > maxLineW && curr.length > 0) {
-				wrapped.push(curr);
-				curr = ch;
-			} else {
-				curr += ch;
-			}
-		}
-		if (curr.length > 0) wrapped.push(curr);
-	}
-	const lineHeight = 22;
-	const logicalH = Math.max(96, wrapped.length * lineHeight + pad * 2 + 12);
-
-	const canvas = document.createElement("canvas");
-	canvas.width = logicalW * dpr;
-	canvas.height = logicalH * dpr;
-	const ctx = canvas.getContext("2d")!;
-	ctx.scale(dpr, dpr);
-
-	ctx.fillStyle = "#FEF08A";
-	ctx.strokeStyle = "#CA8A04";
-	ctx.lineWidth = 2;
-	ctx.beginPath();
-	ctx.roundRect(2, 2, logicalW - 4, logicalH - 4, 8);
-	ctx.fill();
-	ctx.stroke();
-
-	// Top header strip
-	ctx.fillStyle = "#FDE047";
-	ctx.beginPath();
-	ctx.roundRect(3, 3, logicalW - 6, 12, [6, 6, 0, 0]);
-	ctx.fill();
-
-	ctx.fillStyle = "#422006";
-	ctx.font = font;
-	ctx.textBaseline = "top";
-	wrapped.forEach((line, idx) => {
-		ctx.fillText(line, pad, pad + 8 + idx * lineHeight);
-	});
 	return { dataUrl: canvas.toDataURL("image/png"), aspect: logicalW / logicalH };
 }
 
