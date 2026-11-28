@@ -1117,7 +1117,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			.map((starter) => (
 				<div key={starter.key} className="flex flex-col gap-14" data-automation-starter>
 					<div className="message user-msg flex justify-end animate-rise [animation-fill-mode:both]">
-						<div className="bubble max-w-bubble-max rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{starter.ask}</div>
+						<div className="bubble max-w-bubble-max min-w-0 rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window [overflow-wrap:anywhere] whitespace-pre-wrap">{starter.ask}</div>
 					</div>
 					<p className="m-0 text-body leading-[1.55] text-ink animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
 					<div className="max-w-[480px] animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
@@ -1368,7 +1368,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										))}
 									</div>
 								) : null}
-								<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{submittedQuery}</div>
+								<div className="bubble max-w-full min-w-0 rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window [overflow-wrap:anywhere] whitespace-pre-wrap">{submittedQuery}</div>
 								<SentActions text={submittedQuery} className="-mt-4" />
 							</div>
 						</div>
@@ -1788,7 +1788,7 @@ function PastTurnView({
 							))}
 						</div>
 					) : null}
-					<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+					<div className="bubble max-w-full min-w-0 rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window [overflow-wrap:anywhere] whitespace-pre-wrap">{turn.question}</div>
 					<SentActions text={turn.question} className="-mt-4" />
 				</div>
 			</div>

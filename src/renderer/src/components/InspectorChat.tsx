@@ -606,7 +606,7 @@ function TurnView({
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
-				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+				<div className="inspector-chat-question block max-w-full min-w-0 rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window [overflow-wrap:anywhere] whitespace-pre-wrap">{turn.question}</div>
 				<SentActions text={turn.question} className="-mt-2" />
 			</div>
 			{turn.steers
@@ -969,7 +969,7 @@ export function InspectorChatView({
 						// Figma 672:3740: the person's 새 자동화 만들기, the reply, and the card, rising one after another.
 						<div key={newAutomation} className="flex flex-col gap-10" data-automation-starter>
 							<div className="flex max-w-[90%] self-end animate-rise [animation-fill-mode:both]">
-								<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window">{t("automations.starter.ask")}</div>
+								<div className="inspector-chat-question block max-w-full min-w-0 rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window [overflow-wrap:anywhere]">{t("automations.starter.ask")}</div>
 							</div>
 							<p className="m-0 text-sm leading-[1.5] text-ink-body animate-rise [animation-delay:140ms] [animation-fill-mode:both]">{t("automations.starter.reply")}</p>
 							<div className="animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
