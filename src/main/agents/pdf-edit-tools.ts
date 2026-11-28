@@ -3,8 +3,11 @@ import { Type } from "typebox";
 import { extname, isAbsolute } from "node:path";
 import {
 	isPdfEditOperation,
+	needsRenderedText,
 	PDF_NOTE_COLORS,
 	PDF_STAMP_PRESETS,
+	PDF_WATERMARK_PRESETS,
+	type PdfLineImage,
 	type PdfAssetRequest,
 	type PdfAssetResult,
 	type PdfEditOperation,
@@ -12,6 +15,7 @@ import {
 	type PdfPageNumberFormat,
 	type PdfPageNumberPosition,
 	type PdfStampPreset,
+	type PdfWatermarkPreset,
 } from "../../shared/document-editor-contract";
 import type { PdfEditorIo } from "../pdf-editor-io";
 
@@ -85,6 +89,25 @@ const VERIFY_HINT = "Call pdf_render_page on this page now to visually verify pl
  */
 export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDefinition[] {
 	const { targetPath, pdfIo, cancelled } = input;
+	/**
+	 * Standard PDF fonts cannot draw Korean / Japanese / Chinese header or footer text (it would be dropped), so
+	 * such lines are rendered by the editor and placed as images. Without an editor the call fails loudly.
+	 */
+	const withRenderedLines = async (op: PdfEditOperation): Promise<PdfEditOperation> => {
+		if (op.kind !== "addPageNumbers") return op;
+		const line = async (text: string | undefined): Promise<PdfLineImage | undefined> => {
+			if (text === undefined || text.trim() === "" || !needsRenderedText(text)) return undefined;
+			if (input.renderAsset === undefined) {
+				throw new Error("Header/footer text in this script needs the open Dazzi PDF editor to render it; open the PDF in Dazzi and try again.");
+			}
+			const result = await input.renderAsset({ kind: "textLine", text, fontSizePt: op.fontSize, color: op.color });
+			if (result.kind !== "png" || result.widthPt === undefined || result.heightPt === undefined) throw new Error("The editor returned no header/footer image.");
+			return { pngDataUrl: result.dataUrl, widthPt: result.widthPt, heightPt: result.heightPt };
+		};
+		const headerImage = await line(op.headerText);
+		const footerImage = await line(op.footerText);
+		return { ...op, ...(headerImage === undefined ? {} : { headerImage }), ...(footerImage === undefined ? {} : { footerImage }) };
+	};
 	const supportsImage = input.supportsImage !== false;
 	const ensureLive = (): void => {
 		if (cancelled()) throw new Error("The edit was cancelled.");
@@ -205,7 +228,7 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 				if (!isPdfEditOperation(candidate)) {
 					throw new Error(`Invalid PDF operation at index ${i}: ${JSON.stringify(candidate)}`);
 				}
-				ops.push(candidate);
+				ops.push(await withRenderedLines(candidate));
 			}
 			const result = await pdfIo.apply({ path: targetPath, operations: ops, force: true }, "ai");
 			if (!result.ok) {
@@ -323,7 +346,7 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 	const pdfAddPageNumbers = defineTool({
 		name: "pdf_add_page_numbers",
 		label: "Add PDF Page Numbers",
-		description: "Stamp page numbers (and optional Latin/ASCII header/footer) onto pages of the target PDF.",
+		description: "Stamp page numbers (and an optional header/footer line in any language) onto pages of the target PDF.",
 		parameters: Type.Object({
 			position: Type.Optional(
 				Type.Union([
@@ -356,7 +379,7 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 				...(params.footerText === undefined ? {} : { footerText: params.footerText }),
 				...(params.pageIndices === undefined ? {} : { pageIndices: params.pageIndices }),
 			};
-			const result = await pdfIo.apply({ path: targetPath, operations: [op], force: true }, "ai");
+			const result = await pdfIo.apply({ path: targetPath, operations: [await withRenderedLines(op)], force: true }, "ai");
 			if (!result.ok) throw new Error("Failed to add page numbers.");
 			return jsonResult({ ok: true, pageCount: result.pageCount });
 		},
@@ -533,9 +556,10 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 				name: "pdf_add_watermark",
 				label: "Add Watermark",
 				description:
-					"Add a diagonal text watermark (Korean/CJK supported), exactly like the toolbar's Watermark dialog, to all pages or to `pageIndices` (0-based). Prefer this over pdf_apply_ops addTextWatermark, which only supports Latin text.",
+					"Add a diagonal text watermark (Korean/CJK supported), exactly like the toolbar's Watermark dialog, to all pages or to `pageIndices` (0-based). Use `preset` (confidential, draft, copy, sample) for the standard wordings: they are written in the app's current language (e.g. 대외비 / CONFIDENTIAL / 社外秘 / 机密). Pass `text` only when the user asked for specific wording. Prefer this over pdf_apply_ops addTextWatermark, which only supports Latin text.",
 				parameters: Type.Object({
-					text: Type.String({ minLength: 1 }),
+					preset: Type.Optional(Type.Union(PDF_WATERMARK_PRESETS.map((p) => Type.Literal(p)))),
+					text: Type.Optional(Type.String({ minLength: 1, description: "Exact wording, when the user asked for it." })),
 					color: Type.Optional(Type.String({ description: "Hex color (default #64748B)." })),
 					opacity: Type.Optional(Type.Number({ minimum: 0.03, maximum: 1, description: "Default 0.18." })),
 					angleDegrees: Type.Optional(Type.Number({ minimum: -90, maximum: 90, description: "Default 35." })),
@@ -544,9 +568,11 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 				}),
 				execute: async (_callId, params) => {
 					ensureLive();
+					if (params.preset === undefined && params.text === undefined) throw new Error("Give a watermark preset or text.");
 					const png = await pngOf({
 						kind: "watermark",
-						text: params.text,
+						...(params.preset === undefined ? {} : { preset: params.preset as PdfWatermarkPreset }),
+						...(params.text === undefined ? {} : { text: params.text }),
 						color: params.color !== undefined && HEX_COLOR.test(params.color) ? params.color : "#64748B",
 						angleDeg: params.angleDegrees ?? 35,
 					});

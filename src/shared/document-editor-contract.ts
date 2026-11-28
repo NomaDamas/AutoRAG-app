@@ -296,6 +296,12 @@ export type PdfEditOperation =
 			readonly color: string;
 			readonly headerText?: string;
 			readonly footerText?: string;
+			/**
+			 * Pre-rendered header / footer lines (transparent PNG, sized in points) for text standard PDF fonts
+			 * cannot draw (Korean, Japanese, Chinese…). When given, they replace `headerText` / `footerText`.
+			 */
+			readonly headerImage?: PdfLineImage;
+			readonly footerImage?: PdfLineImage;
 			/** Optional 0-based page indices; omitted applies to all pages. */
 			readonly pageIndices?: readonly number[];
 	  }
@@ -401,6 +407,38 @@ export interface DocumentEditorAiCapture {
 
 export type PdfNoteColor = "yellow" | "pink" | "blue" | "green";
 export type PdfStampPreset = "approved" | "confidential" | "draft" | "reviewed" | "urgent";
+export type PdfWatermarkPreset = "confidential" | "draft" | "copy" | "sample";
+export const PDF_WATERMARK_PRESETS: readonly PdfWatermarkPreset[] = ["confidential", "draft", "copy", "sample"];
+
+/** A single pre-rendered line of text (transparent PNG) and its size in PDF points. */
+export interface PdfLineImage {
+	readonly pngDataUrl: string;
+	readonly widthPt: number;
+	readonly heightPt: number;
+}
+
+export function isPdfLineImage(value: unknown): value is PdfLineImage {
+	if (typeof value !== "object" || value === null) return false;
+	const image = value as Record<string, unknown>;
+	return (
+		typeof image.pngDataUrl === "string" &&
+		image.pngDataUrl.startsWith("data:image/png;base64,") &&
+		typeof image.widthPt === "number" &&
+		Number.isFinite(image.widthPt) &&
+		image.widthPt > 0 &&
+		image.widthPt <= 5000 &&
+		typeof image.heightPt === "number" &&
+		Number.isFinite(image.heightPt) &&
+		image.heightPt > 0 &&
+		image.heightPt <= 500
+	);
+}
+
+/** True when standard PDF fonts (WinAnsi) cannot draw `text`, so it must be rendered as an image. */
+export function needsRenderedText(text: string): boolean {
+	// Mirrors the main process's WinAnsi sanitizer: anything it would blank out is rendered as an image instead.
+	return /[^\x20-\x7E\xA0-\xFF]/u.test(text);
+}
 export const PDF_NOTE_COLORS: readonly PdfNoteColor[] = ["yellow", "pink", "blue", "green"];
 export const PDF_STAMP_PRESETS: readonly PdfStampPreset[] = ["approved", "confidential", "draft", "reviewed", "urgent"];
 
@@ -412,7 +450,15 @@ export type PdfAssetRequest =
 	| { readonly kind: "textBox"; readonly text: string; readonly widthPt: number; readonly fontSizePt: number; readonly color: string }
 	| { readonly kind: "note"; readonly text: string; readonly widthPt: number; readonly fontSizePt: number; readonly noteColor: PdfNoteColor }
 	| { readonly kind: "stamp"; readonly preset?: PdfStampPreset; readonly label?: string; readonly color?: string; readonly withDate: boolean }
-	| { readonly kind: "watermark"; readonly text: string; readonly color: string; readonly angleDeg: number }
+	| {
+			readonly kind: "watermark";
+			/** A localized preset (follows the app language) or explicit `text`. */
+			readonly preset?: PdfWatermarkPreset;
+			readonly text?: string;
+			readonly color: string;
+			readonly angleDeg: number;
+	  }
+	| { readonly kind: "textLine"; readonly text: string; readonly fontSizePt: number; readonly color: string }
 	| { readonly kind: "image"; readonly path: string }
 	| { readonly kind: "findText"; readonly path: string; readonly query: string; readonly pages?: readonly number[] };
 
@@ -452,7 +498,15 @@ export function isPdfAssetRequest(value: unknown): value is PdfAssetRequest {
 				(value.color === undefined || typeof value.color === "string")
 			);
 		case "watermark":
-			return typeof value.text === "string" && typeof value.color === "string" && typeof value.angleDeg === "number";
+			return (
+				(value.preset === undefined || PDF_WATERMARK_PRESETS.includes(value.preset as PdfWatermarkPreset)) &&
+				(value.text === undefined || typeof value.text === "string") &&
+				(value.preset !== undefined || (typeof value.text === "string" && value.text.trim() !== "")) &&
+				typeof value.color === "string" &&
+				typeof value.angleDeg === "number"
+			);
+		case "textLine":
+			return typeof value.text === "string" && value.text.trim() !== "" && isFinitePositive(value.fontSizePt) && typeof value.color === "string";
 		case "image":
 			return typeof value.path === "string" && value.path.length > 0;
 		case "findText":
@@ -737,6 +791,8 @@ export function isPdfEditOperation(value: unknown): value is PdfEditOperation {
 				isHexColor(op.color) &&
 				(op.headerText === undefined || (typeof op.headerText === "string" && op.headerText.length <= 200)) &&
 				(op.footerText === undefined || (typeof op.footerText === "string" && op.footerText.length <= 200)) &&
+				(op.headerImage === undefined || isPdfLineImage(op.headerImage)) &&
+				(op.footerImage === undefined || isPdfLineImage(op.footerImage)) &&
 				(op.pageIndices === undefined || isPageIndices(op.pageIndices))
 			);
 		case "setMetadata": {

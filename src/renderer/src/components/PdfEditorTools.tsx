@@ -58,6 +58,14 @@ export const PRESET_STAMPS = [
 	{ id: "urgent", labelKey: "documentEditor.pdf.stampUrgent", color: "#C2410C" },
 ] as const;
 
+/** Watermark quick picks; labels follow the app language (the AI agent's `pdf_add_watermark` presets use the same table). */
+export const WATERMARK_PRESETS = [
+	{ id: "confidential", labelKey: "documentEditor.pdf.stampConfidential" },
+	{ id: "draft", labelKey: "documentEditor.pdf.stampDraft" },
+	{ id: "copy", labelKey: "documentEditor.pdf.watermarkPresetCopy" },
+	{ id: "sample", labelKey: "documentEditor.pdf.watermarkPresetSample" },
+] as const;
+
 /** Font stack shared by on-canvas text/note boxes and their committed PNGs, so both wrap identically. */
 export const BOX_FONT_FAMILY = '"Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 export const BOX_LINE_HEIGHT = 1.32;
@@ -169,6 +177,41 @@ export function renderTextBoxPng(
 		});
 	}
 	return { dataUrl: canvas.toDataURL("image/png"), widthPt: logicalW, heightPt: logicalH };
+}
+
+/**
+ * Renders one line of text (any script) tightly into a transparent PNG sized in PDF points, for page-number
+ * headers and footers that standard PDF fonts cannot draw (Korean, Japanese, Chinese…).
+ */
+export function renderTextLinePng(
+	text: string,
+	fontSizePt: number,
+	color: string,
+): { readonly dataUrl: string; readonly widthPt: number; readonly heightPt: number } {
+	const dpr = 4;
+	const font = `500 ${fontSizePt}px ${BOX_FONT_FAMILY}`;
+	const line = text.replace(/\s+/gu, " ").trim();
+	const mctx = document.createElement("canvas").getContext("2d");
+	let measured = line.length * fontSizePt * 0.6;
+	if (mctx !== null) {
+		mctx.font = font;
+		measured = mctx.measureText(line).width;
+	}
+	const pad = 1;
+	const widthPt = Math.max(1, Math.ceil(measured + pad * 2));
+	const heightPt = Math.ceil(fontSizePt * BOX_LINE_HEIGHT);
+	const canvas = document.createElement("canvas");
+	canvas.width = Math.max(1, Math.round(widthPt * dpr));
+	canvas.height = Math.max(1, Math.round(heightPt * dpr));
+	const ctx = canvas.getContext("2d");
+	if (ctx !== null) {
+		ctx.scale(dpr, dpr);
+		ctx.font = font;
+		ctx.fillStyle = color;
+		ctx.textBaseline = "middle";
+		ctx.fillText(line, pad, heightPt / 2);
+	}
+	return { dataUrl: canvas.toDataURL("image/png"), widthPt, heightPt };
 }
 
 /**
@@ -354,7 +397,8 @@ export function WatermarkModal({
 	readonly onClose: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
-	const [text, setText] = useState("CONFIDENTIAL");
+	// The default follows the app language (대외비 / CONFIDENTIAL / 社外秘 / 机密).
+	const [text, setText] = useState(() => t("documentEditor.pdf.stampConfidential"));
 	const [color, setColor] = useState("#64748B");
 	const [opacity, setOpacity] = useState(0.22);
 	const [angle, setAngle] = useState(-35);
@@ -387,6 +431,27 @@ export function WatermarkModal({
 						autoFocus
 					/>
 				</label>
+
+				<div className="flex flex-wrap items-center gap-6" role="group" aria-label={t("documentEditor.pdf.watermarkPresets")}>
+					{WATERMARK_PRESETS.map((preset) => {
+						const label = t(preset.labelKey);
+						return (
+							<button
+								key={preset.id}
+								type="button"
+								data-pdf-watermark-preset={preset.id}
+								aria-pressed={text === label}
+								className={cn(
+									"h-24 rounded-full border px-10 text-badge font-medium transition-colors",
+									text === label ? "border-accent bg-accent-soft text-accent" : "border-border bg-window text-ink-body hover:bg-hover",
+								)}
+								onClick={() => setText(label)}
+							>
+								{label}
+							</button>
+						);
+					})}
+				</div>
 
 				<div className="flex items-center gap-8">
 					<span className="text-meta text-ink-muted">{t("documentEditor.pdf.strokeColor")}</span>
@@ -614,6 +679,7 @@ export function PageNumbersModal({
 					<input
 						type="text"
 						value={headerText}
+						data-pdf-page-numbers-header="true"
 						onChange={(e) => setHeaderText(e.target.value)}
 						className="h-28 rounded-6 border border-border bg-window px-10 text-body text-ink outline-none focus:border-accent"
 					/>
@@ -623,6 +689,7 @@ export function PageNumbersModal({
 					<input
 						type="text"
 						value={footerText}
+						data-pdf-page-numbers-footer="true"
 						onChange={(e) => setFooterText(e.target.value)}
 						className="h-28 rounded-6 border border-border bg-window px-10 text-body text-ink outline-none focus:border-accent"
 					/>

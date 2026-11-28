@@ -6,6 +6,7 @@ import {
 	type AutoRAGAgentOptions,
 	type SearchDocumentsResponse,
 	type SearchDocumentsStreamEvent,
+	type SubagentDefinition,
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -1009,6 +1010,11 @@ export interface DefaultAgentFactoryOptions {
 	/** When provided, the main AI Agent can also list, create, verify, customize, and delete right-click Magic Actions directly. */
 	readonly settings?: Pick<SettingsBridge, "get" | "set">;
 	readonly language?: () => ReplyLanguage;
+	/**
+	 * Specialist subagents the app runs itself (the PDF editor) and offers the main agent through the librarian's
+	 * `subagent` tool. Read on each agent build; the definitions are static, so the prompt stays cache-stable.
+	 */
+	readonly subagents?: () => readonly SubagentDefinition[];
 }
 
 type LibrarianAgentTool = NonNullable<AutoRAGAgentOptions["tools"]>[number];
@@ -1084,8 +1090,10 @@ export function createDefaultAgentFactory(options: DefaultAgentFactoryOptions): 
 								}),
 						}).tools,
 					);
+		const subagents = options.subagents?.() ?? [];
 		const agentOptions: AutoRAGAgentOptions = {
 			...baseOptions,
+			...(subagents.length > 0 ? { subagents } : {}),
 			tools: [...(baseOptions.tools ?? []), sandboxAutomationTool, ...magicActionTools],
 			...(sllm !== undefined ? { jev: { ...baseOptions.jev, sllm } } : {}),
 			model: resolved.model,

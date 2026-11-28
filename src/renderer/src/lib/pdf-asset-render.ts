@@ -10,8 +10,10 @@ import {
 	renderNoteBoxPng,
 	renderPresetStampPng,
 	renderTextBoxPng,
+	renderTextLinePng,
 	renderWatermarkPng,
 	todayIso,
+	WATERMARK_PRESETS,
 } from "../components/PdfEditorTools";
 import { loadLocalImageAsPngDataUrl } from "./pdf-image-load";
 import { canvasCharEdges, findPageTextMatches } from "./pdf-search";
@@ -73,8 +75,17 @@ export async function renderPdfAsset(request: PdfAssetRequest): Promise<PdfAsset
 			const png = renderPresetStampPng(label, request.color ?? preset?.color ?? "#B91C1C", request.withDate ? todayIso() : undefined);
 			return { kind: "png", dataUrl: png.dataUrl, aspect: png.aspect };
 		}
-		case "watermark":
-			return { kind: "png", dataUrl: renderWatermarkPng(request.text, request.color, request.angleDeg), aspect: 1 };
+		case "watermark": {
+			// A preset resolves in the app's current language (대외비 / CONFIDENTIAL / 社外秘 / 机密 …).
+			const preset = WATERMARK_PRESETS.find((item) => item.id === request.preset);
+			const text = request.text?.trim() || (preset === undefined ? "" : i18n.t(preset.labelKey));
+			if (text === "") throw new Error("A watermark needs a preset or text.");
+			return { kind: "png", dataUrl: renderWatermarkPng(text, request.color, request.angleDeg), aspect: 1 };
+		}
+		case "textLine": {
+			const png = renderTextLinePng(request.text, request.fontSizePt, request.color);
+			return { kind: "png", dataUrl: png.dataUrl, widthPt: png.widthPt, heightPt: png.heightPt, aspect: png.widthPt / Math.max(1, png.heightPt) };
+		}
 		case "image": {
 			const png = await loadLocalImageAsPngDataUrl(request.path);
 			return { kind: "png", dataUrl: png.dataUrl, aspect: png.aspect };

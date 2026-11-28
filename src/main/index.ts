@@ -141,6 +141,9 @@ import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { createDocumentEditService } from "./document-edit-service";
 import { createPdfEditorIo } from "./pdf-editor-io";
+import { createPdfAssetBridge } from "./pdf-asset-bridge";
+import { createPdfEditorSubagent } from "./pdf-editor-subagent";
+import type { SubagentDefinition } from "@autorag/librarian";
 import { createWriteJudge } from "./agents/write-judge";
 import { resolveDecisionBackendsForConfig } from "./decision-model";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -705,6 +708,7 @@ app.whenReady().then(async () => {
 		},
 		onTraining: (running) => sendToMainWindow(LTR_CHANNELS.training, running),
 	});
+	let pdfEditorSubagent: SubagentDefinition | undefined;
 	const searchService = createSearchService({
 		afterAnsweredSearch: () => ltr.autoTrainIfDue(),
 		// The tab's head names the chat once it has answered, with the model that answered it.
@@ -727,6 +731,8 @@ app.whenReady().then(async () => {
 				set: (patch) => settingsService.set(patch),
 			},
 			language: () => currentLanguage,
+			// The PDF editor is built further down with the document-edit service; an agent is only built long after startup.
+			subagents: () => (pdfEditorSubagent === undefined ? [] : [pdfEditorSubagent]),
 		}),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
@@ -1342,6 +1348,12 @@ app.whenReady().then(async () => {
 		pdfIo: pdfEditorIo,
 	});
 	setQuickLookDocumentEdit(documentEditService);
+	const pdfAssets = createPdfAssetBridge();
+	// The main AI agent delegates PDF edits to the same agent the editor's sidebar runs (librarian host subagent).
+	pdfEditorSubagent = createPdfEditorSubagent({
+		service: documentEditService,
+		renderAsset: (request, tag) => pdfAssets.request(mainWindow?.webContents, request, tag),
+	});
 	registerDocumentEditorIpcHandlers(
 		documentEditService,
 		pdfEditorIo,
@@ -1357,6 +1369,7 @@ app.whenReady().then(async () => {
 			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
 			return result.canceled ? [] : result.filePaths;
 		},
+		pdfAssets,
 	);
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;

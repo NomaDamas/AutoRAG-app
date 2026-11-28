@@ -631,6 +631,78 @@ describe("PDF memo and image insertion", () => {
 	});
 });
 
+describe("PDF stamps, watermarks and page numbers follow the app language", () => {
+	const openMore = async (): Promise<void> => {
+		await act(async () => (container!.querySelector('button[data-pdf-more-tools="true"]') as HTMLButtonElement).click());
+	};
+	const setInput = async (input: HTMLInputElement, value: string): Promise<void> => {
+		const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+		await act(async () => {
+			setter.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	};
+
+	it.each([
+		["ko", "대외비", ["대외비", "초안", "사본", "샘플"], "승인됨"],
+		["ja", "社外秘", ["社外秘", "下書き", "コピー", "サンプル"], "承認済"],
+		["zh", "机密", ["机密", "草稿", "副本", "样本"], "已批准"],
+		["en", "CONFIDENTIAL", ["CONFIDENTIAL", "DRAFT", "COPY", "SAMPLE"], "APPROVED"],
+	] as const)("uses %s wording for the watermark default, its presets, and the stamp menu", async (language, defaultText, presets, approved) => {
+		await setAppLanguage(language);
+		const { applied } = await mountEditor();
+		await act(async () => (container!.querySelector('button[data-pdf-stamp-menu="true"]') as HTMLButtonElement).click());
+		expect(container!.querySelector('button[data-pdf-preset-stamp="approved"]')?.textContent).toContain(approved);
+		await act(async () => (container!.querySelector('button[data-pdf-stamp-menu="true"]') as HTMLButtonElement).click());
+
+		await openMore();
+		await act(async () => (container!.querySelector('button[data-pdf-action="watermark"]') as HTMLButtonElement).click());
+		const input = container!.querySelector<HTMLInputElement>('input[data-pdf-watermark-input="true"]')!;
+		expect(input.value).toBe(defaultText);
+		const chips = [...container!.querySelectorAll<HTMLButtonElement>("button[data-pdf-watermark-preset]")];
+		expect(chips.map((chip) => chip.textContent)).toEqual([...presets]);
+		await act(async () => chips[2]!.click());
+		expect(input.value).toBe(presets[2]);
+		await act(async () => (container!.querySelector('button[data-pdf-watermark-apply="true"]') as HTMLButtonElement).click());
+		expect(applied.at(-1)?.operations[0]?.kind).toBe("addWatermark");
+	});
+
+	it("draws a Korean page-number header as a rendered line, and keeps a Latin footer on the standard font", async () => {
+		await setAppLanguage("ko");
+		const { applied } = await mountEditor();
+		await openMore();
+		await act(async () => (container!.querySelector('button[data-pdf-action="page-numbers"]') as HTMLButtonElement).click());
+		await setInput(container!.querySelector<HTMLInputElement>('input[data-pdf-page-numbers-header="true"]')!, "대외비 — 2026 사업계획");
+		await setInput(container!.querySelector<HTMLInputElement>('input[data-pdf-page-numbers-footer="true"]')!, "Dazzi Inc.");
+		await act(async () => (container!.querySelector('button[data-pdf-page-numbers-apply="true"]') as HTMLButtonElement).click());
+		const op = applied.at(-1)?.operations[0];
+		expect(op?.kind).toBe("addPageNumbers");
+		if (op?.kind !== "addPageNumbers") return;
+		expect(op.headerText).toBe("대외비 — 2026 사업계획");
+		expect(op.headerImage?.pngDataUrl).toBe(MOCK_PNG);
+		expect(op.headerImage!.widthPt).toBeGreaterThan(0);
+		expect(op.footerImage).toBeUndefined();
+	});
+
+	it("renders the agent's preset stamps and watermarks in the current app language", async () => {
+		const ctx = document.createElement("canvas").getContext("2d") as unknown as { fillText: ReturnType<typeof vi.fn> };
+		await setAppLanguage("zh");
+		await renderPdfAsset({ kind: "stamp", preset: "approved", withDate: false });
+		expect(ctx.fillText.mock.calls.map((c) => c[0])).toContain("已批准");
+		await setAppLanguage("ja");
+		ctx.fillText.mockClear();
+		await renderPdfAsset({ kind: "watermark", preset: "confidential", color: "#64748B", angleDeg: 35 });
+		expect(ctx.fillText.mock.calls.map((c) => c[0])).toContain("社外秘");
+		// Explicit wording wins over the preset.
+		ctx.fillText.mockClear();
+		await renderPdfAsset({ kind: "watermark", preset: "confidential", text: "TOP SECRET", color: "#64748B", angleDeg: 35 });
+		expect(ctx.fillText.mock.calls.map((c) => c[0])).toContain("TOP SECRET");
+		const line = await renderPdfAsset({ kind: "textLine", text: "機密文書", fontSizePt: 10, color: "#334155" });
+		expect(line).toMatchObject({ kind: "png", dataUrl: MOCK_PNG });
+		await setAppLanguage("en");
+	});
+});
+
 describe("PDF agent asset requests", () => {
 	it("finds text with the Find bar's matcher and returns page-normalized boxes", async () => {
 		await mountEditor();
