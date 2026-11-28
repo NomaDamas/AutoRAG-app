@@ -1347,6 +1347,9 @@
       "skipped": "更新時にスキップ ({{reason}})",
       "notIndexed": "まだインデックスされていません"
     },
+    "contentSearch": {
+      "visualImageMatch": "画像の視覚的類似度による検索結果"
+    },
     "archive": {
       "corrupt": "圧縮ファイルが破損しています。",
       "encrypted": "パスワード保護された圧縮ファイルは展開できません。",
@@ -2591,6 +2594,7 @@
       "preview": "計画を確認",
       "apply": "適用",
       "dimensionFixed": "モデル: Qwen3 Embedding 0.6B(1024次元)。モデルは変更できません。",
+      "dimensionMultimodal": "モデル: EmbeddingGemma 2(768次元) — 文書と画像(PNG/JPG/WebP)を同じ意味空間に直接埋め込みます。",
       "serverUrl": "サーバーのアドレス",
       "serverUrlPlaceholder": "https://embed.example.com",
       "serverType": "サーバーの方式",

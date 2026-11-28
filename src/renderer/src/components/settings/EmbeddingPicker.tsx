@@ -175,7 +175,9 @@ export function EmbeddingPicker({ name, hint }: { readonly name?: string; readon
 							</label>
 						))}
 					</div>
-					{profileId !== "none" && profileId.length > 0 ? <Note>{t("settingsCore.embedding.dimensionFixed")}</Note> : null}
+					{profileId !== "none" && profileId.length > 0 ? (
+						<Note>{t(profileId === "local-multimodal" ? "settingsCore.embedding.dimensionMultimodal" : "settingsCore.embedding.dimensionFixed")}</Note>
+					) : null}
 					{profileId === "local" ? (
 						<ModelDownloadPanel status={modelDownload.status} t={t as unknown as Translate} onStart={modelDownload.start} onCancel={modelDownload.cancel} />
 					) : null}

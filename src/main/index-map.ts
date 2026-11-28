@@ -1,6 +1,18 @@
+import { existsSync } from "node:fs";
 import { access, opendir, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { minSyncDocumentPath, type ParsedMirrorEntry, type ParsedMirrorIndex } from "@autorag/librarian";
+
+function resolveStagedPath(minSyncRoot: string, virtualPath: string): string {
+	const docPath = minSyncDocumentPath(minSyncRoot, virtualPath);
+	if (existsSync(docPath)) return docPath;
+	const safePath = virtualPath.replace(/^\/+/u, "");
+	const imagePath = join(minSyncRoot, "files", safePath);
+	if (existsSync(imagePath)) return imagePath;
+	const visualPath = join(minSyncRoot, "files", `${safePath}.autorag-visual.md`);
+	if (existsSync(visualPath)) return visualPath;
+	return docPath;
+}
 import { loadDazziNativeCore, type NativeMirrorEntry, type NativeScanDir } from "./dazzi-native-core";
 import { createExclusionMatcher } from "./path-exclusion";
 import {
@@ -94,7 +106,7 @@ export async function scanIndexScope(context: IndexScopeContext, maxEntries = IN
 				for (const entry of context.entries.values()) {
 					mirrorEntries.push({
 						sourcePath: entry.sourcePath,
-						stagedPath: minSyncDocumentPath(context.minSyncRoot, entry.virtualPath),
+						stagedPath: resolveStagedPath(context.minSyncRoot, entry.virtualPath),
 						sourceMtimeNs: entry.sourceMtimeNs,
 						sourceSizeBytes: entry.sourceSizeBytes,
 					});
@@ -129,7 +141,7 @@ export async function scanIndexScope(context: IndexScopeContext, maxEntries = IN
 		if (excludedBy(path)) return "excluded";
 		const entry = context.entries.get(path);
 		if (entry !== undefined) {
-			const staged = await access(minSyncDocumentPath(context.minSyncRoot, entry.virtualPath)).then(() => true, () => false);
+			const staged = await access(resolveStagedPath(context.minSyncRoot, entry.virtualPath)).then(() => true, () => false);
 			if (!staged) return "stale";
 			const info = await stat(path, { bigint: true }).catch(() => null);
 			// The mirror records `Number(stat.mtimeNs)` and the size; either moving means the next refresh re-reads the file.

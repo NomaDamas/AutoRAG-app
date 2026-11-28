@@ -1347,6 +1347,9 @@
       "skipped": "Skipped on refresh ({{reason}})",
       "notIndexed": "Not indexed yet"
     },
+    "contentSearch": {
+      "visualImageMatch": "Matched by visual image similarity"
+    },
     "archive": {
       "corrupt": "The archive is corrupted.",
       "encrypted": "Password-protected archives cannot be extracted.",
@@ -2591,6 +2594,7 @@
       "preview": "Review Plan",
       "apply": "Apply",
       "dimensionFixed": "Model: Qwen3 Embedding 0.6B (1024 dimensions). The model cannot be changed.",
+      "dimensionMultimodal": "Model: EmbeddingGemma 2 (768 dimensions) — embeds documents and images (PNG/JPG/WebP) into one shared semantic space.",
       "serverUrl": "Server address",
       "serverUrlPlaceholder": "https://embed.example.com",
       "serverType": "Server type",

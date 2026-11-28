@@ -1347,6 +1347,9 @@
       "skipped": "최신화에서 건너뜀 ({{reason}})",
       "notIndexed": "아직 인덱싱되지 않음"
     },
+    "contentSearch": {
+      "visualImageMatch": "이미지 시각 유사도 검색 결과"
+    },
     "archive": {
       "corrupt": "압축 파일이 손상되었습니다",
       "encrypted": "암호로 보호된 압축 파일은 풀 수 없습니다",
@@ -2591,6 +2594,7 @@
       "preview": "계획 확인",
       "apply": "적용",
       "dimensionFixed": "모델: Qwen3 Embedding 0.6B (1024차원). 모델은 바꿀 수 없습니다.",
+      "dimensionMultimodal": "모델: EmbeddingGemma 2 (768차원) — 문서와 이미지(PNG/JPG/WebP)를 같은 의미 공간으로 직접 임베딩합니다.",
       "serverUrl": "서버 주소",
       "serverUrlPlaceholder": "https://embed.example.com",
       "serverType": "서버 방식",

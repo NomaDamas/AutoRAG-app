@@ -12,6 +12,7 @@ import { basename } from "node:path";
 import { AutoRAGLite, type RetrievalDiagnostic, type RetrievalOptions, type RetrievalResult, type RetrievalSelection, type RetrievalUnsearchedSurface } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { CONTENT_SEARCH_MAX_HITS, type ContentHit, type ContentSearchOutcome } from "../shared/content-search-contract";
+import { t } from "../shared/i18n/core";
 import { readAppIndexing } from "./app-indexing";
 import { createDefaultSearchRelevanceGate, matchesQueryLexicallyOrApprox, type SearchRelevanceGate } from "./search-relevance-gate";
 
@@ -86,16 +87,37 @@ export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
 					byFile.set(result.source, { chunk: result, lexical: true });
 				}
 			}
-			const candidates = [...byFile.values()].map(({ chunk }) => ({
-				id: chunk.source,
-				sourceLabel: "local-document",
-				title: basename(chunk.source),
-				subtitle: null,
-				content: chunk.content,
-				hit: { path: chunk.source, snippet: contentSnippet(chunk.content, text), line: lineOf(chunk), score: chunk.score } satisfies ContentHit,
-			}));
-			const filtered = deps.relevanceGate === undefined ? candidates : await deps.relevanceGate.filter(text, candidates, signal);
-			return { state: "ok", hits: filtered.map((entry) => entry.hit) };
+			const ordered = [...byFile.values()].map(({ chunk }) => {
+				const directVisualOnly = chunk.metadata?.mirrorKind === "image" && chunk.metadata?.hasVisualComplement !== true;
+				return {
+					id: chunk.source,
+					sourceLabel: "local-document",
+					title: basename(chunk.source),
+					subtitle: null,
+					content: chunk.content,
+					directVisualOnly,
+					hit: {
+						path: chunk.source,
+						snippet: directVisualOnly ? t("main.contentSearch.visualImageMatch") : contentSnippet(chunk.content, text),
+						line: lineOf(chunk),
+						score: chunk.score,
+					} satisfies ContentHit,
+				};
+			});
+			if (deps.relevanceGate === undefined) {
+				return { state: "ok", hits: ordered.map((entry) => entry.hit) };
+			}
+			// Direct multimodal image hits without an OCR/VLM text mirror cannot be evaluated by a text-only Jev gate
+			// because Jev only sees the placeholder text, never the pixels; keep them in original score order while
+			// gating all text documents and OCR/VLM-described images normally.
+			const gateable = ordered.filter((entry) => !entry.directVisualOnly);
+			const directVisual = ordered.filter((entry) => entry.directVisualOnly);
+			const gated = gateable.length === 0 ? [] : await deps.relevanceGate.filter(text, gateable, signal);
+			if (directVisual.length === 0) {
+				return { state: "ok", hits: gated.map((entry) => entry.hit) };
+			}
+			const combined = [...gated, ...directVisual].sort((a, b) => b.hit.score - a.hit.score);
+			return { state: "ok", hits: combined.map((entry) => entry.hit) };
 		},
 	};
 }

@@ -1,6 +1,22 @@
 import { access, lstat, readdir, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { createDefaultParserRegistry, emptyMirrorIndex, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, parsedMirrorRoot, type DefaultParserRegistryOptions, type ParsedMirrorEntry, type ParsedMirrorIndex } from "@autorag/librarian";
+
+function minSyncStagedCandidates(minSyncRoot: string, virtualPath: string): readonly string[] {
+	const safePath = virtualPath.replace(/^\/+/u, "");
+	return [
+		minSyncDocumentPath(minSyncRoot, virtualPath),
+		join(minSyncRoot, "files", safePath),
+		join(minSyncRoot, "files", `${safePath}.autorag-visual.md`),
+	];
+}
+
+async function isStagedInMinSync(minSyncRoot: string, virtualPath: string): Promise<boolean> {
+	for (const candidate of minSyncStagedCandidates(minSyncRoot, virtualPath)) {
+		if (await access(candidate).then(() => true, () => false)) return true;
+	}
+	return false;
+}
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { applyAppIndexing } from "./app-indexing";
 import { refreshAutoragIndex } from "./index-refresh";
@@ -246,8 +262,8 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			const excluded = exclusion !== null;
 			const toggleable = exclusion === null || (exclusion.kind === "path" && exclusion.entry === real);
 			const entry = entries.get(real);
-			// Both modes stage parsed files into MinSync (keyword-only as a sparse-only index): a file is in the index once staged.
-			const staged = entry !== undefined && (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false));
+			// Both modes stage parsed files (or raw multimodal images / visual mirrors) into MinSync: a file is in the index once staged.
+			const staged = entry !== undefined && (await isStagedInMinSync(minSyncRoot, entry.virtualPath));
 			if (excluded) {
 				return entry === undefined
 					? {
