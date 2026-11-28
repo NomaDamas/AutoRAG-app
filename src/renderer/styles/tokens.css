@@ -115,6 +115,28 @@
   --ql-badge-archive: #8D6E63;
   --ql-badge-other: #8E8E93;
 
+  /* ------------------------------------------------------- §2a Quick-search glass */
+  /* The launcher (DESIGN.md §2a) is a Tinycast-style Liquid Glass palette. `data-material` on `.qs` says what main
+   * put behind the page: native glass, a blurred vibrancy, or nothing (an opaque window). The page tints only as much
+   * as the material lacks, then adds the specular rim, the rows' washes and the keycaps, all as ink over the glass. */
+  --qs-radius: 26px;
+  --qs-tint-glass: rgba(255,255,255,0.10);
+  --qs-tint-vibrancy: rgba(255,255,255,0.52);
+  --qs-rim: inset 0 0 0 0.5px rgba(255,255,255,0.55), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(0,0,0,0.04);
+  --qs-selection: rgba(29,29,31,0.09);
+  --qs-hover: rgba(29,29,31,0.05);
+  --qs-divider: rgba(29,29,31,0.10);
+  --qs-control: rgba(29,29,31,0.08);
+  --qs-control-hover: rgba(29,29,31,0.14);
+  --qs-control-border: rgba(29,29,31,0.18);
+  --qs-pill: rgba(255,255,255,0.46);
+  --qs-pill-rim: inset 0 0 0 0.5px rgba(255,255,255,0.7), inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 3px rgba(0,0,0,0.08);
+  --qs-menu: rgba(250,250,252,0.78);
+  --qs-fade: 28px;
+  --qs-foot: 52px;
+  --qs-icon: 26px;
+  --qs-blur: blur(24px) saturate(180%);
+
   /* ------------------------------------------------------------ §2.2 Hover washes */
   --bg-hover: rgba(29,29,31,0.05);
   --bg-hover-row: rgba(29,29,31,0.04);
@@ -541,6 +563,20 @@ html[data-appearance="dark"] {
     --text-tab: #D1D1D6;
     --bg-code: #2C2C2E;
     --bg-chip-sent: #343438;
+
+    /* ------------------------------------------------------- Quick-search glass */
+    --qs-tint-glass: rgba(30,30,32,0.18);
+    --qs-tint-vibrancy: rgba(30,30,32,0.56);
+    --qs-rim: inset 0 0 0 0.5px rgba(255,255,255,0.22), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.3);
+    --qs-selection: rgba(255,255,255,0.10);
+    --qs-hover: rgba(255,255,255,0.05);
+    --qs-divider: rgba(255,255,255,0.10);
+    --qs-control: rgba(255,255,255,0.10);
+    --qs-control-hover: rgba(255,255,255,0.16);
+    --qs-control-border: rgba(255,255,255,0.20);
+    --qs-pill: rgba(255,255,255,0.08);
+    --qs-pill-rim: inset 0 0 0 0.5px rgba(255,255,255,0.22), inset 0 1px 0 rgba(255,255,255,0.3), 0 1px 3px rgba(0,0,0,0.35);
+    --qs-menu: rgba(40,40,44,0.78);
 
     /* --------------------------------------------------------------- Hovers */
     --bg-hover: rgba(255,255,255,0.08);

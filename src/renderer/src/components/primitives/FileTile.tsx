@@ -7,7 +7,7 @@ const TILE_BASE = "flex-none items-center justify-center text-on-tile font-bold"
 const FOLDER_BACK = "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z";
 const FOLDER_FRONT = "M3 9h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z";
 
-function tileSizeClass(size: 16 | 18 | 22): string {
+function tileSizeClass(size: 16 | 18 | 22 | 26): string {
 	switch (size) {
 		case 16:
 			return "size-16 rounded-4 text-tile";
@@ -15,6 +15,9 @@ function tileSizeClass(size: 16 | 18 | 22): string {
 			return "size-18 rounded-5 text-tile";
 		case 22:
 			return "size-22 rounded-6 text-badge";
+		case 26:
+			// The quick-search launcher's row icon (`--qs-icon`); the spacing scale has no 26.
+			return "size-[26px] rounded-7 text-badge";
 	}
 }
 
@@ -68,7 +71,7 @@ export function FileTile({
 }: {
 	readonly kind: FileKind;
 	readonly iconUrl?: string | null | undefined;
-	readonly size?: 16 | 18 | 22;
+	readonly size?: 16 | 18 | 22 | 26;
 	readonly large?: boolean;
 }): ReactElement {
 	const [failed, setFailed] = useState(false);

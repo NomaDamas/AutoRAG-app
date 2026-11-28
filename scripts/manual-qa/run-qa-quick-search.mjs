@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { AI_PANEL, finderWindow, launchFinder } from "./launch-finder.mjs";
 import { homeEnv, isMac, sh, sleep } from "./platform.mjs";
 
 /**
@@ -21,6 +21,10 @@ import { homeEnv, isMac, sh, sleep } from "./platform.mjs";
  *   4. Mouse: click a row, double-click opens it (recorded in Recents), the Ask row hands the question to a new AI
  *      Search tab in the Finder.
  *   5. Settings → General: the section is there, the switch releases the global shortcut.
+ *   6. The Liquid Glass sheet (macOS): the window carries native glass (macOS 26) or the rounded blur before it, the
+ *      Tinycast layout is on screen (Ask AI hint beside the field, folder at each row's right, a round actions button
+ *      and the capsule in the footer), and real screen captures of the window are written next to the page ones so a
+ *      person can look at the material, which a page screenshot of a transparent window cannot show.
  *
  * Run `bun run build` first; needs `inl` (or `minsync`) on PATH and the shared model cache (`inl serve` once).
  */
@@ -82,7 +86,7 @@ writeFileSync(FILES.budget, "# Q3 budget\n\nMarketing spend rose 12 percent whil
 writeFileSync(FILES.report, "# Weekly report\n\nShipped the launcher. Next week: polish keyboard navigation.\n");
 writeFileSync(
 	configPath,
-	`${JSON.stringify({ searchPaths: [docs], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: false, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, webSearch: false, datasources: {} }, null, 2)}\n`,
+	`${JSON.stringify({ searchPaths: [docs], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: false, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, webSearch: { enabled: false }, datasources: {} }, null, 2)}\n`,
 );
 
 log("launching the built app");
@@ -111,6 +115,17 @@ const withTimeout = (promise, ms, label) => Promise.race([promise, new Promise((
 const launcherPage = async () => {
 	for (const page of app.windows()) if (page.url().endsWith("/quick-search.html")) return page;
 	return null;
+};
+const macMajor = isMac ? Number.parseInt(sh("sw_vers -productVersion").trim().split(".")[0] ?? "0", 10) : 0;
+/** What the person sees: the launcher's rectangle (plus its shadow margin) cut out of the real display, glass and all. */
+const captureLauncher = async (name) => {
+	if (!isMac) return;
+	const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Quick Search")?.getBounds() ?? null);
+	if (bounds === null) return;
+	// The compositor trails the DOM by a frame or two; a capture taken at once shows the previous state.
+	await sleep(400);
+	const pad = 24;
+	execFileSync("screencapture", ["-x", "-R", `${bounds.x - pad},${bounds.y - pad},${bounds.width + pad * 2},${bounds.height + pad * 2}`, join(OUT, name)]);
 };
 const launcherVisible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.getTitle() === "Quick Search" && window.isVisible()));
 
@@ -149,6 +164,16 @@ try {
 	await page.locator(".qs__input").waitFor();
 	check("the query field has the keyboard focus", await page.evaluate(() => document.activeElement?.classList.contains("qs__input") === true));
 	await page.screenshot({ path: join(OUT, "01-summoned-recents.png") });
+	await sleep(500);
+	await captureLauncher("01-summoned-recents-screen.png");
+	if (isMac) {
+		const material = await page.evaluate(() => document.querySelector(".qs")?.getAttribute("data-material"));
+		check("the window carries the system's material (native glass on macOS 26, blur before it)", material === (macMajor >= 26 ? "glass" : "vibrancy"), `macOS ${macMajor}: ${material}`);
+		const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Quick Search")?.getBounds());
+		check("the palette is 750 × 475", size?.width === 750 && size?.height === 475, JSON.stringify(size));
+		const radius = await page.evaluate(() => getComputedStyle(document.querySelector(".qs")).borderTopLeftRadius);
+		check("the sheet's corners match the glass's 26px radius", radius === "26px", radius);
+	}
 
 	log("launcher summoned");
 	// ── 3. Keyboard ──
@@ -156,7 +181,14 @@ try {
 	await waitFor(async () => (await page.locator(".qs__row[role=option] .qs__name").allInnerTexts()).includes("report-weekly.md"), 10_000);
 	const nameRows = await page.locator(".qs__row[role=option] .qs__name").allInnerTexts();
 	check("a name match is listed first", nameRows[0] === "report-weekly.md", JSON.stringify(nameRows));
-	check("the last row asks Dazzi the query", /report/.test(nameRows.at(-1) ?? "") && /Dazzi/.test(nameRows.at(-1) ?? ""), nameRows.at(-1));
+	check("the last row asks AI the query", /report/.test(nameRows.at(-1) ?? "") && /Ask AI/.test(nameRows.at(-1) ?? ""), nameRows.at(-1));
+	check("a round actions button sits at the footer's left once a row can act", (await page.locator(".qs__menu-btn").count()) === 1);
+	check("the Ask AI hint with ⌥↩ sits beside the field once something is typed", (await page.locator(".qs__ask-hint").innerText()).includes("Ask") && (await page.locator(".qs__ask-hint .qs__key").innerText()) === (isMac ? "⌥↩" : "Alt+Enter"));
+	const trails = await page.locator(".qs__row[role=option] .qs__trail").allInnerTexts();
+	check("each file row shows the folder it lives in at its right", trails.length > 0 && trails.every((trail) => trail === "qs-fixtures"), JSON.stringify(trails));
+	const capsule = (await page.locator(".qs__pill").innerText()).replace(/\s+/gu, " ");
+	check("the footer capsule names the primary action and the actions menu", /Open/.test(capsule) && /Actions/.test(capsule), capsule);
+	await captureLauncher("01b-typed-report-screen.png");
 
 	await page.keyboard.press("Meta+A");
 	await page.keyboard.type("환불 기간");
@@ -166,6 +198,7 @@ try {
 	check("content search finds the Korean refund policy by meaning", contentNames[0] === "refund-policy.md", JSON.stringify(contentNames));
 	check("the content row shows the matched passage", /환불/.test(snippet), snippet);
 	await page.screenshot({ path: join(OUT, "02-content-match.png") });
+	await captureLauncher("02-content-match-screen.png");
 
 	await page.keyboard.press("Meta+A");
 	await page.keyboard.type("md");
@@ -243,6 +276,7 @@ try {
 	const panelItems = await page.locator(".qs__panel .qs__name").allInnerTexts();
 	check("⌘K lists the actions for the row", panelItems.length === 7, JSON.stringify(panelItems));
 	await page.screenshot({ path: join(OUT, "05-action-panel.png") });
+	await captureLauncher("05-action-panel-screen.png");
 	await page.keyboard.press("Escape");
 	check("Escape closes the panel first", (await page.locator(".qs__panel").count()) === 0 && (await launcherVisible()));
 	await page.keyboard.press("Escape");
@@ -280,12 +314,13 @@ try {
 	await row.waitFor();
 	await row.click();
 	check("a click selects the row", (await row.getAttribute("aria-selected")) === "true");
-	await page.locator(".qs__hint", { hasText: /Copy/ }).click();
-	check("the footer's Copy button copies the clicked row", Boolean(await waitFor(() => (isMac ? pasteboardFiles()[0] === FILES.report : true), 5000)));
-	const ask = page.locator('.qs__row[role=option]', { hasText: "Dazzi" });
+	await page.locator(".qs__menu-btn").click();
+	await page.locator(".qs__panel .qs__row", { hasText: /Copy File/ }).click();
+	check("the round button's menu copies the clicked row", Boolean(await waitFor(() => (isMac ? pasteboardFiles()[0] === FILES.report : true), 5000)));
+	const ask = page.locator('.qs__row[role=option]', { hasText: "Ask AI" });
 	await ask.dblclick();
-	const tab = await waitFor(async () => (await finder.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"])').count()) > 0, 10_000);
-	check("the Ask row opens AI Chat in the Finder with the question", Boolean(tab));
+	const tab = await waitFor(async () => (await finder.locator(AI_PANEL).count()) > 0, 10_000);
+	check("the Ask row opens the AI Agent in the Finder with the question", Boolean(tab));
 	check("asking hands off: the launcher hides", !(await launcherVisible()));
 	await finder.screenshot({ path: join(OUT, "05-ask-handoff.png") });
 
@@ -293,13 +328,14 @@ try {
 	// ── 5. Settings ──
 	await finder.locator(".sidebar__item--settings").click();
 	await finder.waitForSelector(".settings-panel");
-	const section = finder.locator(".settings-section", { hasText: "Quick Search" }).first();
-	await section.waitFor();
-	await section.scrollIntoViewIfNeeded();
+	// Settings opens on General; the Quick Search section is one switch (and a chord recorder) on that page.
+	const quickSwitch = finder.locator('[data-sidebar-switch="quick-search"]');
+	await quickSwitch.waitFor();
+	await quickSwitch.scrollIntoViewIfNeeded();
 	await finder.screenshot({ path: join(OUT, "06-settings.png") });
-	await section.locator('[data-sidebar-switch="quick-search"]').click();
+	await quickSwitch.click();
 	check("turning the switch off releases ⌥Space", Boolean(await waitFor(async () => (await app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered("Alt+Space"))) === false, 5000)));
-	await section.locator('[data-sidebar-switch="quick-search"]').click();
+	await quickSwitch.click();
 	check("turning it back on registers it again", Boolean(await waitFor(() => app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered("Alt+Space")), 5000)));
 } catch (error) {
 	check("the lane ran to the end", false, error instanceof Error ? error.message : String(error));

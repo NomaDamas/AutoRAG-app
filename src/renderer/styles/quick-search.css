@@ -1,8 +1,13 @@
 /* ============================================================================
- * Quick-search launcher window (DESIGN.md §2a).
+ * Quick-search launcher window (DESIGN.md §2a): a Tinycast-style Liquid Glass palette.
  *
  * Same Tailwind bridge and base layer as the Finder, plus the launcher's own
- * hand-written sheet in the base layer. Every value is a token.
+ * hand-written sheet in the base layer. Every value is a token (`--qs-*` for the glass).
+ *
+ * The window is transparent and main puts a material behind the page (`data-material` on
+ * `.qs`: `glass` is macOS 26's native Liquid Glass, `vibrancy` a blurred backdrop, `solid`
+ * an opaque window). The sheet adds a tint only where the material needs one, the specular
+ * rim, and ink-over-glass washes for rows, keycaps and the footer capsule.
  * ========================================================================== */
 
 @import "./tailwind.css";
@@ -16,31 +21,39 @@
 	}
 
 	.qs {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		overflow: hidden;
-		border-radius: var(--radius-12);
+		border-radius: var(--qs-radius);
 		background: var(--bg-window);
 		border: 1px solid var(--border);
 		color: var(--text-primary);
 	}
 
-	html[data-platform="darwin"] .qs {
-		/* The panel's own vibrancy shows through a translucent surface. */
-		background: color-mix(in srgb, var(--bg-window) 86%, transparent);
+	.qs[data-material="glass"] {
+		background: var(--qs-tint-glass);
+		border: 0;
+		box-shadow: var(--qs-rim);
+	}
+
+	.qs[data-material="vibrancy"] {
+		background: var(--qs-tint-vibrancy);
+		border: 0;
+		box-shadow: var(--qs-rim);
 	}
 
 	.qs__bar {
 		display: flex;
+		flex: none;
 		align-items: center;
-		gap: var(--space-10);
-		padding: var(--space-14) var(--space-16);
-		border-bottom: 1px solid var(--border);
+		gap: var(--space-12);
+		padding: var(--space-14) var(--space-20) var(--space-10);
 		-webkit-app-region: drag;
 	}
 
-	.qs__bar svg {
+	.qs__bar > svg {
 		flex: none;
 		color: var(--text-muted);
 	}
@@ -48,12 +61,17 @@
 	.qs__input {
 		flex: 1;
 		min-width: 0;
+		height: 36px;
 		border: 0;
 		outline: 0;
 		background: transparent;
 		color: var(--text-primary);
-		font-size: var(--font-size-title);
+		font-size: 20px;
 		-webkit-app-region: no-drag;
+	}
+
+	.qs__input::placeholder {
+		color: var(--text-faint);
 	}
 
 	.qs__spinner {
@@ -61,33 +79,63 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		border: 2px solid var(--border);
+		border: 2px solid var(--qs-control-border);
 		border-top-color: var(--accent);
 		animation: spin 0.8s linear infinite;
 	}
 
+	.qs__ask-hint,
+	.qs__hint,
+	.qs__pill-primary,
+	.qs__pill-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-6);
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--font-size-sm);
+		font-weight: var(--weight-medium);
+		white-space: nowrap;
+		cursor: default;
+		-webkit-app-region: no-drag;
+	}
+
+	.qs__ask-hint:hover,
+	.qs__hint:hover,
+	.qs__pill-primary:hover,
+	.qs__pill-actions:hover {
+		color: var(--text-primary);
+	}
+
 	.qs__list {
 		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
-		padding: var(--space-6);
+		padding: 0 var(--space-8) calc(var(--qs-foot) + var(--space-12));
+		/* The footer floats over the list: rows dissolve into it instead of being cut by a line. They are gone by the
+		 * footer's text line, so a notice or a path never prints over a half-faded row. */
+		mask-image: linear-gradient(to bottom, #000 calc(100% - var(--qs-foot) - var(--space-12)), transparent calc(100% - var(--qs-fade)));
 	}
 
 	.qs__section {
-		padding: var(--space-8) var(--space-10) var(--space-4);
-		font-size: var(--font-size-badge);
-		font-weight: var(--weight-semibold);
+		padding: var(--space-10) var(--space-10) var(--space-4);
+		font-size: var(--font-size-meta);
+		font-weight: var(--weight-medium);
 		color: var(--text-muted);
-		letter-spacing: var(--tracking-label);
 	}
 
 	.qs__row {
 		display: flex;
 		align-items: center;
-		gap: var(--space-10);
+		gap: var(--space-12);
 		width: 100%;
+		min-height: 42px;
 		padding: var(--space-6) var(--space-10);
 		border: 0;
-		border-radius: var(--radius-8);
+		border-radius: var(--radius-10);
 		background: transparent;
 		color: inherit;
 		text-align: left;
@@ -95,15 +143,11 @@
 	}
 
 	.qs__row:hover {
-		background: var(--bg-hover-row);
+		background: var(--qs-hover);
 	}
 
 	.qs__row[aria-selected="true"] {
-		background: var(--accent-soft);
-	}
-
-	.qs__row[data-focus="true"] {
-		box-shadow: inset 0 0 0 1px var(--accent);
+		background: var(--qs-selection);
 	}
 
 	.qs__text {
@@ -114,8 +158,8 @@
 	}
 
 	.qs__name,
-	.qs__where,
-	.qs__snippet {
+	.qs__snippet,
+	.qs__trail {
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
@@ -125,7 +169,6 @@
 		font-size: var(--font-size-body);
 	}
 
-	.qs__where,
 	.qs__snippet {
 		font-size: var(--font-size-meta);
 		color: var(--text-muted);
@@ -137,14 +180,21 @@
 		font-weight: var(--weight-semibold);
 	}
 
+	.qs__trail {
+		flex: none;
+		max-width: 38%;
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
 	.qs__ask-icon {
 		display: flex;
 		flex: none;
 		align-items: center;
 		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: var(--radius-6);
+		width: var(--qs-icon);
+		height: var(--qs-icon);
+		border-radius: var(--radius-8);
 		background: var(--accent-soft);
 		color: var(--accent);
 	}
@@ -156,14 +206,24 @@
 		color: var(--text-muted);
 	}
 
+	/* The footer floats: a round actions button, the focused row's folder, and the capsule. */
 	.qs__foot {
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
 		display: flex;
 		align-items: center;
 		gap: var(--space-12);
-		padding: var(--space-8) var(--space-14);
-		border-top: 1px solid var(--border);
-		font-size: var(--font-size-badge);
+		height: var(--qs-foot);
+		padding: 0 var(--space-8);
+		font-size: var(--font-size-meta);
 		color: var(--text-muted);
+		pointer-events: none;
+	}
+
+	.qs__foot > * {
+		pointer-events: auto;
 	}
 
 	.qs__foot-spacer {
@@ -172,46 +232,83 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		pointer-events: none;
 	}
 
-	.qs__hint {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-4);
+	.qs__menu-btn {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 36px;
+		height: 36px;
 		padding: 0;
 		border: 0;
-		background: transparent;
-		color: inherit;
-		font: inherit;
+		border-radius: var(--radius-full);
+		background: var(--qs-pill);
+		color: var(--text-body);
+		box-shadow: var(--qs-pill-rim);
+		-webkit-backdrop-filter: var(--qs-blur);
+		backdrop-filter: var(--qs-blur);
 		cursor: default;
 	}
 
-	.qs__hint:hover {
+	.qs__menu-btn:hover {
+		background: var(--qs-control-hover);
+	}
+
+	.qs__pill {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: var(--space-14);
+		height: 36px;
+		padding: 0 var(--space-14);
+		border-radius: 18px;
+		background: var(--qs-pill);
+		box-shadow: var(--qs-pill-rim);
+		-webkit-backdrop-filter: var(--qs-blur);
+		backdrop-filter: var(--qs-blur);
+	}
+
+	.qs__pill-primary {
 		color: var(--text-primary);
 	}
 
 	.qs__key {
-		padding: 0 var(--space-5);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-4);
-		background: var(--bg-hover-row);
+		display: inline-grid;
+		place-items: center;
+		min-width: 18px;
+		height: 18px;
+		padding: 0 var(--space-4);
+		border-radius: var(--radius-6);
+		background: var(--qs-control);
+		color: var(--text-muted);
 		font-size: var(--font-size-badge);
+		font-weight: var(--weight-medium);
+		line-height: 1;
 		white-space: nowrap;
+	}
+
+	.qs__ask-hint .qs__key {
+		background: transparent;
+		box-shadow: inset 0 0 0 1px var(--qs-control-border);
 	}
 
 	.qs__panel {
 		position: absolute;
-		right: var(--space-10);
-		bottom: var(--space-40);
-		min-width: 260px;
-		padding: var(--space-4);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-10);
-		background: var(--bg-window);
-		box-shadow: var(--shadow-menu);
+		right: var(--space-8);
+		bottom: calc(var(--qs-foot) + var(--space-2));
+		min-width: 280px;
+		padding: var(--space-6);
+		border-radius: var(--radius-14);
+		background: var(--qs-menu);
+		box-shadow: var(--qs-pill-rim), var(--shadow-menu);
+		-webkit-backdrop-filter: var(--qs-blur);
+		backdrop-filter: var(--qs-blur);
 	}
 
 	.qs__panel .qs__row {
 		justify-content: space-between;
+		min-height: 36px;
 	}
 }

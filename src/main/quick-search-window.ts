@@ -13,12 +13,14 @@
 
 import { BrowserWindow, ipcMain, nativeTheme, screen } from "electron";
 import { LANGUAGE_FLAG } from "../shared/language-contract";
-import { QUICK_SEARCH_CHANNELS, type QuickSearchHideMode, type QuickSearchStatus } from "../shared/quick-search-contract";
+import { QUICK_SEARCH_CHANNELS, type QuickSearchHideMode, type QuickSearchMaterial, type QuickSearchStatus } from "../shared/quick-search-contract";
 import type { AppSettings } from "../shared/settings-contract";
+import { loadGlassAddon } from "./mac-glass";
+import { applyLauncherMaterial, LAUNCHER_CORNER_RADIUS, launcherWindowOptions } from "./quick-search-material";
 import { whenQuitting } from "./quit-signal";
 
-export const QUICK_SEARCH_WIDTH = 720;
-export const QUICK_SEARCH_HEIGHT = 468;
+export const QUICK_SEARCH_WIDTH = 750;
+export const QUICK_SEARCH_HEIGHT = 475;
 /** The launcher's top edge sits this far down the work area, like Spotlight's. */
 const TOP_FRACTION = 0.2;
 
@@ -79,6 +81,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	let window: BrowserWindow | null = null;
 	let loaded: Promise<void> = Promise.resolve();
 	let preview: BrowserWindow | null = null;
+	let material: QuickSearchMaterial = "solid";
 	let destroyed = false;
 	/** Set when the app starts to quit (see {@link whenQuitting}): the quit closes every window, and this one must not refuse. */
 	let quitting = false;
@@ -101,7 +104,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 			alwaysOnTop: true,
 			hasShadow: true,
 			title: "Quick Search",
-			...(darwin ? { type: "panel", transparent: true, backgroundColor: "#00000000", vibrancy: "popover" as const, visualEffectState: "active" as const } : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#1E1E20" : "#FFFFFF" }),
+			...launcherWindowOptions(process.platform, nativeTheme.shouldUseDarkColors),
 			webPreferences: {
 				preload: deps.preload,
 				contextIsolation: true,
@@ -112,6 +115,12 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 				additionalArguments: [`--autorag-appearance=${deps.appearance}`, `${LANGUAGE_FLAG}${deps.language}`],
 			},
 		});
+		// The material goes in before the page loads: the preload reads which one it got to draw the rest of the sheet.
+		material = applyLauncherMaterial(
+			{ platform: process.platform, handle: created.getNativeWindowHandle(), setVibrancy: (type) => created.setVibrancy(type) },
+			loadGlassAddon(),
+			LAUNCHER_CORNER_RADIUS,
+		);
 		// Above full-screen apps and on every Space / virtual desktop, like the system's own search.
 		created.setAlwaysOnTop(true, darwin ? "pop-up-menu" : "screen-saver");
 		created.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
@@ -163,6 +172,9 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	const fromLauncher = (sender: Electron.WebContents): boolean => window !== null && !window.isDestroyed() && sender === window.webContents;
 	ipcMain.on(QUICK_SEARCH_CHANNELS.hide, (event, mode: unknown) => {
 		if (fromLauncher(event.sender)) hide(mode === "handoff" ? "handoff" : "restore");
+	});
+	ipcMain.on(QUICK_SEARCH_CHANNELS.material, (event) => {
+		event.returnValue = fromLauncher(event.sender) ? material : "solid";
 	});
 	ipcMain.handle(QUICK_SEARCH_CHANNELS.revealInApp, async (event, path: unknown) => {
 		if (!fromLauncher(event.sender) || typeof path !== "string" || path.length === 0) return;
@@ -216,6 +228,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 				ipcMain.removeHandler(channel);
 			}
 			ipcMain.removeAllListeners(QUICK_SEARCH_CHANNELS.hide);
+			ipcMain.removeAllListeners(QUICK_SEARCH_CHANNELS.material);
 			if (window !== null && !window.isDestroyed()) window.destroy();
 			window = null;
 		},

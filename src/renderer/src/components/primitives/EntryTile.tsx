@@ -9,7 +9,7 @@ const LARGE_WIDTH = 160;
 const ROW_WIDTH = 48;
 
 /** A row's file tile: the first page of a PDF/HWP where the OS has none, else the OS icon. */
-export function EntryTile({ entry, size, large = false }: { readonly entry: FinderEntry; readonly size?: 16 | 18 | 22; readonly large?: boolean }): ReactElement {
+export function EntryTile({ entry, size, large = false }: { readonly entry: FinderEntry; readonly size?: 16 | 18 | 22 | 26; readonly large?: boolean }): ReactElement {
 	const firstPage = useFirstPageTile(entry, large ? LARGE_WIDTH : ROW_WIDTH);
 	return <FileTile kind={fileKindOf(entry)} iconUrl={firstPage ?? entry.iconUrl} {...(size === undefined ? {} : { size })} large={large} />;
 }

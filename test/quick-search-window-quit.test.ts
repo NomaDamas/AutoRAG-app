@@ -22,6 +22,10 @@ const electron = vi.hoisted(() => {
 			FakeWindow.all.push(this);
 		}
 		setAlwaysOnTop() {}
+		getNativeWindowHandle() {
+			return Buffer.alloc(8);
+		}
+		setVibrancy() {}
 		setVisibleOnAllWorkspaces() {}
 		setWindowButtonVisibility() {}
 		setBounds() {}

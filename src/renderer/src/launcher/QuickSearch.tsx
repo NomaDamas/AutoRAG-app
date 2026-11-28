@@ -9,7 +9,7 @@ import type { ContentSearchState } from "../../../shared/content-search-contract
 import { useTranslation } from "../../../shared/i18n";
 import type { QuickSearchBridge } from "../../../shared/quick-search-contract";
 import { formatShortcutChord } from "../../../shared/shortcuts-contract";
-import { SearchIcon, SparklesIcon } from "../components/icons";
+import { EqualIcon, SearchIcon, SparklesIcon } from "../components/icons";
 import { EntryTile } from "../components/primitives/EntryTile";
 import { entryFromFs, type FinderEntry } from "../data/entries";
 import { markTerms } from "../lib/mark-terms";
@@ -24,7 +24,7 @@ import {
 	type LauncherRow,
 	type LauncherSelection,
 } from "../state/launcher";
-import { dirname } from "../state/paths";
+import { basename, dirname } from "../state/paths";
 
 /** Content search runs a MinSync query; it waits for a pause in typing so one keystroke is not one query. */
 const CONTENT_DEBOUNCE_MS = 180;
@@ -321,15 +321,18 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 					? t("quickSearch.contentUnavailable")
 					: null;
 
-	const hint = (id: LauncherActionId, chord: string, label: string): ReactElement => (
-		<button type="button" className="qs__hint" onMouseDown={(event) => event.preventDefault()} onClick={() => void run(id)}>
-			<span className="qs__key">{formatShortcutChord(chord, platform)}</span>
+	const hint = (id: LauncherActionId, chord: string, label: string, className = "qs__hint"): ReactElement => (
+		<button type="button" className={className} onMouseDown={(event) => event.preventDefault()} onClick={() => void run(id)}>
 			{label}
+			<span className="qs__key">{formatShortcutChord(chord, platform)}</span>
 		</button>
 	);
+	const togglePanel = (): void => setPanel((current) => (current === null && actions.length > 0 ? { index: 0 } : null));
+	const primary: { readonly id: LauncherActionId; readonly label: string } | null =
+		focused === undefined ? null : focused.kind === "ask" ? { id: "askQuery", label: t("quickSearch.actions.askQuery") } : { id: "open", label: t("quickSearch.actions.open") };
 
 	return (
-		<div className="qs" onKeyDown={onKeyDown} role="dialog" aria-label={t("quickSearch.title")}>
+		<div className="qs" data-material={bridge.material} onKeyDown={onKeyDown} role="dialog" aria-label={t("quickSearch.title")}>
 			<div className="qs__bar">
 				<SearchIcon size={18} />
 				<input
@@ -348,6 +351,7 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 					autoFocus
 				/>
 				{pending ? <span className="qs__spinner" role="status" aria-label={t("quickSearch.searching")} /> : null}
+				{query.trim().length > 0 ? hint("askQuery", "Alt+Enter", t("quickSearch.actions.askQuery"), "qs__ask-hint") : null}
 			</div>
 			<div className="qs__list" id="qs-results" role="listbox" aria-multiselectable="true" ref={listRef}>
 				{rows.length === 0 ? (
@@ -419,16 +423,26 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 				</div>
 			)}
 			<div className="qs__foot">
+				{actions.length > 0 ? (
+					<button type="button" className="qs__menu-btn" aria-label={t("quickSearch.actionsTitle")} onMouseDown={(event) => event.preventDefault()} onClick={togglePanel}>
+						<EqualIcon />
+					</button>
+				) : null}
 				<span className="qs__foot-spacer" role="status">
 					{notice ?? (focused?.kind === "file" ? dirname(focused.entry.path) : "")}
 				</span>
-				{focused?.kind === "ask" ? hint("askQuery", "Enter", t("quickSearch.actions.askQuery")) : hint("open", "Enter", t("quickSearch.actions.open"))}
-				{focused?.kind === "file" ? hint("preview", "Space", t("quickSearch.hints.preview")) : null}
-				{focused?.kind === "file" ? hint("copyFile", "Mod+C", t("quickSearch.hints.copy")) : null}
-				<button type="button" className="qs__hint" onMouseDown={(event) => event.preventDefault()} onClick={() => setPanel((current) => (current === null && actions.length > 0 ? { index: 0 } : null))}>
-					<span className="qs__key">{formatShortcutChord("Mod+K", platform)}</span>
-					{t("quickSearch.hints.actions")}
-				</button>
+				{primary === null ? null : (
+					<div className="qs__pill">
+						<button type="button" className="qs__pill-primary" onMouseDown={(event) => event.preventDefault()} onClick={() => void run(primary.id)}>
+							{primary.label}
+							<span className="qs__key">{formatShortcutChord("Enter", platform)}</span>
+						</button>
+						<button type="button" className="qs__pill-actions" onMouseDown={(event) => event.preventDefault()} onClick={togglePanel}>
+							{t("quickSearch.hints.actions")}
+							<span className="qs__key">{formatShortcutChord("Mod+K", platform)}</span>
+						</button>
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -470,11 +484,12 @@ function FileRowView({
 			onDoubleClick={() => onOpen(index)}
 			onDragStart={(event) => onDragStart(event, index)}
 		>
-			<EntryTile entry={entry} size={22} />
+			<EntryTile entry={entry} size={26} />
 			<span className="qs__text">
 				<span className="qs__name">{row.entry.name}</span>
-				{row.snippet === null ? <span className="qs__where">{dirname(row.entry.path)}</span> : <span className="qs__snippet">{markTerms(row.snippet, query)}</span>}
+				{row.snippet === null ? null : <span className="qs__snippet">{markTerms(row.snippet, query)}</span>}
 			</span>
+			<span className="qs__trail">{basename(dirname(row.entry.path))}</span>
 		</div>
 	);
 }

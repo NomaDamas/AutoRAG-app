@@ -240,14 +240,33 @@ The app's own icon comes from the native thumbnail lane, which renders a bundle 
 ## 2a. Quick-search launcher
 
 A Raycast/Spotlight-style window the system-wide shortcut (default `⌥Space` on macOS, `Alt+Space` on Windows) summons
-over whatever app is in front: one text field, one result list, a footer of key hints. Everything works from the
-keyboard and everything works with the mouse.
+over whatever app is in front: one text field, one result list, and a floating footer. Everything works from the
+keyboard and everything works with the mouse. The look follows [Tinycast](https://github.com/abue-ammar/tinycast)'s
+palette on macOS 26's Liquid Glass.
+
+- **Material.** The window is a transparent panel and the material goes behind the page (`data-material` on `.qs`).
+  `src/main/native/mac-glass.mm` (`vendor/mac-glass.node`, built by `scripts/build-mac-glass.mjs` with the other macOS
+  addons) puts an `NSGlassEffectView` with a 26px corner radius behind the web content on macOS 26 (`glass`); on an
+  earlier macOS it puts a behind-window `NSVisualEffectView` masked to the same rounded rectangle (`vibrancy`). Without the
+  addon the window takes Electron's own `under-window` vibrancy, and off macOS it is an opaque window in the system colour
+  (`solid`). `src/main/quick-search-material.ts` makes the choice (`test/quick-search-material.test.ts`) and the preload
+  hands it to the page, so the sheet tints only as much as the material lacks. The `--qs-*` tokens carry the glass: the
+  26px radius, the tints, the specular rim, the washes for rows and keycaps, the footer capsule. Keep the window's own
+  shadow: macOS 26's glass hairline follows the system corner radius, which matches the glass; squaring the corners
+  (`roundedCorners: false`) traced a square frame past them.
+- **Layout.** A 20px search field on a 36px row with a search glyph, and at its right the `Ask AI ⌥↩` hint (shown once
+  something is typed; it asks the typed question). Rows are one line: a 26px file tile, the name, and at the right the
+  folder the file lives in; a content hit adds its matched passage under the name. Section labels (Recent, File Names,
+  Contents, Ask AI) are 12px medium. The footer floats over the list, which dissolves into it so a notice or path never
+  prints over a half-faded row: a 36px round button at the left (the `⌘K` actions menu), the focused file's folder (or a
+  notice) in the middle, and a capsule at the right with the primary action and `↩` (Open, or Ask AI on the Ask row) and
+  `Actions ⌘K`. Preview, copy and the rest live in the actions menu and on their keys.
 
 - **Results.** Empty query: the Finder's Recents. Typed: *File Names* (the file-name index, ranked prefix → word start →
   substring, shorter and newer first), then *Contents* (the local MinSync hybrid index, one row per file with the
   matched passage, terms marked; files already listed by name are not repeated), then the *Ask Dazzi* row. At most 8 rows
   per section. Keyword-only mode and an index that is not ready say so under the list.
-- **Placement.** Centred on the display under the pointer, a fifth of the way down its work area; 720 × 468; above
+- **Placement.** Centred on the display under the pointer, a fifth of the way down its work area; 750 × 475; above
   full-screen apps and on every Space / virtual desktop. Clicking anywhere else hides it.
 
 | Key | Action |
@@ -265,8 +284,8 @@ keyboard and everything works with the mouse.
 | `⌘K` | Action panel for the row (arrows + `↩`, or click) |
 | `Esc` | Close the panel → close the preview → clear the query → hide and give the foreground back to the previous app |
 
-Mouse: click selects, `⇧`-click extends, double-click opens, a row drags out as the real file(s), the footer hints and
-the panel entries are buttons. On Windows the chords use `Ctrl` for `⌘` and `Alt` for `⌥`.
+Mouse: click selects, `⇧`-click extends, double-click opens, a row drags out as the real file(s), the Ask AI hint, the
+round button, the capsule's two halves and the panel entries are buttons. On Windows the chords use `Ctrl` for `⌘` and `Alt` for `⌥`.
 
 ## 3. Inspector file actions
 
