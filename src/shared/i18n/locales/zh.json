@@ -3961,6 +3961,7 @@
       },
       "watermarkTitle": "添加水印",
       "watermarkText": "水印文字",
+      "originalCopyLabel": "原件",
       "watermarkPresets": "常用文字",
       "watermarkPresetCopy": "副本",
       "watermarkPresetSample": "样本",
