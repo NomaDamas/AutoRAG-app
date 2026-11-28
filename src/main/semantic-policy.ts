@@ -7,6 +7,7 @@ import {
 	type RetrievalMethod,
 } from "@autorag/librarian";
 import { isJsonObject } from "../shared/settings-contract";
+import type { IndexingTier } from "../shared/local-embedding-spec";
 
 /**
  * Keyword-only mode ("사용 안 함" on the onboarding embedding step), the mode of a machine too small for the dense
@@ -26,8 +27,11 @@ import { isJsonObject } from "../shared/settings-contract";
  * reach (`agentMinSyncVectorMethod`; a test fails when a librarian release moves it).
  */
 
-/** `minSync.embedder.id` of a sparse-only MinSync index (the librarian's `SPARSE_ONLY_EMBEDDER_ID`). */
+/** `minSync.embedder.id` of a non-dense MinSync index (the librarian's `SPARSE_ONLY_EMBEDDER_ID`). */
 const SPARSE_ONLY_EMBEDDER_ID = "none";
+
+/** `minSync.sparse.id` that disables SPLADE on low-spec (`bm25-only`) hardware. */
+const NONE_SPARSE_ID = "none";
 
 /** Retrieval method types that rank by embeddings, alone or fused with keywords. */
 const SEMANTIC_TYPES: Record<string, true> = { vector: true, hybrid: true };
@@ -52,13 +56,41 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 }
 
 /**
- * The config the librarian runs in keyword-only mode: MinSync (and an Obsidian vault) as a sparse-only index, and
- * every datasource's semantic option switched off. The same object while semantic search is on.
+ * The config the librarian runs with semantic search and hardware-derived indexing tier applied:
+ *
+ * - When `indexingTier` is omitted, preserves the exact legacy 2-argument contract.
+ * - When `indexingTier === "bm25-only"` (< 16 GiB RAM or < 4 cores CPU-only): disables local
+ *   0.1B SPLADE (`sparse: { id: "none" }`) and enables multilingual BM25 (`bm25: { enabled: true }`)
+ *   so low-spec PCs never load neural weights into RAM; if `semantic === false`, dense is also
+ *   `"none"` (zero-ML pure BM25).
+ * - When `indexingTier === "sparse+bm25"` or `"full"`: keeps BM25 enabled alongside SPLADE (and
+ *   dense when `semantic === true`) so all active retrievers feed multi-feature LTR.
  */
-export function withSemanticPolicyApplied(config: CliConfig, semantic: boolean): CliConfig {
-	if (semantic) return config;
-	const minSync = { ...config.minSync, embedder: { id: SPARSE_ONLY_EMBEDDER_ID } };
-	if (config.datasources === undefined) return { ...config, minSync };
+export function withSemanticPolicyApplied(config: CliConfig, semantic: boolean, indexingTier?: IndexingTier): CliConfig {
+	if (semantic && indexingTier === undefined) return config;
+
+	const baseMinSync = config.minSync ?? {};
+	const nextBm25 =
+		indexingTier === undefined
+			? undefined
+			: {
+					enabled: true,
+					language: "multilingual",
+					...baseMinSync.bm25,
+				};
+	const nextSparse =
+		indexingTier === "bm25-only"
+			? { id: NONE_SPARSE_ID }
+			: baseMinSync.sparse;
+
+	const minSync = {
+		...baseMinSync,
+		...(semantic ? {} : { embedder: { id: SPARSE_ONLY_EMBEDDER_ID } }),
+		...(nextSparse === undefined ? {} : { sparse: nextSparse }),
+		...(nextBm25 === undefined ? {} : { bm25: nextBm25 }),
+	};
+
+	if (semantic || config.datasources === undefined) return { ...config, minSync };
 	const datasources = Object.fromEntries(Object.entries(config.datasources).map(([alias, entry]) => [alias, entryWithoutSemantic(alias, entry)]));
 	return { ...config, minSync, datasources: datasources as NonNullable<CliConfig["datasources"]> };
 }
