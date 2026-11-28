@@ -387,6 +387,12 @@ function checkKnownBlock(path: string, value: unknown): void {
 			fail("appIndexing.semanticSearch must be a boolean");
 		}
 		if (
+			value.indexingMode !== undefined &&
+			!(typeof value.indexingMode === "string" && ["auto", "bm25-only", "sparse+bm25", "full"].includes(value.indexingMode))
+		) {
+			fail("appIndexing.indexingMode must be one of: auto, bm25-only, sparse+bm25, full");
+		}
+		if (
 			value.refreshIntervalMs !== undefined &&
 			!(typeof value.refreshIntervalMs === "number" && Number.isInteger(value.refreshIntervalMs) && value.refreshIntervalMs >= 0)
 		) {
@@ -473,6 +479,33 @@ function checkKnownBlock(path: string, value: unknown): void {
 				if (embedder[key] !== undefined && !(typeof embedder[key] === "number" && Number.isInteger(embedder[key]) && embedder[key] > 0)) {
 					fail(`minSync.embedder.${key} must be a positive integer`);
 				}
+			}
+		}
+		if (value.sparse !== undefined) {
+			const sparse = value.sparse;
+			if (!isJsonObject(sparse)) return fail("minSync.sparse must be an object");
+			for (const key of ["id", "baseUrl"] as const) {
+				if (sparse[key] !== undefined && !(typeof sparse[key] === "string" && (sparse[key] as string).length > 0)) {
+					fail(`minSync.sparse.${key} must be a non-empty string`);
+				}
+			}
+			for (const key of ["timeoutMs", "batchSize", "maxRetries"] as const) {
+				if (sparse[key] !== undefined && !(typeof sparse[key] === "number" && Number.isInteger(sparse[key]) && sparse[key] > 0)) {
+					fail(`minSync.sparse.${key} must be a positive integer`);
+				}
+			}
+		}
+		if (value.bm25 !== undefined) {
+			const bm25 = value.bm25;
+			if (!isJsonObject(bm25)) return fail("minSync.bm25 must be an object");
+			if (bm25.enabled !== undefined && typeof bm25.enabled !== "boolean") {
+				fail("minSync.bm25.enabled must be a boolean");
+			}
+			if (
+				bm25.language !== undefined &&
+				!(typeof bm25.language === "string" && ["multilingual", "simple", "ko", "ja", "zh", "ar"].includes(bm25.language))
+			) {
+				fail("minSync.bm25.language must be one of: multilingual, simple, ko, ja, zh, ar");
 			}
 		}
 		return;

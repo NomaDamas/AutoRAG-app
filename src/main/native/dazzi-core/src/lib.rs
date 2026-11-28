@@ -23,6 +23,7 @@ use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use unicode_normalization::UnicodeNormalization;
 
+mod finder_meta;
 mod preview;
 
 // ─────────────────────────────────────────────────────────────────────────────

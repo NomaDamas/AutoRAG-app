@@ -186,17 +186,56 @@ try {
 	rmSync(root, { recursive: true, force: true });
 }
 
-// Second launch: a slow OS decode, and a file that cannot be read.
+// Second launch: a slow OS decode (exercises the macOS `sips` fallback path via an indexed
+// Palette TIFF that the native Rust decoder deliberately delegates to `sips`), and a file that
+// cannot be read.
+function paletteTiff(w, h) {
+	const pixelBytes = w * h;
+	const paletteBytes = 256 * 3 * 2;
+	const ifdEntries = 10;
+	const ifdOffset = 8;
+	const ifdSize = 2 + ifdEntries * 12 + 4;
+	const paletteOffset = ifdOffset + ifdSize;
+	const pixelOffset = paletteOffset + paletteBytes;
+	const buf = Buffer.alloc(pixelOffset + pixelBytes);
+	buf.write("II", 0, "ascii");
+	buf.writeUInt16LE(42, 2);
+	buf.writeUInt32LE(ifdOffset, 4);
+	let p = ifdOffset;
+	buf.writeUInt16LE(ifdEntries, p);
+	p += 2;
+	const tag = (id, type, count, val) => {
+		buf.writeUInt16LE(id, p);
+		buf.writeUInt16LE(type, p + 2);
+		buf.writeUInt32LE(count, p + 4);
+		buf.writeUInt32LE(val, p + 8);
+		p += 12;
+	};
+	tag(256, 4, 1, w);
+	tag(257, 4, 1, h);
+	tag(258, 3, 1, 8);
+	tag(259, 3, 1, 1);
+	tag(262, 3, 1, 3); // PhotometricInterpretation = Palette -> delegates to sips fallback
+	tag(273, 4, 1, pixelOffset);
+	tag(277, 3, 1, 1);
+	tag(278, 4, 1, h);
+	tag(279, 4, 1, pixelBytes);
+	tag(320, 3, 768, paletteOffset);
+	buf.writeUInt32LE(0, p);
+	buf.writeUInt16LE(65535, paletteOffset); // index 0 = red
+	buf.writeUInt16LE(65535, paletteOffset + (512 + 1) * 2); // index 1 = blue
+	for (let y = 0; y < h; y += 1) {
+		for (let x = 0; x < w; x += 1) buf[pixelOffset + y * w + x] = x < w / 2 ? 0 : 1;
+	}
+	return buf;
+}
 const slowRoot = mkdtempSync(join(tmpdir(), "autorag-ql-tiff-slow-"));
 const shimDir = mkdtempSync(join(tmpdir(), "autorag-ql-tiff-shim-"));
 const DECODE_DELAY_S = 4;
 writeFileSync(join(shimDir, "sips"), `#!/bin/sh\n/bin/sleep ${DECODE_DELAY_S}\nexec /usr/bin/sips "$@"\n`, { mode: 0o755 });
 {
-	const seed = join(slowRoot, "seed.bmp");
-	writeFileSync(seed, bmp(120, 80));
-	execFileSync("sips", ["-s", "format", "tiff", seed, "--out", join(slowRoot, "slow.tif")], { stdio: "ignore" });
-	execFileSync("sips", ["-s", "format", "tiff", seed, "--out", join(slowRoot, "locked.tif")], { stdio: "ignore" });
-	rmSync(seed);
+	writeFileSync(join(slowRoot, "slow.tif"), paletteTiff(120, 80));
+	writeFileSync(join(slowRoot, "locked.tif"), paletteTiff(120, 80));
 	chmodSync(join(slowRoot, "locked.tif"), 0o000);
 }
 const slowApp = await launchFinder({

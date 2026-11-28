@@ -15,6 +15,7 @@
 import { execFile } from "node:child_process";
 import { lstat, stat } from "node:fs/promises";
 import { hasExtensionKindName } from "../shared/extension-kind-names";
+import { loadDazziNativeCore } from "./dazzi-native-core";
 import { errorMessage, hasErrorCode } from "./fs-entry";
 import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
 
@@ -253,6 +254,7 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 	}
 
 	// Windows: extensions asked for and not yet sent to a process, in request order.
+	const useWindowsNative = platform === "win32" && deps.run === undefined;
 	const waiting = new Map<string, WaitingKind>();
 	let draining = false;
 	let scheduled = false;
@@ -265,11 +267,26 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 				for (const [extension] of batch) waiting.delete(extension);
 				const extensions = batch.map(([extension]) => extension);
 				let kinds: (string | null)[] | null = null;
-				try {
-					const answer = await run(windowsKindQuery(extensions));
-					kinds = parseWindowsKindStdout(typeof answer === "string" ? answer : "", extensions.length);
-				} catch (error) {
-					warn(`file-kind: powershell.exe failed for ${extensions.length} extension(s) (${extensions.slice(0, 8).join(" ")}): ${errorMessage(error)}`);
+				if (useWindowsNative) {
+					const native = loadDazziNativeCore();
+					if (native !== null) {
+						try {
+							const nativeKinds = native.lookupWindowsFileKindsNative(extensions);
+							if (nativeKinds !== null && nativeKinds.length === extensions.length) {
+								kinds = nativeKinds;
+							}
+						} catch (error) {
+							warn(`[dazzi-core] lookupWindowsFileKindsNative failed, falling back to PowerShell: ${errorMessage(error)}`);
+						}
+					}
+				}
+				if (kinds === null) {
+					try {
+						const answer = await run(windowsKindQuery(extensions));
+						kinds = parseWindowsKindStdout(typeof answer === "string" ? answer : "", extensions.length);
+					} catch (error) {
+						warn(`file-kind: powershell.exe failed for ${extensions.length} extension(s) (${extensions.slice(0, 8).join(" ")}): ${errorMessage(error)}`);
+					}
 				}
 				batch.forEach(([extension, entry], index) => {
 					// A failed process must not erase the kind of an extension a later folder can still ask for.

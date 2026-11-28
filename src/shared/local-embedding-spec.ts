@@ -13,6 +13,12 @@
 
 export const LOCAL_EMBEDDING_MIN_MEMORY_GB = 32;
 export const LOCAL_EMBEDDING_MIN_VRAM_GB = 8;
+/** Minimum unified RAM on Apple Silicon for auto-enabling dense alongside SPLADE + BM25 (VM-measured). */
+export const AUTO_DENSE_MIN_APPLE_MEMORY_GB = 24;
+/** Minimum system RAM for auto-enabling SPLADE (0.1B) without starving desktop apps (VM-measured). */
+export const AUTO_SPLADE_MIN_MEMORY_GB = 16;
+/** Minimum logical CPU cores for CPU-only SPLADE. */
+export const AUTO_SPLADE_MIN_CPU_CORES = 4;
 
 /**
  * Drivers report an "8 GB" card as 8188 or 8192 MiB depending on the model, so the
@@ -20,6 +26,19 @@ export const LOCAL_EMBEDDING_MIN_VRAM_GB = 8;
  */
 const MIN_VRAM_MIB = LOCAL_EMBEDDING_MIN_VRAM_GB * 1000;
 const MIN_MEMORY_BYTES = LOCAL_EMBEDDING_MIN_MEMORY_GB * 1024 ** 3;
+const AUTO_DENSE_APPLE_BYTES = AUTO_DENSE_MIN_APPLE_MEMORY_GB * 1024 ** 3;
+const AUTO_SPLADE_BYTES = AUTO_SPLADE_MIN_MEMORY_GB * 1024 ** 3;
+
+export type IndexingTier = "bm25-only" | "sparse+bm25" | "full";
+export type IndexingMode = "auto" | IndexingTier;
+
+export interface IndexingTierVerdict {
+	readonly tier: IndexingTier;
+	readonly denseEligible: boolean;
+	readonly sparseEnabled: boolean;
+	readonly bm25Enabled: true;
+	readonly reason: string;
+}
 
 export interface GpuInfo {
 	readonly name: string;
@@ -34,6 +53,8 @@ export interface HardwareProfile {
 	/** `os.cpus()[0].model`: "Apple M4 Max" on Apple silicon. */
 	readonly cpuModel: string;
 	readonly memoryBytes: number;
+	/** Logical CPU cores (`os.cpus().length`). Optional for backwards compatibility with older QA fixtures. */
+	readonly cores?: number;
 	/** CUDA-capable GPUs only; empty when none was found. */
 	readonly gpus: readonly GpuInfo[];
 }
@@ -102,6 +123,62 @@ export function evaluateLocalEmbeddingSpec(hardware: HardwareProfile): LocalSpec
 		return { eligible: true };
 	}
 	return { eligible: false, reason: "unsupported-platform" };
+}
+
+/**
+ * Automatic local indexing tier calibrated against realistic desktop-load VM experiments
+ * (8 / 16 / 24 GiB RAM with ~30 browser tabs + IDE/editor/chat running):
+ *
+ * - `bm25-only`: RAM < 16 GiB, or CPU-only with < 4 cores (zero ML inference, ~165-276 MB RSS)
+ * - `sparse+bm25`: RAM >= 16 GiB with GPU/Apple Silicon or >= 4 CPU cores (SPLADE 0.1B + BM25)
+ * - `full`: Apple Silicon >= 24 GiB RAM, or NVIDIA CUDA >= 8 GB VRAM with >= 16 GiB host RAM
+ */
+export function evaluateIndexingTier(hardware: HardwareProfile): IndexingTierVerdict {
+	const isAppleSilicon = hardware.platform === "darwin" && hardware.arch === "arm64";
+	const maxVramMiB = hardware.gpus.reduce((best, gpu) => Math.max(best, gpu.vramMiB), 0);
+	const cores = hardware.cores ?? AUTO_SPLADE_MIN_CPU_CORES;
+	const hasAccelerator = isAppleSilicon || maxVramMiB > 0;
+	const ramGb = Math.floor(hardware.memoryBytes / 1024 ** 3);
+
+	if (isAppleSilicon && hardware.memoryBytes >= AUTO_DENSE_APPLE_BYTES) {
+		return {
+			tier: "full",
+			denseEligible: true,
+			sparseEnabled: true,
+			bm25Enabled: true,
+			reason: `Apple Silicon with ${ramGb} GiB RAM supports dense + SPLADE + BM25`,
+		};
+	}
+	if ((hardware.platform === "win32" || hardware.platform === "linux") && maxVramMiB >= MIN_VRAM_MIB && hardware.memoryBytes >= AUTO_SPLADE_BYTES) {
+		return {
+			tier: "full",
+			denseEligible: true,
+			sparseEnabled: true,
+			bm25Enabled: true,
+			reason: `CUDA GPU (${Math.floor(maxVramMiB / 1024)} GiB VRAM) + ${ramGb} GiB RAM supports dense + SPLADE + BM25`,
+		};
+	}
+	if (hardware.memoryBytes >= AUTO_SPLADE_BYTES && (hasAccelerator || cores >= AUTO_SPLADE_MIN_CPU_CORES)) {
+		return {
+			tier: "sparse+bm25",
+			denseEligible: false,
+			sparseEnabled: true,
+			bm25Enabled: true,
+			reason: isAppleSilicon
+				? `${ramGb} GiB unified RAM (< ${AUTO_DENSE_MIN_APPLE_MEMORY_GB} GiB): SPLADE + BM25`
+				: `No >= ${LOCAL_EMBEDDING_MIN_VRAM_GB} GB CUDA GPU: SPLADE + BM25`,
+		};
+	}
+	return {
+		tier: "bm25-only",
+		denseEligible: false,
+		sparseEnabled: false,
+		bm25Enabled: true,
+		reason:
+			hardware.memoryBytes < AUTO_SPLADE_BYTES
+				? `${ramGb} GiB RAM (< ${AUTO_SPLADE_MIN_MEMORY_GB} GiB): BM25 only (zero ML)`
+				: `CPU-only with ${cores} core(s) (< ${AUTO_SPLADE_MIN_CPU_CORES}): BM25 only (zero ML)`,
+	};
 }
 
 export type LocalSpecTranslate = (key: string, options?: Record<string, unknown>) => string;
