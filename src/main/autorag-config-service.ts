@@ -22,6 +22,7 @@ import type {
 	ModelCatalogProvider,
 	ModelCatalogSnapshot,
 } from "../shared/settings-contract";
+import { datasourceTemplateOf } from "../shared/datasource-template";
 import { isJsonObject } from "../shared/settings-contract";
 import { migrateLegacyJev } from "./jev-migration";
 import { migrateLegacyPermissionMode } from "./permission-migration";
@@ -539,8 +540,8 @@ function checkKnownBlock(path: string, value: unknown): void {
 			}
 			if (entry.connector !== undefined && !isJsonObject(entry.connector)) fail(`datasources.${id}.connector must be an object`);
 			if (isJsonObject(entry.connector)) assertConnectorOptions(id, entry.connector, fail);
-			const template = typeof entry.type === "string" && entry.type.length > 0 ? entry.type : id;
-			if (template === "hister" && isJsonObject(entry.connector) && entry.connector.baseUrl !== undefined) {
+			const template = datasourceTemplateOf(id, entry);
+			if (template === "nogon" && isJsonObject(entry.connector) && entry.connector.baseUrl !== undefined) {
 				const rawUrl = String(entry.connector.baseUrl).trim();
 				let parsedUrl: URL;
 				try {

@@ -2859,8 +2859,8 @@
       "rss": {
         "summary": "RSS 2.0 / Atom フィードをポーリングしてインデックスします。"
       },
-      "hister": {
-        "summary": "Hister サーバー経由でブラウザの閲覧履歴ページを検索します。"
+      "nogon": {
+        "summary": "Nogon サーバー経由でブラウザの閲覧履歴ページを検索します。"
       },
       "calendar": {
         "summary": "EventKit MCP 経由で macOS のカレンダー予定とリマインダーをライブ照会します。"
@@ -2891,7 +2891,7 @@
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",
-      "hister": "Hister (ブラウザ閲覧履歴)",
+      "nogon": "Nogon (ブラウザ閲覧履歴)",
       "calendar": "Apple カレンダー・リマインダー (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)",
       "aiSessions": "AI セッション"
@@ -2977,7 +2977,7 @@
         "defaultOff": "デフォルト: オフ。",
         "tokenEnv": "トークンそのものではなく、トークンが入った環境変数の名前です。",
         "rcloneConfig": "自分で指定した rclone.conf は読み取り専用でのみ使います。",
-        "histerSemantic": "Hister サーバー側でセマンティック検索が有効である必要があります (autorag setup --sync-hister)。",
+        "nogonSemantic": "Nogon サーバー側でセマンティック検索が有効である必要があります (autorag setup --sync-nogon)。",
         "requireWriteConfirmation": "オンにすると、確認なしで予定やリマインダーを変更しません (--require-write-confirmation)。",
         "mcpExposure": "direct はツールを直接モデルに公開し、codemode はスクリプト経由で呼び出します。",
         "calendarCommand": "空欄にすると npx で mcp-server-apple-events を起動します。",

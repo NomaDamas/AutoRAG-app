@@ -9,8 +9,8 @@ import {
 	type DatasourceSkill,
 	type DatasourceSkillConfig,
 	datasourceChunkStorePath,
-	HisterClient,
 	loadMirrorIndex,
+	NogonClient,
 	resolveConfigReadOnly,
 	sanitizeIdSegment,
 	writeConfigObject,
@@ -18,6 +18,7 @@ import {
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isCalendarDatasourceType } from "../shared/calendar-platform";
+import { datasourceTemplateOf } from "../shared/datasource-template";
 import { datasourceEntrySupported, datasourceSupported } from "../shared/messenger-platform";
 import { calendarMcpServerName, syncCalendarMcpConfig } from "./calendar-mcp";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
@@ -79,7 +80,7 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 	"cloud-drive": "rclone",
 	clawgallery: "clawgallery",
 	spotlight: "mdfind",
-	hister: "hister",
+	nogon: "nogon",
 	wombat: "wombat",
 };
 
@@ -195,19 +196,21 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 			? { state: "builtin", binary: null, path: gh, detail: hasToken ? `Token from ${tokenEnv}` : "Token from gh auth", app }
 			: { state: "credential-missing", binary: null, path: null, detail: `Set ${tokenEnv} to let Dazzi reach GitHub`, app };
 	}
-	if (type === "hister") {
+	if (type === "nogon") {
 		const tokenEnv = typeof connector.tokenEnv === "string" && connector.tokenEnv.trim().length > 0 ? connector.tokenEnv.trim() : undefined;
 		if (tokenEnv !== undefined && !env[tokenEnv]) {
-			return { state: "credential-missing", binary: "hister", path: null, detail: `Set ${tokenEnv} to let Dazzi reach Hister`, app };
+			return { state: "credential-missing", binary: "nogon", path: null, detail: `Set ${tokenEnv} to let Dazzi reach Nogon`, app };
 		}
-		const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : "hister";
-		const path = await findExecutable(configured, env);
+		const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : "nogon";
+		// Nogon was `hister` before v0.22.0 and Homebrew keeps the old program until it relinks, so an install that has
+		// not been upgraded yet still answers to the old name (unless the operator pinned a path).
+		const path = (await findExecutable(configured, env)) ?? (typeof connector.binaryPath === "string" ? null : await findExecutable("hister", env));
 		if (path !== null) {
-			return { state: "installed", binary: "hister", path, detail: `hister at ${path}`, app };
+			return { state: "installed", binary: "nogon", path, detail: `nogon at ${path}`, app };
 		}
 		if (typeof connector.baseUrl === "string" && connector.baseUrl.trim().length > 0) {
 			try {
-				const client = new HisterClient({
+				const client = new NogonClient({
 					baseUrl: connector.baseUrl,
 					...(tokenEnv === undefined ? {} : { tokenEnv }),
 					timeoutMs: 2_000,
@@ -215,13 +218,13 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 				});
 				const cfg = await client.config();
 				if (cfg.ok) {
-					return { state: "installed", binary: "hister", path: connector.baseUrl, detail: `hister server at ${connector.baseUrl}`, app };
+					return { state: "installed", binary: "nogon", path: connector.baseUrl, detail: `nogon server at ${connector.baseUrl}`, app };
 				}
 			} catch {
 				// Fall through to missing binary report.
 			}
 		}
-		return { state: "missing", binary: "hister", path: null, detail: `${configured} was not found on PATH`, app };
+		return { state: "missing", binary: "nogon", path: null, detail: `${configured} was not found on PATH`, app };
 	}
 	const binary = BACKEND_BINARIES[type];
 	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into Dazzi", app };
@@ -351,13 +354,13 @@ async function indexState(
 		}
 		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Searched live through its own CLI" };
 	}
-	if (type === "hister") {
+	if (type === "nogon") {
 		if (install.state === "missing" || install.state === "credential-missing") {
 			return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: install.detail };
 		}
 		const connector = isJsonObject(entry.connector) ? entry.connector : {};
 		try {
-			const client = new HisterClient({
+			const client = new NogonClient({
 				...(typeof connector.baseUrl === "string" ? { baseUrl: connector.baseUrl } : {}),
 				...(typeof connector.tokenEnv === "string" ? { tokenEnv: connector.tokenEnv } : {}),
 				timeoutMs: 3_000,
@@ -370,7 +373,7 @@ async function indexState(
 					chunkCount: null,
 					unit: "document",
 					indexedAt: null,
-					detail: cfg.ok ? "Hister requires authentication" : cfg.message,
+					detail: cfg.ok ? "Nogon requires authentication" : cfg.message,
 				};
 			}
 			const count = await client.count("type:web");
@@ -378,8 +381,8 @@ async function indexState(
 				return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: count.message };
 			}
 			return count.value === 0
-				? { state: "empty", chunkCount: 0, unit: "document", indexedAt: null, detail: "hister holds nothing yet" }
-				: { state: "indexed", chunkCount: count.value, unit: "document", indexedAt: null, detail: `${count.value} items in hister` };
+				? { state: "empty", chunkCount: 0, unit: "document", indexedAt: null, detail: "nogon holds nothing yet" }
+				: { state: "indexed", chunkCount: count.value, unit: "document", indexedAt: null, detail: `${count.value} items in nogon` };
 		} catch (error) {
 			return {
 				state: "not-indexed",
@@ -499,7 +502,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 			Object.entries(config.datasources ?? {}).map(async ([id, raw]): Promise<DataSourceRow> => {
 				const entry: DatasourceSkillConfig = isJsonObject(raw) ? raw : {};
 				const enabled = raw !== false && entry.enabled !== false;
-				const type = entry.type ?? id;
+				const type = datasourceTemplateOf(id, entry);
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
 				const install = await installState(type, entry, deps.env, platform);
 				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
@@ -555,7 +558,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		if (rawEntry === false || entry.enabled === false) {
 			return { ...base, error: "This datasource is turned off" };
 		}
-		const type = entry.type ?? id;
+		const type = datasourceTemplateOf(id, entry);
 		await ensureMessengerConfigsFor({ [id]: entry }, { platform, env: deps.env, home: platform === "win32" ? (deps.env.USERPROFILE ?? "") : (deps.env.HOME ?? "") });
 		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) && !isCalendarDatasourceType(type)) {
 			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };

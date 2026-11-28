@@ -34,8 +34,8 @@ interface Fixture {
 	readonly env: NodeJS.ProcessEnv;
 }
 
-async function createFixture(): Promise<Fixture> {
-	const root = await mkdtemp(join(tmpdir(), "autorag-hister-calendar-"));
+async function createFixture(programs: readonly string[] = ["nogon", "npx"]): Promise<Fixture> {
+	const root = await mkdtemp(join(tmpdir(), "autorag-nogon-calendar-"));
 	directories.push(root);
 	const workspace = join(root, "workspace");
 	const bin = join(root, "bin");
@@ -43,7 +43,7 @@ async function createFixture(): Promise<Fixture> {
 	await mkdir(join(workspace, "docs"), { recursive: true });
 	await mkdir(bin, { recursive: true });
 	await mkdir(agentDir, { recursive: true });
-	for (const name of ["hister", "npx"]) {
+	for (const name of programs) {
 		const target = join(bin, process.platform === "win32" ? `${name}.cmd` : name);
 		await writeFile(target, process.platform === "win32" ? "@echo off\r\nexit /b 0\r\n" : "#!/bin/sh\nexit 0\n");
 		await chmod(target, 0o755);
@@ -81,7 +81,7 @@ async function createFixture(): Promise<Fixture> {
 	};
 }
 
-async function startHisterServer(options: {
+async function startNogonServer(options: {
 	readonly webCount: number;
 	readonly authenticated?: boolean;
 	readonly expectedToken?: string;
@@ -145,16 +145,16 @@ function byId(rows: readonly DataSourceRow[], id: string): DataSourceRow {
 	return row;
 }
 
-describe("Hister datasource config, status, and keyword-only policy", () => {
-	it("validates hister connector fields and enforces https when tokenEnv targets a non-loopback host", async () => {
+describe("Nogon datasource config, status, and keyword-only policy", () => {
+	it("validates nogon connector fields and enforces https when tokenEnv targets a non-loopback host", async () => {
 		const fixture = await createFixture();
 		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 
-		const snapshot = await config.set(["datasources", "hister"], {
-			type: "hister",
+		const snapshot = await config.set(["datasources", "nogon"], {
+			type: "nogon",
 			connector: {
 				baseUrl: "http://127.0.0.1:4433",
-				tokenEnv: "HISTER_TOKEN",
+				tokenEnv: "NOGON_TOKEN",
 				semantic: true,
 				timeoutMs: 15000,
 			},
@@ -162,32 +162,32 @@ describe("Hister datasource config, status, and keyword-only policy", () => {
 		expect(snapshot.error).toBeNull();
 
 		await expect(
-			config.set(["datasources", "hister", "connector", "semantic"], "yes"),
+			config.set(["datasources", "nogon", "connector", "semantic"], "yes"),
 		).rejects.toThrow(/semantic must be a boolean/);
 		await expect(
-			config.set(["datasources", "hister", "connector", "baseUrl"], "not-a-url"),
+			config.set(["datasources", "nogon", "connector", "baseUrl"], "not-a-url"),
 		).rejects.toMatchObject({ code: "url-invalid" });
 		await expect(
-			config.set(["datasources", "hister", "connector"], {
+			config.set(["datasources", "nogon", "connector"], {
 				baseUrl: "http://history.example.com:4433",
-				tokenEnv: "HISTER_TOKEN",
+				tokenEnv: "NOGON_TOKEN",
 			}),
 		).rejects.toMatchObject({ code: "url-needs-https" });
 
-		const httpsRemote = await config.set(["datasources", "hister", "connector"], {
+		const httpsRemote = await config.set(["datasources", "nogon", "connector"], {
 			baseUrl: "https://history.example.com:4433",
-			tokenEnv: "HISTER_TOKEN",
+			tokenEnv: "NOGON_TOKEN",
 			semantic: false,
 		});
 		expect(httpsRemote.error).toBeNull();
 	});
 
-	it("probes a running Hister server for indexed web-page counts and syncs through HisterSkill", async () => {
+	it("probes a running Nogon server for indexed web-page counts and syncs through NogonSkill", async () => {
 		const fixture = await createFixture();
-		const baseUrl = await startHisterServer({ webCount: 3 });
+		const baseUrl = await startNogonServer({ webCount: 3 });
 		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
 		await config.set(["datasources", "browser"], {
-			type: "hister",
+			type: "nogon",
 			description: "Visited web pages",
 			connector: { baseUrl, semantic: true },
 		});
@@ -204,12 +204,12 @@ describe("Hister datasource config, status, and keyword-only policy", () => {
 		expect(synced).toMatchObject({ id: "browser", ok: true, state: "indexed", chunkCount: 3 });
 	});
 
-	it("reports credential-missing when Hister tokenEnv is configured but missing in env", async () => {
+	it("reports credential-missing when Nogon tokenEnv is configured but missing in env", async () => {
 		const fixture = await createFixture();
-		const baseUrl = await startHisterServer({ webCount: 2, expectedToken: "secret-token" });
+		const baseUrl = await startNogonServer({ webCount: 2, expectedToken: "secret-token" });
 		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
-		await config.set(["datasources", "hister"], {
-			connector: { baseUrl, tokenEnv: "HISTER_TOKEN" },
+		await config.set(["datasources", "nogon"], {
+			connector: { baseUrl, tokenEnv: "NOGON_TOKEN" },
 		});
 
 		const status = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
@@ -217,33 +217,108 @@ describe("Hister datasource config, status, and keyword-only policy", () => {
 		expect(missingToken?.install.state).toBe("credential-missing");
 		expect(missingToken?.status).toBe("attention");
 
-		fixture.env.HISTER_TOKEN = "secret-token";
+		fixture.env.NOGON_TOKEN = "secret-token";
 		const [withToken] = (await status.list()).sources;
 		expect(withToken?.install.state).toBe("installed");
 		expect(withToken?.index).toMatchObject({ state: "indexed", chunkCount: 2 });
 		expect(withToken?.status).toBe("ready");
 	});
 
-	it("turns off Hister semantic search in keyword-only mode", () => {
+	it("turns off Nogon semantic search in keyword-only mode", () => {
 		const effective = withSemanticPolicyApplied(
 			{
 				searchPaths: ["/docs"],
 				workspacePath: "/ws",
 				memoryPath: "/ws/memory.json",
 				datasources: {
-					browser: { type: "hister", connector: { baseUrl: "http://127.0.0.1:4433", semantic: true } },
-					hister: { connector: { semantic: true } },
+					browser: { type: "nogon", connector: { baseUrl: "http://127.0.0.1:4433", semantic: true } },
+					nogon: { connector: { semantic: true } },
 				},
 			},
 			false,
 		);
 		expect(effective.datasources?.browser).toEqual({
-			type: "hister",
+			type: "nogon",
 			connector: { baseUrl: "http://127.0.0.1:4433", semantic: false },
 		});
-		expect(effective.datasources?.hister).toEqual({
+		expect(effective.datasources?.nogon).toEqual({
 			connector: { semantic: false },
 		});
+	});
+});
+
+describe("Configs written before the Hister -> Nogon rename keep working", () => {
+	it("shows a `type: hister` connection as a Nogon row with its live page count, and syncs it", async () => {
+		const fixture = await createFixture();
+		const baseUrl = await startNogonServer({ webCount: 3 });
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "browser"], { type: "hister", connector: { baseUrl, semantic: true } });
+
+		const status = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+		const row = byId((await status.list()).sources, "browser");
+		expect(row.type).toBe("nogon");
+		expect(row.install.state).toBe("installed");
+		expect(row.agent).toMatchObject({ state: "connected" });
+		expect(row.index).toMatchObject({ state: "indexed", chunkCount: 3, unit: "document" });
+		expect(await status.sync("browser")).toMatchObject({ id: "browser", ok: true, state: "indexed", chunkCount: 3 });
+	});
+
+	it("treats a bare `hister` key (no type) as Nogon, with the token variable the operator configured", async () => {
+		const fixture = await createFixture();
+		const baseUrl = await startNogonServer({ webCount: 2, expectedToken: "secret-token" });
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "hister"], { connector: { baseUrl, tokenEnv: "HISTER_TOKEN" } });
+
+		const status = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+		const [missing] = (await status.list()).sources;
+		expect(missing?.id).toBe("hister");
+		expect(missing?.install.state).toBe("credential-missing");
+		fixture.env.HISTER_TOKEN = "secret-token";
+		const [ok] = (await status.list()).sources;
+		expect(ok?.install.state).toBe("installed");
+		expect(ok?.index).toMatchObject({ state: "indexed", chunkCount: 2 });
+	});
+
+	it("finds a not-yet-upgraded `hister` program when no `nogon` is on PATH", async () => {
+		const fixture = await createFixture(["hister", "npx"]);
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "browser"], { type: "hister", connector: {} });
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "browser");
+		expect(row.install.state).toBe("installed");
+		expect(row.install.binary).toBe("nogon");
+		expect(row.install.path).toContain("hister");
+	});
+
+	it("reports a missing program by its current name when neither is installed", async () => {
+		const fixture = await createFixture(["npx"]);
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "browser"], { type: "hister", connector: {} });
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "browser");
+		expect(row.install).toMatchObject({ state: "missing", binary: "nogon" });
+	});
+
+	it("still validates the baseUrl of a `type: hister` entry", async () => {
+		const fixture = await createFixture();
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "browser"], { type: "hister", connector: { baseUrl: "http://127.0.0.1:4433" } });
+		await expect(config.set(["datasources", "browser", "connector", "baseUrl"], "not-a-url")).rejects.toThrow();
+	});
+
+	it("turns off semantic search in keyword-only mode for a `type: hister` entry and a bare `hister` key", () => {
+		const effective = withSemanticPolicyApplied(
+			{
+				searchPaths: ["/docs"],
+				workspacePath: "/ws",
+				memoryPath: "/ws/memory.json",
+				datasources: {
+					browser: { type: "hister", connector: { semantic: true } },
+					hister: { connector: { semantic: true } },
+				},
+			},
+			false,
+		);
+		expect(effective.datasources?.browser).toEqual({ type: "hister", connector: { semantic: false } });
+		expect(effective.datasources?.hister).toEqual({ connector: { semantic: false } });
 	});
 });
 

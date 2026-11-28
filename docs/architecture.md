@@ -249,19 +249,24 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   `minsync-sync-failed` warning per file it covered; `index-refresh.ts` folds them into one `minsync-batch-skipped` diagnostic with
   `count`, which the banner counts as files left out (`skippedFileCount`) and the next refresh retries.
 - **연결된 앱** — all connections plus a gallery of the datasource templates
-  (librarian v2.11.0 adds Hister browser history and Apple Calendar &
-  Reminders); each configured connection gets its own page with enable,
+  (librarian v2.11.0 added browser history, which Nogon renamed from
+  Hister, and Apple Calendar & Reminders); each configured connection gets its own page with enable,
   desktop-app requirement and download link, per-source AI access, sync,
   polling interval, description, and the template's connector fields.
-  - *Hister* (`datasources.<id>` with `type: "hister"`) searches the pages a
-    Chromium/Firefox browser visited through a running Hister server
+  - *Nogon* (`datasources.<id>` with `type: "nogon"`) searches the pages a
+    Chromium/Firefox browser visited through a running Nogon server
     (AGPL, separate program; the app only calls its HTTP API). Its detail page
     edits `connector.baseUrl`, `tokenEnv` (never the token), `semantic`, and
     `timeoutMs`; a config write refuses a non-loopback `http:` `baseUrl` when a
     token env is set (mirroring the librarian's client). Status probes the
     server live (`/api/config`, `type:web` count), and "지금 최신화" runs the
-    librarian `HisterSkill` probe. Keyword-only mode pins
-    `connector.semantic: false` like GitHub Gist.
+    librarian `NogonSkill` probe. Keyword-only mode pins
+    `connector.semantic: false` like GitHub Gist. A `config.json` written
+    before the rename (`type: "hister"`, or a bare `hister` key) keeps working:
+    `src/shared/datasource-template.ts` resolves every stored type to its current
+    template, so the connection shows as Nogon, the status probe finds a
+    not-yet-upgraded `hister` program, and the connection's own id is never
+    rewritten.
   - *Apple Calendar & Reminders* (`type: "calendar"`) is the librarian's
     documented zero-code macOS path: a `calendar` entry in `datasources` is not
     a librarian skill but an MCP server the app connects. `calendar-mcp.ts`

@@ -2859,8 +2859,8 @@
       "rss": {
         "summary": "RSS 2.0 / Atom 피드를 폴링해 인덱싱합니다."
       },
-      "hister": {
-        "summary": "Hister 서버에서 브라우저 방문 웹페이지를 검색합니다."
+      "nogon": {
+        "summary": "Nogon 서버에서 브라우저 방문 웹페이지를 검색합니다."
       },
       "calendar": {
         "summary": "EventKit MCP로 macOS 캘린더 일정과 미리알림을 실시간 조회합니다."
@@ -2891,7 +2891,7 @@
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",
-      "hister": "Hister (브라우저 방문 기록)",
+      "nogon": "Nogon (브라우저 방문 기록)",
       "calendar": "Apple 캘린더 · 미리알림 (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)",
       "aiSessions": "AI 세션"
@@ -2977,7 +2977,7 @@
         "defaultOff": "기본값: 꺼짐.",
         "tokenEnv": "비밀 토큰 자체가 아니라, 토큰이 담긴 환경 변수 이름입니다.",
         "rcloneConfig": "직접 지정한 rclone.conf는 읽기 전용으로만 사용합니다.",
-        "histerSemantic": "Hister 서버에 시맨틱 검색이 켜져 있어야 합니다 (autorag setup --sync-hister).",
+        "nogonSemantic": "Nogon 서버에 시맨틱 검색이 켜져 있어야 합니다 (autorag setup --sync-nogon).",
         "requireWriteConfirmation": "켜 두면 확인 없이 일정이나 미리알림을 수정하지 않습니다 (--require-write-confirmation).",
         "mcpExposure": "direct는 도구를 바로 노출하고, codemode는 스크립트를 통해 호출합니다.",
         "calendarCommand": "비워 두면 npx로 mcp-server-apple-events를 실행합니다.",

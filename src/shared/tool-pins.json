@@ -2,7 +2,7 @@
   "schema": 1,
   "librarian": {
     "repo": "Marker-Inc-Korea/AutoRAG",
-    "ref": "b191d326c62a634291924df70a8439e602df4d8a",
+    "ref": "05c54d2e158f1e495ed8c619de54e3f515ac988f",
     "version": "2.16.0"
   },
   "daemon": {

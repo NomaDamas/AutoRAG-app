@@ -48,7 +48,7 @@ describe("WhatsApp and Spotlight are macOS-only sources too", () => {
 			expect(datasourceSupported(type, "darwin"), `${type} on darwin`).toBe(true);
 			expect(datasourceSupported(type, "win32"), `${type} on win32`).toBe(false);
 		}
-		for (const type of ["slack", "discord", "telegram", "notion", "obsidian", "mailcrawl", "cloud-drive", "hister", "lark", "rss", "github"]) {
+		for (const type of ["slack", "discord", "telegram", "notion", "obsidian", "mailcrawl", "cloud-drive", "nogon", "lark", "rss", "github"]) {
 			expect(datasourceSupported(type, "win32"), `${type} on win32`).toBe(true);
 		}
 	});

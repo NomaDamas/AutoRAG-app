@@ -2859,8 +2859,8 @@
       "rss": {
         "summary": "Index RSS 2.0 / Atom feeds by polling."
       },
-      "hister": {
-        "summary": "Search visited browser web pages through a Hister server."
+      "nogon": {
+        "summary": "Search visited browser web pages through a Nogon server."
       },
       "calendar": {
         "summary": "Query macOS Calendar events and Reminders live via EventKit MCP."
@@ -2891,7 +2891,7 @@
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",
-      "hister": "Hister (Browser history)",
+      "nogon": "Nogon (Browser history)",
       "calendar": "Apple Calendar & Reminders (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)",
       "aiSessions": "AI sessions"
@@ -2977,7 +2977,7 @@
         "defaultOff": "Default: off.",
         "tokenEnv": "This is the env var name that holds the token, not the token itself.",
         "rcloneConfig": "A rclone.conf you set yourself is used read-only.",
-        "histerSemantic": "Requires semantic search enabled on the Hister server (autorag setup --sync-hister).",
+        "nogonSemantic": "Requires semantic search enabled on the Nogon server (autorag setup --sync-nogon).",
         "requireWriteConfirmation": "When on, calendar and reminder writes require confirmation (--require-write-confirmation).",
         "mcpExposure": "direct exposes tools directly to the model; codemode calls them through a script.",
         "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx.",

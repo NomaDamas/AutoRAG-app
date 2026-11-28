@@ -8,7 +8,7 @@
 export interface SearchDatasource {
 	/** The config alias (`datasources.<id>`), e.g. `"kakao"` or `"nomadamas"`. */
 	readonly id: string;
-	/** The settings template it was made from (`"kakao"`, `"discord"`, `"hister"`, …); the alias when it names none. */
+	/** The settings template it was made from (`"kakao"`, `"discord"`, `"nogon"`, …); the alias when it names none. */
 	readonly type: string;
 }
 
