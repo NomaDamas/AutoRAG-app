@@ -56,16 +56,25 @@ import type {
 } from "../../../shared/document-editor-contract";
 import { cn } from "../lib/cn";
 import { findPageTextMatches, type PdfSearchHit } from "../lib/pdf-search";
-import { DazziFilePickerModal, loadLocalImageAsPngDataUrl } from "./DazziFilePickerModal";
+import { loadLocalImageAsPngDataUrl } from "../lib/pdf-image-load";
+import { DazziFilePickerModal } from "./DazziFilePickerModal";
 import {
+	BOX_FONT_FAMILY,
+	BOX_LINE_HEIGHT,
+	NOTE_BOX_PAD,
+	NOTE_BOX_RADIUS,
+	NOTE_PALETTES,
+	notePalette,
+	type NotePaletteId,
 	PageNumbersModal,
 	PdfFormsModal,
 	PdfPropertiesModal,
+	renderNoteBoxPng,
 	renderPresetStampPng,
-	renderStickyNotePng,
 	renderTextBoxPng,
 	renderWatermarkPng,
 	SplitPdfModal,
+	TEXT_BOX_PAD,
 	WatermarkModal,
 } from "./PdfEditorTools";
 
@@ -109,12 +118,14 @@ function storeSavedSignatures(signatures: readonly string[]): void {
 	}
 }
 
-type InteractiveTool = "none" | "text" | "crop" | "highlight" | "redact" | "whiteout" | "draw" | "shape";
+type InteractiveTool = "none" | "text" | "note" | "crop" | "highlight" | "redact" | "whiteout" | "draw" | "shape";
 type ShapeKind = "rect" | "ellipse" | "line" | "arrow";
-type StampKind = "signature" | "text" | "image" | "stamp" | "note";
+type StampKind = "signature" | "image" | "stamp";
 
 interface InlineTextBox {
 	readonly id: number;
+	/** "text" is a transparent Keynote-style text box; "note" is a colored sticky-note card. */
+	readonly variant: "text" | "note";
 	readonly pageIndex: number;
 	/** Top-left normalized coordinates (0..1) on the active page. */
 	readonly x: number;
@@ -124,6 +135,7 @@ interface InlineTextBox {
 	readonly text: string;
 	readonly fontSizePt: number;
 	readonly color: string;
+	readonly noteColor: NotePaletteId;
 }
 
 interface PendingStamp {
@@ -527,8 +539,8 @@ export function PdfDocumentEditor({
 	const textBoxDraftRef = useRef<RectDraft | null>(null);
 	const inlineTextInputRef = useRef<HTMLTextAreaElement | null>(null);
 	const textBoxSeqRef = useRef(1);
-	const [notePromptOpen, setNotePromptOpen] = useState(false);
-	const [noteInput, setNoteInput] = useState("");
+	const [noteColor, setNoteColor] = useState<NotePaletteId>("yellow");
+	const [noteSize, setNoteSize] = useState(13);
 	const [stampMenuOpen, setStampMenuOpen] = useState(false);
 	const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 	const [watermarkOpen, setWatermarkOpen] = useState(false);
@@ -806,9 +818,10 @@ export function PdfDocumentEditor({
 	useEffect(() => {
 		const el = inlineTextInputRef.current;
 		if (el === null || inlineTextBox === null) return;
+		const padY = inlineTextBox.variant === "note" ? NOTE_BOX_PAD.y : TEXT_BOX_PAD.y;
 		el.style.height = "auto";
-		el.style.height = `${Math.max(el.scrollHeight, Math.ceil(inlineTextBox.fontSizePt * 1.32 * effectiveScale + 6))}px`;
-	}, [inlineTextBox?.text, inlineTextBox?.width, inlineTextBox?.fontSizePt, effectiveScale, inlineTextBox]);
+		el.style.height = `${Math.max(el.scrollHeight, Math.ceil((inlineTextBox.fontSizePt * BOX_LINE_HEIGHT + padY * 2) * effectiveScale))}px`;
+	}, [inlineTextBox?.text, inlineTextBox?.width, inlineTextBox?.fontSizePt, inlineTextBox?.variant, effectiveScale, inlineTextBox]);
 
 	const commitInlineTextBox = useCallback(
 		async (boxOverride?: InlineTextBox | null): Promise<boolean> => {
@@ -821,8 +834,13 @@ export function PdfDocumentEditor({
 			}
 			const natW = pageNaturalSize?.width ?? 612;
 			const natH = pageNaturalSize?.height ?? 792;
-			const boxWidthPt = Math.max(40, box.width * natW);
-			const rendered = renderTextBoxPng(trimmed, boxWidthPt, box.fontSizePt, box.color);
+			// Render at the width actually stamped, so the committed text wraps exactly like the on-canvas box.
+			const widthFraction = Math.min(1 - box.x, box.width);
+			const boxWidthPt = Math.max(40, widthFraction * natW);
+			const rendered =
+				box.variant === "note"
+					? renderNoteBoxPng(trimmed, boxWidthPt, box.fontSizePt, notePalette(box.noteColor), box.minHeight * natH)
+					: renderTextBoxPng(trimmed, boxWidthPt, box.fontSizePt, box.color);
 			const heightFraction = Math.min(1 - box.y, Math.max(0.02, rendered.heightPt / Math.max(1, natH)));
 			const ok = await applyOps(
 				[
@@ -832,11 +850,11 @@ export function PdfDocumentEditor({
 						pngDataUrl: rendered.dataUrl,
 						x: box.x,
 						y: box.y,
-						width: Math.min(1 - box.x, box.width),
+						width: Math.min(1 - box.x, rendered.widthPt / Math.max(1, natW)),
 						height: heightFraction,
 					},
 				],
-				t("documentEditor.pdf.textApplied"),
+				box.variant === "note" ? t("documentEditor.pdf.noteApplied") : t("documentEditor.pdf.textApplied"),
 			);
 			if (ok) {
 				setInlineTextBox(null);
@@ -989,7 +1007,6 @@ export function PdfDocumentEditor({
 		setPendingStamp(null);
 		setStampMenuOpen(false);
 		setMoreMenuOpen(false);
-		setNotePromptOpen(false);
 		setRectDraft(null);
 		setTextBoxDraft(null);
 		setShapeDraft(null);
@@ -1007,16 +1024,7 @@ export function PdfDocumentEditor({
 			setCropDraft(null);
 			setStampMenuOpen(false);
 			setMoreMenuOpen(false);
-			const width =
-				kind === "signature"
-					? 0.28
-					: kind === "image"
-						? 0.36
-						: kind === "stamp"
-							? 0.28
-							: kind === "note"
-								? 0.26
-								: Math.min(0.45, Math.max(0.16, 0.06 * aspect));
+			const width = kind === "image" ? 0.36 : 0.28;
 			const frame = pageFrameRef.current?.getBoundingClientRect();
 			const pageAspect = frame !== undefined && frame.height > 0 ? frame.width / frame.height : 0.72;
 			const height = Math.min(0.45, Math.max(0.035, (width * pageAspect) / Math.max(0.2, aspect)));
@@ -1068,10 +1076,8 @@ export function PdfDocumentEditor({
 		if (pendingStamp === null) return;
 		const noteKey: Record<StampKind, string> = {
 			signature: t("documentEditor.pdf.signatureApplied"),
-			text: t("documentEditor.pdf.textApplied"),
 			image: t("documentEditor.pdf.imageApplied"),
 			stamp: t("documentEditor.pdf.stampApplied"),
-			note: t("documentEditor.pdf.noteApplied"),
 		};
 		const ok = await applyOps(
 			[
@@ -1127,7 +1133,7 @@ export function PdfDocumentEditor({
 		const fy = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
 		event.currentTarget.setPointerCapture(event.pointerId);
 
-		if (tool === "text") {
+		if (tool === "text" || tool === "note") {
 			dragRef.current = { mode: "textbox-draw", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
 			textBoxDraftRef.current = null;
 			setTextBoxDraft(null);
@@ -1262,31 +1268,35 @@ export function PdfDocumentEditor({
 			textBoxDraftRef.current = null;
 			setTextBoxDraft(null);
 			const nextId = textBoxSeqRef.current++;
+			const isNote = tool === "note";
+			const style = {
+				variant: isNote ? ("note" as const) : ("text" as const),
+				text: "",
+				fontSizePt: isNote ? noteSize : textSize,
+				color: textColor,
+				noteColor,
+			};
 			if (draft !== null && (draft.width >= 0.06 || draft.height >= 0.03)) {
 				setInlineTextBox({
 					id: nextId,
 					pageIndex: activePage,
 					x: draft.left,
 					y: draft.top,
-					width: Math.min(1 - draft.left, Math.max(0.16, draft.width)),
-					minHeight: Math.max(0.04, draft.height),
-					text: "",
-					fontSizePt: textSize,
-					color: textColor,
+					width: Math.min(1 - draft.left, Math.max(isNote ? 0.2 : 0.16, draft.width)),
+					minHeight: Math.max(isNote ? 0.06 : 0.04, draft.height),
+					...style,
 				});
 			} else {
-				const x = Math.min(0.8, Math.max(0.02, drag.startX));
-				const y = Math.min(0.92, Math.max(0.02, drag.startY));
+				const x = Math.min(isNote ? 0.7 : 0.8, Math.max(0.02, drag.startX));
+				const y = Math.min(isNote ? 0.86 : 0.92, Math.max(0.02, drag.startY));
 				setInlineTextBox({
 					id: nextId,
 					pageIndex: activePage,
 					x,
 					y,
-					width: Math.min(0.42, Math.max(0.18, 0.98 - x)),
-					minHeight: 0.045,
-					text: "",
-					fontSizePt: textSize,
-					color: textColor,
+					width: isNote ? Math.min(0.3, 0.98 - x) : Math.min(0.42, Math.max(0.18, 0.98 - x)),
+					minHeight: isNote ? 0.09 : 0.045,
+					...style,
 				});
 			}
 			return;
@@ -1427,7 +1437,9 @@ export function PdfDocumentEditor({
 	const activeHint =
 		tool === "text"
 			? t("documentEditor.pdf.textBoxHint")
-			: tool === "highlight"
+			: tool === "note"
+				? t("documentEditor.pdf.noteBoxHint")
+				: tool === "highlight"
 				? t("documentEditor.pdf.highlightHint")
 				: tool === "redact"
 					? t("documentEditor.pdf.redactHint")
@@ -1583,19 +1595,13 @@ export function PdfDocumentEditor({
 
 				<button
 					type="button"
+					aria-pressed={tool === "note"}
 					disabled={busy || payload.encrypted}
 					title={t("documentEditor.pdf.stickyNote")}
 					aria-label={t("documentEditor.pdf.stickyNote")}
 					data-pdf-tool="note"
-					className={iconToolBtn(notePromptOpen)}
-					onClick={() => {
-						setTool("none");
-						setInlineTextBox(null);
-						setStampMenuOpen(false);
-						setMoreMenuOpen(false);
-						setNotePromptOpen((open) => !open);
-						setNoteInput("");
-					}}
+					className={iconToolBtn(tool === "note")}
+					onClick={() => activateTool("note")}
 				>
 					<StickyNote size={15} strokeWidth={1.65} />
 				</button>
@@ -1876,48 +1882,6 @@ export function PdfDocumentEditor({
 				</div>
 			) : null}
 
-			{/* Inline sticky note composer */}
-			{notePromptOpen ? (
-				<div className="flex flex-none items-center gap-8 border-b border-divider bg-window px-12 py-6">
-					<StickyNote size={15} className="text-warning" />
-					<input
-						type="text"
-						value={noteInput}
-						data-pdf-note-input="true"
-						placeholder={t("documentEditor.pdf.notePlaceholder")}
-						className="h-28 flex-1 rounded-6 border border-border bg-input px-10 text-body text-ink outline-none focus:border-accent"
-						onChange={(e) => setNoteInput(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && noteInput.trim() !== "") {
-								const rendered = renderStickyNotePng(noteInput.trim());
-								beginStampPlacement("note", rendered.dataUrl, rendered.aspect);
-								setNotePromptOpen(false);
-							}
-						}}
-						autoFocus
-					/>
-					<button
-						type="button"
-						disabled={noteInput.trim() === ""}
-						className="h-26 rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent disabled:opacity-35"
-						onClick={() => {
-							const rendered = renderStickyNotePng(noteInput.trim());
-							beginStampPlacement("note", rendered.dataUrl, rendered.aspect);
-							setNotePromptOpen(false);
-						}}
-					>
-						{t("documentEditor.pdf.placeNote")}
-					</button>
-					<button
-						type="button"
-						className="h-26 rounded-6 border-0 bg-transparent px-8 text-meta text-ink-muted hover:bg-hover hover:text-ink"
-						onClick={() => setNotePromptOpen(false)}
-					>
-						{t("common.cancel")}
-					</button>
-				</div>
-			) : null}
-
 			{/* Contextual active-tool sub-bar (Apple Preview / Acrobat style) */}
 			{activeHint !== null ? (
 				<div className="flex flex-none flex-wrap items-center justify-between gap-8 border-b border-divider bg-window px-12 py-6 text-meta">
@@ -1973,6 +1937,7 @@ export function PdfDocumentEditor({
 											const nextId = textBoxSeqRef.current++;
 											setInlineTextBox({
 												id: nextId,
+												variant: "text",
 												pageIndex: activePage,
 												x: 0.12,
 												y: 0.14,
@@ -1981,6 +1946,7 @@ export function PdfDocumentEditor({
 												text: stamp,
 												fontSizePt: textSize,
 												color: textColor,
+												noteColor,
 											});
 										}
 									}}
@@ -1988,6 +1954,48 @@ export function PdfDocumentEditor({
 									<Calendar size={12} />
 									{t("documentEditor.pdf.insertToday")}
 								</button>
+							</div>
+						) : null}
+						{tool === "note" ? (
+							<div className="flex items-center gap-8">
+								<div className="flex items-center gap-4" role="group" aria-label={t("documentEditor.pdf.noteColor")}>
+									{NOTE_PALETTES.map((palette) => (
+										<button
+											key={palette.id}
+											type="button"
+											data-pdf-note-color={palette.id}
+											aria-label={t(`documentEditor.pdf.noteColors.${palette.id}`)}
+											title={t(`documentEditor.pdf.noteColors.${palette.id}`)}
+											aria-pressed={noteColor === palette.id}
+											className={cn(
+												"size-16 rounded-full border-2",
+												noteColor === palette.id ? "border-accent ring-2 ring-accent/20" : "border-border",
+											)}
+											style={{ backgroundColor: palette.fill }}
+											onMouseDown={(e) => e.preventDefault()}
+											onClick={() => {
+												setNoteColor(palette.id);
+												setInlineTextBox((curr) => (curr === null || curr.variant !== "note" ? curr : { ...curr, noteColor: palette.id }));
+											}}
+										/>
+									))}
+								</div>
+								<select
+									aria-label={t("documentEditor.pdf.textSize")}
+									value={noteSize}
+									onChange={(e) => {
+										const nextSize = Number(e.target.value);
+										setNoteSize(nextSize);
+										setInlineTextBox((curr) => (curr === null || curr.variant !== "note" ? curr : { ...curr, fontSizePt: nextSize }));
+									}}
+									className="h-24 rounded-6 border border-border bg-window px-6 text-badge text-ink"
+								>
+									{[11, 12, 13, 14, 16, 18].map((sz) => (
+										<option key={sz} value={sz}>
+											{sz}pt
+										</option>
+									))}
+								</select>
 							</div>
 						) : null}
 						{isRedactGroup ? (
@@ -2228,7 +2236,7 @@ export function PdfDocumentEditor({
 								className={cn(
 									"relative flex-none rounded-[2px] bg-white shadow-ql-page select-none",
 									tool === "crop" && "overflow-hidden",
-									tool === "text" ? "cursor-text" : tool !== "none" && "cursor-crosshair",
+									tool === "text" || tool === "note" ? "cursor-text" : tool !== "none" && "cursor-crosshair",
 								)}
 								onPointerDown={onStagePointerDown}
 								onPointerMove={onStagePointerMove}
@@ -2285,12 +2293,24 @@ export function PdfDocumentEditor({
 								{inlineTextBox !== null && inlineTextBox.pageIndex === activePage ? (
 									<div
 										data-pdf-textbox="true"
-										className="absolute z-30 rounded-[3px] border-[1.5px] border-accent bg-white/85 shadow-sm select-text"
+										data-pdf-textbox-variant={inlineTextBox.variant}
+										className={cn(
+											"absolute z-30 select-text",
+											inlineTextBox.variant === "text" && "rounded-[3px] bg-white/85 shadow-sm ring-[1.5px] ring-accent",
+										)}
 										style={{
 											left: `${inlineTextBox.x * 100}%`,
 											top: `${inlineTextBox.y * 100}%`,
 											width: `${inlineTextBox.width * 100}%`,
 											minHeight: `${inlineTextBox.minHeight * 100}%`,
+											...(inlineTextBox.variant === "note"
+												? {
+														backgroundColor: notePalette(inlineTextBox.noteColor).fill,
+														borderRadius: NOTE_BOX_RADIUS * effectiveScale,
+														// Hairline card border (inside, so it never eats text width) + accent focus ring + soft lift.
+														boxShadow: `inset 0 0 0 1px ${notePalette(inlineTextBox.noteColor).stroke}, 0 0 0 2px var(--accent), 0 4px 12px rgba(20, 20, 41, 0.14)`,
+													}
+												: {}),
 										}}
 										onPointerDown={(event) => event.stopPropagation()}
 									>
@@ -2352,15 +2372,26 @@ export function PdfDocumentEditor({
 											rows={1}
 											data-pdf-textbox-input="true"
 											value={inlineTextBox.text}
-											placeholder={t("documentEditor.pdf.textBoxPlaceholder")}
+											placeholder={
+												inlineTextBox.variant === "note"
+													? t("documentEditor.pdf.noteBoxPlaceholder")
+													: t("documentEditor.pdf.textBoxPlaceholder")
+											}
 											className="block w-full resize-none overflow-hidden border-0 bg-transparent outline-none placeholder:text-ink-faint"
 											style={{
-												padding: `${3 * effectiveScale}px ${4 * effectiveScale}px`,
+												padding:
+													inlineTextBox.variant === "note"
+														? `${NOTE_BOX_PAD.y * effectiveScale}px ${NOTE_BOX_PAD.x * effectiveScale}px`
+														: `${TEXT_BOX_PAD.y * effectiveScale}px ${TEXT_BOX_PAD.x * effectiveScale}px`,
 												fontSize: `${inlineTextBox.fontSizePt * effectiveScale}px`,
-												lineHeight: 1.32,
+												lineHeight: BOX_LINE_HEIGHT,
 												fontWeight: 500,
-												color: inlineTextBox.color,
-												fontFamily: '"Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+												color: inlineTextBox.variant === "note" ? notePalette(inlineTextBox.noteColor).ink : inlineTextBox.color,
+												fontFamily: BOX_FONT_FAMILY,
+												// Same wrapping rules as wrapBoxText(), so the saved PDF matches what was typed.
+												whiteSpace: "pre-wrap",
+												wordBreak: "keep-all",
+												overflowWrap: "anywhere",
 											}}
 											onChange={(event) => {
 												const nextText = event.target.value;
@@ -2410,7 +2441,7 @@ export function PdfDocumentEditor({
 								{pendingStamp !== null && pendingStamp.pageIndex === activePage ? (
 									<div
 										data-pdf-stamp-box="true"
-										className="absolute z-20 cursor-move border-2 border-dashed border-accent bg-accent/5"
+										className="absolute z-20 cursor-move border-2 border-dashed border-accent bg-transparent"
 										style={{
 											left: `${pendingStamp.x * 100}%`,
 											top: `${pendingStamp.y * 100}%`,

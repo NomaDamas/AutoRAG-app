@@ -51,6 +51,7 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 		pdfPickMergeFiles: vi.fn(async () => []),
 		pdfRestore: vi.fn(async () => ({ ok: true })),
 		pdfReadMetadata: vi.fn(async () => ({ title: "", author: "", subject: "", keywords: "" })),
+		pdfDecodeImage: vi.fn(async () => ({ mime: "image/png" as const, bytes: new Uint8Array() })),
 		pdfReadFormFields: vi.fn(async () => []),
 		pdfSaveFormFields: vi.fn(async () => ({ ok: true as const, size: 100, modifiedAt: new Date().toISOString(), mtimeMs: initial.mtimeMs + 25, pageCount: 1, snapshotId: "snap-form-1" })),
 		onPdfChanged: () => () => undefined,

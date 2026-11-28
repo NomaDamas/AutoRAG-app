@@ -20,6 +20,7 @@ import {
 	isPdfSplitRequest,
 } from "../src/shared/document-editor-contract";
 import { PdfDocumentEditor } from "../src/renderer/src/components/PdfDocumentEditor";
+import { loadLocalImageAsPngDataUrl } from "../src/renderer/src/lib/pdf-image-load";
 import { findPageTextMatches } from "../src/renderer/src/lib/pdf-search";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -107,6 +108,7 @@ function createMockBridge() {
 			changedListeners.add(listener);
 			return () => changedListeners.delete(listener);
 		},
+		pdfDecodeImage: vi.fn(async () => ({ mime: "image/png" as const, bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) })),
 		aiStart: vi.fn(async () => ({ changed: false })),
 		aiCancel: vi.fn(async () => undefined),
 		aiUndo: vi.fn(async () => false),
@@ -524,6 +526,104 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		expect(applied).toHaveLength(1);
 		expect(applied[0]?.operations[0]?.kind).toBe("stampImage");
 		expect(container!.querySelector('[data-pdf-textbox="true"]')).toBeNull();
+	});
+});
+
+describe("PDF memo and image insertion", () => {
+	it("places a sticky note card where the page is clicked, recolors it, and commits it with Cmd+Enter", async () => {
+		const { applied } = await mountEditor();
+
+		const noteBtn = container!.querySelector('button[data-pdf-tool="note"]') as HTMLButtonElement;
+		await act(async () => noteBtn.click());
+		expect(noteBtn.getAttribute("aria-pressed")).toBe("true");
+		// The old top-of-editor memo input bar is gone: the memo is typed on the page itself.
+		expect(container!.querySelector('[data-pdf-note-input="true"]')).toBeNull();
+
+		const stage = container!.querySelector<HTMLDivElement>('[data-pdf-page-stage="1"]')!;
+		stage.getBoundingClientRect = () =>
+			({ left: 0, top: 0, width: 600, height: 800, right: 600, bottom: 800, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+		stage.setPointerCapture = vi.fn();
+		stage.hasPointerCapture = vi.fn(() => false);
+		stage.releasePointerCapture = vi.fn();
+
+		await act(async () => {
+			stage.dispatchEvent(new PointerEvent("pointerdown", { button: 0, clientX: 300, clientY: 400, pointerId: 1, bubbles: true }));
+			stage.dispatchEvent(new PointerEvent("pointerup", { button: 0, clientX: 300, clientY: 400, pointerId: 1, bubbles: true }));
+		});
+
+		const noteBox = container!.querySelector<HTMLElement>('[data-pdf-textbox="true"]');
+		expect(noteBox).not.toBeNull();
+		expect(noteBox!.getAttribute("data-pdf-textbox-variant")).toBe("note");
+		// Placed exactly at the clicked point (300/600, 400/800).
+		expect(noteBox!.style.left).toBe("50%");
+		expect(noteBox!.style.top).toBe("50%");
+
+		// Pick a different note color from the contextual sub-bar; the live card recolors.
+		const pink = container!.querySelector('button[data-pdf-note-color="pink"]') as HTMLButtonElement;
+		await act(async () => pink.click());
+		expect(pink.getAttribute("aria-pressed")).toBe("true");
+		expect(noteBox!.style.backgroundColor).not.toBe("");
+
+		const textArea = container!.querySelector<HTMLTextAreaElement>('[data-pdf-textbox-input="true"]')!;
+		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+		await act(async () => {
+			nativeSetter.call(textArea, "법무팀 검토 완료 — 수정 필요");
+			textArea.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			textArea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
+			await Promise.resolve();
+		});
+
+		expect(applied).toHaveLength(1);
+		const op = applied[0]!.operations[0]!;
+		expect(op.kind).toBe("stampImage");
+		if (op.kind === "stampImage") {
+			expect(op.pageIndex).toBe(0);
+			expect(op.x).toBeCloseTo(0.5, 5);
+			expect(op.y).toBeCloseTo(0.5, 5);
+		}
+		expect(container!.querySelector('[data-pdf-textbox="true"]')).toBeNull();
+		expect(container!.textContent).toContain("Note saved to PDF");
+	});
+
+	it("routes TIFF/HEIC through the main-process decoder and other images through the transparent canvas path", async () => {
+		const { bridge } = await mountEditor();
+		const fetchSpy = vi.fn(async () => new Response(new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" })));
+		vi.stubGlobal("fetch", fetchSpy);
+		class LoadingImage {
+			naturalWidth = 200;
+			naturalHeight = 100;
+			onload: (() => void) | null = null;
+			onerror: (() => void) | null = null;
+			set src(_value: string) {
+				queueMicrotask(() => this.onload?.());
+			}
+		}
+		vi.stubGlobal("Image", LoadingImage);
+		const drawImage = vi.fn();
+		const clearRect = vi.fn();
+		vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage, clearRect } as unknown as CanvasRenderingContext2D);
+		const toDataUrl = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(MOCK_PNG);
+
+		try {
+			for (const path of ["/tmp/scan.tiff", "/tmp/scan.TIF", "/tmp/photo.heic"]) {
+				const loaded = await loadLocalImageAsPngDataUrl(path);
+				expect(loaded.aspect).toBeCloseTo(2, 5);
+				expect(bridge.pdfDecodeImage).toHaveBeenLastCalledWith(path);
+			}
+			expect(fetchSpy).not.toHaveBeenCalled();
+
+			const png = await loadLocalImageAsPngDataUrl("/tmp/logo.png");
+			expect(png.dataUrl).toBe(MOCK_PNG);
+			expect(fetchSpy).toHaveBeenCalledTimes(1);
+			expect(bridge.pdfDecodeImage).toHaveBeenCalledTimes(3);
+			// Exported as PNG from a cleared (transparent) canvas: no background fill that would hide alpha.
+			expect(clearRect).toHaveBeenCalled();
+			expect(toDataUrl).toHaveBeenLastCalledWith("image/png");
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 });
 

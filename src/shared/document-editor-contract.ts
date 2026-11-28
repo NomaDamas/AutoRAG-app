@@ -30,6 +30,7 @@ export const DOCUMENT_EDITOR_CHANNELS = {
 	pdfReadMetadata: "documentEditor:pdfReadMetadata",
 	pdfReadFormFields: "documentEditor:pdfReadFormFields",
 	pdfSaveFormFields: "documentEditor:pdfSaveFormFields",
+	pdfDecodeImage: "documentEditor:pdfDecodeImage",
 	pdfChanged: "documentEditor:pdfChanged",
 	aiStart: "documentEditor:aiStart",
 	aiCancel: "documentEditor:aiCancel",
@@ -407,6 +408,8 @@ export interface DocumentEditorBridge {
 	pdfReadMetadata(path: string): Promise<PdfMetadata>;
 	pdfReadFormFields(path: string): Promise<readonly PdfFormField[]>;
 	pdfSaveFormFields(request: PdfFormSaveRequest): Promise<PdfApplyResult>;
+	/** Decodes a TIFF/HEIC picture Chromium cannot read (PNG keeps alpha; raw bytes when only the renderer can decode). */
+	pdfDecodeImage(path: string): Promise<{ readonly mime: "image/png" | "image/jpeg" | "image/tiff" | "image/heic"; readonly bytes: Uint8Array }>;
 	onPdfChanged(listener: (event: PdfChangedEvent) => void): () => void;
 	aiStart(runId: string, request: DocumentEditRequest, capture?: DocumentEditorAiCapture): Promise<{ readonly changed: boolean }>;
 	aiCancel(runId: string): Promise<void>;

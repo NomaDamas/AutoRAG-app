@@ -3950,8 +3950,15 @@
       "stampDraft": "초안",
       "stampReviewed": "검토 완료",
       "stampUrgent": "긴급",
-      "notePlaceholder": "페이지에 붙일 메모 내용을 입력하세요…",
-      "placeNote": "메모 배치",
+      "noteBoxHint": "페이지에서 원하는 위치를 클릭하거나 드래그해 메모를 붙이고 바로 입력하세요. (⌘Enter로 적용)",
+      "noteBoxPlaceholder": "메모 입력…",
+      "noteColor": "메모 색상",
+      "noteColors": {
+        "yellow": "노랑",
+        "pink": "분홍",
+        "blue": "파랑",
+        "green": "초록"
+      },
       "watermarkTitle": "워터마크 추가",
       "watermarkText": "워터마크 텍스트",
       "watermarkPlaceholder": "예: 대외비, CONFIDENTIAL, 초안",

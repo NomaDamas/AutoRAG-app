@@ -22,6 +22,7 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { deflateSync } from "node:zlib";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, rmRetry } from "./platform.mjs";
@@ -108,6 +109,74 @@ writeFileSync(
 	STAMP_LOGO,
 	Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
 );
+
+// 4. Transparent fixtures: an opaque ring on a fully transparent background, as PNG and as RGBA TIFF.
+function crc32(buf) {
+	let c = 0xffffffff;
+	for (let i = 0; i < buf.length; i += 1) {
+		c ^= buf[i];
+		for (let k = 0; k < 8; k += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+	}
+	return (c ^ 0xffffffff) >>> 0;
+}
+function pngChunk(type, data) {
+	const len = Buffer.alloc(4);
+	len.writeUInt32BE(data.length, 0);
+	const typed = Buffer.concat([Buffer.from(type, "ascii"), data]);
+	const crc = Buffer.alloc(4);
+	crc.writeUInt32BE(crc32(typed), 0);
+	return Buffer.concat([len, typed, crc]);
+}
+function encodeRgbaPng(rgba, w, h) {
+	const ihdr = Buffer.alloc(13);
+	ihdr.writeUInt32BE(w, 0);
+	ihdr.writeUInt32BE(h, 4);
+	ihdr[8] = 8;
+	ihdr[9] = 6;
+	const raw = Buffer.alloc((1 + w * 4) * h);
+	for (let y = 0; y < h; y += 1) Buffer.from(rgba.subarray(y * w * 4, (y + 1) * w * 4)).copy(raw, y * (1 + w * 4) + 1);
+	return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", ihdr), pngChunk("IDAT", deflateSync(raw)), pngChunk("IEND", Buffer.alloc(0))]);
+}
+function encodeRgbaTiff(rgba, w, h) {
+	const pixelOffset = 16;
+	const ifdOffset = pixelOffset + rgba.length;
+	const entries = [
+		[256, 3, 1, w], [257, 3, 1, h], [258, 3, 4, 8], [259, 3, 1, 1], [262, 3, 1, 2], [273, 4, 1, pixelOffset],
+		[277, 3, 1, 4], [278, 3, 1, h], [279, 4, 1, rgba.length], [284, 3, 1, 1], [338, 3, 1, 2],
+	];
+	const out = Buffer.alloc(ifdOffset + 2 + entries.length * 12 + 4);
+	out.write("II", 0, "ascii");
+	out.writeUInt16LE(42, 2);
+	out.writeUInt32LE(ifdOffset, 4);
+	for (let i = 0; i < 4; i += 1) out.writeUInt16LE(8, 8 + i * 2);
+	out.set(rgba, pixelOffset);
+	out.writeUInt16LE(entries.length, ifdOffset);
+	entries.forEach(([tag, type, count, value], i) => {
+		const at = ifdOffset + 2 + i * 12;
+		out.writeUInt16LE(tag, at);
+		out.writeUInt16LE(type, at + 2);
+		out.writeUInt32LE(count, at + 4);
+		if (type === 3 && count === 1) out.writeUInt16LE(value, at + 8);
+		else out.writeUInt32LE(value, at + 8);
+	});
+	return out;
+}
+function ringRgba(size, thickness, [r, g, b]) {
+	const rgba = new Uint8Array(size * size * 4);
+	for (let y = 0; y < size; y += 1) {
+		for (let x = 0; x < size; x += 1) {
+			if (x < thickness || y < thickness || x >= size - thickness || y >= size - thickness) {
+				const p = (y * size + x) * 4;
+				rgba.set([r, g, b, 255], p);
+			}
+		}
+	}
+	return rgba;
+}
+const ALPHA_PNG = join(DOCS_DIR, "logo-transparent.png");
+writeFileSync(ALPHA_PNG, encodeRgbaPng(ringRgba(120, 14, [220, 38, 38]), 120, 120));
+const ALPHA_TIFF = join(DOCS_DIR, "scan-alpha.tiff");
+writeFileSync(ALPHA_TIFF, encodeRgbaTiff(ringRgba(120, 14, [37, 99, 235]), 120, 120));
 
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
@@ -237,6 +306,62 @@ try {
 	const stage = pdfEditor.locator('[data-pdf-page-stage="1"]');
 	await stage.waitFor({ timeout: 15_000 });
 
+	// 0-alpha. Transparent PNG and RGBA TIFF through the in-app picker: transparent pixels must show the page underneath.
+	const stagePixel = (x, y) =>
+		main.evaluate(
+			([cx, cy]) => {
+				const canvas = document.querySelector('[data-pdf-page-stage="1"] > canvas');
+				if (!(canvas instanceof HTMLCanvasElement)) return null;
+				const r = canvas.getBoundingClientRect();
+				const px = Math.round(((cx - r.left) * canvas.width) / r.width);
+				const py = Math.round(((cy - r.top) * canvas.height) / r.height);
+				return Array.from(canvas.getContext("2d").getImageData(px, py, 1, 1).data);
+			},
+			[x, y],
+		);
+	const near = (a, b) => a !== null && b !== null && a.slice(0, 3).every((v, i) => Math.abs(v - b[i]) <= 24);
+	const isWhite = (px) => px !== null && px[0] > 235 && px[1] > 235 && px[2] > 235;
+	const isRedPx = (px) => px !== null && px[0] > 170 && px[1] < 90 && px[2] < 90;
+	const isBluePx = (px) => px !== null && px[2] > 170 && px[0] < 90;
+	const insertViaPicker = async (path) => {
+		await pdfEditor.locator('button[data-pdf-action="insert-image"]').click();
+		const picker = main.locator('[data-dazzi-file-picker="image"]');
+		await picker.waitFor({ timeout: 10_000 });
+		await picker.locator(`[role="row"][data-path="${path}"]`).click();
+		await picker.locator('button[data-dazzi-picker-confirm="true"]').click();
+		const box = pdfEditor.locator('[data-pdf-stamp-box="true"]');
+		await box.waitFor({ timeout: 10_000 });
+		return box.boundingBox();
+	};
+
+	const pngBox = await insertViaPicker(ALPHA_PNG);
+	const center = { x: pngBox.x + pngBox.width / 2, y: pngBox.y + pngBox.height / 2 };
+	const ringPoint = { x: pngBox.x + pngBox.width * 0.05, y: pngBox.y + pngBox.height / 2 };
+	const underCenter = await stagePixel(center.x, center.y);
+	await shot("02c-transparent-png-placement");
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	const ringAfterPng = await poll(() => stagePixel(ringPoint.x, ringPoint.y), isRedPx, 15_000);
+	const centerAfterPng = await stagePixel(center.x, center.y);
+	check(
+		"Transparent PNG: page content stays visible through transparent pixels (no white/black fill)",
+		!isWhite(underCenter) && near(centerAfterPng, underCenter),
+		`under=${JSON.stringify(underCenter)} after=${JSON.stringify(centerAfterPng)}`,
+	);
+	check("Transparent PNG: opaque pixels drawn on the page", isRedPx(ringAfterPng), JSON.stringify(ringAfterPng));
+
+	const tiffBox = await insertViaPicker(ALPHA_TIFF);
+	check("TIFF image loads from the in-app picker and opens for placement", tiffBox !== null && tiffBox.width > 20);
+	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	const ringAfterTiff = await poll(() => stagePixel(ringPoint.x, ringPoint.y), isBluePx, 15_000);
+	const centerAfterTiff = await stagePixel(center.x, center.y);
+	check("TIFF inserted into the PDF (opaque pixels drawn)", isBluePx(ringAfterTiff), JSON.stringify(ringAfterTiff));
+	check(
+		"Transparent TIFF: page content stays visible through transparent pixels",
+		near(centerAfterTiff, underCenter),
+		`under=${JSON.stringify(underCenter)} after=${JSON.stringify(centerAfterTiff)}`,
+	);
+	await shot("02d-transparent-png-and-tiff-on-page");
+
 	// 0. Unified right-sidebar chat UI (exact shared .customizer-panel from Settings / Finder)
 	const sidebarCheck = await main.evaluate(() => {
 		const el = document.querySelector("[data-document-editor-sidebar]");
@@ -334,13 +459,30 @@ try {
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("스탬프를 PDF에 저장했습니다"), 10_000);
 	check("Preset APPROVED stamp saved to PDF", true);
 
+	const sizeBeforeNote = readFileSync(CONTRACT).byteLength;
 	await pdfEditor.locator('button[data-pdf-tool="note"]').click();
-	const noteInput = pdfEditor.locator('input[data-pdf-note-input="true"]');
-	await noteInput.fill("법무팀 검토 완료");
-	await main.keyboard.press("Enter");
-	await pdfEditor.locator('[data-pdf-commit-stamp="true"]').click();
+	check("Old top memo input bar is gone", (await pdfEditor.locator('[data-pdf-note-input="true"]').count()) === 0);
+	const noteStageBox = await stage.boundingBox();
+	await main.mouse.click(noteStageBox.x + noteStageBox.width * 0.7, noteStageBox.y + noteStageBox.height * 0.36);
+	const noteCard = pdfEditor.locator('[data-pdf-textbox="true"][data-pdf-textbox-variant="note"]');
+	await noteCard.waitFor({ timeout: 10_000 });
+	const noteCardBox = await noteCard.boundingBox();
+	check(
+		"Memo card opens exactly where the page was clicked",
+		noteCardBox !== null &&
+			Math.abs(noteCardBox.x - (noteStageBox.x + noteStageBox.width * 0.7)) < 3 &&
+			Math.abs(noteCardBox.y - (noteStageBox.y + noteStageBox.height * 0.36)) < 3,
+		JSON.stringify(noteCardBox),
+	);
+	await pdfEditor.locator('button[data-pdf-note-color="blue"]').click();
+	await pdfEditor.locator('textarea[data-pdf-textbox-input="true"]').fill("법무팀 검토 완료 — 3조 2항 수정 필요");
+	await shot("03b-memo-card-typed-on-page");
+	await main.keyboard.press(chord("Enter"));
 	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("메모를 PDF에 저장했습니다"), 10_000);
-	check("Sticky note saved to PDF", true);
+	check("Memo typed on the page saved to PDF", readFileSync(CONTRACT).byteLength > sizeBeforeNote);
+	await sleep(600);
+	await shot("03c-memo-committed-to-pdf");
+	await pdfEditor.locator('button[data-pdf-tool="note"]').click();
 
 	// 5. Document Tools -> Watermark, Page Numbers, Duplicate, Insert Blank, In-app Merge PDF
 	const openMore = async () => {

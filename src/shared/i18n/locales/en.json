@@ -3950,8 +3950,15 @@
       "stampDraft": "DRAFT",
       "stampReviewed": "REVIEWED",
       "stampUrgent": "URGENT",
-      "notePlaceholder": "Write a sticky note to place on the page…",
-      "placeNote": "Place note",
+      "noteBoxHint": "Click or drag on the page to place a note, then type right on it. Press ⌘Enter or click outside to apply.",
+      "noteBoxPlaceholder": "Write a note…",
+      "noteColor": "Note color",
+      "noteColors": {
+        "yellow": "Yellow",
+        "pink": "Pink",
+        "blue": "Blue",
+        "green": "Green"
+      },
       "watermarkTitle": "Add watermark",
       "watermarkText": "Watermark text",
       "watermarkPlaceholder": "e.g. CONFIDENTIAL, DRAFT",

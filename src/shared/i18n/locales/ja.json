@@ -3950,8 +3950,15 @@
       "stampDraft": "下書き",
       "stampReviewed": "確認済",
       "stampUrgent": "至急",
-      "notePlaceholder": "ページに貼るメモを入力…",
-      "placeNote": "メモを配置",
+      "noteBoxHint": "ページ上の任意の位置をクリックまたはドラッグしてメモを貼り、そのまま入力します。（⌘Enterで適用）",
+      "noteBoxPlaceholder": "メモを入力…",
+      "noteColor": "メモの色",
+      "noteColors": {
+        "yellow": "黄",
+        "pink": "ピンク",
+        "blue": "青",
+        "green": "緑"
+      },
       "watermarkTitle": "透かしを追加",
       "watermarkText": "透かしテキスト",
       "watermarkPlaceholder": "例: 社外秘、CONFIDENTIAL、下書き",

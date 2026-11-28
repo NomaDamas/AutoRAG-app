@@ -18,6 +18,7 @@ export function createDocumentEditorBridge(ipcRenderer: IpcRenderer): DocumentEd
 		pdfReadMetadata: (path) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfReadMetadata, path),
 		pdfReadFormFields: (path) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfReadFormFields, path),
 		pdfSaveFormFields: (request) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfSaveFormFields, request),
+		pdfDecodeImage: (path) => ipcRenderer.invoke(DOCUMENT_EDITOR_CHANNELS.pdfDecodeImage, path),
 		onPdfChanged: (listener) => {
 			const handler = (_event: IpcRendererEvent, event: unknown): void => {
 				if (isPdfChangedEvent(event)) listener(event);
