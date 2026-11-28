@@ -26,7 +26,7 @@ import type {
 } from "../../../../shared/settings-contract";
 import { isCalendarDatasourceType } from "../../../../shared/calendar-platform";
 import { newDatasourceEntry } from "../../../../shared/datasource-defaults";
-import { canonicalDatasourceTemplate } from "../../../../shared/datasource-template";
+import { canonicalDatasourceTemplate, defaultConnectionAlias } from "../../../../shared/datasource-template";
 import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { excludePath, includePath } from "../../../../shared/index-scope-edit";
@@ -599,9 +599,9 @@ export function AppsPage({
 								const available = macOnlyKey === null || datasourceSupported(templateId, hostPlatform());
 								return (
 									<div className="settings-list-row" key={templateId}>
-										<SourceIcon type={templateId} label={template.label} />
+										<SourceIcon type={templateId} label={templateLabel(templateId)} />
 										<span className="settings-list-body">
-											<span className="settings-list-title">{template.label}</span>
+											<span className="settings-list-title">{templateLabel(templateId)}</span>
 											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
 										<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={!available} onClick={() => setAddTemplate(templateId)}>
@@ -630,7 +630,8 @@ export function AppsPage({
 					title={t("settingsSources.apps.promptTitle", { name: templateLabel(addTemplate) })}
 					description={t("settingsSources.apps.promptDesc")}
 					label={t("settingsSources.apps.promptLabel")}
-					placeholder={addTemplate}
+					placeholder={defaultConnectionAlias(addTemplate)}
+					initialValue={defaultConnectionAlias(addTemplate) === addTemplate ? "" : defaultConnectionAlias(addTemplate)}
 					confirmLabel={t("settingsSources.apps.promptConfirm")}
 					onCancel={() => { setAddTemplate(null); setAddError(null); }}
 					onSubmit={(value) => void addConnection(addTemplate, value)}
@@ -854,7 +855,7 @@ export function SourceDetailPage({
 				</Row>
 			</Section>
 			{template !== undefined && template.groups.length > 0 ? (
-				<Section title={t("settingsSources.sourceDetail.templateSection", { label: template.label })}>
+				<Section title={t("settingsSources.sourceDetail.templateSection", { label: templateLabel(type) })}>
 					{template.groups.map((group) => (
 						<div key={group.title}>
 							{group.fields.map((field) => (

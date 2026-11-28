@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppsPage } from "../src/renderer/src/components/settings/AppsPages";
+import { setAppLanguage } from "../src/shared/i18n";
 import type { AutoRagConfigSnapshot } from "../src/shared/settings-contract";
 
 // AppsPages reads `window.autorag.settings` while it is being imported; hoisted code runs before the imports.
@@ -15,7 +16,9 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 let host: HTMLDivElement;
 let root: Root;
 
-beforeEach(() => {
+beforeEach(async () => {
+	// The gallery rows are found by their English names.
+	await setAppLanguage("en");
 	host = document.createElement("div");
 	document.body.append(host);
 	root = createRoot(host);
@@ -55,7 +58,10 @@ describe("the Apple Calendar gallery row", () => {
 
 	it("every other row stays connectable on Windows", () => {
 		render("win32");
-		expect(galleryRow("Nogon")?.querySelector("button")?.disabled).toBe(false);
+		const history = galleryRow("Browser history");
+		expect(history?.querySelector("button")?.disabled).toBe(false);
+		// Nothing a person reads on this row names the program.
+		expect(history?.textContent).not.toMatch(/nogon|hister/i);
 		expect(galleryRow("Slack")?.querySelector("button")?.disabled).toBe(false);
 	});
 });

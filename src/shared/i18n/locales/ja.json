@@ -1258,6 +1258,17 @@
     }
   },
   "main": {
+    "datasourceStatus": {
+      "browserHistory": {
+        "credentialMissing": "{{env}} を設定すると、Dazzi がブラウザ履歴にアクセスできます",
+        "programFound": "ブラウザ履歴のプログラムが {{path}} に見つかりました",
+        "serverAt": "{{url}} のブラウザ履歴サーバー",
+        "programMissing": "ブラウザ履歴のプログラム ({{name}}) が PATH に見つかりません",
+        "authRequired": "ブラウザ履歴には認証が必要です",
+        "empty": "まだ収集されたページがありません",
+        "pages": "{{count}} ページ"
+      }
+    },
     "errors": {
       "config": {
         "pathEmpty": "変更する設定項目が指定されていません。",
@@ -2860,7 +2871,8 @@
         "summary": "RSS 2.0 / Atom フィードをポーリングしてインデックスします。"
       },
       "nogon": {
-        "summary": "Nogon サーバー経由でブラウザの閲覧履歴ページを検索します。"
+        "name": "ブラウザ履歴",
+        "summary": "ブラウザで閲覧したウェブページを検索します。"
       },
       "calendar": {
         "summary": "EventKit MCP 経由で macOS のカレンダー予定とリマインダーをライブ照会します。"
@@ -2891,7 +2903,7 @@
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",
-      "nogon": "Nogon (ブラウザ閲覧履歴)",
+      "nogon": "ブラウザ履歴",
       "calendar": "Apple カレンダー・リマインダー (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)",
       "aiSessions": "AI セッション"
@@ -2977,7 +2989,7 @@
         "defaultOff": "デフォルト: オフ。",
         "tokenEnv": "トークンそのものではなく、トークンが入った環境変数の名前です。",
         "rcloneConfig": "自分で指定した rclone.conf は読み取り専用でのみ使います。",
-        "nogonSemantic": "Nogon サーバー側でセマンティック検索が有効である必要があります (autorag setup --sync-nogon)。",
+        "nogonSemantic": "ブラウザ履歴でセマンティック検索が有効になっている必要があります。",
         "requireWriteConfirmation": "オンにすると、確認なしで予定やリマインダーを変更しません (--require-write-confirmation)。",
         "mcpExposure": "direct はツールを直接モデルに公開し、codemode はスクリプト経由で呼び出します。",
         "calendarCommand": "空欄にすると npx で mcp-server-apple-events を起動します。",
