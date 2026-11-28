@@ -442,6 +442,89 @@ describe("PdfDocumentEditor UI (Acrobat tools)", () => {
 		expect(fsMock.search).toHaveBeenCalledWith("banner");
 		expect(picker.querySelector('[role="row"][data-path="/tmp/sub/found-banner.png"]')).not.toBeNull();
 	});
+
+	it("navigates pages with ArrowDown/ArrowUp/PageDown/PageUp/Home/End keyboard shortcuts", async () => {
+		await mountEditor();
+		expect(container!.querySelector('[data-pdf-page-stage="1"]')).not.toBeNull();
+		expect(container!.querySelector('[data-pdf-page-indicator="true"]')?.textContent).toBe("1 / 3");
+
+		// ArrowDown -> page 2
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+		});
+		expect(container!.querySelector('[data-pdf-page-stage="2"]')).not.toBeNull();
+		expect(container!.querySelector('[data-pdf-page-indicator="true"]')?.textContent).toBe("2 / 3");
+
+		// PageDown -> page 3
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "PageDown", bubbles: true, cancelable: true }));
+		});
+		expect(container!.querySelector('[data-pdf-page-stage="3"]')).not.toBeNull();
+
+		// ArrowUp -> page 2
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+		});
+		expect(container!.querySelector('[data-pdf-page-stage="2"]')).not.toBeNull();
+
+		// Home -> page 1, End -> page 3
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+		});
+		expect(container!.querySelector('[data-pdf-page-stage="1"]')).not.toBeNull();
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+		});
+		expect(container!.querySelector('[data-pdf-page-stage="3"]')).not.toBeNull();
+	});
+
+	it("places a Keynote/PPT-style live on-canvas text box on click and commits via Cmd+Enter", async () => {
+		const { applied } = await mountEditor();
+
+		const textBtn = container!.querySelector('button[data-pdf-tool="text"]') as HTMLButtonElement;
+		expect(textBtn).not.toBeNull();
+		await act(async () => textBtn.click());
+		expect(textBtn.getAttribute("aria-pressed")).toBe("true");
+
+		const stage = container!.querySelector<HTMLDivElement>('[data-pdf-page-stage="1"]')!;
+		stage.getBoundingClientRect = () =>
+			({ left: 0, top: 0, width: 600, height: 800, right: 600, bottom: 800, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+		stage.setPointerCapture = vi.fn();
+		stage.hasPointerCapture = vi.fn(() => false);
+		stage.releasePointerCapture = vi.fn();
+
+		// Click directly on canvas -> opens live editable on-canvas text box at clicked coordinate
+		await act(async () => {
+			stage.dispatchEvent(new PointerEvent("pointerdown", { button: 0, clientX: 120, clientY: 160, pointerId: 1, bubbles: true }));
+			stage.dispatchEvent(new PointerEvent("pointerup", { button: 0, clientX: 120, clientY: 160, pointerId: 1, bubbles: true }));
+		});
+
+		const textBox = container!.querySelector('[data-pdf-textbox="true"]');
+		expect(textBox).not.toBeNull();
+		const textArea = container!.querySelector<HTMLTextAreaElement>('[data-pdf-textbox-input="true"]')!;
+		expect(textArea).not.toBeNull();
+
+		// ArrowDown while typing inside text box must NOT change PDF page!
+		await act(async () => {
+			textArea.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+		});
+		expect(container!.querySelector('[data-pdf-page-stage="1"]')).not.toBeNull();
+
+		// Type text directly inside on-canvas box and commit with Cmd+Enter
+		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+		await act(async () => {
+			nativeSetter.call(textArea, "승인 완료 — Keynote Style");
+			textArea.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			textArea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
+			await Promise.resolve();
+		});
+
+		expect(applied).toHaveLength(1);
+		expect(applied[0]?.operations[0]?.kind).toBe("stampImage");
+		expect(container!.querySelector('[data-pdf-textbox="true"]')).toBeNull();
+	});
 });
 
 describe("findPageTextMatches", () => {

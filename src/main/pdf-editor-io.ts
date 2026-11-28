@@ -1,6 +1,10 @@
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
+import { promisify } from "node:util";
+import { resizeImage } from "@earendil-works/pi-coding-agent";
 import {
 	degrees,
 	PDFCheckBox,
@@ -13,6 +17,7 @@ import {
 	rgb,
 	StandardFonts,
 } from "pdf-lib";
+import { imageSize } from "./attachment-images";
 import type {
 	DocumentEditorPdfPayload,
 	PdfApplyRequest,
@@ -33,10 +38,133 @@ import type {
 	PdfSplitResult,
 } from "../shared/document-editor-contract";
 
+const execFileAsync = promisify(execFile);
 const MAX_PDF_EDIT_BYTES = 128 * 1024 * 1024;
 const MAX_SNAPSHOTS = 40;
+const RENDER_DEFAULT_DPI = 144;
+const RENDER_MIN_DPI = 72;
+const RENDER_MAX_DPI = 220;
+const RENDER_DEFAULT_MAX_EDGE = 1600;
+const RENDER_TIMEOUT_MS = 30_000;
 const A4_SIZE: readonly [number, number] = [595.28, 841.89];
 const LETTER_SIZE: readonly [number, number] = [612, 792];
+
+const JXA_RENDER_PDF_PAGE_SCRIPT = [
+	'ObjC.import("PDFKit");',
+	'ObjC.import("AppKit");',
+	"function run(argv) {",
+	"  const pdfPath = argv[0];",
+	"  const pageIdx = parseInt(argv[1], 10);",
+	"  const scale = parseFloat(argv[2]);",
+	"  const outPath = argv[3];",
+	"  const url = $.NSURL.fileURLWithPath(pdfPath);",
+	"  const doc = $.PDFDocument.alloc.initWithURL(url);",
+	'  if (!doc) throw new Error("Cannot open PDF");',
+	"  const page = doc.pageAtIndex(pageIdx);",
+	'  if (!page) throw new Error("Page out of range");',
+	"  const bounds = page.boundsForBox($.kPDFDisplayBoxCropBox);",
+	"  const rot = ((page.rotation % 360) + 360) % 360;",
+	"  const swap = rot === 90 || rot === 270;",
+	"  const w = Math.max(1, Math.round((swap ? bounds.size.height : bounds.size.width) * scale));",
+	"  const h = Math.max(1, Math.round((swap ? bounds.size.width : bounds.size.height) * scale));",
+	"  const img = page.thumbnailOfSizeForBox($.NSMakeSize(w, h), $.kPDFDisplayBoxCropBox);",
+	"  const tiff = img.TIFFRepresentation;",
+	"  const rep = $.NSBitmapImageRep.imageRepWithData(tiff);",
+	"  const png = rep.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $({}));",
+	"  if (!png.writeToFileAtomically(outPath, true)) throw new Error(\"Failed to write rendered PNG\");",
+	'  return w + "x" + h;',
+	"}",
+].join("\n");
+
+async function firstAvailableBinary(candidates: readonly string[]): Promise<string | null> {
+	for (const candidate of candidates) {
+		if (candidate.includes("/") || candidate.includes("\\")) {
+			try {
+				await access(candidate);
+				return candidate;
+			} catch {
+				// Not present at absolute path
+			}
+		} else {
+			try {
+				await execFileAsync(process.platform === "win32" ? "where" : "which", [candidate], { timeout: 3_000 });
+				return candidate;
+			} catch {
+				// Not on PATH
+			}
+		}
+	}
+	return null;
+}
+
+async function rasterizePdfPage(pdfPath: string, pageNumber: number, dpi: number, workDir: string): Promise<Buffer> {
+	const errors: string[] = [];
+
+	// 1. Poppler pdftoppm (fast, accurate across macOS / Linux / Windows when installed)
+	const pdftoppm = await firstAvailableBinary(
+		process.platform === "darwin"
+			? ["pdftoppm", "/opt/homebrew/bin/pdftoppm", "/usr/local/bin/pdftoppm"]
+			: process.platform === "win32"
+				? ["pdftoppm.exe", "pdftoppm"]
+				: ["pdftoppm", "/usr/bin/pdftoppm", "/usr/local/bin/pdftoppm"],
+	);
+	if (pdftoppm !== null) {
+		const outBase = join(workDir, `page-${pageNumber}`);
+		const outPng = `${outBase}.png`;
+		try {
+			await execFileAsync(
+				pdftoppm,
+				["-png", "-r", String(dpi), "-f", String(pageNumber), "-l", String(pageNumber), "-singlefile", pdfPath, outBase],
+				{ timeout: RENDER_TIMEOUT_MS },
+			);
+			return await readFile(outPng);
+		} catch (error) {
+			errors.push(`pdftoppm: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	// 2. macOS built-in Quartz / PDFKit via JXA (zero external dependencies on every Mac)
+	if (process.platform === "darwin") {
+		const outPng = join(workDir, `jxa-page-${pageNumber}.png`);
+		try {
+			const scale = Number((dpi / 72).toFixed(4));
+			await execFileAsync(
+				"/usr/bin/osascript",
+				["-l", "JavaScript", "-e", JXA_RENDER_PDF_PAGE_SCRIPT, pdfPath, String(pageNumber - 1), String(scale), outPng],
+				{ timeout: RENDER_TIMEOUT_MS },
+			);
+			return await readFile(outPng);
+		} catch (error) {
+			errors.push(`PDFKit: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	// 3. MuPDF mutool fallback (cross-platform when installed)
+	const mutool = await firstAvailableBinary(
+		process.platform === "darwin"
+			? ["mutool", "/opt/homebrew/bin/mutool", "/usr/local/bin/mutool"]
+			: process.platform === "win32"
+				? ["mutool.exe", "mutool"]
+				: ["mutool", "/usr/bin/mutool"],
+	);
+	if (mutool !== null) {
+		const outPng = join(workDir, `mutool-page-${pageNumber}.png`);
+		try {
+			await execFileAsync(mutool, ["draw", "-F", "png", "-r", String(dpi), "-o", outPng, pdfPath, String(pageNumber)], {
+				timeout: RENDER_TIMEOUT_MS,
+			});
+			return await readFile(outPng);
+		} catch (error) {
+			errors.push(`mutool: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	throw new Error(
+		errors.length > 0
+			? `Could not render PDF page ${pageNumber} to PNG (${errors.join("; ")}).`
+			: `No PDF rasterizer (pdftoppm, PDFKit, or mutool) is available to render page ${pageNumber}.`,
+	);
+}
 
 interface SnapshotRecord {
 	readonly id: string;
@@ -663,9 +791,27 @@ export interface PdfInspection {
 	readonly formFields: readonly PdfFormField[];
 }
 
+export interface PdfRenderPageOptions {
+	readonly dpi?: number;
+	readonly maxEdgePx?: number;
+}
+
+export interface PdfRenderedPage {
+	readonly pageNumber: number;
+	readonly pageIndex: number;
+	readonly pageCount: number;
+	readonly widthPt: number;
+	readonly heightPt: number;
+	readonly rotation: number;
+	readonly imageWidthPx: number;
+	readonly imageHeightPx: number;
+	readonly png: Buffer;
+}
+
 export interface PdfEditorIo {
 	open(filePath: string): Promise<DocumentEditorPdfPayload>;
 	inspect(filePath: string): Promise<PdfInspection>;
+	renderPageToPng(filePath: string, pageNumber: number, options?: PdfRenderPageOptions): Promise<PdfRenderedPage>;
 	apply(request: PdfApplyRequest, source?: "human" | "ai"): Promise<PdfApplyResult>;
 	extract(request: PdfExtractRequest): Promise<PdfExtractResult>;
 	split(request: PdfSplitRequest): Promise<PdfSplitResult>;
@@ -1063,6 +1209,72 @@ export function createPdfEditorIo(backupDir: string): PdfEditorIo {
 			const record = snapshots.get(snapshotId);
 			if (record === undefined) return null;
 			return readFile(record.backupPath).catch(() => null);
+		},
+
+		renderPageToPng: async (filePath, pageNumber, options) => {
+			assertPdfPath(filePath);
+			if (!Number.isInteger(pageNumber) || pageNumber < 1) {
+				throw new Error(`Invalid 1-based page number: ${pageNumber}`);
+			}
+			const workDir = await mkdtemp(join(tmpdir(), "dazzi-pdf-render-"));
+			try {
+				// Snapshot current PDF bytes under the per-file mutex so concurrent edits never cause a torn read.
+				const snapshot = await withFileLock(filePath, async () => {
+					const info = await stat(filePath);
+					if (!info.isFile()) throw new Error(`${filePath} is not a file.`);
+					if (info.size > MAX_PDF_EDIT_BYTES) throw new Error("PDF is too large to render here.");
+					const bytes = await readFile(filePath);
+					const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
+					const pageCount = doc.getPageCount();
+					if (pageNumber > pageCount) {
+						throw new Error(`Page ${pageNumber} is out of range (PDF has ${pageCount} page${pageCount === 1 ? "" : "s"}).`);
+					}
+					const page = doc.getPage(pageNumber - 1);
+					const box = visibleBox(page);
+					const rotation = ((page.getRotation().angle % 360) + 360) % 360;
+					const swap = rotation === 90 || rotation === 270;
+					const widthPt = Number((swap ? box.height : box.width).toFixed(2));
+					const heightPt = Number((swap ? box.width : box.height).toFixed(2));
+					const tmpPdf = join(workDir, "source.pdf");
+					await writeFile(tmpPdf, bytes);
+					return { tmpPdf, pageCount, widthPt, heightPt, rotation };
+				});
+
+				const requestedDpi = Math.min(
+					RENDER_MAX_DPI,
+					Math.max(RENDER_MIN_DPI, Math.round(options?.dpi ?? RENDER_DEFAULT_DPI)),
+				);
+				const maxEdgePx = Math.min(2000, Math.max(400, Math.round(options?.maxEdgePx ?? RENDER_DEFAULT_MAX_EDGE)));
+				const maxPt = Math.max(1, snapshot.widthPt, snapshot.heightPt);
+				const cappedDpi = Math.max(RENDER_MIN_DPI, Math.min(requestedDpi, Math.floor((maxEdgePx * 72) / maxPt)));
+
+				let png = await rasterizePdfPage(snapshot.tmpPdf, pageNumber, cappedDpi, workDir);
+				let dims = imageSize(png);
+				if (dims === null) {
+					throw new Error(`Rendered page ${pageNumber} did not produce a valid PNG image.`);
+				}
+				if (dims.width > maxEdgePx || dims.height > maxEdgePx || Math.ceil((png.length * 4) / 3) >= 4.5 * 1024 * 1024) {
+					const resized = await resizeImage(png, "image/png");
+					if (resized !== null && resized.mimeType === "image/png") {
+						png = Buffer.from(resized.data, "base64");
+						dims = imageSize(png) ?? dims;
+					}
+				}
+
+				return {
+					pageNumber,
+					pageIndex: pageNumber - 1,
+					pageCount: snapshot.pageCount,
+					widthPt: snapshot.widthPt,
+					heightPt: snapshot.heightPt,
+					rotation: snapshot.rotation,
+					imageWidthPx: dims.width,
+					imageHeightPx: dims.height,
+					png,
+				};
+			} finally {
+				await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+			}
 		},
 
 		withLock: withFileLock,

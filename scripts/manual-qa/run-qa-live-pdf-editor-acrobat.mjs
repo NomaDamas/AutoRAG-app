@@ -236,6 +236,42 @@ try {
 
 	const stage = pdfEditor.locator('[data-pdf-page-stage="1"]');
 	await stage.waitFor({ timeout: 15_000 });
+
+	// 0. Unified right-sidebar chat UI (exact shared .customizer-panel from Settings / Finder)
+	const sidebarCheck = await main.evaluate(() => {
+		const el = document.querySelector("[data-document-editor-sidebar]");
+		if (!el) return null;
+		return {
+			usesCustomizerPanel: el.classList.contains("customizer-panel"),
+			hasDazziMark: el.querySelector(".customizer-panel__empty-logo") !== null,
+			hasCustomizerComposer: el.querySelector(".customizer-composer") !== null,
+			hasOldHeader: el.querySelector(".border-b") !== null,
+		};
+	});
+	check(
+		"Right AI sidebar reuses Dazzi's unified .customizer-panel chat UI (faded mark + floating composer, no bespoke header)",
+		sidebarCheck !== null &&
+			sidebarCheck.usesCustomizerPanel &&
+			sidebarCheck.hasDazziMark &&
+			sidebarCheck.hasCustomizerComposer &&
+			!sidebarCheck.hasOldHeader,
+		JSON.stringify(sidebarCheck),
+	);
+
+	// 0b. Keyboard ArrowDown / ArrowUp page navigation
+	await main.keyboard.press("ArrowDown");
+	await pdfEditor.locator('[data-pdf-page-stage="2"]').waitFor({ timeout: 5_000 });
+	check(
+		"ArrowDown keyboard shortcut stepped PDF to page 2",
+		(await pdfEditor.locator('[data-pdf-page-indicator="true"]').innerText()).startsWith("2 /"),
+	);
+	await main.keyboard.press("ArrowUp");
+	await pdfEditor.locator('[data-pdf-page-stage="1"]').waitFor({ timeout: 5_000 });
+	check(
+		"ArrowUp keyboard shortcut stepped PDF back to page 1",
+		(await pdfEditor.locator('[data-pdf-page-indicator="true"]').innerText()).startsWith("1 /"),
+	);
+
 	const dragOnStage = async (fx1, fy1, fx2, fy2) => {
 		const box = await stage.boundingBox();
 		if (box === null) throw new Error("PDF stage has no bounding box");
@@ -244,6 +280,20 @@ try {
 		await main.mouse.move(box.x + box.width * fx2, box.y + box.height * fy2, { steps: 6 });
 		await main.mouse.up();
 	};
+
+	// 0c. Keynote / PowerPoint-style live on-canvas Text Box placement + direct typing + Cmd/Ctrl+Enter commit
+	const sizeBeforeText = readFileSync(CONTRACT).byteLength;
+	await pdfEditor.locator('button[data-pdf-tool="text"]').click();
+	const contractStageBox = await stage.boundingBox();
+	if (contractStageBox === null) throw new Error("PDF stage has no bounding box");
+	await main.mouse.click(contractStageBox.x + contractStageBox.width * 0.14, contractStageBox.y + contractStageBox.height * 0.48);
+	const textBoxInput = pdfEditor.locator('textarea[data-pdf-textbox-input="true"]');
+	await textBoxInput.waitFor({ timeout: 10_000 });
+	await textBoxInput.fill("Keynote 스타일 직접 입력 테스트");
+	await shot("02b-pdf-keynote-textbox-and-unified-sidebar");
+	await main.keyboard.press(chord("Enter"));
+	await poll(() => pdfEditor.innerText(), (txt) => txt.includes("텍스트를 PDF에 저장했습니다"), 10_000);
+	check("Keynote-style on-canvas text box committed directly onto PDF", readFileSync(CONTRACT).byteLength > sizeBeforeText);
 
 	// 1. Highlight
 	const size0 = readFileSync(CONTRACT).byteLength;

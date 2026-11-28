@@ -369,4 +369,31 @@ describe("pdf editor I/O (pdf-lib)", () => {
 		const afterFlatten = await io.readFormFields(pdfPath);
 		expect(afterFlatten).toHaveLength(0);
 	});
+
+	it("renders any PDF page to PNG bytes for visual agent inspection and Visual QA", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "visual-qa.pdf");
+		await createSamplePdf(pdfPath, [
+			[600, 800], // page 1 portrait
+			[960, 540], // page 2 landscape 16:9
+		]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+
+		const p1 = await io.renderPageToPng(pdfPath, 1, { dpi: 120 });
+		expect(p1.pageNumber).toBe(1);
+		expect(p1.pageIndex).toBe(0);
+		expect(p1.pageCount).toBe(2);
+		expect(p1.widthPt).toBe(600);
+		expect(p1.heightPt).toBe(800);
+		expect(p1.png.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true);
+		expect(p1.imageHeightPx).toBeGreaterThan(p1.imageWidthPx);
+
+		const p2 = await io.renderPageToPng(pdfPath, 2, { dpi: 120 });
+		expect(p2.pageNumber).toBe(2);
+		expect(p2.widthPt).toBe(960);
+		expect(p2.heightPt).toBe(540);
+		expect(p2.imageWidthPx).toBeGreaterThan(p2.imageHeightPx);
+
+		await expect(io.renderPageToPng(pdfPath, 3)).rejects.toThrow(/out of range/i);
+	});
 });

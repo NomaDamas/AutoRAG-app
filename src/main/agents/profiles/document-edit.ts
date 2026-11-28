@@ -42,6 +42,8 @@ export interface DocumentEditProfileInput {
 	readonly writeJudge?: WriteJudge;
 	/** Shared PDF editor engine used when `mode === "pdf"` so human and AI edits serialize safely. */
 	readonly pdfIo?: PdfEditorIo;
+	/** Whether the active model accepts image inputs (enables visual page PNG blocks in `pdf_render_page`). */
+	readonly supportsImage?: boolean;
 }
 
 /**
@@ -115,7 +117,14 @@ function documentEditTools(input: DocumentEditProfileInput): readonly ToolDefini
 					guarded(createLsToolDefinition(cwd), readCheck),
 					guarded(createFindToolDefinition(cwd), readCheck),
 					guarded(createGrepToolDefinition(cwd), readCheck),
-					...(input.pdfIo !== undefined ? createPdfAgentTools({ targetPath: target, pdfIo: input.pdfIo, cancelled }) : []),
+					...(input.pdfIo !== undefined
+						? createPdfAgentTools({
+								targetPath: target,
+								pdfIo: input.pdfIo,
+								cancelled,
+								...(input.supportsImage === undefined ? {} : { supportsImage: input.supportsImage }),
+							})
+						: []),
 				] as unknown as ToolDefinition[])
 			: ([
 					guarded(createReadToolDefinition(cwd), readCheck),
@@ -171,10 +180,12 @@ function systemPrompt(input: DocumentEditProfileInput): string {
 			: input.mode === "pdf"
 				? [
 						"- The document is a PDF file opened in Dazzi's live PDF editor. The person may keep editing pages in the toolbar while you work.",
-						"- ALWAYS prefer the structured PDF tools (`pdf_inspect`, `pdf_apply_ops`, `pdf_fill_form`, `pdf_set_metadata`, `pdf_add_page_numbers`, `pdf_extract_pages`, `pdf_split`) over shell scripts! They run through Dazzi's shared per-file lock so your edits and the user's concurrent UI edits never overwrite each other, and the editor live-reloads after each call.",
+						"- ALWAYS prefer the structured PDF tools (`pdf_inspect`, `pdf_render_page`, `pdf_apply_ops`, `pdf_fill_form`, `pdf_set_metadata`, `pdf_add_page_numbers`, `pdf_extract_pages`, `pdf_split`) over shell scripts! They run through Dazzi's shared per-file lock so your edits and the user's concurrent UI edits never overwrite each other, and the editor live-reloads after each call.",
 						"- Start with `pdf_inspect` when you need page counts, dimensions, rotations, metadata, or AcroForm field names.",
+						"- Visual page reading (`pdf_render_page`): You can render any 1-based page(s) of the PDF directly as PNG images into your context. Before making layout-sensitive edits (placing text, stamps, images, highlights, redactions, whiteouts, shapes, watermarks, page numbers, crops, or filling forms on pages you have not seen), call `pdf_render_page` on the target page(s) to inspect existing layout, margins, whitespace, and exact normalized coordinates.",
+						"- Mandatory Visual QA after editing: After applying ANY visual or layout edit (`pdf_apply_ops`, `pdf_fill_form`, `pdf_add_page_numbers`, or bash-based PDF changes), ALWAYS call `pdf_render_page` on the modified page(s) to visually inspect the rendered result in image context. Verify there is no unintended overlap with existing text, no clipping at page edges, proper orientation/rotation, readable contrast and size, complete redaction/whiteout coverage, and intact characters (especially Korean/CJK). If you spot any visual defect, adjust coordinates/size/styling and re-verify with `pdf_render_page` before finishing, and briefly report what you visually verified.",
 						"- In `pdf_apply_ops`, pageIndex is 0-based (page 1 -> 0) and coordinates are normalized 0..1 fractions from the top-left of the visible page.",
-						"- Use the attached screenshot and mark bounds to place highlights, redactions, whiteouts, shapes, or text accurately over marked regions.",
+						"- Use the attached screenshot, rendered page images from `pdf_render_page`, and mark bounds to place highlights, redactions, whiteouts, shapes, or text accurately.",
 						"- Only fall back to `bash` (in the scratch folder) for tasks the structured PDF tools cannot do (e.g. extracting text with python3/pdftotext to locate coordinates, or rendering a CJK/Korean PNG stamp with python3/PIL to pass into `pdf_apply_ops` `stampImage`). Never overwrite the target PDF directly via bash when `pdf_apply_ops` can apply the change.",
 					]
 				: [

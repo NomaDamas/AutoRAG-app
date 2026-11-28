@@ -344,4 +344,79 @@ describe("document-edit service", () => {
 		expect(aiOutcome.changed).toBe(false);
 		expect((await PDFDocument.load(await readFile(pdfPath))).getPage(0).getRotation().angle).toBe(90);
 	});
+
+	it("provides pdf_render_page returning inline PNG image blocks and prompts Visual QA after edits", async () => {
+		const registration = register(["text", "image"]);
+		const pdfPath = join(docsDir, "visual-qa-agent.pdf");
+		const initialDoc = await PDFDocument.create();
+		initialDoc.addPage([600, 800]);
+		initialDoc.addPage([800, 500]);
+		await writeFile(pdfPath, await initialDoc.save());
+
+		const pdfIo = createPdfEditorIo(join(root, "pdf-backups"));
+		cleanups.push(() => pdfIo.dispose());
+
+		// Verify profile prompt explicitly guides pre-edit visual reading & post-edit Visual QA
+		const { documentEditProfile } = await import("../src/main/agents/profiles/document-edit");
+		const profile = documentEditProfile({
+			language: "en",
+			path: pdfPath,
+			mode: "pdf",
+			scratchDir: root,
+			agentDir,
+			env: { ...process.env },
+			pdfIo,
+			supportsImage: true,
+		});
+		expect(profile.systemPrompt).toContain("pdf_render_page");
+		expect(profile.systemPrompt).toContain("Visual QA");
+		const renderTool = profile.customTools?.find((t) => t.name === "pdf_render_page");
+		expect(renderTool).toBeDefined();
+
+		// Execute pdf_render_page directly and confirm inline PNG image blocks are attached
+		const toolResult = await (
+			renderTool!.execute as unknown as (callId: string, params: Record<string, unknown>) => Promise<{
+				content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+			}>
+		)("call-render-1", { i: "Render pages 1 and 2 visually", pages: [1, 2], dpi: 100 });
+		expect(toolResult.content[0]?.type).toBe("text");
+		expect(toolResult.content[0]?.text).toContain('"imagesAttached": true');
+		const images = toolResult.content.filter((c) => c.type === "image");
+		expect(images).toHaveLength(2);
+		expect(images[0]?.mimeType).toBe("image/png");
+		expect(Buffer.from(images[0]!.data!, "base64").subarray(0, 4).toString("hex")).toBe("89504e47");
+
+		// Verify full edit + Visual QA tool loop runs end-to-end inside DocumentEditService
+		const svc = createDocumentEditService({
+			resolveModel: async () => ({ model: registration.getModel() }),
+			agentDir,
+			env: { ...process.env },
+			language: () => "en",
+			backupDir,
+			pdfIo,
+		});
+		cleanups.push(() => svc.dispose());
+
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("pdf_render_page", { i: "Inspect page 1 before editing", pages: [1] })),
+			fauxAssistantMessage(
+				fauxToolCall("pdf_apply_ops", {
+					i: "Add title note to page 1",
+					operations: [{ kind: "addText", pageIndex: 0, text: "Verified QA", x: 0.1, y: 0.1, fontSize: 16, color: "#1D1D1F" }],
+				}),
+			),
+			fauxAssistantMessage(fauxToolCall("pdf_render_page", { i: "Run Visual QA on modified page 1", pages: [1] })),
+			fauxAssistantMessage("Added the note and visually verified page 1 with zero overlap."),
+		]);
+
+		const events: DocumentEditEvent[] = [];
+		const outcome = await svc.start(
+			"run-pdf-visual-qa",
+			{ path: pdfPath, instruction: "Add 'Verified QA' at top-left and verify visually", marks: [] },
+			{ send: (e) => events.push(e), screenshot: async () => null },
+		);
+		expect(outcome.changed).toBe(true);
+		const done = events.find((e) => e.type === "done");
+		expect(done && done.type === "done" ? done.reply : "").toContain("visually verified");
+	});
 });

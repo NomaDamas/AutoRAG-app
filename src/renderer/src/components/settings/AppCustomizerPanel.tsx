@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
-import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
-import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
+import { Check } from "lucide-react";
 import { AutomationDraftCard } from "../AutomationsView";
 import { rightClickSentence } from "../RightClickWhen";
-import { VoiceButton } from "../InspectorChat";
-import { SeedLoader } from "../SeedLoader";
+import {
+	SidebarChatComposer,
+	SidebarChatEmpty,
+	SidebarChatProgress,
+	SidebarChatShell,
+	SidebarReplyBody,
+} from "../SidebarChat";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerPrompt, AppCustomizerPromptAnswer, AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { appendTranscript } from "../../../../shared/voice-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { findSecrets, redactSecrets } from "../../../../shared/secret-guard";
-import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
 
 type CustomizerWindow = Window & {
 	readonly autorag?: { readonly appCustomizer?: AppCustomizerBridge; readonly settings?: { get(): Promise<AppSettings>; set(patch: Partial<AppSettings>): Promise<AppSettings> } };
@@ -191,63 +192,6 @@ function makeId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function renderInlineSegments(segments: readonly InlineSegment[]): ReactElement[] {
-	return segments.map((seg, idx) => {
-		switch (seg.kind) {
-			case "bold":
-				return <strong key={idx}>{seg.text}</strong>;
-			case "code":
-				return <code key={idx}>{seg.text}</code>;
-			case "link":
-				return <span key={idx}>{ renderInlineSegments(seg.children) }</span>;
-			case "citation":
-				return <span key={idx}>[{seg.number}]</span>;
-			case "file":
-				return <span key={idx}>{seg.path}</span>;
-			case "image":
-				return <span key={idx}>{seg.target}</span>;
-			default:
-				return <span key={idx}>{seg.text}</span>;
-		}
-	});
-}
-
-function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement {
-	const blocks = parseAnswerBlocks(text);
-	return (
-		<div className="customizer-turn__reply">
-			{blocks.map((block, idx) => {
-				if (block.kind === "code") {
-					return (
-						<pre key={idx} className="m-0 overflow-x-auto rounded-6 bg-code p-8 font-mono text-badge">
-							<code>{block.text}</code>
-						</pre>
-					);
-				}
-				if (block.kind === "table") {
-					return <p key={idx}>{(block.header ?? []).join(" · ")}</p>;
-				}
-				if (block.kind === "list") {
-					return (
-						<div key={idx} className="customizer-turn__reply-item">
-							<span className="customizer-turn__reply-bullet" aria-hidden="true">•</span>
-							<span>{renderInlineSegments(parseInline(block.text))}</span>
-						</div>
-					);
-				}
-				if (block.kind === "heading") {
-					return (
-						<p key={idx} className="font-semibold">
-							{renderInlineSegments(parseInline(block.text))}
-						</p>
-					);
-				}
-				return <p key={idx}>{renderInlineSegments(parseInline(block.text))}</p>;
-			})}
-		</div>
-	);
-}
-
 /**
  * The AI customization assistant for one customizable Settings section (`surface`), shown in the window's right
  * sidebar (`SettingsAssistantDock.tsx`). It has no header of its own: the page beside it already names the section,
@@ -294,7 +238,6 @@ export function AppCustomizerPanel({
 	const [activeRunId, setActiveRunId] = useState<string | null>(null);
 	const activeRunIdRef = useRef<string | null>(null);
 	activeRunIdRef.current = activeRunId;
-	const scrollRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const appliedPrefillNonce = useRef(0);
 	const [starters, setStarters] = useState<readonly MagicStarter[]>([]);
@@ -310,13 +253,6 @@ export function AppCustomizerPanel({
 	}, [prefill]);
 
 	useEffect(() => {
-		const el = textareaRef.current;
-		if (el === null) return;
-		el.style.height = "auto";
-		if (input.length > 0) el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
-	}, [input, hidden]);
-
-	useEffect(() => {
 		if (focusRequest > 0 && !hidden) {
 			const el = textareaRef.current;
 			if (el !== null) {
@@ -325,13 +261,6 @@ export function AppCustomizerPanel({
 			}
 		}
 	}, [focusRequest, hidden, prefill]);
-
-	useEffect(() => {
-		const container = scrollRef.current;
-		if (container !== null) {
-			container.scrollTop = container.scrollHeight;
-		}
-	}, [turns, starters]);
 
 	useEffect(() => {
 		const bridge = getCustomizerBridge();
@@ -485,33 +414,44 @@ export function AppCustomizerPanel({
 		textareaRef.current?.focus();
 	}, [sessionId, surface]);
 
-	const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
-		if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-			event.preventDefault();
-			sendMessage(input);
-		} else if (event.key === "Escape" && activeRunIdRef.current !== null) {
-			event.preventDefault();
-			stopRun();
-		}
-	};
-
 	const running = activeRunId !== null;
-	const voice = window.autorag?.voice;
+	const latestTurn = turns.at(-1);
+	const followKey = `${turns.length}:${starters.length}:${latestTurn?.status ?? ""}:${latestTurn?.messages.length ?? 0}:${latestTurn?.draft.length ?? 0}:${latestTurn?.progress ?? ""}`;
 
 	return (
-		<aside className="customizer-panel" aria-label={t(copy.title)} data-testid="app-customizer-panel" data-surface={surface} hidden={hidden}>
-			<div ref={scrollRef} className="customizer-panel__body">
-				{turns.length === 0 && starters.length === 0 ? (
-					<div className="customizer-panel__empty">
-						{/* The faded monochrome mark (Figma 367:8865); dark mode has its own, with the fade in the image. */}
-						{/* On 우클릭 메뉴 the welcome rises in like chat messages: the mark, title, line and first suggestion together, then each next suggestion in turn (settings.css .customizer-rise). */}
-						<div className="customizer-panel__empty-orb customizer-rise" style={{ "--rise-i": 0 } as CSSProperties} aria-hidden="true">
-							<img src={dazziMarkMono} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--light" draggable={false} />
-							<img src={dazziMarkMonoDark} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--dark" draggable={false} />
-						</div>
-						<h3 className="customizer-panel__empty-title customizer-rise" style={{ "--rise-i": 0 } as CSSProperties}>{t(copy.emptyTitle)}</h3>
-						<p className="customizer-panel__empty-desc customizer-rise" style={{ "--rise-i": 0 } as CSSProperties}>{t(copy.emptyDesc)}</p>
-						{copy.suggestions.length === 0 ? null : (
+		<SidebarChatShell
+			aria-label={t(copy.title)}
+			data-testid="app-customizer-panel"
+			data-surface={surface}
+			hidden={hidden}
+			running={running}
+			followKey={followKey}
+			footer={
+				<SidebarChatComposer
+					textareaRef={textareaRef}
+					inputTestId="app-customizer-input"
+					value={input}
+					onChange={setInput}
+					onSend={() => sendMessage(input)}
+					onStop={stopRun}
+					onReset={resetChat}
+					showReset={turns.length > 0}
+					running={running}
+					placeholder={t(copy.placeholder)}
+					inputAriaLabel={t("settingsCore.sidebar.assistant.inputLabel")}
+					sendLabel={t("settingsCore.sidebar.assistant.send")}
+					stopLabel={t("settingsCore.sidebar.assistant.stop")}
+					resetLabel={t("settingsCore.sidebar.assistant.newChat")}
+					sendAction="send-customizer-message"
+					stopAction="stop-customizer-message"
+					resetAction="reset-customizer-chat"
+					hidden={hidden}
+				/>
+			}
+		>
+			{turns.length === 0 && starters.length === 0 ? (
+				<SidebarChatEmpty title={t(copy.emptyTitle)} description={t(copy.emptyDesc)} rise>
+					{copy.suggestions.length === 0 ? null : (
 						<div className="customizer-panel__suggestions">
 							{copy.suggestions.map((key, index) => (
 								<button
@@ -526,75 +466,72 @@ export function AppCustomizerPanel({
 								</button>
 							))}
 						</div>
-						)}
-					</div>
-				) : (
-					<div className="customizer-panel__turns">
-						{turns.map((turn) => (
-							<div key={turn.id} className="customizer-turn">
-								<div className="customizer-turn__user-row">
-									<div className="customizer-turn__user-bubble">{turn.userText}</div>
-								</div>
-								<div className="customizer-turn__assistant-row">
-									{(turn.changes.length > 0 && turn.messages.length > 0 ? turn.messages.slice(0, -1) : turn.messages).map(
-										(message, idx) => (
-											<CustomizerReplyBody key={idx} text={message} />
-										),
-									)}
-									{turn.changes.length > 0 ? (
-										<div className="customizer-turn__changes">
-											{turn.changes.map((change, idx) => (
-												<span key={idx} className="customizer-change-pill">
-													<Check size={14} strokeWidth={1.8} aria-hidden="true" />
-													<span>{change.summary}</span>
-												</span>
-											))}
-										</div>
-									) : null}
-									{turn.changes.length > 0 && turn.messages.length > 0 ? (
-										<CustomizerReplyBody text={turn.messages[turn.messages.length - 1]!} />
-									) : null}
-									{turn.status === "running" && turn.draft.length > 0 ? (
-										<CustomizerReplyBody text={turn.draft} />
-									) : null}
-									{turn.status === "running"
-										? prompts.map((prompt) => <PromptCard key={prompt.id} prompt={prompt} onAnswer={(answer) => answerPrompt(prompt.id, answer)} />)
-										: null}
-									{turn.status === "running" && turn.draft.length === 0 && prompts.length === 0 ? (
-										<div className="customizer-turn__progress" role="status">
-											<SeedLoader />
-											<span className="shimmer min-w-0 truncate">{turn.progress.length > 0 ? turn.progress : t(copy.thinking)}</span>
-										</div>
-									) : null}
-									{turn.error !== null ? (
-										<div className="customizer-turn__error" role="alert">
-											<p className="customizer-turn__error-text">{turn.error}</p>
-											<button
-												type="button"
-												className="linear-btn"
-												data-action="customizer-open-ai-settings"
-												onClick={onOpenAiSettings}
-											>
-												{t(copy.openAiSettings)}
-											</button>
-										</div>
-									) : null}
-								</div>
+					)}
+				</SidebarChatEmpty>
+			) : (
+				<div className="customizer-panel__turns">
+					{turns.map((turn) => (
+						<div key={turn.id} className="customizer-turn">
+							<div className="customizer-turn__user-row">
+								<div className="customizer-turn__user-bubble">{turn.userText}</div>
 							</div>
-						))}
-						{starters.map((starter) => (
-							// As 새 자동화 does in the AI column: the person's 새 매직 액션 만들기, the reply, and the card, rising one after another.
-							<div key={`starter-${starter.key}`} className="customizer-turn" data-magic-starter={starter.key}>
-								<div className="customizer-turn__user-row animate-rise [animation-fill-mode:both]">
-									<div className="customizer-turn__user-bubble">{t("settingsCore.contextMenu.assistant.starterUser")}</div>
-								</div>
-								<div className="customizer-turn__assistant-row">
-									<div className="animate-rise [animation-delay:140ms] [animation-fill-mode:both]">
-										<CustomizerReplyBody text={t("settingsCore.contextMenu.assistant.starterReply")} />
+							<div className="customizer-turn__assistant-row">
+								{(turn.changes.length > 0 && turn.messages.length > 0 ? turn.messages.slice(0, -1) : turn.messages).map(
+									(message, idx) => (
+										<SidebarReplyBody key={idx} text={message} />
+									),
+								)}
+								{turn.changes.length > 0 ? (
+									<div className="customizer-turn__changes">
+										{turn.changes.map((change, idx) => (
+											<span key={idx} className="customizer-change-pill">
+												<Check size={14} strokeWidth={1.8} aria-hidden="true" />
+												<span>{change.summary}</span>
+											</span>
+										))}
 									</div>
-									{starter.added === null ? (
-										// The card takes the column's whole width and follows it as the sidebar is resized.
-										<div className="w-full min-w-0 self-stretch animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
+								) : null}
+								{turn.changes.length > 0 && turn.messages.length > 0 ? (
+									<SidebarReplyBody text={turn.messages[turn.messages.length - 1]!} />
+								) : null}
+								{turn.status === "running" && turn.draft.length > 0 ? (
+									<SidebarReplyBody text={turn.draft} />
+								) : null}
+								{turn.status === "running"
+									? prompts.map((prompt) => <PromptCard key={prompt.id} prompt={prompt} onAnswer={(answer) => answerPrompt(prompt.id, answer)} />)
+									: null}
+								{turn.status === "running" && turn.draft.length === 0 && prompts.length === 0 ? (
+									<SidebarChatProgress text={turn.progress.length > 0 ? turn.progress : t(copy.thinking)} />
+								) : null}
+								{turn.error !== null ? (
+									<div className="customizer-turn__error" role="alert">
+										<p className="customizer-turn__error-text">{turn.error}</p>
+										<button
+											type="button"
+											className="linear-btn"
+											data-action="customizer-open-ai-settings"
+											onClick={onOpenAiSettings}
+										>
+											{t(copy.openAiSettings)}
+										</button>
+									</div>
+								) : null}
+							</div>
+						</div>
+					))}
+					{starters.map((starter) => (
+						// As 새 자동화 does in the AI column: the person's 새 매직 액션 만들기, the reply, and the card, rising one after another.
+						<div key={`starter-${starter.key}`} className="customizer-turn" data-magic-starter={starter.key}>
+							<div className="customizer-turn__user-row animate-rise [animation-fill-mode:both]">
+								<div className="customizer-turn__user-bubble">{t("settingsCore.contextMenu.assistant.starterUser")}</div>
+							</div>
+							<div className="customizer-turn__assistant-row">
+								<div className="animate-rise [animation-delay:140ms] [animation-fill-mode:both]">
+									<SidebarReplyBody text={t("settingsCore.contextMenu.assistant.starterReply")} />
+								</div>
+								{starter.added === null ? (
+									// The card takes the column's whole width and follows it as the sidebar is resized.
+									<div className="w-full min-w-0 self-stretch animate-rise [animation-delay:280ms] [animation-fill-mode:both]">
 										<AutomationDraftCard
 											initial={null}
 											rightClickOnly
@@ -610,76 +547,20 @@ export function AppCustomizerPanel({
 											}}
 											onCancel={() => setStarters((current) => current.filter((item) => item.key !== starter.key))}
 										/>
-										</div>
-									) : (
-										<div className="customizer-turn__changes">
-											<span className="customizer-change-pill">
-												<Check size={14} strokeWidth={1.8} aria-hidden="true" />
-												<span>{t("settingsCore.contextMenu.assistant.starterAdded", { title: starter.added })}</span>
-											</span>
-										</div>
-									)}
-								</div>
+									</div>
+								) : (
+									<div className="customizer-turn__changes">
+										<span className="customizer-change-pill">
+											<Check size={14} strokeWidth={1.8} aria-hidden="true" />
+											<span>{t("settingsCore.contextMenu.assistant.starterAdded", { title: starter.added })}</span>
+										</span>
+									</div>
+								)}
 							</div>
-						))}
-					</div>
-				)}
-			</div>
-
-			<footer className="customizer-panel__foot">
-				<div className="customizer-composer">
-					<textarea
-						ref={textareaRef}
-						rows={1}
-						data-testid="app-customizer-input"
-						className="customizer-composer__input"
-						placeholder={t(copy.placeholder)}
-						aria-label={t("settingsCore.sidebar.assistant.inputLabel")}
-						value={input}
-						onChange={(event) => setInput(event.target.value)}
-						onKeyDown={handleKeyDown}
-					/>
-					{turns.length > 0 ? (
-						<button
-							type="button"
-							className="customizer-composer__new-chat"
-							data-action="reset-customizer-chat"
-							title={t("settingsCore.sidebar.assistant.newChat")}
-							aria-label={t("settingsCore.sidebar.assistant.newChat")}
-							onClick={resetChat}
-						>
-							<RotateCcw size={14} />
-						</button>
-					) : null}
-					{running ? (
-						<button
-							type="button"
-							className="customizer-composer__send is-stop"
-							data-action="stop-customizer-message"
-							title={t("settingsCore.sidebar.assistant.stop")}
-							aria-label={t("settingsCore.sidebar.assistant.stop")}
-							onClick={stopRun}
-						>
-							<Square size={12} fill="currentColor" />
-						</button>
-					) : input.trim().length === 0 && voice !== undefined ? (
-						// Nothing typed: the blue mic, as in the inspector chat; the transcript lands in the input.
-						<VoiceButton voice={voice} onTranscript={(text) => setInput((current) => appendTranscript(current, text))} onError={() => {}} />
-					) : (
-						<button
-							type="button"
-							className="customizer-composer__send"
-							data-action="send-customizer-message"
-							disabled={input.trim().length === 0}
-							title={t("settingsCore.sidebar.assistant.send")}
-							aria-label={t("settingsCore.sidebar.assistant.send")}
-							onClick={() => sendMessage(input)}
-						>
-							<ArrowUp size={12} strokeWidth={2.4} />
-						</button>
-					)}
+						</div>
+					))}
 				</div>
-			</footer>
-		</aside>
+			)}
+		</SidebarChatShell>
 	);
 }
