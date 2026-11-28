@@ -212,6 +212,65 @@ describe("AttachmentContextAgent", () => {
 			registration.unregister();
 		}
 	});
+	it("reaches the model on parallel fast, organize, and extra routes without repeating it", async () => {
+		const directory = await tempDir();
+		const image = join(directory, "outside", "shot.png");
+		await mkdir(dirname(image), { recursive: true });
+		await writeFile(image, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]));
+		const corpus = join(directory, "corpus");
+		await mkdir(corpus);
+		const minsync = join(directory, "minsync");
+		await writeFile(
+			minsync,
+			`#!/usr/bin/env node\nconst c = process.argv[2];\nconsole.log(JSON.stringify(c === "query" ? { results: [] } : c === "check" ? { vectorstore_ok: true, embedder_ok: true } : c === "sync" ? { files_processed: 0 } : { initialized: true }));\n`,
+			{ mode: 0o755 },
+		);
+
+		for (const scenario of [
+			{ parallelFastPhase: true, routeOverride: undefined },
+			{ parallelFastPhase: false, routeOverride: "organize" as const },
+			{ parallelFastPhase: false, routeOverride: "extra" as const },
+		]) {
+			const requests: string[] = [];
+			const registration = pi.registerFauxProvider({ api: `faux-${randomUUID()}`, models: [{ id: "attachments" }] });
+			registration.setResponses([
+				(context: { readonly messages: unknown }) => {
+					requests.push(JSON.stringify(context.messages));
+					return pi.fauxAssistantMessage("ok", { stopReason: "stop" });
+				},
+				(context: { readonly messages: unknown }) => {
+					requests.push(JSON.stringify(context.messages));
+					return pi.fauxAssistantMessage("ok", { stopReason: "stop" });
+				},
+			]);
+			try {
+				const agent = new AttachmentContextAgent({
+					jev: baselineJev(),
+					model: registration.getModel() as never,
+					searchPaths: [corpus],
+					workspacePath: directory,
+					memoryPath: join(directory, "memory.json"),
+					jikji: false,
+					parallelFastPhase: scenario.parallelFastPhase,
+					minSync: { binaryPath: minsync, autoInstall: false },
+					webSearch: false,
+					dupey: false,
+				});
+				agent.setAttachmentContext(await buildAttachmentContext([file(image)]));
+
+				await agent.searchDocuments(
+					"Where is this image?",
+					scenario.routeOverride === undefined ? {} : { routeOverride: scenario.routeOverride },
+				);
+
+				expect(requests.length).toBeGreaterThan(0);
+				expect(requests[0]).toContain(requestPath(image));
+				expect(requests[0]).toContain("Binary file; content not included.");
+			} finally {
+				registration.unregister();
+			}
+		}
+	});
 });
 
 describe("buildViewingFolderContext", () => {

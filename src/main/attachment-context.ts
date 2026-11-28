@@ -184,9 +184,12 @@ export function buildViewingFolderContext(folder: string | undefined): string {
 
 /**
  * The librarian agent with a per-run attachment context. The block goes in
- * front of the first prompt of either search flow (the two-phase fast prompt
- * or the legacy single-phase prompt); later prompts of the same run continue
- * that transcript, so the model keeps seeing it without a second copy.
+ * front of the first prompt of every Turn-1 route (parallel fast, sequential
+ * fast, organize, or extra); later prompts of the same run continue that
+ * transcript, so the model keeps seeing it without a second copy. When a
+ * subclass (such as {@link InteractiveSearchAgent}) has already delivered the
+ * block into a bound conversation session, it clears the stored context so it
+ * is not attached a second time.
  */
 export class AttachmentContextAgent extends AutoRAGAgent {
 	#attachmentContext = "";
@@ -201,8 +204,31 @@ export class AttachmentContextAgent extends AutoRAGAgent {
 		return this.#attachmentContext;
 	}
 
+	/** Consume the pending context once (returns "" when empty), for a subclass that delivers it as its own message. */
+	protected takeAttachmentContext(): string {
+		const context = this.#attachmentContext;
+		this.#attachmentContext = "";
+		return context;
+	}
+
+	#withAttachmentContext(prompt: string): string {
+		const context = this.#attachmentContext;
+		return context === "" ? prompt : `${context}\n\n${prompt}`;
+	}
+
 	override buildFastAnswerPrompt(query: string, options: RetrievalOptions, baseline: string): string {
-		const prompt = super.buildFastAnswerPrompt(query, options, baseline);
-		return this.#attachmentContext === "" ? prompt : `${this.#attachmentContext}\n\n${prompt}`;
+		return this.#withAttachmentContext(super.buildFastAnswerPrompt(query, options, baseline));
+	}
+
+	override buildParallelFastAnswerPrompt(query: string, options: RetrievalOptions): string {
+		return this.#withAttachmentContext(super.buildParallelFastAnswerPrompt(query, options));
+	}
+
+	override buildOrganizePrompt(query: string, skill: Parameters<AutoRAGAgent["buildOrganizePrompt"]>[1]): string {
+		return this.#withAttachmentContext(super.buildOrganizePrompt(query, skill));
+	}
+
+	override buildExtraPrompt(query: string): string {
+		return this.#withAttachmentContext(super.buildExtraPrompt(query));
 	}
 }

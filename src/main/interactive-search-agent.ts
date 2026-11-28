@@ -238,13 +238,16 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 	}
 
 	/**
-	 * A follow-up is sent to the model as typed, so the attachment block (which the first question gets in its prompt)
-	 * goes into the conversation as a message of its own, ahead of the question.
+	 * Puts the attachment block (paths, URLs, and extracted content) into the conversation as its own message ahead of
+	 * the question, on the first question and on follow-ups alike. That way every Turn-1 route (parallel fast,
+	 * sequential fast, organize, extra, config) and every follow-up turn sees the attached paths exactly once, right
+	 * before any attached image pixels.
 	 */
 	async #deliverAttachments(): Promise<void> {
-		const context = this.attachmentContext;
 		const session = this.#runtime?.runtime.session;
-		if (context === "" || session === undefined || !session.messages.some((message) => message.role === "assistant")) return;
+		if (session === undefined) return;
+		const context = this.takeAttachmentContext();
+		if (context === "") return;
 		await session.sendCustomMessage({ customType: "dazzi.attachments", content: [{ type: "text", text: context }], display: false }, { triggerTurn: false });
 	}
 
@@ -263,7 +266,7 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 		this.#images = [];
 		const session = this.#runtime?.runtime.session;
 		if (images.length === 0 || session === undefined || session.model?.input.includes("image") !== true) return;
-		const note = { type: "text" as const, text: "The user pasted or attached the image(s) below with their next message." };
+		const note = { type: "text" as const, text: "The user pasted or attached the image(s) below with their next message (each file's path is listed in the `<attachments>` block above)." };
 		await session.sendCustomMessage({ customType: "dazzi.images", content: [note, ...images], display: false }, { triggerTurn: false });
 	}
 
