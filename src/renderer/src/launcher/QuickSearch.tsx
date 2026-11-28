@@ -332,7 +332,7 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 		focused === undefined ? null : focused.kind === "ask" ? { id: "askQuery", label: t("quickSearch.actions.askQuery") } : { id: "open", label: t("quickSearch.actions.open") };
 
 	return (
-		<div className="qs" data-material={bridge.material} onKeyDown={onKeyDown} role="dialog" aria-label={t("quickSearch.title")}>
+		<div className="qs" data-material={bridge.material} data-menu={panel === null ? undefined : "open"} onKeyDown={onKeyDown} role="dialog" aria-label={t("quickSearch.title")}>
 			<div className="qs__bar">
 				<SearchIcon size={18} />
 				<input

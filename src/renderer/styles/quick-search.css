@@ -120,6 +120,15 @@
 		mask-image: linear-gradient(to bottom, #000 calc(100% - var(--qs-foot) - var(--space-12)), transparent calc(100% - var(--qs-fade)));
 	}
 
+	/* The list scrolls with the wheel and the arrow keys; an overlay scrollbar would be a hard dark line on the glass. */
+	.qs__list {
+		scrollbar-width: none;
+	}
+
+	.qs__list::-webkit-scrollbar {
+		display: none;
+	}
+
 	.qs__section {
 		padding: var(--space-10) var(--space-10) var(--space-4);
 		font-size: var(--font-size-meta);
@@ -148,6 +157,23 @@
 
 	.qs__row[aria-selected="true"] {
 		background: var(--qs-selection);
+		box-shadow: var(--qs-selection-rim);
+	}
+
+	/* A file icon the OS draws as a blank white sheet would read as an opaque hole in the glass without an edge. */
+	.qs__row .tile--image {
+		box-shadow: 0 0 0 0.5px var(--qs-control-border);
+	}
+
+	/* `backdrop-filter` does nothing in this transparent window, so a menu cannot blur what is behind it. The list
+	 * steps back instead (a plain `filter` does work), and the menu can stay see-through glass. */
+	.qs__list {
+		transition: filter var(--dur-popover) var(--ease-out), opacity var(--dur-popover) var(--ease-out);
+	}
+
+	.qs[data-menu="open"] .qs__list {
+		filter: var(--qs-behind-menu);
+		opacity: 0.55;
 	}
 
 	.qs__text {
@@ -247,13 +273,11 @@
 		background: var(--qs-pill);
 		color: var(--text-body);
 		box-shadow: var(--qs-pill-rim);
-		-webkit-backdrop-filter: var(--qs-blur);
-		backdrop-filter: var(--qs-blur);
 		cursor: default;
 	}
 
 	.qs__menu-btn:hover {
-		background: var(--qs-control-hover);
+		background: var(--qs-pill-hover);
 	}
 
 	.qs__pill {
@@ -266,8 +290,6 @@
 		border-radius: 18px;
 		background: var(--qs-pill);
 		box-shadow: var(--qs-pill-rim);
-		-webkit-backdrop-filter: var(--qs-blur);
-		backdrop-filter: var(--qs-blur);
 	}
 
 	.qs__pill-primary {
@@ -303,8 +325,6 @@
 		border-radius: var(--radius-14);
 		background: var(--qs-menu);
 		box-shadow: var(--qs-pill-rim), var(--shadow-menu);
-		-webkit-backdrop-filter: var(--qs-blur);
-		backdrop-filter: var(--qs-blur);
 	}
 
 	.qs__panel .qs__row {

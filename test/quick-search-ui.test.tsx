@@ -283,6 +283,15 @@ describe("quick search launcher page", () => {
 			expect(host.querySelector(".qs__panel")).not.toBeNull();
 		});
 
+		it("marks the sheet while the actions menu is open, so the list can step back behind it instead of showing through", async () => {
+			await type("report");
+			expect(host.querySelector(".qs")?.hasAttribute("data-menu")).toBe(false);
+			await press("k", { code: "KeyK", metaKey: true });
+			expect(host.querySelector(".qs")?.getAttribute("data-menu")).toBe("open");
+			await press("Escape", { code: "Escape" });
+			expect(host.querySelector(".qs")?.hasAttribute("data-menu")).toBe(false);
+		});
+
 		it("names the Ask row's action in the capsule when the Ask row is focused", async () => {
 			await type("report");
 			for (let step = 0; step < 3; step += 1) await press("ArrowDown");

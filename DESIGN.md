@@ -261,6 +261,13 @@ palette on macOS 26's Liquid Glass.
   prints over a half-faded row: a 36px round button at the left (the `⌘K` actions menu), the focused file's folder (or a
   notice) in the middle, and a capsule at the right with the primary action and `↩` (Open, or Ask AI on the Ask row) and
   `Actions ⌘K`. Preview, copy and the rest live in the actions menu and on their keys.
+- **No `backdrop-filter`.** It does nothing in this transparent window (measured with page screenshots, with and
+  without the list's mask or the sheet's `overflow`), so nothing on the page can blur what is behind it. The footer
+  capsule, the round button and the actions menu are therefore see-through lenses (a top-lit gradient and a hairline rim,
+  no blur), and while the menu is open the list behind it steps back with a plain `filter: blur` and lower opacity
+  (`data-menu="open"` on `.qs`) so rows never show through the menu as crisp text. A selected row is a lighter piece of
+  glass (white wash and hairline), not a grey slab. The list's scrollbar is hidden: it would be a hard dark line on the
+  glass. Verify glass changes in the QA VM over a colourful backdrop (`bun run qa script --vm`), never on the host.
 
 - **Results.** Empty query: the Finder's Recents. Typed: *File Names* (the file-name index, ranked prefix → word start →
   substring, shorter and newer first), then *Contents* (the local MinSync hybrid index, one row per file with the
