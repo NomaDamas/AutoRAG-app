@@ -35,7 +35,13 @@ function configFor(root: string): CliConfig {
 
 describe("app indexing", () => {
 	it("defaults to excluding the built-in code folders", () => {
-		expect(readAppIndexing({})).toEqual({ excludeCodeFolders: true, codeFolderNames: DEFAULT_CODE_FOLDER_NAMES, fileTimeoutMs: 180_000, semanticSearch: true });
+		expect(readAppIndexing({})).toEqual({
+			excludeCodeFolders: true,
+			codeFolderNames: DEFAULT_CODE_FOLDER_NAMES,
+			fileTimeoutMs: 180_000,
+			semanticSearch: true,
+			indexingMode: "auto",
+		});
 	});
 
 	it("honors explicit appIndexing overrides", () => {
@@ -44,6 +50,7 @@ describe("app indexing", () => {
 			codeFolderNames: ["custom"],
 			fileTimeoutMs: 180_000,
 			semanticSearch: true,
+			indexingMode: "auto",
 		});
 	});
 

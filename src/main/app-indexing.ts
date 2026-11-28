@@ -2,9 +2,11 @@ import type { Dirent } from "node:fs";
 import { readdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { CliConfig } from "@autorag/librarian/core";
+import type { IndexingMode, IndexingTier } from "../shared/local-embedding-spec";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject } from "../shared/settings-contract";
 import { embedderKind, learnedBatchSize } from "./embedding-batch";
 import { DEFAULT_FILE_TIMEOUT_MS, kordocDefaultParse, withFileTimeout } from "./file-timeout";
+import { readCurrentIndexingTier } from "./hardware-probe";
 import { sharedParsePool } from "./parse-isolation";
 import { withIndexingPoliciesApplied } from "./indexing-policy";
 import { withSemanticPolicyApplied } from "./semantic-policy";
@@ -30,7 +32,14 @@ export interface AppIndexingSettings {
 	 * answers (see `semantic-policy`). Anything but an explicit `false` keeps it on.
 	 */
 	readonly semanticSearch: boolean;
+	/**
+	 * Which local MinSync indexing tier to run: `"auto"` (default: probes host RAM, CPU cores,
+	 * and GPU/Apple Silicon), `"bm25-only"`, `"sparse+bm25"`, or `"full"`.
+	 */
+	readonly indexingMode: IndexingMode;
 }
+
+const VALID_INDEXING_MODES: ReadonlySet<string> = new Set(["auto", "bm25-only", "sparse+bm25", "full"]);
 
 /** Read `appIndexing` from a raw config object, applying defaults. */
 export function readAppIndexing(raw: Record<string, unknown>): AppIndexingSettings {
@@ -45,7 +54,11 @@ export function readAppIndexing(raw: Record<string, unknown>): AppIndexingSettin
 			? block.fileTimeoutMs
 			: DEFAULT_FILE_TIMEOUT_MS;
 	const semanticSearch = block.semanticSearch !== false;
-	return { excludeCodeFolders, codeFolderNames: names, fileTimeoutMs, semanticSearch };
+	const indexingMode: IndexingMode =
+		typeof block.indexingMode === "string" && VALID_INDEXING_MODES.has(block.indexingMode)
+			? (block.indexingMode as IndexingMode)
+			: "auto";
+	return { excludeCodeFolders, codeFolderNames: names, fileTimeoutMs, semanticSearch, indexingMode };
 }
 
 /**
@@ -154,6 +167,8 @@ export interface ApplyAppIndexingOptions {
 	readonly fresh?: boolean;
 	/** Config file path; when given, the embedding batch size a past refresh learned is applied. */
 	readonly configPath?: string;
+	/** Optional pre-resolved indexing tier override (primarily for tests). */
+	readonly indexingTier?: IndexingTier;
 }
 
 /**
@@ -170,7 +185,10 @@ export async function applyAppIndexing(
 ): Promise<CliConfig> {
 	const { configPath } = options;
 	const settings = readAppIndexing(raw);
-	const config = withSemanticPolicyApplied(withIndexingPoliciesApplied(input), settings.semanticSearch);
+	const tier: IndexingTier =
+		options.indexingTier ??
+		(settings.indexingMode === "auto" ? (await readCurrentIndexingTier()).tier : settings.indexingMode);
+	const config = withSemanticPolicyApplied(withIndexingPoliciesApplied(input), settings.semanticSearch, tier);
 	const excluded = new Set<string>(config.excludePaths ?? []);
 	// AutoRAG's own state directories are product output, never corpus.
 	for (const root of [...config.searchPaths, config.workspacePath]) excluded.add(join(root, ".autorag"));
