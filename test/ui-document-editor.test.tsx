@@ -10,6 +10,7 @@ import type {
 	DocumentEditorLoad,
 	DocumentEditorSaveRequest,
 	DocumentEditorSaveResult,
+	PdfAssetRequest,
 } from "../src/shared/document-editor-contract";
 import { DocumentEditorTab } from "../src/renderer/src/components/DocumentEditorTab";
 import { DocumentEditorAiSidebar } from "../src/renderer/src/components/DocumentEditorAiSidebar";
@@ -23,6 +24,7 @@ interface MockEditorHost {
 	readonly saves: DocumentEditorSaveRequest[];
 	readonly aiStarts: Array<{ readonly runId: string; readonly instruction: string; readonly marksCount: number }>;
 	readonly emit: (event: DocumentEditEvent) => void;
+	readonly requestAsset: (id: string, request: PdfAssetRequest) => void;
 	setLoad(next: DocumentEditorLoad): void;
 	setSaveResult(result: DocumentEditorSaveResult): void;
 }
@@ -36,6 +38,7 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 		mtimeMs: initial.mtimeMs + 10,
 	};
 	const listeners = new Set<(event: DocumentEditEvent) => void>();
+	const assetListeners = new Set<(id: string, request: PdfAssetRequest) => void>();
 	const saves: DocumentEditorSaveRequest[] = [];
 	const aiStarts: Array<{ readonly runId: string; readonly instruction: string; readonly marksCount: number }> = [];
 
@@ -52,6 +55,11 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 		pdfRestore: vi.fn(async () => ({ ok: true })),
 		pdfReadMetadata: vi.fn(async () => ({ title: "", author: "", subject: "", keywords: "" })),
 		pdfDecodeImage: vi.fn(async () => ({ mime: "image/png" as const, bytes: new Uint8Array() })),
+		onPdfAssetRequest: (listener) => {
+			assetListeners.add(listener);
+			return () => assetListeners.delete(listener);
+		},
+		pdfAssetReply: vi.fn(async () => undefined),
 		pdfReadFormFields: vi.fn(async () => []),
 		pdfSaveFormFields: vi.fn(async () => ({ ok: true as const, size: 100, modifiedAt: new Date().toISOString(), mtimeMs: initial.mtimeMs + 25, pageCount: 1, snapshotId: "snap-form-1" })),
 		onPdfChanged: () => () => undefined,
@@ -75,6 +83,9 @@ function createMockHost(initial: DocumentEditorLoad): MockEditorHost {
 		aiStarts,
 		emit: (event) => {
 			for (const listener of listeners) listener(event);
+		},
+		requestAsset: (id: string, request: PdfAssetRequest) => {
+			for (const listener of assetListeners) listener(id, request);
 		},
 		setLoad: (next) => {
 			currentLoad = next;
@@ -366,5 +377,39 @@ describe("DocumentEditorTab UI", () => {
 		expect(host.aiStarts).toHaveLength(1);
 		expect(host.aiStarts[0]!.instruction).toBe("Add CONFIDENTIAL watermark and rotate page 2");
 		expect(sidebarEl!.querySelector(".customizer-turn__user-bubble")?.textContent).toBe("Add CONFIDENTIAL watermark and rotate page 2");
+	});
+
+	it("answers the PDF agent's render requests from the open editor and reports failures back", async () => {
+		const host = createMockHost({
+			kind: "pdf", surface: "pdf", path: "/tmp/contract.pdf", name: "contract.pdf", ext: "pdf",
+			size: 1024, modifiedAt: "2026-11-27T00:00:00.000Z", mtimeMs: 1000, pageCount: 2, encrypted: false,
+		});
+		mountEditor(host, "/tmp/contract.pdf");
+		await act(async () => {
+			await Promise.resolve();
+		});
+		const rendered = new Promise<unknown[]>((resolve) => {
+			(host.bridge.pdfAssetReply as ReturnType<typeof vi.fn>).mockImplementation(async (...args: unknown[]) => resolve(args));
+		});
+		vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+			scale: vi.fn(), fillText: vi.fn(), measureText: vi.fn(() => ({ width: 40 })), beginPath: vi.fn(), roundRect: vi.fn(),
+			fill: vi.fn(), stroke: vi.fn(), font: "", fillStyle: "", strokeStyle: "", lineWidth: 1, textAlign: "left", textBaseline: "top",
+		} as unknown as CanvasRenderingContext2D);
+		vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,AAAA");
+		await act(async () => {
+			host.requestAsset("a-1", { kind: "note", text: "확인 필요", widthPt: 180, fontSizePt: 13, noteColor: "pink" });
+		});
+		const [id, reply] = await rendered;
+		expect(id).toBe("a-1");
+		expect(reply).toMatchObject({ ok: true, result: { kind: "png", dataUrl: "data:image/png;base64,AAAA", widthPt: 180 } });
+
+		const failed = new Promise<unknown[]>((resolve) => {
+			(host.bridge.pdfAssetReply as ReturnType<typeof vi.fn>).mockImplementation(async (...args: unknown[]) => resolve(args));
+		});
+		await act(async () => {
+			host.requestAsset("a-2", { kind: "stamp", withDate: false });
+		});
+		expect(await failed).toEqual(["a-2", { ok: false, error: "A stamp needs a preset or a label." }]);
+		vi.restoreAllMocks();
 	});
 });

@@ -75,8 +75,11 @@ import {
 	isDocumentEditorSaveRequest,
 	isPdfApplyRequest,
 	isPdfExtractRequest,
+	isPdfAssetReply,
 	isPdfFormSaveRequest,
 	isPdfSplitRequest,
+	type PdfAssetRequest,
+	type PdfAssetResult,
 } from "../shared/document-editor-contract";
 
 /**
@@ -622,6 +625,9 @@ export function registerToolVersionsIpcHandlers(service: ToolVersionsService): v
 	ipcMain.handle(TOOL_VERSIONS_CHANNELS.restartDaemon, () => service.restartDaemon());
 }
 
+/** How long the agent waits for the open editor to render a text box, note, stamp, image, or text search. */
+const PDF_ASSET_TIMEOUT_MS = 30_000;
+
 /** The widest screenshot of an editor tab handed to the AI document-edit model. */
 const EDITOR_SCREENSHOT_WIDTH = 1600;
 
@@ -632,6 +638,8 @@ export function registerDocumentEditorIpcHandlers(
 	sendEvent: (event: DocumentEditEvent) => void,
 	pickPdfFiles?: () => Promise<readonly string[]>,
 ): void {
+	const pendingAssets = new Map<string, { resolve: (result: PdfAssetResult) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+	let assetSeq = 0;
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.open, (_event, filePath: unknown) => {
 		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
 		return openDocumentForEditor(filePath, pdfIo);
@@ -700,7 +708,33 @@ export function registerDocumentEditorIpcHandlers(
 			const { width } = image.getSize();
 			return (width > EDITOR_SCREENSHOT_WIDTH ? image.resize({ width: EDITOR_SCREENSHOT_WIDTH, quality: "good" }) : image).toPNG();
 		};
-		return service.start(runId, request, { send: sendEvent, screenshot });
+		// The agent asks this same editor window to render text boxes, notes, stamps, images and to find text,
+		// so its edits look exactly like the toolbar's.
+		const renderAsset = (asset: PdfAssetRequest): Promise<PdfAssetResult> => {
+			if (sender === undefined || sender === null || sender.isDestroyed()) {
+				return Promise.reject(new Error("The PDF editor window is closed, so this content cannot be rendered."));
+			}
+			const id = `asset-${runId}-${(assetSeq += 1)}`;
+			const { promise, resolve, reject } = Promise.withResolvers<PdfAssetResult>();
+			const timer = setTimeout(() => {
+				pendingAssets.delete(id);
+				reject(new Error("The PDF editor did not answer in time. Keep the PDF tab open while the AI edits it."));
+			}, PDF_ASSET_TIMEOUT_MS);
+			pendingAssets.set(id, { resolve, reject, timer });
+			sender.send(DOCUMENT_EDITOR_CHANNELS.pdfAssetRequest, { id, request: asset });
+			return promise;
+		};
+		return service.start(runId, request, { send: sendEvent, screenshot, renderAsset });
+	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfAssetReply, (_event, id: unknown, reply: unknown) => {
+		if (typeof id !== "string") return;
+		const pending = pendingAssets.get(id);
+		if (pending === undefined) return;
+		pendingAssets.delete(id);
+		clearTimeout(pending.timer);
+		if (!isPdfAssetReply(reply)) pending.reject(new Error("The PDF editor sent an invalid answer."));
+		else if (reply.ok) pending.resolve(reply.result);
+		else pending.reject(new Error(reply.error));
 	});
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiCancel, async (_event, runId: unknown) => {
 		if (typeof runId !== "string" || runId === "") return;

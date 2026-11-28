@@ -10,6 +10,7 @@ import { subscribeProfileProgress, type ReplyLanguage } from "./agents/profile-p
 import { errorText, modelFailure } from "./agents/session-failure";
 import type { WriteJudge } from "./agents/write-gate";
 import type { PdfEditorIo } from "./pdf-editor-io";
+import type { PdfAssetRequest, PdfAssetResult } from "../shared/document-editor-contract";
 
 /** Files larger than this are not kept for undo, so they are not edited either. */
 const MAX_EDIT_BYTES = 64 * 1024 * 1024;
@@ -34,6 +35,8 @@ export interface DocumentEditIo {
 	readonly send: (event: DocumentEditEvent) => void;
 	/** A PNG of the preview with the marks drawn on it, or null when none can be taken. */
 	readonly screenshot: () => Promise<Buffer | null>;
+	/** Asks the open editor to render content (text box, note, stamp, watermark, image) or find text; absent without a UI. */
+	readonly renderAsset?: (request: PdfAssetRequest) => Promise<PdfAssetResult>;
 }
 
 export interface DocumentEditOutcome {
@@ -137,6 +140,7 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 					...(deps.writeJudge === undefined ? {} : { writeJudge: deps.writeJudge }),
 					...(deps.pdfIo === undefined ? {} : { pdfIo: deps.pdfIo }),
 					supportsImage: model.model.input.includes("image"),
+					...(io.renderAsset === undefined ? {} : { renderAsset: io.renderAsset }),
 					cancelled: () => active.cancelled,
 				}),
 				cwd: scratchDir,
@@ -152,6 +156,13 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 				}),
 			);
 			let lastDraft = "";
+			const toolsUsed: string[] = [];
+			unsubscribe.push(
+				opened.subscribe((event) => {
+					const started = recordOf(event);
+					if (started?.type === "tool_execution_start" && typeof started.toolName === "string") toolsUsed.push(started.toolName);
+				}),
+			);
 			unsubscribe.push(
 				opened.subscribe((event) => {
 					const ev = recordOf(event);
@@ -169,6 +180,8 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 					? [{ type: "image" as const, data: screenshot.toString("base64"), mimeType: "image/png" }]
 					: undefined;
 			await opened.prompt(documentEditMessage(request), images === undefined ? undefined : { images });
+			// Tool names only (no arguments or document content): diagnoses what the agent actually did.
+			console.log(`[document-edit] ${runId} ${mode} tools: ${toolsUsed.length === 0 ? "(none)" : toolsUsed.join(", ")}`);
 
 			const after = await readFile(request.path).catch(() => null);
 			// In PDF co-editing mode, only count edits performed by the AI (never let a

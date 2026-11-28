@@ -94,7 +94,18 @@ function isPdfTextItem(item: unknown): item is PdfTextItem {
  * top-left units and applies the page's rotation; an item's box runs from
  * 82% of the font size above the baseline to 22% below it.
  */
-export function pdfRuns(items: readonly unknown[], viewport: readonly number[]): readonly TextRun[] {
+/**
+ * Measures the prefix widths of `text` in any unit: `[0, w(t[0]), w(t[0..1]), …, w(all)]`, or null when it
+ * cannot. `item` is the pdf.js text item (for its `fontName`).
+ */
+export type CharEdgeMeasure = (text: string, item: unknown) => readonly number[] | null;
+
+/**
+ * pdf.js text runs in device space. Without `measure`, characters are spread evenly across a run, which
+ * misplaces matches inside long runs (wide capitals vs narrow digits); with it, horizontal runs get
+ * per-character edges (`charX`) scaled to the run's real width.
+ */
+export function pdfRuns(items: readonly unknown[], viewport: readonly number[], measure?: CharEdgeMeasure): readonly TextRun[] {
 	const [a, b, c, d, e, f] = viewport as [number, number, number, number, number, number];
 	const runs: TextRun[] = [];
 	for (const item of items) {
@@ -111,7 +122,11 @@ export function pdfRuns(items: readonly unknown[], viewport: readonly number[]):
 		const angle = Math.atan2(mb, ma);
 		if (Math.abs(angle) < 1e-3) {
 			const width = item.width * Math.hypot(a, b);
-			runs.push({ text: item.str, x, y: y - size * 0.82, width, height: size * 1.04 });
+			const edges = measure?.(item.str, item) ?? null;
+			const total = edges === null ? 0 : (edges[edges.length - 1] ?? 0);
+			const charX =
+				edges !== null && edges.length === item.str.length + 1 && total > 0 ? edges.map((edge) => (edge / total) * width) : undefined;
+			runs.push({ text: item.str, x, y: y - size * 0.82, width, height: size * 1.04, ...(charX === undefined ? {} : { charX }) });
 			continue;
 		}
 		// A rotated run: its axis-aligned bounding box, characters spread evenly along it.

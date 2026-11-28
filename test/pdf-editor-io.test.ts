@@ -370,6 +370,40 @@ describe("pdf editor I/O (pdf-lib)", () => {
 		expect(afterFlatten).toHaveLength(0);
 	});
 
+	it("draws arrows with a filled head (not two thin wings) and reports rotation-aware page sizes", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "arrow.pdf");
+		await createSamplePdf(pdfPath, [[300, 300]]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+		const res = await io.apply({
+			path: pdfPath,
+			operations: [{ kind: "drawShape", pageIndex: 0, shape: "arrow", x1: 0.1, y1: 0.5, x2: 0.9, y2: 0.5, strokeColor: "#DC2626", strokeWidthPt: 1.5 }],
+		});
+		expect(res.ok).toBe(true);
+		const { decode, toRGBA8 } = await import("@pdf-lib/upng");
+		const rendered = await io.renderPageToPng(pdfPath, 1, { dpi: 200 });
+		const image = decode(rendered.png.buffer.slice(rendered.png.byteOffset, rendered.png.byteOffset + rendered.png.byteLength) as ArrayBuffer);
+		const rgba = new Uint8Array(toRGBA8(image)[0]!);
+		const pxPerPt = image.width / 300;
+		const at = (xPt: number, yFromTopPt: number): number[] => {
+			const p = (Math.round(yFromTopPt * pxPerPt) * image.width + Math.round(xPt * pxPerPt)) * 4;
+			return [...rgba.subarray(p, p + 3)];
+		};
+		// 8pt behind the tip (x = 270pt) and 3pt off the axis: inside a filled head, but between the old impl's shaft and wings.
+		const inside = at(262, 150 - 3);
+		expect(inside[0]).toBeGreaterThan(170);
+		expect(inside[1]).toBeLessThan(110);
+		// Just past the tip stays clear: the shaft does not poke through.
+		const past = at(273, 150);
+		expect(past[1]).toBeGreaterThan(200);
+
+		const rotated = join(dir, "rotated.pdf");
+		await createSamplePdf(rotated, [[600, 800]]);
+		await io.apply({ path: rotated, operations: [{ kind: "rotatePage", pageIndex: 0, deltaDegrees: 90 }] });
+		expect(await io.pageVisualSize(rotated, 0)).toMatchObject({ widthPt: 800, heightPt: 600, pageCount: 1 });
+		await expect(io.pageVisualSize(rotated, 1)).rejects.toThrow(/out of range/);
+	});
+
 	it("renders any PDF page to PNG bytes for visual agent inspection and Visual QA", async () => {
 		const dir = makeWorkDir();
 		const pdfPath = join(dir, "visual-qa.pdf");
