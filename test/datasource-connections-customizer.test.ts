@@ -197,7 +197,7 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
 		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
 		expect(profile.systemPrompt).toContain("<available_skills>");
-		expect(profile.systemPrompt).toContain("datasource-setup-hister");
+		expect(profile.systemPrompt).toContain("datasource-setup-nogon");
 		expect(profile.systemPrompt).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
 		expect(DATASOURCE_TEMPLATE_CATALOG.some((t) => t.id === "slack")).toBe(true);
 		expect(DATASOURCE_TEMPLATE_CATALOG.some((t) => t.id === "obsidian")).toBe(true);
@@ -221,9 +221,9 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 			return res.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
 		};
 
-		const byFullName = await runLoad("datasource-setup-hister");
-		expect(byFullName).toContain('<skill name="datasource-setup-hister" location="dazzi-setup-skill://datasource-setup-hister">');
-		expect(byFullName).toContain("brew install hister");
+		const byFullName = await runLoad("datasource-setup-nogon");
+		expect(byFullName).toContain('<skill name="datasource-setup-nogon" location="dazzi-setup-skill://datasource-setup-nogon">');
+		expect(byFullName).toContain("brew install nogon");
 		expect(byFullName).toContain("Never");
 
 		const byTemplateId = await runLoad("obsidian");
@@ -239,7 +239,7 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 
 		const unknown = await runLoad("nonexistent-thing");
 		expect(unknown).toContain("Unknown datasource setup skill");
-		expect(unknown).toContain("datasource-setup-hister");
+		expect(unknown).toContain("datasource-setup-nogon");
 	});
 
 	it("get_datasources lists configured connections (with redacted connector fields) and available templates for the platform", async () => {
@@ -430,7 +430,7 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		const profile = datasourceConnectionsProfile({ language: "en", surface: "apps", toolkit: kit });
 		expect(profile.systemPrompt).toContain("bash");
 		expect(profile.systemPrompt).toContain("NOT MCP");
-		expect(profile.systemPrompt).toContain("brew install hister");
+		expect(profile.systemPrompt).toContain("brew install nogon");
 		expect(profile.systemPrompt).toContain("end-to-end");
 		expect(profile.systemPrompt).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
 

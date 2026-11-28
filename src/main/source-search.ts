@@ -10,6 +10,7 @@ import { AutoRAGLite, type RetrievalDiagnostic, type RetrievalOptions, type Retr
 import { resolveConfigReadOnly } from "@autorag/librarian/core";
 import { isJsonObject } from "../shared/settings-contract";
 import { SOURCE_HIT_CONTENT_LIMIT, SOURCE_SEARCH_MAX_HITS, type SearchDatasource, type SourceHit, type SourceSearchOutcome } from "../shared/source-search-contract";
+import { datasourceTemplateOf } from "../shared/datasource-template";
 import { contentSnippet, sharedConfigLoader, type ContentSearchDeps } from "./content-search";
 import { createDefaultSearchRelevanceGate, type SearchRelevanceGate } from "./search-relevance-gate";
 
@@ -102,7 +103,7 @@ function configuredDatasources(raw: Record<string, unknown>): readonly SearchDat
 	if (!isJsonObject(raw.datasources)) return [];
 	return Object.entries(raw.datasources).flatMap(([id, entry]) => {
 		if (entry === false || (isJsonObject(entry) && entry.enabled === false)) return [];
-		return [{ id, type: (isJsonObject(entry) ? text(entry.type) : null) ?? id }];
+		return [{ id, type: datasourceTemplateOf(id, entry) }];
 	});
 }
 

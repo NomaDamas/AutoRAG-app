@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
+import { canonicalDatasourceTemplate } from "../../../../shared/datasource-template";
 import { isJsonObject } from "../../../../shared/settings-contract";
 import { SelectField } from "./SelectField";
 
@@ -382,19 +383,19 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		],
 	},
 	{
-		id: "hister",
-		label: "Hister",
-		binary: "hister",
-		summary: "settingsSources.templates.hister.summary",
+		id: "nogon",
+		label: "Nogon",
+		binary: "nogon",
+		summary: "settingsSources.templates.nogon.summary",
 		channels: "none",
 		polling: false,
 		groups: [
 			{
-				title: "settingsSources.groups.hister",
+				title: "settingsSources.groups.nogon",
 				fields: [
 					{ key: "baseUrl", label: "settingsSources.fields.baseUrl", kind: "text", placeholder: "http://127.0.0.1:4433" },
-					{ key: "tokenEnv", label: "settingsSources.fields.tokenEnv", kind: "text", placeholder: "HISTER_TOKEN", hint: "settingsSources.fields.hint.tokenEnv" },
-					{ key: "semantic", label: "settingsSources.fields.semantic", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.histerSemantic" },
+					{ key: "tokenEnv", label: "settingsSources.fields.tokenEnv", kind: "text", placeholder: "NOGON_TOKEN", hint: "settingsSources.fields.hint.tokenEnv" },
+					{ key: "semantic", label: "settingsSources.fields.semantic", kind: "boolean", defaultValue: false, hint: "settingsSources.fields.hint.nogonSemantic" },
 					{ key: "timeoutMs", label: "settingsSources.fields.timeoutMs", kind: "number" },
 				],
 			},
@@ -480,9 +481,14 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 
 export const TEMPLATE_BY_ID: Readonly<Record<string, TemplateMeta>> = Object.fromEntries(TEMPLATES.map((template) => [template.id, template]));
 
+/** The template a stored `type` resolves to; a type written before a rename (`hister`) finds its renamed template. */
+export function templateMeta(type: string): TemplateMeta | undefined {
+	return TEMPLATE_BY_ID[canonicalDatasourceTemplate(type)];
+}
+
 /** The template's product name ("Slack"); the bare type when no template carries it. */
 export function templateLabel(type: string): string {
-	return TEMPLATE_BY_ID[type]?.label ?? type;
+	return templateMeta(type)?.label ?? type;
 }
 
 /** The connection's kind ("Slack"); the alias only joins it when it tells two connections of one kind apart. */

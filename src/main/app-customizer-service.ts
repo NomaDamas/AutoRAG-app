@@ -201,7 +201,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				const mcpKit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets, ...shellOption });
 				const dsKit = createDatasourceConnectionsToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
 				// Give the MCP assistant full datasource tools + dynamic setup skills as well so if a user asks to
-				// connect/install/fix a built-in datasource (like Hister) from the MCP tab, it loads its setup skill
+				// connect/install/fix a built-in datasource (like Nogon) from the MCP tab, it loads its setup skill
 				// and configures `datasources.<alias>` directly instead of mistakenly trying to add it as an MCP server.
 				const mcpToolsOnly = mcpKit.tools.filter((tool) => tool.name !== "update_datasource");
 				const combinedKit: CustomizerToolkit = {

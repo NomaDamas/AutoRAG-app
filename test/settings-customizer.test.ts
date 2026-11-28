@@ -175,7 +175,7 @@ describe("settings-customizer unified profile & toolkit", () => {
 		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
 		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
 		expect(profile.systemPrompt).toContain("<available_skills>");
-		expect(profile.systemPrompt).toContain("datasource-setup-hister");
+		expect(profile.systemPrompt).toContain("datasource-setup-nogon");
 		expect(profile.systemPrompt).not.toMatch(/[가-힯぀-ヿ一-鿿]/u);
 	});
 

@@ -396,7 +396,7 @@ export function AppCustomizerPanel({
 			);
 			// Refresh the adjacent Settings page whenever structured settings changed, OR whenever a turn finishes on
 			// a connections surface (`apps`, `source`, `mcp`) where shell commands (e.g. installing a CLI or starting
-			// Hister) may have changed live connection/install status without writing config.json.
+			// Nogon) may have changed live connection/install status without writing config.json.
 			const shouldReload =
 				event.type !== "progress" &&
 				event.type !== "draft" &&

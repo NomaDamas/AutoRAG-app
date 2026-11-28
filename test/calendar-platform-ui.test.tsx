@@ -55,7 +55,7 @@ describe("the Apple Calendar gallery row", () => {
 
 	it("every other row stays connectable on Windows", () => {
 		render("win32");
-		expect(galleryRow("Hister")?.querySelector("button")?.disabled).toBe(false);
+		expect(galleryRow("Nogon")?.querySelector("button")?.disabled).toBe(false);
 		expect(galleryRow("Slack")?.querySelector("button")?.disabled).toBe(false);
 	});
 });

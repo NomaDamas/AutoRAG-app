@@ -26,12 +26,13 @@ import type {
 } from "../../../../shared/settings-contract";
 import { isCalendarDatasourceType } from "../../../../shared/calendar-platform";
 import { newDatasourceEntry } from "../../../../shared/datasource-defaults";
+import { canonicalDatasourceTemplate } from "../../../../shared/datasource-template";
 import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { excludePath, includePath } from "../../../../shared/index-scope-edit";
 import { readScheduleSettings, scheduleUpdates, type ScheduleSettings } from "../../../../shared/refresh-schedule-settings";
 import { hostPlatform } from "../../lib/shortcuts";
-import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
+import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, templateMeta, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PlainRow, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SelectField } from "./SelectField";
 import { SourceIcon } from "./SourceIcon";
@@ -56,7 +57,7 @@ const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readon
 	{ title: "settingsSources.apps.groups.aiSessions", ids: ["wombat"] },
 	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl"] },
 	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
-	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
+	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "nogon", "calendar", "spotlight"] },
 ];
 
 function sourceAliases(snapshot: AutoRagConfigSnapshot): readonly { readonly alias: string; readonly type: string }[] {
@@ -64,7 +65,7 @@ function sourceAliases(snapshot: AutoRagConfigSnapshot): readonly { readonly ali
 	if (datasources === null) return [];
 	return Object.entries(datasources).map(([alias, raw]) => {
 		const record = asRecord(raw);
-		return { alias, type: record !== null ? stringOf(record.type) || alias : alias };
+		return { alias, type: canonicalDatasourceTemplate(record !== null ? stringOf(record.type) || alias : alias) };
 	});
 }
 
@@ -374,7 +375,7 @@ export function IndexingPage({
 								</span>
 								{row.index.state === "live" ? (
 									<span className="settings-sync-live">{t("settingsSources.indexing.liveLabel")}</span>
-								) : TEMPLATE_BY_ID[row.type]?.polling !== false ? (
+								) : templateMeta(row.type)?.polling !== false ? (
 									<SelectField
 										className="settings-select-compact"
 										aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
@@ -668,8 +669,8 @@ export function SourceDetailPage({
 	const liveSourceState = activityItem(activity, `source:${alias}`)?.state ?? null;
 	const sourceSyncActive = busy || liveSourceState === "running" || liveSourceState === "queued";
 	const entry = asRecord(asRecord(snapshot.config.datasources)?.[alias]);
-	const type = entry !== null ? stringOf(entry.type) || alias : alias;
-	const template = TEMPLATE_BY_ID[type];
+	const type = canonicalDatasourceTemplate(entry !== null ? stringOf(entry.type) || alias : alias);
+	const template = templateMeta(type);
 	const connector = entry !== null ? asRecord(entry.connector) : null;
 	const row = sources?.sources.find((item) => item.id === alias) ?? null;
 	const enabled = entry !== null ? entry.enabled !== false : true;

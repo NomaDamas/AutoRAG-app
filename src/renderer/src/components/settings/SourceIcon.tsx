@@ -20,6 +20,7 @@ import {
 	siWhatsapp,
 	type SimpleIcon,
 } from "simple-icons";
+import { canonicalDatasourceTemplate } from "../../../../shared/datasource-template";
 import { LARK_MARK } from "./larkMark";
 import { SLACK_MARK } from "./slackMark";
 
@@ -41,7 +42,7 @@ const GLYPH_BY_TEMPLATE: Readonly<Record<string, LucideIcon>> = {
 	mailcrawl: Mail,
 	local: Folder,
 	spotlight: Search,
-	hister: Globe,
+	nogon: Globe,
 	wombat: MessageSquareCode,
 	calendar: Calendar,
 	"apple-events": Calendar,
@@ -58,8 +59,10 @@ export function brandFill(hex: string): string {
 
 export function SourceIcon({ type, label, small = false }: { readonly type: string; readonly label: string; readonly small?: boolean }): ReactElement {
 	const size = small ? 12 : 18;
-	const brand = BRAND_BY_TEMPLATE[type];
-	const Glyph = GLYPH_BY_TEMPLATE[type];
+	// A connection written before a template was renamed (`hister`) draws the renamed template's icon.
+	const kind = canonicalDatasourceTemplate(type);
+	const brand = BRAND_BY_TEMPLATE[kind];
+	const Glyph = GLYPH_BY_TEMPLATE[kind];
 	let mark: ReactElement;
 	if (brand !== undefined) {
 		mark = (
@@ -67,7 +70,7 @@ export function SourceIcon({ type, label, small = false }: { readonly type: stri
 				<path d={brand.path} fill={brandFill(brand.hex)} />
 			</svg>
 		);
-	} else if (type === "slack") {
+	} else if (kind === "slack") {
 		mark = (
 			<svg viewBox="0 0 256 256" width={size} height={size} role="img" aria-label={label} focusable="false">
 				{SLACK_MARK.map((part) => (
@@ -75,7 +78,7 @@ export function SourceIcon({ type, label, small = false }: { readonly type: stri
 				))}
 			</svg>
 		);
-	} else if (type === "lark") {
+	} else if (kind === "lark") {
 		mark = (
 			<svg viewBox="0 0 48 48" width={size} height={size} role="img" aria-label={label} focusable="false">
 				<path d={LARK_MARK} fill="currentColor" fillRule="evenodd" />

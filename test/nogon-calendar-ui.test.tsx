@@ -22,15 +22,15 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-describe("Hister and Calendar datasource templates and icons", () => {
-	it("registers hister and calendar templates with their connector field schemas", () => {
-		const hister = TEMPLATE_BY_ID.hister;
-		expect(hister).toBeDefined();
-		expect(hister?.binary).toBe("hister");
-		expect(hister?.polling).toBe(false);
-		expect(hister?.channels).toBe("none");
-		const histerFields = hister?.groups.flatMap((group) => group.fields.map((field) => [field.key, field.kind]));
-		expect(histerFields).toEqual([
+describe("Nogon and Calendar datasource templates and icons", () => {
+	it("registers nogon and calendar templates with their connector field schemas", () => {
+		const nogon = TEMPLATE_BY_ID.nogon;
+		expect(nogon).toBeDefined();
+		expect(nogon?.binary).toBe("nogon");
+		expect(nogon?.polling).toBe(false);
+		expect(nogon?.channels).toBe("none");
+		const nogonFields = nogon?.groups.flatMap((group) => group.fields.map((field) => [field.key, field.kind]));
+		expect(nogonFields).toEqual([
 			["baseUrl", "text"],
 			["tokenEnv", "text"],
 			["semantic", "boolean"],
@@ -51,11 +51,11 @@ describe("Hister and Calendar datasource templates and icons", () => {
 		]);
 	});
 
-	it("renders SVG icons for hister, calendar, and apple-events", () => {
+	it("renders SVG icons for nogon, calendar, and apple-events", () => {
 		act(() => {
 			root.render(
 				<div>
-					<SourceIcon type="hister" label="Hister" />
+					<SourceIcon type="nogon" label="Nogon" />
 					<SourceIcon type="calendar" label="Apple Calendar & Reminders" />
 					<SourceIcon type="apple-events" label="Apple Events" />
 				</div>,

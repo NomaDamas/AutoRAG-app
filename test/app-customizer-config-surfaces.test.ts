@@ -111,17 +111,17 @@ describe("the app customizer service routes each Settings section to its own pi 
 		expect(mcp.mcpServers.docs.url).toBe("https://example.com/mcp");
 	});
 
-	it("mcp: also exposes datasource management tools and dynamic setup skills so built-in datasources like hister are configured in config.json, not mcp.json", async () => {
+	it("mcp: also exposes datasource management tools and dynamic setup skills so built-in datasources like nogon are configured in config.json, not mcp.json", async () => {
 		await run(
 			"mcp",
 			[
-				["load_datasource_setup_skill", { name: "hister" }],
-				["add_datasource", { type: "hister", alias: "hister", connector: { baseUrl: "http://127.0.0.1:4433" } }],
+				["load_datasource_setup_skill", { name: "nogon" }],
+				["add_datasource", { type: "nogon", alias: "nogon", connector: { baseUrl: "http://127.0.0.1:4433" } }],
 			],
-			"install and connect hister",
+			"install and connect nogon",
 		);
 		const config = JSON.parse(await readFile(configPath, "utf8"));
-		expect(config.datasources.hister).toMatchObject({ connector: { baseUrl: "http://127.0.0.1:4433" } });
+		expect(config.datasources.nogon).toMatchObject({ connector: { baseUrl: "http://127.0.0.1:4433" } });
 	});
 
 	it("apps: routes to the dedicated datasource connections profile and connects a datasource", async () => {

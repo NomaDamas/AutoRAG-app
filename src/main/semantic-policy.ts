@@ -6,6 +6,7 @@ import {
 	type RefreshMethod,
 	type RetrievalMethod,
 } from "@autorag/librarian";
+import { datasourceTemplateOf } from "../shared/datasource-template";
 import { isJsonObject } from "../shared/settings-contract";
 
 /**
@@ -37,7 +38,7 @@ const SIDECAR_TEMPLATES: Record<string, true> = { kakao: true, slack: true, tele
 
 function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 	if (!isJsonObject(entry)) return entry;
-	const template = typeof entry.type === "string" ? entry.type : alias;
+	const template = datasourceTemplateOf(alias, entry);
 	const connector = isJsonObject(entry.connector) ? entry.connector : {};
 	if (SIDECAR_TEMPLATES[template] === true) {
 		if (connector.sidecar === false) return entry;
@@ -46,7 +47,7 @@ function entryWithoutSemantic(alias: string, entry: unknown): unknown {
 	}
 	if (template === "discord") return { ...entry, connector: { ...connector, defaultMode: "fts" } };
 	// The librarian maps `connector.semantic: false` to the gist skill's own switch (AutoRAG#1936): no vector index, no semantic method.
-	if (template === "github-gist" || template === "hister") return { ...entry, connector: { ...connector, semantic: false } };
+	if (template === "github-gist" || template === "nogon") return { ...entry, connector: { ...connector, semantic: false } };
 	if (template === "clawgallery") return { ...entry, connector: { ...connector, syncVisual: false, defaultMode: "keyword" } };
 	return entry;
 }

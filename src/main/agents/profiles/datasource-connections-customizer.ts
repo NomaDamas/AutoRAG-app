@@ -2,6 +2,7 @@ import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent
 import { Type } from "typebox";
 import type { AgentProfile } from "@autorag/librarian/profiles";
 import { newDatasourceEntry } from "../../../shared/datasource-defaults";
+import { canonicalDatasourceTemplate, datasourceTemplateOf } from "../../../shared/datasource-template";
 import { datasourceSupported } from "../../../shared/messenger-platform";
 import { findSecrets, maskSecret } from "../../../shared/secret-guard";
 import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type JsonValue } from "../../../shared/settings-contract";
@@ -62,7 +63,7 @@ export const DATASOURCE_TEMPLATE_CATALOG: readonly DatasourceTemplateInfo[] = [
 	{ id: "github", label: "GitHub", binary: null, polling: true, defaultTokenEnv: "GITHUB_TOKEN", connectorFields: ["repos", "tokenEnv", "baseUrl", "timeoutMs", "maxPages", "maxDocuments"] },
 	{ id: "github-gist", label: "GitHub Gist", binary: null, polling: true, defaultTokenEnv: "GITHUB_TOKEN", connectorFields: ["tokenEnv", "ghCliFallback", "baseUrl", "statePath", "timeoutMs", "maxPages", "maxGists"] },
 	{ id: "rss", label: "RSS / News", binary: null, polling: true, connectorFields: ["feeds", "maxItemsPerFeed", "maxDocuments", "maxContentChars", "timeoutMs"] },
-	{ id: "hister", label: "Hister", binary: "hister", polling: false, defaultTokenEnv: "HISTER_TOKEN", connectorFields: ["baseUrl", "tokenEnv", "semantic", "timeoutMs"] },
+	{ id: "nogon", label: "Nogon", binary: "nogon", polling: false, defaultTokenEnv: "NOGON_TOKEN", connectorFields: ["baseUrl", "tokenEnv", "semantic", "timeoutMs"] },
 	{ id: "calendar", label: "Apple Calendar & Reminders", binary: "npx", polling: false, macOnly: true, connectorFields: ["requireWriteConfirmation", "exposure", "command", "args"] },
 ];
 
@@ -253,7 +254,7 @@ export function createDatasourceConnectionsToolkit(deps: DatasourceConnectionsTo
 		description:
 			"Add a new built-in datasource connection to `datasources.<alias>` in the shared AutoRAG config, using the same template defaults as Settings → Connected apps (for example Slack starts with `syncSource: 'wiretap'`). Optionally sets `description`, `pollingIntervalMs`, and non-secret `connector` options. Never pass plaintext tokens or secrets in `connector`; use `set_datasource_credential` afterwards.",
 		parameters: Type.Object({
-			type: Type.String({ description: "Built-in datasource template id (e.g. 'slack', 'obsidian', 'github', 'notion', 'discord', 'telegram', 'mailcrawl', 'rss', 'wombat', 'hister', 'calendar')." }),
+			type: Type.String({ description: "Built-in datasource template id (e.g. 'slack', 'obsidian', 'github', 'notion', 'discord', 'telegram', 'mailcrawl', 'rss', 'wombat', 'nogon', 'calendar')." }),
 			alias: Type.Optional(Type.String({ description: "Connection name in config (defaults to `type`; letters, digits, `.`, `_`, `-`). Use a distinct alias when connecting a second instance of the same type." })),
 			description: Type.Optional(Type.String({ description: "Optional description that helps the AI know what this connection holds." })),
 			pollingIntervalMs: Type.Optional(
@@ -263,7 +264,7 @@ export function createDatasourceConnectionsToolkit(deps: DatasourceConnectionsTo
 		}),
 		execute: async (_callId, params) => {
 			kit.ensureLive();
-			const type = params.type.trim();
+			const type = canonicalDatasourceTemplate(params.type.trim());
 			const template = TEMPLATE_BY_ID[type];
 			if (template === undefined) {
 				return textResult({
@@ -507,10 +508,10 @@ export function createDatasourceConnectionsToolkit(deps: DatasourceConnectionsTo
 		name: "set_datasource_credential",
 		label: "Store A Datasource Credential",
 		description:
-			"Open a masked password field so the person can enter an API token or credential for a datasource (for example `GITHUB_TOKEN` for GitHub or `HISTER_TOKEN` for Hister). The value goes directly from the panel to the encrypted credential store — the AI never sees it — and `connector.tokenEnv` is linked to `envName` when requested (default true for tokenEnv-based sources).",
+			"Open a masked password field so the person can enter an API token or credential for a datasource (for example `GITHUB_TOKEN` for GitHub or `NOGON_TOKEN` for Nogon). The value goes directly from the panel to the encrypted credential store — the AI never sees it — and `connector.tokenEnv` is linked to `envName` when requested (default true for tokenEnv-based sources).",
 		parameters: Type.Object({
 			id: Type.String({ description: "Existing configured datasource id." }),
-			envName: Type.Optional(Type.String({ description: "Environment variable name to store the secret under (e.g. `GITHUB_TOKEN`, `HISTER_TOKEN`). Defaults to the template's default tokenEnv." })),
+			envName: Type.Optional(Type.String({ description: "Environment variable name to store the secret under (e.g. `GITHUB_TOKEN`, `NOGON_TOKEN`). Defaults to the template's default tokenEnv." })),
 			wireTokenEnv: Type.Optional(Type.Boolean({ description: "Also set `datasources.<id>.connector.tokenEnv` to `envName` (default true)." })),
 		}),
 		execute: async (_callId, params) => {
@@ -521,7 +522,7 @@ export function createDatasourceConnectionsToolkit(deps: DatasourceConnectionsTo
 			if (!isJsonObject(rawEntry)) {
 				return textResult({ ok: false, error: `There is no datasource with id '${params.id}'.` });
 			}
-			const type = typeof rawEntry.type === "string" && rawEntry.type.length > 0 ? rawEntry.type : params.id;
+			const type = datasourceTemplateOf(params.id, rawEntry);
 			const template = TEMPLATE_BY_ID[type];
 			const envName = (params.envName ?? template?.defaultTokenEnv ?? "").trim();
 			if (!ENV_NAME_PATTERN.test(envName)) {
@@ -724,7 +725,7 @@ function systemPrompt(
 	const shellLines = hasShell
 		? [
 				"- **Direct execution with `bash` (full read/write shell)**: DO NOT just give manual terminal instructions when the person asks you to install, set up, start, or fix a connection — run the commands yourself with `bash`, then verify with `get_datasources`!",
-				"  - **Install missing CLIs or desktop apps directly**: load the matching setup skill via `load_datasource_setup_skill`, check available package managers (`brew`, `cargo`, `npm`, `bun`, `uv`, `winget`, `choco`), and install what is needed directly (e.g. `brew install hister` + `brew services start hister`, `brew install --cask <app>`, `npm install -g @nomadamas/mailcrawl`, `cargo install wombat-sessions`, `cargo install clawgallery`). If an install method is unknown, use `web_search`/`web_fetch` to look up the official command first and then run it.",
+				"  - **Install missing CLIs or desktop apps directly**: load the matching setup skill via `load_datasource_setup_skill`, check available package managers (`brew`, `cargo`, `npm`, `bun`, `uv`, `winget`, `choco`), and install what is needed directly (e.g. `brew install nogon` + `brew services start nogon`, `brew install --cask <app>`, `npm install -g @nomadamas/mailcrawl`, `cargo install wombat-sessions`, `cargo install clawgallery`). If an install method is unknown, use `web_search`/`web_fetch` to look up the official command first and then run it.",
 				"  - **Start / repair background services and configs**: run `<cli> doctor` / `<cli> status`, start local servers, initialize configs, discover local Obsidian vaults (`.obsidian`) or mail directories, or set `connector.binaryPath` when installed outside default `PATH`.",
 				"  - Never copy a secret or token into a command, file, or reply — use `set_datasource_credential` instead.",
 			]
@@ -745,7 +746,7 @@ function systemPrompt(
 		buildDatasourceSetupSkillsPrompt(platform),
 		"",
 		"## Be Proactive & Fix End-to-End",
-		"- When the user asks to install, connect, or fix a broken connection (for example installing and connecting Hister, fixing Slack's connection status, or connecting an Obsidian vault), **load its setup skill with `load_datasource_setup_skill` and do the work end-to-end** using `bash` + the datasource tools rather than passively listing commands for the user to copy-paste.",
+		"- When the user asks to install, connect, or fix a broken connection (for example installing and connecting Nogon, fixing Slack's connection status, or connecting an Obsidian vault), **load its setup skill with `load_datasource_setup_skill` and do the work end-to-end** using `bash` + the datasource tools rather than passively listing commands for the user to copy-paste.",
 		"- Only stop and ask the user when an action genuinely requires their hands: entering a secret/token (use `set_datasource_credential`), granting an OS permission (Full Disk Access / browser extension install / Calendar permission), signing into an interactive GUI/OAuth app, or confirming a destructive removal (`remove_datasource`).",
 		"- After fixing or installing something via `bash` or config tools, re-run `get_datasources` to verify that `installState`, `status`, and `indexState` actually became healthy before reporting success.",
 		"",
@@ -758,7 +759,7 @@ function systemPrompt(
 		"## Workflow",
 		"1. Call `get_datasources` first to inspect existing connections, `installState`, `installDetail`, `indexState`, `indexDetail`, `desktopApp`, and template schemas. If the message notes an active datasource page (`[Active Settings datasource page: \"<alias>\"]`), focus on that alias when the person refers to \"this connection\".",
 		"2. Call `load_datasource_setup_skill` for the target datasource before installing, configuring, or troubleshooting it so you follow its exact prerequisites, CLI commands, and connector options.",
-		"3. Diagnose & fix prerequisites directly with `bash`: if a required CLI, desktop app, or local server (such as `hister`) is missing, stopped, or misconfigured, install/start/repair it directly via `bash` (never passively tell the user \"run this yourself\" when you can run it now).",
+		"3. Diagnose & fix prerequisites directly with `bash`: if a required CLI, desktop app, or local server (such as `nogon`) is missing, stopped, or misconfigured, install/start/repair it directly via `bash` (never passively tell the user \"run this yourself\" when you can run it now).",
 		"4. Wire or repair the config: call `add_datasource` for a new connection, `update_datasource_connector` to fix options (`baseUrl`, `binaryPath`, `vaultPath`, `workspace`, `repos`, etc.), `set_datasource_credential` if an access token is needed, and `update_datasource` to enable/tune it.",
 		"5. Verify with `get_datasources` (and `<cli> doctor` if applicable) so the UI reflects the healthy state, then summarize in 1-3 short sentences what you installed/fixed and any remaining manual step (such as installing a browser extension or granting Full Disk Access).",
 		"",

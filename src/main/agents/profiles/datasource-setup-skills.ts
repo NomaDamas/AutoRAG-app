@@ -53,39 +53,40 @@ function makeSkill(
 
 export const DATASOURCE_SETUP_SKILLS: readonly DatasourceSetupSkill[] = [
 	makeSkill({
-		templateId: "hister",
-		label: "Hister (Browser history)",
-		binary: "hister",
+		templateId: "nogon",
+		label: "Nogon (Browser history)",
+		binary: "nogon",
 		bundledInApp: false,
 		description:
-			"Built-in datasource (NOT MCP) for browser web history via a local Hister server (`hister` CLI, `brew install hister`, `http://127.0.0.1:4433`).",
+			"Built-in datasource (NOT MCP) for browser web history via a local Nogon server (`nogon` CLI, `brew install nogon`, `http://127.0.0.1:4433`). Nogon was called Hister before v0.22.0.",
 		contentLines: [
-			"# Hister — Browser Web History Datasource Setup",
+			"# Nogon — Browser Web History Datasource Setup",
 			"",
-			"**Type:** Built-in datasource (`type: \"hister\"` in `config.json` under `datasources.<alias>`). **Never** install Hister as an MCP server in `mcp.json`.",
-			"**Packaging:** Hister (AGPL-3.0-or-later) is NOT bundled in Dazzi; install and run it as a separate program via `bash`.",
+			"**Type:** Built-in datasource (`type: \"nogon\"` in `config.json` under `datasources.<alias>`). **Never** install Nogon as an MCP server in `mcp.json`.",
+			"**Packaging:** Nogon (AGPL-3.0-or-later) is NOT bundled in Dazzi; install and run it as a separate program via `bash`.",
+			"**Formerly Hister:** Nogon was renamed from Hister in v0.22.0 (same HTTP API on `http://127.0.0.1:4433`, same data and config). An existing `type: \"hister\"` entry keeps working and is shown as Nogon; do not rewrite it unless the user asks. A not-yet-upgraded install still has the `hister` program and the `hister` Homebrew service.",
 			"",
 			"## 1. Check & Install via `bash`",
-			"1. Check if `hister` (or its renamed Homebrew binary `nogon`) is installed and running:",
-			"   - `command -v hister || command -v nogon`",
-			"   - `curl -fsS http://127.0.0.1:4433/api/config` (or `hister doctor` / `nogon doctor`)",
+			"1. Check if `nogon` (or, on an install that has not been upgraded yet, `hister`) is installed and running:",
+			"   - `command -v nogon || command -v hister`",
+			"   - `curl -fsS http://127.0.0.1:4433/api/config` (or `nogon doctor` / `hister doctor`)",
 			"2. If missing on macOS/Linux with Homebrew, install directly:",
-			"   - `brew install hister` (Note: newer Homebrew formula `hister` installs as `nogon`, which serves the same Hister HTTP API on `http://127.0.0.1:4433`.)",
-			"   - If Homebrew is unavailable, check GitHub releases (`https://github.com/asciimoo/hister/releases`) or install with `web_search` / `bash`.",
+			"   - `brew install nogon` (the old `hister` formula is now an alias of `nogon`; `brew upgrade nogon` upgrades an existing Hister install in place).",
+			"   - If Homebrew is unavailable, check GitHub releases (`https://github.com/asciimoo/nogon/releases`) or install with `web_search` / `bash`.",
 			"3. Start the server as a background service so it stays up for the browser extension and Dazzi:",
-			"   - macOS (Homebrew): run `brew services start nogon` (if `nogon` was installed) or `brew services start hister` (for older `hister` installs).",
-			"   - Fallback if `brew services` fails (e.g. headless/non-brew): start `nohup nogon listen >/tmp/hister.log 2>&1 &` or `nohup hister listen >/tmp/hister.log 2>&1 &` (serves `http://127.0.0.1:4433` by default).",
-			"4. Verify reachability: `curl -fsS http://127.0.0.1:4433/api/config` (wait 1-2s after starting if needed) and `hister doctor` / `nogon doctor`.",
+			"   - macOS (Homebrew): run `brew services start nogon` (or `brew services restart nogon` after an upgrade; use `hister` as the service name only on an install that still has the old program).",
+			"   - Fallback if `brew services` fails (e.g. headless/non-brew): start `nohup nogon listen >/tmp/nogon.log 2>&1 &` (serves `http://127.0.0.1:4433` by default).",
+			"4. Verify reachability: `curl -fsS http://127.0.0.1:4433/api/config` (wait 1-2s after starting if needed) and `nogon doctor`.",
 			"",
 			"## 2. Wire the Datasource in Dazzi",
-			"- Call `add_datasource` with `type: \"hister\"` (default alias `hister` or e.g. `browser`) and `connector: { baseUrl: \"http://127.0.0.1:4433\" }` (or update an existing entry with `update_datasource_connector`). Note: setting `baseUrl: \"http://127.0.0.1:4433\"` ensures Dazzi detects the running `nogon`/`hister` server as `installed` even when the binary is named `nogon`.",
-			"- Supported connector fields: `baseUrl` (default `http://127.0.0.1:4433`; must be `https://` for non-loopback hosts when `tokenEnv` is set), `tokenEnv` (optional, default `HISTER_TOKEN`), `semantic` (boolean, default `false`), `timeoutMs`.",
-			"- If Hister requires an access token (`authenticated: false`), call `set_datasource_credential` with `envName: \"HISTER_TOKEN\"` (never put plaintext tokens in config or chat).",
-			"- Optional shared semantic search: run `autorag setup --sync-hister` (requires local `inl serve` daemon) so Hister shares AutoRAG's embedding model, verify `hister doctor` shows `server.index.embeddings` ok, then set `connector.semantic: true`.",
+			"- Call `add_datasource` with `type: \"nogon\"` (default alias `nogon` or e.g. `browser`) and `connector: { baseUrl: \"http://127.0.0.1:4433\" }` (or update an existing entry with `update_datasource_connector`). Setting `baseUrl` lets Dazzi detect the running server as `installed` even when the program is not on `PATH`.",
+			"- Supported connector fields: `baseUrl` (default `http://127.0.0.1:4433`; must be `https://` for non-loopback hosts when `tokenEnv` is set), `tokenEnv` (optional, default `NOGON_TOKEN`), `semantic` (boolean, default `false`), `timeoutMs`.",
+			"- If Nogon requires an access token (`authenticated: false`), call `set_datasource_credential` with `envName: \"NOGON_TOKEN\"` (never put plaintext tokens in config or chat). An existing entry whose `tokenEnv` is `HISTER_TOKEN` keeps using that variable.",
+			"- Optional shared semantic search: run `autorag setup --sync-nogon` (requires local `inl serve` daemon; `--sync-hister` is the deprecated spelling) so Nogon shares AutoRAG's embedding model, verify `nogon doctor` shows `server.index.embeddings` ok, then set `connector.semantic: true`.",
 			"",
 			"## 3. Remaining Manual Steps & Privacy Note",
-			"- Browser extension: tell the user to install the Hister Chrome or Firefox extension so visited pages are captured live.",
-			"- Before running `hister import browser history --start-date YYYY-MM-DD`, warn the user to configure a privacy skip list in Hister's `rules.json` (backfill re-fetches URLs without cookies).",
+			"- Browser extension: tell the user to install the Nogon Chrome or Firefox extension so visited pages are captured live (an installed Hister extension is updated to Nogon by its store and keeps its settings).",
+			"- Before running `nogon import browser history --start-date YYYY-MM-DD`, warn the user to configure a privacy skip list in Nogon's `rules.json` (backfill re-fetches URLs without cookies).",
 			"- Re-run `get_datasources` to confirm `installState` is `installed` and `status` is `ready`.",
 		],
 	}),
@@ -490,13 +491,15 @@ const SKILL_ALIAS_MAP: Readonly<Record<string, string>> = {
 	gist: "github-gist",
 	gists: "github-gist",
 	news: "rss",
-	"browser history": "hister",
+	"browser history": "nogon",
+	hister: "nogon",
+	"datasource-setup-hister": "nogon",
 	"apple calendar": "calendar",
 	"apple-events": "calendar",
 	reminders: "calendar",
 };
 
-/** Resolve a setup skill by exact skill name (`datasource-setup-hister`), template id (`hister`), CLI binary (`slacrawl`), or common alias. */
+/** Resolve a setup skill by exact skill name (`datasource-setup-nogon`), template id (`nogon`; the pre-rename `hister` still resolves), CLI binary (`slacrawl`), or common alias. */
 export function resolveDatasourceSetupSkill(rawName: string): DatasourceSetupSkill | undefined {
 	const key = rawName.trim().toLowerCase();
 	if (key.length === 0) return undefined;
@@ -551,11 +554,11 @@ export function createLoadDatasourceSetupSkillTool(): ToolDefinition {
 		name: LOAD_DATASOURCE_SETUP_SKILL_TOOL_NAME,
 		label: "Load Datasource Setup Skill",
 		description:
-			"Dynamically load the full installation, configuration, verification, and troubleshooting skill for one built-in Dazzi datasource (e.g. `datasource-setup-hister` or `hister`, `slack`, `discord`, `kakao`, `telegram`, `whatsapp`, `lark`, `notion`, `obsidian`, `clawgallery`, `wombat`, `mailcrawl`, `github`, `github-gist`, `rss`, `calendar`). Call this before installing, connecting, or repairing a datasource.",
+			"Dynamically load the full installation, configuration, verification, and troubleshooting skill for one built-in Dazzi datasource (e.g. `datasource-setup-nogon` or `nogon`, `slack`, `discord`, `kakao`, `telegram`, `whatsapp`, `lark`, `notion`, `obsidian`, `clawgallery`, `wombat`, `mailcrawl`, `github`, `github-gist`, `rss`, `calendar`). Call this before installing, connecting, or repairing a datasource.",
 		parameters: Type.Object({
 			name: Type.String({
 				description:
-					"Skill name from `<available_skills>` (e.g. `datasource-setup-hister`) or datasource template id / CLI name (e.g. `hister`, `slack`, `slacrawl`, `mailcrawl`).",
+					"Skill name from `<available_skills>` (e.g. `datasource-setup-nogon`) or datasource template id / CLI name (e.g. `nogon`, `slack`, `slacrawl`, `mailcrawl`).",
 			}),
 		}),
 		execute: async (_callId, params) => {
