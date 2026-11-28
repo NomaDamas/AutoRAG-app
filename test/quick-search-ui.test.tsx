@@ -29,9 +29,10 @@ interface Calls {
 /** The preview panel's side of the bridge: what the page asked it, plus its own close and arrow keys. */
 const panel = { closed: () => {}, navigate: (_delta: 1 | -1) => {} };
 
-function fakeBridge(calls: Calls): QuickSearchBridge {
+function fakeBridge(calls: Calls, material: QuickSearchBridge["material"] = "glass"): QuickSearchBridge {
 	return {
 		platform: "darwin",
+		material,
 		language: "en",
 		onLanguage: () => () => {},
 		onShown: () => () => {},
@@ -231,5 +232,81 @@ describe("quick search launcher page", () => {
 		await act(async () => panel.closed());
 		await press("ArrowDown");
 		expect(calls.previews.at(-1)).toBe("show /d/report.md");
+	});
+
+	describe("liquid glass layout", () => {
+		it("marks the surface with the material main attached, so the sheet knows how much of the glass to draw itself", async () => {
+			expect(host.querySelector(".qs")?.getAttribute("data-material")).toBe("glass");
+			await act(async () => root.render(<QuickSearch bridge={fakeBridge(calls, "solid")} />));
+			expect(host.querySelector(".qs")?.getAttribute("data-material")).toBe("solid");
+		});
+
+		it("shows the Ask AI hint beside the field only once something is typed, and ⌥↩ chip clicks ask", async () => {
+			expect(host.querySelector(".qs__ask-hint")).toBeNull();
+			await type("report");
+			const hint = host.querySelector(".qs__ask-hint") as HTMLButtonElement;
+			expect(hint.textContent).toContain("Ask AI");
+			expect(hint.querySelector(".qs__key")?.textContent).toBe("⌥↩");
+			await act(async () => hint.click());
+			expect(calls.asked).toEqual(["report"]);
+		});
+
+		it("right-aligns the folder a file lives in on every row, one line per name", async () => {
+			expect([...host.querySelectorAll(".qs__row[role=option] .qs__trail")].map((node) => node.textContent)).toEqual(["r"]);
+			await type("report");
+			expect([...host.querySelectorAll(".qs__row[role=option] .qs__trail")].map((node) => node.textContent)).toEqual(["d", "d", "d"]);
+			expect(host.querySelector(".qs__where")).toBeNull();
+		});
+
+		it("draws the row icons at 26px, a thumbnail included, never at the picture's own size", async () => {
+			const icons = fakeBridge(calls);
+			await act(async () => root.render(<QuickSearch bridge={{ ...icons, icons: async (targets) => targets.map((target) => ({ path: target.path, iconUrl: "autorag-thumb://x" }) as never) }} />));
+			await type("report");
+			const tiles = [...host.querySelectorAll(".qs__row[role=option] .tile")];
+			expect(tiles.length).toBeGreaterThan(0);
+			for (const tile of tiles) expect(tile.className).toContain("size-[26px]");
+		});
+
+		it("puts the actions in a round button at the footer's left and the primary action in a capsule at its right", async () => {
+			await type("report");
+			const capsule = host.querySelector(".qs__pill") as HTMLElement;
+			expect(capsule.textContent).toContain("Open");
+			expect(capsule.querySelector(".qs__key")?.textContent).toBe("↩");
+			expect(capsule.textContent).toContain("Actions");
+			expect(capsule.textContent).toContain("⌘K");
+			expect(capsule.textContent).not.toContain("Preview");
+			expect(capsule.textContent).not.toContain("Copy");
+
+			const round = host.querySelector(".qs__menu-btn") as HTMLButtonElement;
+			expect(round.getAttribute("aria-label")).toBe("Actions");
+			await act(async () => round.click());
+			expect(host.querySelector(".qs__panel")).not.toBeNull();
+		});
+
+		it("marks the sheet while the actions menu is open, so the list can step back behind it instead of showing through", async () => {
+			await type("report");
+			expect(host.querySelector(".qs")?.hasAttribute("data-menu")).toBe(false);
+			await press("k", { code: "KeyK", metaKey: true });
+			expect(host.querySelector(".qs")?.getAttribute("data-menu")).toBe("open");
+			await press("Escape", { code: "Escape" });
+			expect(host.querySelector(".qs")?.hasAttribute("data-menu")).toBe(false);
+		});
+
+		it("names the Ask row's action in the capsule when the Ask row is focused", async () => {
+			await type("report");
+			for (let step = 0; step < 3; step += 1) await press("ArrowDown");
+			expect((host.querySelector(".qs__pill") as HTMLElement).textContent).toContain("Ask AI");
+		});
+
+		it("runs the capsule's primary half as a click", async () => {
+			await type("report");
+			await act(async () => (host.querySelector(".qs__pill-primary") as HTMLButtonElement).click());
+			expect(calls.opened).toEqual(["/d/report.md"]);
+		});
+
+		it("keeps the focused file's full path in the footer, where the notice also lands", async () => {
+			await type("report");
+			expect(host.querySelector(".qs__foot-spacer")?.textContent).toBe("/d");
+		});
 	});
 });

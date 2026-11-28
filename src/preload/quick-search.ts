@@ -3,7 +3,7 @@ import { createPreviewBridge } from "../preview/node/bridge";
 import type { ContentSearchResult } from "../shared/content-search-contract";
 import { FS_CHANNELS, RECENTS_PATH, type DirListing, type FsEntryEnrichment, type FsSearchResult } from "../shared/fs-contract";
 import { isAppLanguage, LANGUAGE_CHANNELS, languageFromArgv } from "../shared/language-contract";
-import { QUICK_SEARCH_CHANNELS, type QuickSearchBridge } from "../shared/quick-search-contract";
+import { QUICK_SEARCH_CHANNELS, type QuickSearchBridge, type QuickSearchMaterial } from "../shared/quick-search-contract";
 import { installAppearancePreload } from "./appearance";
 import { connectFsWorker } from "./worker-link";
 
@@ -34,8 +34,15 @@ function subscribe(channel: string, listener: (payload: unknown) => void): () =>
 	};
 }
 
+/** Main attaches the material before the page loads, so a synchronous read here is settled and costs nothing. */
+function readMaterial(): QuickSearchMaterial {
+	const value: unknown = ipcRenderer.sendSync(QUICK_SEARCH_CHANNELS.material);
+	return value === "glass" || value === "vibrancy" ? value : "solid";
+}
+
 const bridge: QuickSearchBridge = {
 	platform: process.platform,
+	material: readMaterial(),
 	language: languageFromArgv(process.argv),
 	onLanguage: (listener) =>
 		subscribe(LANGUAGE_CHANNELS.changed, (next) => {

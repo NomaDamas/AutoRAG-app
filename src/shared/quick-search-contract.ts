@@ -69,6 +69,8 @@ export const QUICK_SEARCH_CHANNELS = {
 	ask: "quick-search:ask",
 	/** launcher → main (invoke): the paths become drafts of the nearest AI Search tab, for a question the person types. */
 	attach: "quick-search:attach",
+	/** launcher → main (sendSync): which material the window was given, read once by the preload before the first paint. */
+	material: "quick-search:material",
 	/** Finder → main (invoke): whether the global shortcut is registered, and why not. */
 	status: "quick-search:status",
 	/** Finder → main (invoke): Settings is recording a new chord; the global one is released meanwhile so the keys reach it. */
@@ -83,12 +85,20 @@ export interface QuickSearchStatus {
 	readonly error: "taken" | null;
 }
 
+/**
+ * What the launcher window is made of: `glass` is macOS 26's native Liquid Glass, `vibrancy` the older blurred
+ * material (macOS before 26, or the addon missing), `solid` an opaque window (Windows, Linux). The sheet draws only
+ * as much of the surface itself as the material lacks.
+ */
+export type QuickSearchMaterial = "glass" | "vibrancy" | "solid";
+
 /** How the launcher goes away: `restore` hands the foreground back (Escape, a copy); `handoff` leaves it to what the action opened. */
 export type QuickSearchHideMode = "restore" | "handoff";
 
 /** `window.launcher`: what the launcher page can do. File operations go to the fs worker like the Finder's. */
 export interface QuickSearchBridge {
 	readonly platform: string;
+	readonly material: QuickSearchMaterial;
 	readonly language: "ko" | "en" | "ja" | "zh";
 	onLanguage(listener: (language: "ko" | "en" | "ja" | "zh") => void): () => void;
 	onShown(listener: () => void): () => void;

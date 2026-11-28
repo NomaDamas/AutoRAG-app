@@ -38,6 +38,7 @@ import {
 	Database,
 	Download,
 	Ellipsis,
+	Equal,
 	Expand,
 	ExternalLink,
 	File,
@@ -234,6 +235,8 @@ export const ZapIcon = glyph(Zap, 11, 2);
 /** A right-click (magic) action in the automation list: the glyph Settings → 우클릭 메뉴 uses. */
 export const MousePointerClickIcon = glyph(MousePointerClick, 14, 2);
 export const MoreIcon = glyph(Ellipsis, 16, 2);
+/** The quick-search footer's round actions button, Tinycast's two-line glyph. */
+export const EqualIcon = glyph(Equal, 16, 2);
 
 export const RefreshIcon = glyph(RefreshCw, 20, 1.8);
 

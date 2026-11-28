@@ -76,13 +76,12 @@ const vendoredLibarchiveWasm: Plugin = {
 			fileName: "vendor/libarchive.wasm",
 			source: readFileSync(resolve(import.meta.dirname, "src/main/vendor/libarchive.wasm")),
 		});
-		const macRevealHook = resolve(import.meta.dirname, "src/main/vendor/mac-reveal-hook.node");
-		if (process.platform === "darwin" && existsSync(macRevealHook)) {
-			this.emitFile({
-				type: "asset",
-				fileName: "vendor/mac-reveal-hook.node",
-				source: readFileSync(macRevealHook),
-			});
+		// Optional macOS addons: the reveal hook and the quick-search launcher's glass. Each loads when present.
+		for (const addon of ["mac-reveal-hook", "mac-glass"]) {
+			const file = resolve(import.meta.dirname, `src/main/vendor/${addon}.node`);
+			if (process.platform === "darwin" && existsSync(file)) {
+				this.emitFile({ type: "asset", fileName: `vendor/${addon}.node`, source: readFileSync(file) });
+			}
 		}
 		const dazziCore = resolve(import.meta.dirname, "src/main/vendor/dazzi-core.node");
 		if (!existsSync(dazziCore)) {
