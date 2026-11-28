@@ -63,7 +63,7 @@ export const DATASOURCE_TEMPLATE_CATALOG: readonly DatasourceTemplateInfo[] = [
 	{ id: "github", label: "GitHub", binary: null, polling: true, defaultTokenEnv: "GITHUB_TOKEN", connectorFields: ["repos", "tokenEnv", "baseUrl", "timeoutMs", "maxPages", "maxDocuments"] },
 	{ id: "github-gist", label: "GitHub Gist", binary: null, polling: true, defaultTokenEnv: "GITHUB_TOKEN", connectorFields: ["tokenEnv", "ghCliFallback", "baseUrl", "statePath", "timeoutMs", "maxPages", "maxGists"] },
 	{ id: "rss", label: "RSS / News", binary: null, polling: true, connectorFields: ["feeds", "maxItemsPerFeed", "maxDocuments", "maxContentChars", "timeoutMs"] },
-	{ id: "nogon", label: "Nogon", binary: "nogon", polling: false, defaultTokenEnv: "NOGON_TOKEN", connectorFields: ["baseUrl", "tokenEnv", "semantic", "timeoutMs"] },
+	{ id: "nogon", label: "Browser history", binary: "nogon", polling: false, defaultTokenEnv: "NOGON_TOKEN", connectorFields: ["baseUrl", "tokenEnv", "semantic", "timeoutMs"] },
 	{ id: "calendar", label: "Apple Calendar & Reminders", binary: "npx", polling: false, macOnly: true, connectorFields: ["requireWriteConfirmation", "exposure", "command", "args"] },
 ];
 
@@ -508,7 +508,7 @@ export function createDatasourceConnectionsToolkit(deps: DatasourceConnectionsTo
 		name: "set_datasource_credential",
 		label: "Store A Datasource Credential",
 		description:
-			"Open a masked password field so the person can enter an API token or credential for a datasource (for example `GITHUB_TOKEN` for GitHub or `NOGON_TOKEN` for Nogon). The value goes directly from the panel to the encrypted credential store — the AI never sees it — and `connector.tokenEnv` is linked to `envName` when requested (default true for tokenEnv-based sources).",
+			"Open a masked password field so the person can enter an API token or credential for a datasource (for example `GITHUB_TOKEN` for GitHub or `NOGON_TOKEN` for browser history). The value goes directly from the panel to the encrypted credential store — the AI never sees it — and `connector.tokenEnv` is linked to `envName` when requested (default true for tokenEnv-based sources).",
 		parameters: Type.Object({
 			id: Type.String({ description: "Existing configured datasource id." }),
 			envName: Type.Optional(Type.String({ description: "Environment variable name to store the secret under (e.g. `GITHUB_TOKEN`, `NOGON_TOKEN`). Defaults to the template's default tokenEnv." })),
@@ -746,7 +746,7 @@ function systemPrompt(
 		buildDatasourceSetupSkillsPrompt(platform),
 		"",
 		"## Be Proactive & Fix End-to-End",
-		"- When the user asks to install, connect, or fix a broken connection (for example installing and connecting Nogon, fixing Slack's connection status, or connecting an Obsidian vault), **load its setup skill with `load_datasource_setup_skill` and do the work end-to-end** using `bash` + the datasource tools rather than passively listing commands for the user to copy-paste.",
+		"- When the user asks to install, connect, or fix a broken connection (for example installing and connecting browser history, fixing Slack's connection status, or connecting an Obsidian vault), **load its setup skill with `load_datasource_setup_skill` and do the work end-to-end** using `bash` + the datasource tools rather than passively listing commands for the user to copy-paste.",
 		"- Only stop and ask the user when an action genuinely requires their hands: entering a secret/token (use `set_datasource_credential`), granting an OS permission (Full Disk Access / browser extension install / Calendar permission), signing into an interactive GUI/OAuth app, or confirming a destructive removal (`remove_datasource`).",
 		"- After fixing or installing something via `bash` or config tools, re-run `get_datasources` to verify that `installState`, `status`, and `indexState` actually became healthy before reporting success.",
 		"",

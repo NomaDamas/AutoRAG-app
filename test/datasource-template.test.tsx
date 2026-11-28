@@ -1,10 +1,16 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
-import { templateLabel } from "../src/renderer/src/components/settings/datasourceTemplates";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { sourceTitle, templateLabel } from "../src/renderer/src/components/settings/datasourceTemplates";
 import { SourceIcon } from "../src/renderer/src/components/settings/SourceIcon";
-import { canonicalDatasourceTemplate, datasourceTemplateOf } from "../src/shared/datasource-template";
+import { setAppLanguage } from "../src/shared/i18n";
+import {
+	canonicalDatasourceTemplate,
+	datasourceTemplateOf,
+	defaultConnectionAlias,
+	isImpliedConnectionAlias,
+} from "../src/shared/datasource-template";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -27,9 +33,10 @@ describe("canonicalDatasourceTemplate", () => {
 });
 
 describe("renderer lookups for a pre-rename `hister` type", () => {
-	it("labels a legacy `hister` connection as Nogon", () => {
-		expect(templateLabel("hister")).toBe("Nogon");
-		expect(templateLabel("nogon")).toBe("Nogon");
+	it("labels a legacy `hister` connection as browser history", async () => {
+		await setAppLanguage("en");
+		expect(templateLabel("hister")).toBe("Browser history");
+		expect(templateLabel("nogon")).toBe("Browser history");
 	});
 
 	it("draws the same icon for `hister` as for `nogon`", () => {
@@ -45,5 +52,48 @@ describe("renderer lookups for a pre-rename `hister` type", () => {
 		};
 		expect(draw("hister")).toBe(draw("nogon"));
 		expect(draw("nogon")).toContain("<svg");
+	});
+});
+
+describe("a person knows it as their browser history, not by the program name", () => {
+	beforeEach(async () => setAppLanguage("en"));
+	afterEach(async () => setAppLanguage("en"));
+
+	it("is named in the interface language", async () => {
+		expect(templateLabel("nogon")).toBe("Browser history");
+		await setAppLanguage("ko");
+		expect(templateLabel("nogon")).toBe("브라우저 기록");
+		expect(templateLabel("hister")).toBe("브라우저 기록");
+		await setAppLanguage("ja");
+		expect(templateLabel("nogon")).toBe("ブラウザ履歴");
+		await setAppLanguage("zh");
+		expect(templateLabel("nogon")).toBe("浏览器历史记录");
+	});
+
+	it("hides a connection name that only restates the program, whatever it is called in config.json", async () => {
+		for (const id of ["browser", "hister", "nogon", "browser-history"]) {
+			expect(sourceTitle({ id, type: "nogon" })).toBe("Browser history");
+			expect(sourceTitle({ id, type: "hister" })).toBe("Browser history");
+		}
+		await setAppLanguage("ko");
+		expect(sourceTitle({ id: "browser", type: "nogon" })).toBe("브라우저 기록");
+		expect(sourceTitle({ id: "hister", type: "nogon" })).toBe("브라우저 기록");
+	});
+
+	it("keeps a name that tells two connections apart", () => {
+		expect(sourceTitle({ id: "work", type: "nogon" })).toBe("Browser history · work");
+		expect(sourceTitle({ id: "work", type: "slack" })).toBe("Slack · work");
+		expect(sourceTitle({ id: "slack", type: "slack" })).toBe("Slack");
+	});
+
+	it("starts a new connection as `browser`, and every other template under its own id", () => {
+		expect(defaultConnectionAlias("nogon")).toBe("browser");
+		expect(defaultConnectionAlias("hister")).toBe("browser");
+		expect(defaultConnectionAlias("slack")).toBe("slack");
+		expect(isImpliedConnectionAlias("nogon", "browser")).toBe(true);
+		expect(isImpliedConnectionAlias("nogon", "hister")).toBe(true);
+		expect(isImpliedConnectionAlias("nogon", "work")).toBe(false);
+		expect(isImpliedConnectionAlias("slack", "slack")).toBe(true);
+		expect(isImpliedConnectionAlias("slack", "browser")).toBe(false);
 	});
 });

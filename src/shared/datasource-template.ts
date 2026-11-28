@@ -14,6 +14,36 @@ export function canonicalDatasourceTemplate(id: string): string {
 }
 
 /**
+ * What a new connection is called when the person does not choose. Browser history starts as `browser`, not as the
+ * program's name: the id shows up in the assistant's tool names and in the shared config, and the person knows this
+ * source as their browser history.
+ */
+const DEFAULT_CONNECTION_ALIASES: Readonly<Record<string, string>> = { nogon: "browser" };
+
+/** Ids that only restate what a template is. A connection under one of them is shown by its kind alone. */
+const IMPLIED_CONNECTION_ALIASES: Readonly<Record<string, readonly string[]>> = { nogon: ["browser", "browser-history"] };
+
+/** The id a new connection of `template` starts with. */
+export function defaultConnectionAlias(template: string): string {
+	const canonical = canonicalDatasourceTemplate(template);
+	return Object.hasOwn(DEFAULT_CONNECTION_ALIASES, canonical) ? (DEFAULT_CONNECTION_ALIASES[canonical] as string) : template;
+}
+
+/**
+ * Whether the connection id `alias` adds nothing a person needs to see next to the name of its template `type`: it is
+ * the template's own id (`slack`), its pre-rename id (`hister` for Nogon), or an id that only says what the source is
+ * (`browser`). A second connection of the same kind keeps its distinguishing name (`work`).
+ */
+export function isImpliedConnectionAlias(type: string, alias: string): boolean {
+	const template = canonicalDatasourceTemplate(type);
+	return (
+		alias === type ||
+		canonicalDatasourceTemplate(alias) === template ||
+		(IMPLIED_CONNECTION_ALIASES[template] ?? []).includes(alias)
+	);
+}
+
+/**
  * The template a stored datasource entry resolves to: its non-empty string `type`, else its alias, canonicalized.
  * `entry` is whatever `config.json` held, so anything that is not an object with a string `type` falls back to the alias.
  */

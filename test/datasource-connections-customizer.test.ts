@@ -237,6 +237,14 @@ describe("datasource-connections-customizer profile & toolkit", () => {
 		const byAlias = await runLoad("mail");
 		expect(byAlias).toContain('name="datasource-setup-mailcrawl"');
 
+		// Whatever the person called it, it is the same browser-history setup.
+		for (const name of ["browser history", "브라우저 기록", "ブラウザ履歴", "浏览器历史记录", "browser", "hister", "nogon", "datasource-setup-hister"]) {
+			expect(await runLoad(name)).toContain('name="datasource-setup-nogon"');
+		}
+		// The assistant is told to call it the person's browser history and to start it as `browser`.
+		expect(byFullName).toMatch(/call (it|this) .*browser history/i);
+		expect(byFullName).toContain('alias `browser`');
+
 		const unknown = await runLoad("nonexistent-thing");
 		expect(unknown).toContain("Unknown datasource setup skill");
 		expect(unknown).toContain("datasource-setup-nogon");

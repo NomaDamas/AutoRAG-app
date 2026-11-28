@@ -30,7 +30,7 @@ import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
 import { ContextMenuPage } from "./settings/ContextMenuPage";
 import { ShortcutsPage } from "./settings/ShortcutsPage";
-import { templateMeta } from "./settings/datasourceTemplates";
+import { sourceTitle } from "./settings/datasourceTemplates";
 import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
 import { attachSettingsNavigation } from "../state/settings-navigation";
@@ -131,9 +131,7 @@ function datasourceEntries(snapshot: AutoRagConfigSnapshot | null): readonly Sou
 		.sort((a, b) => a.localeCompare(b))
 		.map((alias) => {
 			const type = canonicalDatasourceTemplate(sourceType((snapshot.config.datasources as Record<string, unknown>)[alias], alias));
-			const template = templateMeta(type);
-			const kind = template?.label ?? type;
-			return { alias, type, label: alias === type ? kind : `${kind} · ${alias}` };
+			return { alias, type, label: sourceTitle({ id: alias, type }) };
 		});
 }
 

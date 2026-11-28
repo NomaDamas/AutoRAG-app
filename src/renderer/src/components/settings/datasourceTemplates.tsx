@@ -11,7 +11,8 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { canonicalDatasourceTemplate } from "../../../../shared/datasource-template";
+import { canonicalDatasourceTemplate, isImpliedConnectionAlias } from "../../../../shared/datasource-template";
+import { t as translate } from "../../../../shared/i18n/core";
 import { isJsonObject } from "../../../../shared/settings-contract";
 import { SelectField } from "./SelectField";
 
@@ -39,7 +40,10 @@ export interface FieldGroup {
 
 export interface TemplateMeta {
 	readonly id: string;
+	/** The name shown when `labelKey` is absent: a product or program name that is not translated. */
 	readonly label: string;
+	/** A translated name, for a source a person knows by what it is rather than by a program name. */
+	readonly labelKey?: LocaleKey;
 	readonly binary: string | null;
 	readonly summary: LocaleKey;
 	/** Which channel allowlists this template's factory forwards. */
@@ -384,7 +388,8 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 	},
 	{
 		id: "nogon",
-		label: "Nogon",
+		label: "Browser history",
+		labelKey: "settingsSources.templates.nogon.name",
 		binary: "nogon",
 		summary: "settingsSources.templates.nogon.summary",
 		channels: "none",
@@ -488,13 +493,15 @@ export function templateMeta(type: string): TemplateMeta | undefined {
 
 /** The template's product name ("Slack"); the bare type when no template carries it. */
 export function templateLabel(type: string): string {
-	return templateMeta(type)?.label ?? type;
+	const meta = templateMeta(type);
+	if (meta === undefined) return type;
+	return meta.labelKey === undefined ? meta.label : translate(meta.labelKey);
 }
 
 /** The connection's kind ("Slack"); the alias only joins it when it tells two connections of one kind apart. */
 export function sourceTitle(row: { readonly id: string; readonly type: string }): string {
 	const label = templateLabel(row.type);
-	return row.id === row.type ? label : `${label} · ${row.id}`;
+	return isImpliedConnectionAlias(row.type, row.id) ? label : `${label} · ${row.id}`;
 }
 
 /* -------------------------------------------------------- shared constants -- */

@@ -19,6 +19,7 @@ import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isCalendarDatasourceType } from "../shared/calendar-platform";
 import { datasourceTemplateOf } from "../shared/datasource-template";
+import { t } from "../shared/i18n/core";
 import { datasourceEntrySupported, datasourceSupported } from "../shared/messenger-platform";
 import { calendarMcpServerName, syncCalendarMcpConfig } from "./calendar-mcp";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
@@ -199,14 +200,14 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 	if (type === "nogon") {
 		const tokenEnv = typeof connector.tokenEnv === "string" && connector.tokenEnv.trim().length > 0 ? connector.tokenEnv.trim() : undefined;
 		if (tokenEnv !== undefined && !env[tokenEnv]) {
-			return { state: "credential-missing", binary: "nogon", path: null, detail: `Set ${tokenEnv} to let Dazzi reach Nogon`, app };
+			return { state: "credential-missing", binary: "nogon", path: null, detail: t("main.datasourceStatus.browserHistory.credentialMissing", { env: tokenEnv }), app };
 		}
 		const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : "nogon";
 		// Nogon was `hister` before v0.22.0 and Homebrew keeps the old program until it relinks, so an install that has
 		// not been upgraded yet still answers to the old name (unless the operator pinned a path).
 		const path = (await findExecutable(configured, env)) ?? (typeof connector.binaryPath === "string" ? null : await findExecutable("hister", env));
 		if (path !== null) {
-			return { state: "installed", binary: "nogon", path, detail: `nogon at ${path}`, app };
+			return { state: "installed", binary: "nogon", path, detail: t("main.datasourceStatus.browserHistory.programFound", { path }), app };
 		}
 		if (typeof connector.baseUrl === "string" && connector.baseUrl.trim().length > 0) {
 			try {
@@ -218,13 +219,13 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 				});
 				const cfg = await client.config();
 				if (cfg.ok) {
-					return { state: "installed", binary: "nogon", path: connector.baseUrl, detail: `nogon server at ${connector.baseUrl}`, app };
+					return { state: "installed", binary: "nogon", path: connector.baseUrl, detail: t("main.datasourceStatus.browserHistory.serverAt", { url: connector.baseUrl }), app };
 				}
 			} catch {
 				// Fall through to missing binary report.
 			}
 		}
-		return { state: "missing", binary: "nogon", path: null, detail: `${configured} was not found on PATH`, app };
+		return { state: "missing", binary: "nogon", path: null, detail: t("main.datasourceStatus.browserHistory.programMissing", { name: configured }), app };
 	}
 	const binary = BACKEND_BINARIES[type];
 	if (binary === undefined) return { state: "builtin", binary: null, path: null, detail: "Built into Dazzi", app };
@@ -373,7 +374,7 @@ async function indexState(
 					chunkCount: null,
 					unit: "document",
 					indexedAt: null,
-					detail: cfg.ok ? "Nogon requires authentication" : cfg.message,
+					detail: cfg.ok ? t("main.datasourceStatus.browserHistory.authRequired") : cfg.message,
 				};
 			}
 			const count = await client.count("type:web");
@@ -381,8 +382,8 @@ async function indexState(
 				return { state: "not-indexed", chunkCount: null, unit: "document", indexedAt: null, detail: count.message };
 			}
 			return count.value === 0
-				? { state: "empty", chunkCount: 0, unit: "document", indexedAt: null, detail: "nogon holds nothing yet" }
-				: { state: "indexed", chunkCount: count.value, unit: "document", indexedAt: null, detail: `${count.value} items in nogon` };
+				? { state: "empty", chunkCount: 0, unit: "document", indexedAt: null, detail: t("main.datasourceStatus.browserHistory.empty") }
+				: { state: "indexed", chunkCount: count.value, unit: "document", indexedAt: null, detail: t("main.datasourceStatus.browserHistory.pages", { count: count.value }) };
 		} catch (error) {
 			return {
 				state: "not-indexed",

@@ -3,15 +3,21 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildAgentOptions, resolveConfigReadOnly } from "@autorag/librarian";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import { withIndexingPoliciesApplied } from "../src/main/indexing-policy";
 import { withSemanticPolicyApplied } from "../src/main/semantic-policy";
+import { setAppLanguage } from "../src/shared/i18n";
 import type { DataSourceRow } from "../src/shared/settings-contract";
 
 const directories: string[] = [];
 const servers: Server[] = [];
+
+beforeEach(async () => {
+	// The status lines are in the interface language; these assertions read them in English.
+	await setAppLanguage("en");
+});
 
 afterEach(async () => {
 	await Promise.all(
@@ -198,6 +204,7 @@ describe("Nogon datasource config, status, and keyword-only policy", () => {
 		expect(row.install.state).toBe("installed");
 		expect(row.agent).toMatchObject({ state: "connected", skillName: "datasource-browser" });
 		expect(row.index).toMatchObject({ state: "indexed", chunkCount: 3, unit: "document" });
+		expect(row.index.detail).toBe("3 pages");
 		expect(row.status).toBe("ready");
 
 		const synced = await status.sync("browser");
@@ -216,6 +223,10 @@ describe("Nogon datasource config, status, and keyword-only policy", () => {
 		const [missingToken] = (await status.list()).sources;
 		expect(missingToken?.install.state).toBe("credential-missing");
 		expect(missingToken?.status).toBe("attention");
+		// The detail is shown to the person, who has never heard of the program.
+		// (`NOGON_TOKEN` is the variable the person must set, so it stays in the sentence.)
+		expect(missingToken?.install.detail).toMatch(/browser history/i);
+		expect(missingToken?.install.detail?.replace("NOGON_TOKEN", "")).not.toMatch(/nogon|hister/i);
 
 		fixture.env.NOGON_TOKEN = "secret-token";
 		const [withToken] = (await status.list()).sources;
@@ -244,6 +255,37 @@ describe("Nogon datasource config, status, and keyword-only policy", () => {
 		expect(effective.datasources?.nogon).toEqual({
 			connector: { semantic: false },
 		});
+	});
+});
+
+describe("the browser history status lines are in the interface language", () => {
+	it("reads in Korean, naming the source as browser history and the program only where it must be installed", async () => {
+		await setAppLanguage("ko");
+		const fixture = await createFixture(["npx"]);
+		const baseUrl = await startNogonServer({ webCount: 3, expectedToken: "secret-token" });
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "browser"], { type: "nogon", connector: { baseUrl, tokenEnv: "NOGON_TOKEN" } });
+		const status = createDataSourceStatusService({ env: fixture.env, cwd: fixture.root });
+
+		const missingToken = byId((await status.list()).sources, "browser");
+		expect(missingToken.install.detail).toContain("브라우저 기록");
+		expect(missingToken.install.detail).not.toMatch(/[A-Za-z]{4,} to let/);
+		expect(missingToken.install.detail?.replace("NOGON_TOKEN", "")).not.toMatch(/nogon|hister/i);
+
+		await config.set(["datasources", "browser"], { type: "nogon", connector: { baseUrl: "http://127.0.0.1:9" } });
+		const missing = byId((await status.list()).sources, "browser");
+		expect(missing.install).toMatchObject({ state: "missing" });
+		expect(missing.install.detail).toBe("브라우저 기록 프로그램(nogon)을 PATH에서 찾을 수 없습니다");
+	});
+
+	it("shows the page count in Korean", async () => {
+		await setAppLanguage("ko");
+		const fixture = await createFixture();
+		const baseUrl = await startNogonServer({ webCount: 3 });
+		const config = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+		await config.set(["datasources", "browser"], { type: "nogon", connector: { baseUrl } });
+		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "browser");
+		expect(row.index.detail).toBe("3개 페이지");
 	});
 });
 
@@ -295,6 +337,8 @@ describe("Configs written before the Hister -> Nogon rename keep working", () =>
 		await config.set(["datasources", "browser"], { type: "hister", connector: {} });
 		const row = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root }).list()).sources, "browser");
 		expect(row.install).toMatchObject({ state: "missing", binary: "nogon" });
+		// Missing means the person must install something, so the program is named once, in parentheses.
+		expect(row.install.detail).toMatch(/^The browser history program \(.*nogon.*\) was not found on PATH$/);
 	});
 
 	it("still validates the baseUrl of a `type: hister` entry", async () => {

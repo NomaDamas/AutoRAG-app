@@ -27,6 +27,7 @@ describe("Nogon and Calendar datasource templates and icons", () => {
 		const nogon = TEMPLATE_BY_ID.nogon;
 		expect(nogon).toBeDefined();
 		expect(nogon?.binary).toBe("nogon");
+		expect(nogon?.label).toBe("Browser history");
 		expect(nogon?.polling).toBe(false);
 		expect(nogon?.channels).toBe("none");
 		const nogonFields = nogon?.groups.flatMap((group) => group.fields.map((field) => [field.key, field.kind]));
@@ -55,7 +56,7 @@ describe("Nogon and Calendar datasource templates and icons", () => {
 		act(() => {
 			root.render(
 				<div>
-					<SourceIcon type="nogon" label="Nogon" />
+					<SourceIcon type="nogon" label="Browser history" />
 					<SourceIcon type="calendar" label="Apple Calendar & Reminders" />
 					<SourceIcon type="apple-events" label="Apple Events" />
 				</div>,

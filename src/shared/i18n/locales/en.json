@@ -1258,6 +1258,17 @@
     }
   },
   "main": {
+    "datasourceStatus": {
+      "browserHistory": {
+        "credentialMissing": "Set {{env}} to let Dazzi reach your browser history",
+        "programFound": "Browser history program found at {{path}}",
+        "serverAt": "Browser history server at {{url}}",
+        "programMissing": "The browser history program ({{name}}) was not found on PATH",
+        "authRequired": "Browser history requires authentication",
+        "empty": "No pages captured yet",
+        "pages": "{{count}} pages"
+      }
+    },
     "errors": {
       "config": {
         "pathEmpty": "No setting was named to change.",
@@ -2860,7 +2871,8 @@
         "summary": "Index RSS 2.0 / Atom feeds by polling."
       },
       "nogon": {
-        "summary": "Search visited browser web pages through a Nogon server."
+        "name": "Browser history",
+        "summary": "Search the web pages you visited in your browser."
       },
       "calendar": {
         "summary": "Query macOS Calendar events and Reminders live via EventKit MCP."
@@ -2891,7 +2903,7 @@
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",
-      "nogon": "Nogon (Browser history)",
+      "nogon": "Browser history",
       "calendar": "Apple Calendar & Reminders (EventKit MCP)",
       "spotlight": "Spotlight (mdfind)",
       "aiSessions": "AI sessions"
@@ -2977,7 +2989,7 @@
         "defaultOff": "Default: off.",
         "tokenEnv": "This is the env var name that holds the token, not the token itself.",
         "rcloneConfig": "A rclone.conf you set yourself is used read-only.",
-        "nogonSemantic": "Requires semantic search enabled on the Nogon server (autorag setup --sync-nogon).",
+        "nogonSemantic": "Requires semantic search to be turned on for your browser history.",
         "requireWriteConfirmation": "When on, calendar and reminder writes require confirmation (--require-write-confirmation).",
         "mcpExposure": "direct exposes tools directly to the model; codemode calls them through a script.",
         "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx.",

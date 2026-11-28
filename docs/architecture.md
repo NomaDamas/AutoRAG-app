@@ -253,7 +253,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   Hister, and Apple Calendar & Reminders); each configured connection gets its own page with enable,
   desktop-app requirement and download link, per-source AI access, sync,
   polling interval, description, and the template's connector fields.
-  - *Nogon* (`datasources.<id>` with `type: "nogon"`) searches the pages a
+  - *Browser history* (template `nogon`, `datasources.<id>` with `type: "nogon"`) is what a person sees: the name,
+    the summary, the settings group and the status lines are translated (`settingsSources.templates.nogon.*`,
+    `main.datasourceStatus.browserHistory.*`), and neither Hister nor Nogon appears in the interface. A connection id
+    that only restates the source (`browser`, `hister`, `nogon`) is hidden, so it reads as the kind alone; a second
+    connection keeps its name ("브라우저 기록 · work"). A new connection starts as `browser`. The program is named once,
+    in parentheses, in the "program not found" line, because that is the thing to install. The assistants call it
+    browser history and load the same setup skill for `hister`, `nogon` and the translated names. Technically it is
+    *Nogon* (`datasources.<id>` with `type: "nogon"`), which searches the pages a
     Chromium/Firefox browser visited through a running Nogon server
     (AGPL, separate program; the app only calls its HTTP API). Its detail page
     edits `connector.baseUrl`, `tokenEnv` (never the token), `semantic`, and
