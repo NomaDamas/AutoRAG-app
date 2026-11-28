@@ -68,6 +68,7 @@ import { isVersionDiffSummaryRequest, type VersionDiffSummaryService } from "./v
 import { openDocumentForEditor, saveDocumentText } from "./document-editor-io";
 import type { PdfEditorIo } from "./pdf-editor-io";
 import { decodeImageForPdf, MAIN_DECODED_IMAGE_EXTENSIONS } from "./pdf-image-decode";
+import { createPdfAssetBridge, type PdfAssetBridge } from "./pdf-asset-bridge";
 import { isDocumentEditRequest, type DocumentEditEvent } from "../preview/shared/annotation";
 import {
 	DOCUMENT_EDITOR_CHANNELS,
@@ -75,7 +76,6 @@ import {
 	isDocumentEditorSaveRequest,
 	isPdfApplyRequest,
 	isPdfExtractRequest,
-	isPdfAssetReply,
 	isPdfFormSaveRequest,
 	isPdfSplitRequest,
 	type PdfAssetRequest,
@@ -625,9 +625,6 @@ export function registerToolVersionsIpcHandlers(service: ToolVersionsService): v
 	ipcMain.handle(TOOL_VERSIONS_CHANNELS.restartDaemon, () => service.restartDaemon());
 }
 
-/** How long the agent waits for the open editor to render a text box, note, stamp, image, or text search. */
-const PDF_ASSET_TIMEOUT_MS = 30_000;
-
 /** The widest screenshot of an editor tab handed to the AI document-edit model. */
 const EDITOR_SCREENSHOT_WIDTH = 1600;
 
@@ -637,9 +634,8 @@ export function registerDocumentEditorIpcHandlers(
 	pdfIo: PdfEditorIo,
 	sendEvent: (event: DocumentEditEvent) => void,
 	pickPdfFiles?: () => Promise<readonly string[]>,
+	assets: PdfAssetBridge = createPdfAssetBridge(),
 ): void {
-	const pendingAssets = new Map<string, { resolve: (result: PdfAssetResult) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-	let assetSeq = 0;
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.open, (_event, filePath: unknown) => {
 		if (typeof filePath !== "string" || filePath.length === 0) throw new Error(t("main.ipc.invalidPaths"));
 		return openDocumentForEditor(filePath, pdfIo);
@@ -710,32 +706,10 @@ export function registerDocumentEditorIpcHandlers(
 		};
 		// The agent asks this same editor window to render text boxes, notes, stamps, images and to find text,
 		// so its edits look exactly like the toolbar's.
-		const renderAsset = (asset: PdfAssetRequest): Promise<PdfAssetResult> => {
-			if (sender === undefined || sender === null || sender.isDestroyed()) {
-				return Promise.reject(new Error("The PDF editor window is closed, so this content cannot be rendered."));
-			}
-			const id = `asset-${runId}-${(assetSeq += 1)}`;
-			const { promise, resolve, reject } = Promise.withResolvers<PdfAssetResult>();
-			const timer = setTimeout(() => {
-				pendingAssets.delete(id);
-				reject(new Error("The PDF editor did not answer in time. Keep the PDF tab open while the AI edits it."));
-			}, PDF_ASSET_TIMEOUT_MS);
-			pendingAssets.set(id, { resolve, reject, timer });
-			sender.send(DOCUMENT_EDITOR_CHANNELS.pdfAssetRequest, { id, request: asset });
-			return promise;
-		};
+		const renderAsset = (asset: PdfAssetRequest): Promise<PdfAssetResult> => assets.request(sender, asset, runId);
 		return service.start(runId, request, { send: sendEvent, screenshot, renderAsset });
 	});
-	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfAssetReply, (_event, id: unknown, reply: unknown) => {
-		if (typeof id !== "string") return;
-		const pending = pendingAssets.get(id);
-		if (pending === undefined) return;
-		pendingAssets.delete(id);
-		clearTimeout(pending.timer);
-		if (!isPdfAssetReply(reply)) pending.reject(new Error("The PDF editor sent an invalid answer."));
-		else if (reply.ok) pending.resolve(reply.result);
-		else pending.reject(new Error(reply.error));
-	});
+	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.pdfAssetReply, (_event, id: unknown, reply: unknown) => assets.reply(id, reply));
 	ipcMain.handle(DOCUMENT_EDITOR_CHANNELS.aiCancel, async (_event, runId: unknown) => {
 		if (typeof runId !== "string" || runId === "") return;
 		await service.cancel(runId);

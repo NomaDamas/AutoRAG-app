@@ -688,8 +688,11 @@ async function applyOperation(pdfDoc: PDFDocument, op: PdfEditOperation): Promis
 			const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 			const color = parseHexRgb(op.color);
 			const totalDisplay = op.startNumber + targets.length - 1;
-			const safeHeader = op.headerText ? toWinAnsiSafe(op.headerText.trim()) : "";
-			const safeFooter = op.footerText ? toWinAnsiSafe(op.footerText.trim()) : "";
+			// A rendered line image (any script) wins over the WinAnsi-only text fallback.
+			const safeHeader = op.headerImage === undefined && op.headerText ? toWinAnsiSafe(op.headerText.trim()) : "";
+			const safeFooter = op.footerImage === undefined && op.footerText ? toWinAnsiSafe(op.footerText.trim()) : "";
+			const headerImage = op.headerImage === undefined ? undefined : await pdfDoc.embedPng(decodePngDataUrl(op.headerImage.pngDataUrl));
+			const footerImage = op.footerImage === undefined ? undefined : await pdfDoc.embedPng(decodePngDataUrl(op.footerImage.pngDataUrl));
 			const margin = 24;
 
 			targets.forEach((pageIdx, offset) => {
@@ -722,6 +725,19 @@ async function applyOperation(pdfDoc: PDFDocument, op: PdfEditOperation): Promis
 					const fx = !isTop && !isLeft ? box.x + margin : box.x + (box.width - fw) / 2;
 					const fy = box.y + margin;
 					page.drawText(safeFooter, { x: fx, y: fy, size: op.fontSize, font, color });
+				}
+				// Line images sit where the text would, centred on the same baseline band.
+				if (headerImage !== undefined && op.headerImage !== undefined) {
+					const { widthPt, heightPt } = op.headerImage;
+					const hx = isTop && !isLeft ? box.x + margin : box.x + (box.width - widthPt) / 2;
+					const centre = box.y + box.height - margin - op.fontSize + op.fontSize * 0.35;
+					page.drawImage(headerImage, { x: hx, y: centre - heightPt / 2, width: widthPt, height: heightPt });
+				}
+				if (footerImage !== undefined && op.footerImage !== undefined) {
+					const { widthPt, heightPt } = op.footerImage;
+					const fx = !isTop && !isLeft ? box.x + margin : box.x + (box.width - widthPt) / 2;
+					const centre = box.y + margin + op.fontSize * 0.35;
+					page.drawImage(footerImage, { x: fx, y: centre - heightPt / 2, width: widthPt, height: heightPt });
 				}
 			});
 			return;

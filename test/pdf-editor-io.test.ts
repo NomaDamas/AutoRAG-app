@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PDFDocument, rgb } from "pdf-lib";
 import { createPdfEditorIo } from "../src/main/pdf-editor-io";
+import { isPdfEditOperation } from "../src/shared/document-editor-contract";
 
 // Minimal valid 1x1 red PNG as base64 data URL.
 const ONE_PX_PNG =
@@ -368,6 +369,36 @@ describe("pdf editor I/O (pdf-lib)", () => {
 		expect(flattened.ok).toBe(true);
 		const afterFlatten = await io.readFormFields(pdfPath);
 		expect(afterFlatten).toHaveLength(0);
+	});
+
+	it("draws rendered header/footer lines (any script) on every page instead of dropping non-Latin text", async () => {
+		const dir = makeWorkDir();
+		const pdfPath = join(dir, "numbers.pdf");
+		await createSamplePdf(pdfPath, [[300, 300], [300, 300]]);
+		const io = createPdfEditorIo(join(dir, "backups"));
+		const { encodePng } = await import("../src/preview/node/png-encode");
+		const solid = new Uint8Array(40 * 10 * 4);
+		for (let i = 0; i < solid.length; i += 4) solid.set([20, 20, 20, 255], i);
+		const line = { pngDataUrl: `data:image/png;base64,${Buffer.from(encodePng(solid, 40, 10)).toString("base64")}`, widthPt: 80, heightPt: 14 };
+		const res = await io.apply({
+			path: pdfPath,
+			operations: [
+				{ kind: "addPageNumbers", position: "bottom-right", format: "number", startNumber: 1, fontSize: 10, color: "#334155", headerText: "대외비 문서", headerImage: line, footerText: "社外秘", footerImage: line },
+			],
+		});
+		expect(res.ok).toBe(true);
+		const { decode, toRGBA8 } = await import("@pdf-lib/upng");
+		for (const pageNumber of [1, 2]) {
+			const rendered = await io.renderPageToPng(pdfPath, pageNumber, { dpi: 72 });
+			const image = decode(rendered.png.buffer.slice(rendered.png.byteOffset, rendered.png.byteOffset + rendered.png.byteLength) as ArrayBuffer);
+			const rgba = new Uint8Array(toRGBA8(image)[0]!);
+			const at = (x: number, yFromTop: number): number => rgba[(Math.round(yFromTop) * image.width + Math.round(x)) * 4]!;
+			// Header centred at the top (24pt margin), footer at the bottom-left (page number sits bottom-right).
+			// PDF y (bottom-origin) of the header band's centre is 300 - 24 - 10 + 3.5 = 269.5, i.e. 30.5pt from the top.
+			expect(at(150, 300 - (300 - 24 - 10 + 3.5)), `page ${pageNumber} header`).toBeLessThan(80);
+			expect(at(24 + 40, 300 - 24 - 3.5), `page ${pageNumber} footer`).toBeLessThan(80);
+		}
+		expect(isPdfEditOperation({ kind: "addPageNumbers", position: "bottom-center", format: "number", startNumber: 1, fontSize: 10, color: "#334155", headerImage: { ...line, widthPt: -1 } })).toBe(false);
 	});
 
 	it("draws arrows with a filled head (not two thin wings) and reports rotation-aware page sizes", async () => {

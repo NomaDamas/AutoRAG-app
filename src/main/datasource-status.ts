@@ -9,7 +9,7 @@ import {
 	type DatasourceSkill,
 	type DatasourceSkillConfig,
 	datasourceChunkStorePath,
-	HisterClient,
+	NogonClient,
 	loadMirrorIndex,
 	resolveConfigReadOnly,
 	sanitizeIdSegment,
@@ -82,6 +82,14 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 	hister: "hister",
 	wombat: "wombat",
 };
+
+/**
+ * The librarian renamed the `hister` datasource to `nogon` (asciimoo/hister became asciimoo/nogon) and still builds
+ * the nogon skill for `type: "hister"`. Existing Dazzi configs keep their `hister` type, so it stays a built-in here.
+ */
+function isBuiltinDatasource(type: string): boolean {
+	return BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) || (type === "hister" && BUILTIN_DATASOURCE_SKILL_NAMES.includes("nogon"));
+}
 
 /** Templates whose chunks AutoRAG itself persists under `.autorag/datasources/<id>/<instance>/chunks.json`. */
 const CHUNK_STORE_TEMPLATES = new Set(["cloud-drive", "rss", "github", "github-gist"]);
@@ -183,7 +191,7 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 			? { state: "missing", binary: configured, path: null, detail: `${configured} was not found on PATH`, app }
 			: { state: "installed", binary: configured, path, detail: `${configured} at ${path}`, app };
 	}
-	if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type)) {
+	if (!isBuiltinDatasource(type)) {
 		return { state: "unsupported", binary: null, path: null, detail: `No built-in Dazzi datasource named "${type}"`, app };
 	}
 	const connector = isJsonObject(entry.connector) ? entry.connector : {};
@@ -200,14 +208,15 @@ async function installState(type: string, entry: DatasourceSkillConfig, env: Nod
 		if (tokenEnv !== undefined && !env[tokenEnv]) {
 			return { state: "credential-missing", binary: "hister", path: null, detail: `Set ${tokenEnv} to let Dazzi reach Hister`, app };
 		}
-		const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : "hister";
-		const path = await findExecutable(configured, env);
+		// The program is `nogon` since v0.22.0; a machine not yet relinked by Homebrew still has `hister`.
+		const configured = typeof connector.binaryPath === "string" ? connector.binaryPath : "nogon";
+		const path = (await findExecutable(configured, env)) ?? (typeof connector.binaryPath === "string" ? null : await findExecutable("hister", env));
 		if (path !== null) {
 			return { state: "installed", binary: "hister", path, detail: `hister at ${path}`, app };
 		}
 		if (typeof connector.baseUrl === "string" && connector.baseUrl.trim().length > 0) {
 			try {
-				const client = new HisterClient({
+				const client = new NogonClient({
 					baseUrl: connector.baseUrl,
 					...(tokenEnv === undefined ? {} : { tokenEnv }),
 					timeoutMs: 2_000,
@@ -357,7 +366,7 @@ async function indexState(
 		}
 		const connector = isJsonObject(entry.connector) ? entry.connector : {};
 		try {
-			const client = new HisterClient({
+			const client = new NogonClient({
 				...(typeof connector.baseUrl === "string" ? { baseUrl: connector.baseUrl } : {}),
 				...(typeof connector.tokenEnv === "string" ? { tokenEnv: connector.tokenEnv } : {}),
 				timeoutMs: 3_000,
@@ -500,7 +509,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				const entry: DatasourceSkillConfig = isJsonObject(raw) ? raw : {};
 				const enabled = raw !== false && entry.enabled !== false;
 				const type = entry.type ?? id;
-				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
+				const skill = isBuiltinDatasource(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
 				const install = await installState(type, entry, deps.env, platform);
 				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
 				const agent = agentState(id, type, entry, skill, enabled, platform);
@@ -557,7 +566,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 		}
 		const type = entry.type ?? id;
 		await ensureMessengerConfigsFor({ [id]: entry }, { platform, env: deps.env, home: platform === "win32" ? (deps.env.USERPROFILE ?? "") : (deps.env.HOME ?? "") });
-		if (!BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) && !isCalendarDatasourceType(type)) {
+		if (!isBuiltinDatasource(type) && !isCalendarDatasourceType(type)) {
 			return { ...base, state: "unsupported", error: `No built-in Dazzi datasource named "${type}"` };
 		}
 		const install = await installState(type, entry, deps.env, platform);

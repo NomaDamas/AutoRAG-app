@@ -48,10 +48,12 @@ import {
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { pdfRuns } from "../../../preview/shared/text-marks";
 import { pdfDocumentSource } from "../../../preview/ui/pdf-config";
-import type {
-	DocumentEditorPdfPayload,
-	PdfEditOperation,
-	PdfPointFraction,
+import {
+	type DocumentEditorPdfPayload,
+	needsRenderedText,
+	type PdfEditOperation,
+	type PdfLineImage,
+	type PdfPointFraction,
 } from "../../../shared/document-editor-contract";
 import { cn } from "../lib/cn";
 import { canvasCharEdges, findPageTextMatches, type PdfSearchHit } from "../lib/pdf-search";
@@ -73,6 +75,7 @@ import {
 	renderNoteBoxPng,
 	renderPresetStampPng,
 	renderTextBoxPng,
+	renderTextLinePng,
 	renderWatermarkPng,
 	SplitPdfModal,
 	TEXT_BOX_PAD,
@@ -86,6 +89,11 @@ const MAX_SAVED_SIGNATURES = 6;
 const THUMB_MAX_W = 104;
 const THUMB_MAX_H = 128;
 const ZOOM_STEPS = [0.5, 0.65, 0.8, 1, 1.15, 1.35, 1.6, 2] as const;
+
+function lineImage(text: string, fontSizePt: number, color: string): PdfLineImage {
+	const rendered = renderTextLinePng(text, fontSizePt, color);
+	return { pngDataUrl: rendered.dataUrl, widthPt: rendered.widthPt, heightPt: rendered.heightPt };
+}
 
 function parentDirOf(filePath: string): string {
 	const trimmed = filePath.replace(/[\\/]+$/, "");
@@ -2837,6 +2845,9 @@ export function PdfDocumentEditor({
 									color,
 									...(headerText ? { headerText } : {}),
 									...(footerText ? { footerText } : {}),
+									// Korean / Japanese / Chinese header & footer text is drawn as a rendered line (standard PDF fonts would drop it).
+									...(headerText && needsRenderedText(headerText) ? { headerImage: lineImage(headerText, fontSize, color) } : {}),
+									...(footerText && needsRenderedText(footerText) ? { footerImage: lineImage(footerText, fontSize, color) } : {}),
 								},
 							],
 							t("documentEditor.pdf.pageNumbersApplied"),

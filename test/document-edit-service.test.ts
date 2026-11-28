@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName } from "pdf-lib";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { documentEditProfile } from "../src/main/agents/profiles/document-edit";
 import { createDocumentEditService } from "../src/main/document-edit-service";
@@ -536,5 +536,50 @@ describe("document-edit service", () => {
 		await expect(run("c1", { i: "x", path: join(docsDir, "notes.txt"), pageIndex: 0, x: 0.1, y: 0.1 })).rejects.toThrow(/Unsupported image type/);
 		await expect(run("c2", { i: "x", path: "relative.png", pageIndex: 0, x: 0.1, y: 0.1 })).rejects.toThrow(/absolute path/);
 		await expect(run("c3", { i: "x", path: join(agentDir, "auth.png"), pageIndex: 0, x: 0.1, y: 0.1 })).rejects.toThrow(/Refused/);
+	});
+
+	it("renders non-Latin page-number headers through the editor and forwards localized watermark presets", async () => {
+		const pdfPath = join(docsDir, "locale.pdf");
+		const doc = await PDFDocument.create();
+		doc.addPage([600, 800]);
+		await writeFile(pdfPath, await doc.save());
+		const pdfIo = createPdfEditorIo(join(root, "pdf-backups"));
+		cleanups.push(() => pdfIo.dispose());
+		const pngUrl = `data:image/png;base64,${PNG.toString("base64")}`;
+		const calls: PdfAssetRequest[] = [];
+		const renderAsset = async (asset: PdfAssetRequest): Promise<PdfAssetResult> => {
+			calls.push(asset);
+			return asset.kind === "textLine" ? { kind: "png", dataUrl: pngUrl, aspect: 6, widthPt: 60, heightPt: 10 } : { kind: "png", dataUrl: pngUrl, aspect: 1 };
+		};
+		const tools = (renderAssetFn?: typeof renderAsset) =>
+			documentEditProfile({
+				language: "ko", path: pdfPath, mode: "pdf", scratchDir: root, agentDir, env: { ...process.env }, pdfIo,
+				...(renderAssetFn === undefined ? {} : { renderAsset: renderAssetFn }),
+			}).customTools!;
+		const exec = (list: ReturnType<typeof tools>, name: string, params: Record<string, unknown>) =>
+			(list.find((tool) => tool.name === name)!.execute as unknown as (id: string, p: Record<string, unknown>) => Promise<unknown>)("c", { i: "x", ...params });
+
+		await exec(tools(renderAsset), "pdf_add_page_numbers", { headerText: "대외비 문서", footerText: "Page footer" });
+		// Only the Korean line needs rendering; the Latin footer keeps the standard-font path.
+		expect(calls).toEqual([{ kind: "textLine", text: "대외비 문서", fontSizePt: 10, color: "#334155" }]);
+		const images = (await PDFDocument.load(await readFile(pdfPath))).context
+			.enumerateIndirectObjects()
+			.filter(([, obj]) => (obj as { dict?: { get(name: unknown): unknown } }).dict?.get(PDFName.of("Subtype")) === PDFName.of("Image"));
+		expect(images.length).toBeGreaterThanOrEqual(1);
+
+		// Raw pdf_apply_ops gets the same treatment, so the agent cannot silently lose a Korean header either.
+		calls.length = 0;
+		await exec(tools(renderAsset), "pdf_apply_ops", {
+			operations: [{ kind: "addPageNumbers", position: "top-right", format: "number", startNumber: 1, fontSize: 9, color: "#111111", footerText: "機密" }],
+		});
+		expect(calls).toEqual([{ kind: "textLine", text: "機密", fontSizePt: 9, color: "#111111" }]);
+
+		calls.length = 0;
+		await exec(tools(renderAsset), "pdf_add_watermark", { preset: "confidential" });
+		expect(calls).toEqual([{ kind: "watermark", preset: "confidential", color: "#64748B", angleDeg: 35 }]);
+		await expect(exec(tools(renderAsset), "pdf_add_watermark", {})).rejects.toThrow(/preset or text/);
+
+		// No editor to render with: a Korean header fails loudly instead of disappearing from the page.
+		await expect(exec(tools(), "pdf_add_page_numbers", { headerText: "대외비" })).rejects.toThrow(/needs the open Dazzi PDF editor/);
 	});
 });
