@@ -136,6 +136,7 @@ export function createDocumentEditService(deps: DocumentEditServiceDeps): Docume
 					...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
 					...(deps.writeJudge === undefined ? {} : { writeJudge: deps.writeJudge }),
 					...(deps.pdfIo === undefined ? {} : { pdfIo: deps.pdfIo }),
+					supportsImage: model.model.input.includes("image"),
 					cancelled: () => active.cancelled,
 				}),
 				cwd: scratchDir,

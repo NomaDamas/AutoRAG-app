@@ -19,6 +19,8 @@ export interface PdfAgentToolsInput {
 	readonly targetPath: string;
 	readonly pdfIo: PdfEditorIo;
 	readonly cancelled: () => boolean;
+	/** Whether the active LLM accepts image inputs; defaults to true. */
+	readonly supportsImage?: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export interface PdfAgentToolsInput {
  */
 export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDefinition[] {
 	const { targetPath, pdfIo, cancelled } = input;
+	const supportsImage = input.supportsImage !== false;
 	const ensureLive = (): void => {
 		if (cancelled()) throw new Error("The edit was cancelled.");
 	};
@@ -43,6 +46,68 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 			ensureLive();
 			const info = await pdfIo.inspect(targetPath);
 			return jsonResult(info);
+		},
+	});
+
+	const pdfRenderPage = defineTool({
+		name: "pdf_render_page",
+		label: "Render PDF Page Image",
+		description:
+			"Render one or more 1-based pages of the target PDF as PNG images directly into your visual context. Use this BEFORE layout-sensitive edits to see page layout, existing text/margins, and exact normalized 0..1 coordinates, and ALWAYS call it AFTER applying visual/layout edits to perform Visual QA (checking for overlap, clipping, misalignment, readability, or incomplete coverage).",
+		parameters: Type.Object({
+			pages: Type.Array(Type.Integer({ minimum: 1 }), {
+				minItems: 1,
+				maxItems: 6,
+				description: "1-based page numbers to render visually (max 6 per call), e.g. [1] or [1, 2].",
+			}),
+			dpi: Type.Optional(
+				Type.Integer({
+					minimum: 72,
+					maximum: 220,
+					description: "Render resolution in DPI (default 144; use 180-200 for small text or dense forms).",
+				}),
+			),
+		}),
+		execute: async (_callId, params) => {
+			ensureLive();
+			const uniquePages = [...new Set(params.pages as readonly number[])].slice(0, 6);
+			const rendered = [];
+			for (const pageNumber of uniquePages) {
+				ensureLive();
+				rendered.push(
+					await pdfIo.renderPageToPng(targetPath, pageNumber, {
+						...(params.dpi === undefined ? {} : { dpi: params.dpi }),
+					}),
+				);
+			}
+			const summary = {
+				pageCount: rendered[0]?.pageCount ?? 0,
+				coordinateSystem: "normalized 0..1 from top-left (x=0 left edge, x=1 right edge, y=0 top edge, y=1 bottom edge)",
+				imagesAttached: supportsImage,
+				pages: rendered.map((r) => ({
+					pageNumber: r.pageNumber,
+					pageIndex: r.pageIndex,
+					widthPt: r.widthPt,
+					heightPt: r.heightPt,
+					rotation: r.rotation,
+					imageWidthPx: r.imageWidthPx,
+					imageHeightPx: r.imageHeightPx,
+				})),
+				...(supportsImage
+					? {}
+					: { note: "The active model does not accept image inputs; rendered page metadata is returned without PNG image blocks." }),
+			};
+			const content: AgentToolResult<undefined>["content"] = [
+				{ type: "text", text: JSON.stringify(summary, null, 2) },
+				...(supportsImage
+					? rendered.map((r) => ({
+							type: "image" as const,
+							data: r.png.toString("base64"),
+							mimeType: "image/png",
+						}))
+					: []),
+			];
+			return { content, details: undefined };
 		},
 	});
 
@@ -245,6 +310,7 @@ export function createPdfAgentTools(input: PdfAgentToolsInput): readonly ToolDef
 
 	return [
 		pdfInspect,
+		pdfRenderPage,
 		pdfApplyOps,
 		pdfFillForm,
 		pdfExtractPages,

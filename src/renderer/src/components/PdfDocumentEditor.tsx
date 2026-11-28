@@ -21,6 +21,7 @@ import {
 	FileOutput,
 	FilePlus2,
 	FileSliders,
+	GripHorizontal,
 	Hash,
 	Highlighter,
 	Image as ImageIcon,
@@ -62,7 +63,7 @@ import {
 	PdfPropertiesModal,
 	renderPresetStampPng,
 	renderStickyNotePng,
-	renderTextStampPng,
+	renderTextBoxPng,
 	renderWatermarkPng,
 	SplitPdfModal,
 	WatermarkModal,
@@ -108,9 +109,22 @@ function storeSavedSignatures(signatures: readonly string[]): void {
 	}
 }
 
-type InteractiveTool = "none" | "crop" | "highlight" | "redact" | "whiteout" | "draw" | "shape";
+type InteractiveTool = "none" | "text" | "crop" | "highlight" | "redact" | "whiteout" | "draw" | "shape";
 type ShapeKind = "rect" | "ellipse" | "line" | "arrow";
 type StampKind = "signature" | "text" | "image" | "stamp" | "note";
+
+interface InlineTextBox {
+	readonly id: number;
+	readonly pageIndex: number;
+	/** Top-left normalized coordinates (0..1) on the active page. */
+	readonly x: number;
+	readonly y: number;
+	readonly width: number;
+	readonly minHeight: number;
+	readonly text: string;
+	readonly fontSizePt: number;
+	readonly color: string;
+}
 
 interface PendingStamp {
 	readonly kind: StampKind;
@@ -504,10 +518,15 @@ export function PdfDocumentEditor({
 	const [sigModalOpen, setSigModalOpen] = useState(false);
 	const [savedSigs, setSavedSigs] = useState<readonly string[]>(loadSavedSignatures);
 	const [pickerMode, setPickerMode] = useState<null | { readonly kind: "image" | "pdf" | "signature"; readonly rememberSig?: boolean }>(null);
-	const [textPromptOpen, setTextPromptOpen] = useState(false);
-	const [textInput, setTextInput] = useState("");
 	const [textColor, setTextColor] = useState("#1D1D1F");
-	const [textSize, setTextSize] = useState(28);
+	const [textSize, setTextSize] = useState(16);
+	const [inlineTextBox, setInlineTextBox] = useState<InlineTextBox | null>(null);
+	const [textBoxDraft, setTextBoxDraft] = useState<RectDraft | null>(null);
+	const inlineTextBoxRef = useRef<InlineTextBox | null>(null);
+	inlineTextBoxRef.current = inlineTextBox;
+	const textBoxDraftRef = useRef<RectDraft | null>(null);
+	const inlineTextInputRef = useRef<HTMLTextAreaElement | null>(null);
+	const textBoxSeqRef = useRef(1);
 	const [notePromptOpen, setNotePromptOpen] = useState(false);
 	const [noteInput, setNoteInput] = useState("");
 	const [stampMenuOpen, setStampMenuOpen] = useState(false);
@@ -539,9 +558,21 @@ export function PdfDocumentEditor({
 	const [drawDraft, setDrawDraft] = useState<DrawDraft | null>(null);
 
 	const stageScrollRef = useRef<HTMLDivElement | null>(null);
+	const railScrollRef = useRef<HTMLDivElement | null>(null);
 	const pageFrameRef = useRef<HTMLDivElement | null>(null);
 	const dragRef = useRef<{
-		readonly mode: "move" | "resize" | "crop" | "highlight" | "redact" | "whiteout" | "shape" | "draw";
+		readonly mode:
+			| "move"
+			| "resize"
+			| "crop"
+			| "highlight"
+			| "redact"
+			| "whiteout"
+			| "shape"
+			| "draw"
+			| "textbox-draw"
+			| "textbox-move"
+			| "textbox-resize";
 		readonly startX: number;
 		readonly startY: number;
 		readonly initX: number;
@@ -736,10 +767,90 @@ export function PdfDocumentEditor({
 		}
 	}, [busy, editorApi, onPayloadChange, payload, t, undoStack]);
 
+	const numPages = pdf?.numPages ?? payload.pageCount;
+
+	const goToPage = useCallback(
+		(nextIndex: number): void => {
+			if (numPages <= 0) return;
+			const clamped = Math.min(numPages - 1, Math.max(0, nextIndex));
+			setActivePage(clamped);
+			setPendingStamp((curr) => (curr === null ? null : { ...curr, pageIndex: clamped }));
+			setCropDraft((curr) => (curr === null ? null : { ...curr, pageIndex: clamped }));
+			if (stageScrollRef.current !== null) {
+				stageScrollRef.current.scrollTop = 0;
+			}
+		},
+		[numPages],
+	);
+
+	// Keep the active thumbnail visible in the right rail when navigating pages via keyboard or HUD.
+	useEffect(() => {
+		const thumb = railScrollRef.current?.querySelector<HTMLElement>(`[data-pdf-thumb="${activePage + 1}"]`);
+		if (thumb !== null && thumb !== undefined && typeof thumb.scrollIntoView === "function") {
+			thumb.scrollIntoView({ block: "nearest" });
+		}
+	}, [activePage]);
+
+	// Focus newly placed Keynote/PPT-style on-canvas text box immediately.
+	const inlineTextBoxId = inlineTextBox?.id ?? null;
+	useEffect(() => {
+		if (inlineTextBoxId === null) return;
+		const el = inlineTextInputRef.current;
+		if (el !== null) {
+			el.focus();
+			el.setSelectionRange(el.value.length, el.value.length);
+		}
+	}, [inlineTextBoxId]);
+
+	// Auto-grow the on-canvas text box height cleanly as the user types or resizes width.
+	useEffect(() => {
+		const el = inlineTextInputRef.current;
+		if (el === null || inlineTextBox === null) return;
+		el.style.height = "auto";
+		el.style.height = `${Math.max(el.scrollHeight, Math.ceil(inlineTextBox.fontSizePt * 1.32 * effectiveScale + 6))}px`;
+	}, [inlineTextBox?.text, inlineTextBox?.width, inlineTextBox?.fontSizePt, effectiveScale, inlineTextBox]);
+
+	const commitInlineTextBox = useCallback(
+		async (boxOverride?: InlineTextBox | null): Promise<boolean> => {
+			const box = boxOverride ?? inlineTextBoxRef.current;
+			if (box === null) return false;
+			const trimmed = box.text.replace(/\s+$/u, "");
+			if (trimmed.trim() === "") {
+				setInlineTextBox(null);
+				return false;
+			}
+			const natW = pageNaturalSize?.width ?? 612;
+			const natH = pageNaturalSize?.height ?? 792;
+			const boxWidthPt = Math.max(40, box.width * natW);
+			const rendered = renderTextBoxPng(trimmed, boxWidthPt, box.fontSizePt, box.color);
+			const heightFraction = Math.min(1 - box.y, Math.max(0.02, rendered.heightPt / Math.max(1, natH)));
+			const ok = await applyOps(
+				[
+					{
+						kind: "stampImage",
+						pageIndex: box.pageIndex,
+						pngDataUrl: rendered.dataUrl,
+						x: box.x,
+						y: box.y,
+						width: Math.min(1 - box.x, box.width),
+						height: heightFraction,
+					},
+				],
+				t("documentEditor.pdf.textApplied"),
+			);
+			if (ok) {
+				setInlineTextBox(null);
+			}
+			return ok;
+		},
+		[applyOps, pageNaturalSize, t],
+	);
+
 	// Capture-phase keyboard shortcuts for PDF editor:
+	// - ArrowUp/ArrowDown/PageUp/PageDown/ArrowLeft/ArrowRight/Home/End: Step pages cleanly
 	// - Cmd/Ctrl+Z: Undo last PDF edit (unless typing inside an input/textarea or modal)
 	// - Cmd/Ctrl+F: Open & focus in-PDF Find bar (when no modal picker is open)
-	// - Escape: Dismiss open popovers / active tool / Find bar
+	// - Escape: Dismiss open popovers / inline text box / active tool / Find bar
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.isComposing) return;
@@ -749,7 +860,13 @@ export function PdfDocumentEditor({
 			const target = event.target;
 			const typing =
 				target instanceof HTMLElement &&
-				(target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+				(target.tagName === "INPUT" ||
+					target.tagName === "TEXTAREA" ||
+					target.tagName === "SELECT" ||
+					target.isContentEditable);
+			const inOverlayControl =
+				target instanceof HTMLElement &&
+				target.closest('[role="dialog"], [role="menu"], [role="listbox"]') !== null;
 			const mod = event.metaKey || event.ctrlKey;
 			const key = event.key.toLowerCase();
 
@@ -771,6 +888,12 @@ export function PdfDocumentEditor({
 				return;
 			}
 			if (event.key === "Escape") {
+				if (inlineTextBoxRef.current !== null) {
+					event.preventDefault();
+					event.stopPropagation();
+					setInlineTextBox(null);
+					return;
+				}
 				if (stampMenuOpen || moreMenuOpen) {
 					setStampMenuOpen(false);
 					setMoreMenuOpen(false);
@@ -783,14 +906,47 @@ export function PdfDocumentEditor({
 					setTool("none");
 					setCropDraft(null);
 				}
+				return;
+			}
+			if (
+				!mod &&
+				!event.altKey &&
+				!typing &&
+				!inOverlayControl &&
+				!stampMenuOpen &&
+				!moreMenuOpen &&
+				pendingStamp === null &&
+				inlineTextBoxRef.current === null &&
+				numPages > 1
+			) {
+				if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === "ArrowRight") {
+					event.preventDefault();
+					event.stopPropagation();
+					goToPage(activePage + 1);
+				} else if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "ArrowLeft") {
+					event.preventDefault();
+					event.stopPropagation();
+					goToPage(activePage - 1);
+				} else if (event.key === "Home") {
+					event.preventDefault();
+					event.stopPropagation();
+					goToPage(0);
+				} else if (event.key === "End") {
+					event.preventDefault();
+					event.stopPropagation();
+					goToPage(numPages - 1);
+				}
 			}
 		};
 		window.addEventListener("keydown", onKey, true);
 		return () => window.removeEventListener("keydown", onKey, true);
 	}, [
+		activePage,
 		findOpen,
 		formsOpen,
+		goToPage,
 		moreMenuOpen,
+		numPages,
 		pageNumbersOpen,
 		pendingStamp,
 		pickerMode,
@@ -823,12 +979,19 @@ export function PdfDocumentEditor({
 	}, [activePage, busy, editorApi, payload.encrypted, payload.pageCount, payload.path, selectedPages, t]);
 
 	const activateTool = (next: InteractiveTool): void => {
+		if (inlineTextBoxRef.current !== null) {
+			if (inlineTextBoxRef.current.text.trim() !== "") {
+				void commitInlineTextBox(inlineTextBoxRef.current);
+			} else {
+				setInlineTextBox(null);
+			}
+		}
 		setPendingStamp(null);
 		setStampMenuOpen(false);
 		setMoreMenuOpen(false);
-		setTextPromptOpen(false);
 		setNotePromptOpen(false);
 		setRectDraft(null);
+		setTextBoxDraft(null);
 		setShapeDraft(null);
 		setDrawDraft(null);
 		setTool((curr) => {
@@ -949,13 +1112,26 @@ export function PdfDocumentEditor({
 	};
 
 	const onStagePointerDown = (event: PointerEvent<HTMLDivElement>): void => {
-		if (tool === "none" || event.button !== 0 || pageFrameRef.current === null || busy) return;
+		if (event.button !== 0 || pageFrameRef.current === null || busy) return;
+		if (inlineTextBoxRef.current !== null) {
+			const currentBox = inlineTextBoxRef.current;
+			if (currentBox.text.trim() !== "") {
+				void commitInlineTextBox(currentBox);
+				return;
+			}
+			setInlineTextBox(null);
+		}
+		if (tool === "none") return;
 		const rect = pageFrameRef.current.getBoundingClientRect();
 		const fx = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
 		const fy = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
 		event.currentTarget.setPointerCapture(event.pointerId);
 
-		if (tool === "crop") {
+		if (tool === "text") {
+			dragRef.current = { mode: "textbox-draw", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
+			textBoxDraftRef.current = null;
+			setTextBoxDraft(null);
+		} else if (tool === "crop") {
 			dragRef.current = { mode: "crop", startX: fx, startY: fy, initX: fx, initY: fy, initW: 0, initH: 0 };
 			setCropDraft({ pageIndex: activePage, left: fx, top: fy, width: 0.01, height: 0.01 });
 		} else if (tool === "highlight" || tool === "redact" || tool === "whiteout") {
@@ -982,6 +1158,40 @@ export function PdfDocumentEditor({
 		const fx = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
 		const fy = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
 
+		if (drag.mode === "textbox-draw") {
+			const dx = Math.abs(fx - drag.startX);
+			const dy = Math.abs(fy - drag.startY);
+			if (dx >= 0.015 || dy >= 0.015) {
+				const left = Math.min(drag.startX, fx);
+				const top = Math.min(drag.startY, fy);
+				const width = Math.min(1 - left, Math.max(0.04, dx));
+				const height = Math.min(1 - top, Math.max(0.03, dy));
+				const next: RectDraft = { pageIndex: activePage, left, top, width, height };
+				textBoxDraftRef.current = next;
+				setTextBoxDraft(next);
+			}
+			return;
+		}
+		if (drag.mode === "textbox-move") {
+			const dx = fx - drag.startX;
+			const dy = fy - drag.startY;
+			setInlineTextBox((curr) =>
+				curr === null
+					? null
+					: {
+							...curr,
+							x: Math.min(1 - curr.width, Math.max(0, drag.initX + dx)),
+							y: Math.min(0.95, Math.max(0, drag.initY + dy)),
+						},
+			);
+			return;
+		}
+		if (drag.mode === "textbox-resize") {
+			const dx = fx - drag.startX;
+			const nextW = Math.min(1 - drag.initX, Math.max(0.12, drag.initW + dx));
+			setInlineTextBox((curr) => (curr === null ? null : { ...curr, width: nextW }));
+			return;
+		}
 		if (drag.mode === "crop") {
 			const left = Math.min(drag.startX, fx);
 			const top = Math.min(drag.startY, fy);
@@ -1045,6 +1255,45 @@ export function PdfDocumentEditor({
 		dragRef.current = null;
 		if (event.currentTarget.hasPointerCapture(event.pointerId)) {
 			event.currentTarget.releasePointerCapture(event.pointerId);
+		}
+
+		if (drag.mode === "textbox-draw") {
+			const draft = textBoxDraftRef.current;
+			textBoxDraftRef.current = null;
+			setTextBoxDraft(null);
+			const nextId = textBoxSeqRef.current++;
+			if (draft !== null && (draft.width >= 0.06 || draft.height >= 0.03)) {
+				setInlineTextBox({
+					id: nextId,
+					pageIndex: activePage,
+					x: draft.left,
+					y: draft.top,
+					width: Math.min(1 - draft.left, Math.max(0.16, draft.width)),
+					minHeight: Math.max(0.04, draft.height),
+					text: "",
+					fontSizePt: textSize,
+					color: textColor,
+				});
+			} else {
+				const x = Math.min(0.8, Math.max(0.02, drag.startX));
+				const y = Math.min(0.92, Math.max(0.02, drag.startY));
+				setInlineTextBox({
+					id: nextId,
+					pageIndex: activePage,
+					x,
+					y,
+					width: Math.min(0.42, Math.max(0.18, 0.98 - x)),
+					minHeight: 0.045,
+					text: "",
+					fontSizePt: textSize,
+					color: textColor,
+				});
+			}
+			return;
+		}
+		if (drag.mode === "textbox-move" || drag.mode === "textbox-resize") {
+			inlineTextInputRef.current?.focus();
+			return;
 		}
 
 		if (drag.mode === "highlight" || drag.mode === "redact" || drag.mode === "whiteout") {
@@ -1152,7 +1401,6 @@ export function PdfDocumentEditor({
 		{ id: "urgent", label: t("documentEditor.pdf.stampUrgent"), color: "#C2410C" },
 	] as const;
 
-	const numPages = pdf?.numPages ?? payload.pageCount;
 	const zoomInTarget = ZOOM_STEPS.find((step) => step > effectiveScale + 0.01);
 	const zoomOutTarget = [...ZOOM_STEPS].reverse().find((step) => step < effectiveScale - 0.01);
 
@@ -1177,17 +1425,19 @@ export function PdfDocumentEditor({
 
 	const isRedactGroup = tool === "redact" || tool === "whiteout";
 	const activeHint =
-		tool === "highlight"
-			? t("documentEditor.pdf.highlightHint")
-			: tool === "redact"
-				? t("documentEditor.pdf.redactHint")
-				: tool === "whiteout"
-					? t("documentEditor.pdf.whiteoutHint")
-					: tool === "draw"
-						? t("documentEditor.pdf.drawHint")
-						: tool === "shape"
-							? t("documentEditor.pdf.shapeHint")
-							: null;
+		tool === "text"
+			? t("documentEditor.pdf.textBoxHint")
+			: tool === "highlight"
+				? t("documentEditor.pdf.highlightHint")
+				: tool === "redact"
+					? t("documentEditor.pdf.redactHint")
+					: tool === "whiteout"
+						? t("documentEditor.pdf.whiteoutHint")
+						: tool === "draw"
+							? t("documentEditor.pdf.drawHint")
+							: tool === "shape"
+								? t("documentEditor.pdf.shapeHint")
+								: null;
 
 	return (
 		<div className="doc-editor__pdf flex min-h-0 flex-1 flex-col bg-ql-sunk text-ink" data-pdf-editor="true">
@@ -1212,17 +1462,13 @@ export function PdfDocumentEditor({
 				</button>
 				<button
 					type="button"
+					aria-pressed={tool === "text"}
 					disabled={busy || payload.encrypted}
 					title={t("documentEditor.pdf.addText")}
 					aria-label={t("documentEditor.pdf.addText")}
-					className={labeledToolBtn(textPromptOpen)}
-					onClick={() => {
-						setNotePromptOpen(false);
-						setStampMenuOpen(false);
-						setMoreMenuOpen(false);
-						setTextPromptOpen((open) => !open);
-						setTextInput("");
-					}}
+					data-pdf-tool="text"
+					className={labeledToolBtn(tool === "text")}
+					onClick={() => activateTool("text")}
 				>
 					<Type size={15} strokeWidth={1.65} />
 					<span>{t("documentEditor.pdf.textShort")}</span>
@@ -1343,7 +1589,8 @@ export function PdfDocumentEditor({
 					data-pdf-tool="note"
 					className={iconToolBtn(notePromptOpen)}
 					onClick={() => {
-						setTextPromptOpen(false);
+						setTool("none");
+						setInlineTextBox(null);
 						setStampMenuOpen(false);
 						setMoreMenuOpen(false);
 						setNotePromptOpen((open) => !open);
@@ -1629,79 +1876,6 @@ export function PdfDocumentEditor({
 				</div>
 			) : null}
 
-			{/* Inline text stamp composer */}
-			{textPromptOpen ? (
-				<div className="flex flex-none flex-wrap items-center gap-8 border-b border-divider bg-window px-12 py-6">
-					<input
-						type="text"
-						value={textInput}
-						placeholder={t("documentEditor.pdf.textPlaceholder")}
-						className="h-28 min-w-[200px] flex-1 rounded-6 border border-border bg-input px-10 text-body text-ink outline-none focus:border-accent"
-						onChange={(e) => setTextInput(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && textInput.trim() !== "") {
-								const rendered = renderTextStampPng(textInput.trim(), textSize, textColor);
-								beginStampPlacement("text", rendered.dataUrl, rendered.aspect);
-								setTextPromptOpen(false);
-							}
-						}}
-						autoFocus
-					/>
-					<button
-						type="button"
-						className="inline-flex h-24 items-center gap-4 rounded-6 border-0 bg-subtle px-8 text-badge text-ink hover:bg-hover"
-						onClick={() => setTextInput((curr) => (curr.trim() ? `${curr.trim()} ${todayIso()}` : todayIso()))}
-					>
-						<Calendar size={12} />
-						{t("documentEditor.pdf.insertToday")}
-					</button>
-					<div className="flex items-center gap-4">
-						{INK_COLORS.map((c) => (
-							<button
-								key={c}
-								type="button"
-								aria-label={c}
-								aria-pressed={textColor === c}
-								className={cn("size-16 rounded-full border-2", textColor === c ? "border-accent ring-2 ring-accent/20" : "border-border")}
-								style={{ backgroundColor: c }}
-								onClick={() => setTextColor(c)}
-							/>
-						))}
-					</div>
-					<select
-						aria-label={t("documentEditor.pdf.textSize")}
-						value={textSize}
-						onChange={(e) => setTextSize(Number(e.target.value))}
-						className="h-24 rounded-6 border border-border bg-window px-6 text-badge text-ink"
-					>
-						{[18, 22, 28, 36, 48].map((sz) => (
-							<option key={sz} value={sz}>
-								{sz}px
-							</option>
-						))}
-					</select>
-					<button
-						type="button"
-						disabled={textInput.trim() === ""}
-						className="h-26 rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent disabled:opacity-35"
-						onClick={() => {
-							const rendered = renderTextStampPng(textInput.trim(), textSize, textColor);
-							beginStampPlacement("text", rendered.dataUrl, rendered.aspect);
-							setTextPromptOpen(false);
-						}}
-					>
-						{t("documentEditor.pdf.placeText")}
-					</button>
-					<button
-						type="button"
-						className="h-26 rounded-6 border-0 bg-transparent px-8 text-meta text-ink-muted hover:bg-hover hover:text-ink"
-						onClick={() => setTextPromptOpen(false)}
-					>
-						{t("common.cancel")}
-					</button>
-				</div>
-			) : null}
-
 			{/* Inline sticky note composer */}
 			{notePromptOpen ? (
 				<div className="flex flex-none items-center gap-8 border-b border-divider bg-window px-12 py-6">
@@ -1748,6 +1922,74 @@ export function PdfDocumentEditor({
 			{activeHint !== null ? (
 				<div className="flex flex-none flex-wrap items-center justify-between gap-8 border-b border-divider bg-window px-12 py-6 text-meta">
 					<div className="flex flex-wrap items-center gap-12">
+						{tool === "text" ? (
+							<div className="flex items-center gap-8">
+								<div className="flex items-center gap-4">
+									{INK_COLORS.map((c) => (
+										<button
+											key={c}
+											type="button"
+											aria-label={c}
+											aria-pressed={textColor === c}
+											className={cn("size-16 rounded-full border-2", textColor === c ? "border-accent ring-2 ring-accent/20" : "border-border")}
+											style={{ backgroundColor: c }}
+											onMouseDown={(e) => e.preventDefault()}
+											onClick={() => {
+												setTextColor(c);
+												setInlineTextBox((curr) => (curr === null ? null : { ...curr, color: c }));
+											}}
+										/>
+									))}
+								</div>
+								<select
+									aria-label={t("documentEditor.pdf.textSize")}
+									value={textSize}
+									onChange={(e) => {
+										const nextSize = Number(e.target.value);
+										setTextSize(nextSize);
+										setInlineTextBox((curr) => (curr === null ? null : { ...curr, fontSizePt: nextSize }));
+									}}
+									className="h-24 rounded-6 border border-border bg-window px-6 text-badge text-ink"
+								>
+									{[12, 14, 16, 20, 28, 36].map((sz) => (
+										<option key={sz} value={sz}>
+											{sz}pt
+										</option>
+									))}
+								</select>
+								<button
+									type="button"
+									className="inline-flex h-24 items-center gap-4 rounded-6 border-0 bg-subtle px-8 text-badge text-ink hover:bg-hover"
+									onMouseDown={(e) => e.preventDefault()}
+									onClick={() => {
+										const stamp = todayIso();
+										if (inlineTextBoxRef.current !== null) {
+											setInlineTextBox((curr) =>
+												curr === null
+													? null
+													: { ...curr, text: curr.text.trim() ? `${curr.text} ${stamp}` : stamp },
+											);
+										} else {
+											const nextId = textBoxSeqRef.current++;
+											setInlineTextBox({
+												id: nextId,
+												pageIndex: activePage,
+												x: 0.12,
+												y: 0.14,
+												width: 0.28,
+												minHeight: 0.045,
+												text: stamp,
+												fontSizePt: textSize,
+												color: textColor,
+											});
+										}
+									}}
+								>
+									<Calendar size={12} />
+									{t("documentEditor.pdf.insertToday")}
+								</button>
+							</div>
+						) : null}
 						{isRedactGroup ? (
 							<div className="inline-flex h-24 items-center rounded-6 bg-segment-track p-2" role="group">
 								<button
@@ -1856,7 +2098,11 @@ export function PdfDocumentEditor({
 					<button
 						type="button"
 						className="h-24 rounded-6 border-0 bg-transparent px-8 text-badge font-medium text-ink-muted hover:bg-hover hover:text-ink"
-						onClick={() => setTool("none")}
+						onClick={() => {
+							setInlineTextBox(null);
+							setTextBoxDraft(null);
+							setTool("none");
+						}}
 					>
 						{t("common.close")}
 					</button>
@@ -1963,15 +2209,26 @@ export function PdfDocumentEditor({
 					<div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
 						<div
 							ref={stageScrollRef}
-							className="flex min-h-0 flex-1 items-start justify-center overflow-auto px-28 pt-20 pb-64"
+							className="flex min-h-0 flex-1 items-start justify-center overflow-auto px-28 pt-28 pb-64"
+							onPointerDown={(event) => {
+								if (event.button !== 0 || inlineTextBoxRef.current === null) return;
+								if (pageFrameRef.current !== null && pageFrameRef.current.contains(event.target as Node)) return;
+								const currentBox = inlineTextBoxRef.current;
+								if (currentBox.text.trim() !== "") {
+									void commitInlineTextBox(currentBox);
+								} else {
+									setInlineTextBox(null);
+								}
+							}}
 						>
 							<div
 								ref={pageFrameRef}
 								data-page={activePage + 1}
 								data-pdf-page-stage={activePage + 1}
 								className={cn(
-									"relative flex-none overflow-hidden rounded-[2px] bg-white shadow-ql-page select-none",
-									tool !== "none" && "cursor-crosshair",
+									"relative flex-none rounded-[2px] bg-white shadow-ql-page select-none",
+									tool === "crop" && "overflow-hidden",
+									tool === "text" ? "cursor-text" : tool !== "none" && "cursor-crosshair",
 								)}
 								onPointerDown={onStagePointerDown}
 								onPointerMove={onStagePointerMove}
@@ -2010,6 +2267,144 @@ export function PdfDocumentEditor({
 											));
 										})
 									: null}
+
+								{/* Keynote / PowerPoint-style Text Box drag preview */}
+								{textBoxDraft !== null && textBoxDraft.pageIndex === activePage ? (
+									<div
+										className="pointer-events-none absolute z-20 rounded-[2px] border-[1.5px] border-dashed border-accent bg-accent/5"
+										style={{
+											left: `${textBoxDraft.left * 100}%`,
+											top: `${textBoxDraft.top * 100}%`,
+											width: `${textBoxDraft.width * 100}%`,
+											height: `${textBoxDraft.height * 100}%`,
+										}}
+									/>
+								) : null}
+
+								{/* Keynote / PowerPoint-style live editable on-canvas Text Box */}
+								{inlineTextBox !== null && inlineTextBox.pageIndex === activePage ? (
+									<div
+										data-pdf-textbox="true"
+										className="absolute z-30 rounded-[3px] border-[1.5px] border-accent bg-white/85 shadow-sm select-text"
+										style={{
+											left: `${inlineTextBox.x * 100}%`,
+											top: `${inlineTextBox.y * 100}%`,
+											width: `${inlineTextBox.width * 100}%`,
+											minHeight: `${inlineTextBox.minHeight * 100}%`,
+										}}
+										onPointerDown={(event) => event.stopPropagation()}
+									>
+										{/* Top floating move/confirm/cancel bar */}
+										<div
+											className="absolute -top-26 left-0 flex h-22 items-center gap-2 rounded-6 border border-border bg-window px-4 shadow-md"
+											onPointerDown={(event) => event.stopPropagation()}
+										>
+											<span
+												role="presentation"
+												title={t("documentEditor.pdf.textBoxMove")}
+												className="flex h-full cursor-move items-center px-3 text-ink-muted hover:text-ink"
+												onPointerDown={(event) => {
+													if (event.button !== 0 || pageFrameRef.current === null) return;
+													event.stopPropagation();
+													const rect = pageFrameRef.current.getBoundingClientRect();
+													const fx = (event.clientX - rect.left) / Math.max(1, rect.width);
+													const fy = (event.clientY - rect.top) / Math.max(1, rect.height);
+													pageFrameRef.current.setPointerCapture(event.pointerId);
+													dragRef.current = {
+														mode: "textbox-move",
+														startX: fx,
+														startY: fy,
+														initX: inlineTextBox.x,
+														initY: inlineTextBox.y,
+														initW: inlineTextBox.width,
+														initH: inlineTextBox.minHeight,
+													};
+												}}
+											>
+												<GripHorizontal size={12} />
+											</span>
+											<button
+												type="button"
+												disabled={busy || inlineTextBox.text.trim() === ""}
+												data-pdf-textbox-commit="true"
+												aria-label={t("documentEditor.ai.send")}
+												title={`${t("documentEditor.ai.send")} (⌘Enter)`}
+												className="inline-flex h-16 items-center gap-3 rounded-4 border-0 bg-accent px-6 text-[11px] font-medium text-on-accent hover:opacity-90 disabled:opacity-35"
+												onClick={() => void commitInlineTextBox()}
+											>
+												<Check size={10} />
+												<span>{t("documentEditor.ai.send")}</span>
+											</button>
+											<button
+												type="button"
+												data-pdf-textbox-cancel="true"
+												aria-label={t("common.cancel")}
+												title={`${t("common.cancel")} (Esc)`}
+												className="flex size-16 items-center justify-center rounded-4 border-0 bg-transparent text-ink-muted hover:bg-hover hover:text-ink"
+												onClick={() => setInlineTextBox(null)}
+											>
+												<X size={11} />
+											</button>
+										</div>
+
+										<textarea
+											ref={inlineTextInputRef}
+											rows={1}
+											data-pdf-textbox-input="true"
+											value={inlineTextBox.text}
+											placeholder={t("documentEditor.pdf.textBoxPlaceholder")}
+											className="block w-full resize-none overflow-hidden border-0 bg-transparent outline-none placeholder:text-ink-faint"
+											style={{
+												padding: `${3 * effectiveScale}px ${4 * effectiveScale}px`,
+												fontSize: `${inlineTextBox.fontSizePt * effectiveScale}px`,
+												lineHeight: 1.32,
+												fontWeight: 500,
+												color: inlineTextBox.color,
+												fontFamily: '"Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+											}}
+											onChange={(event) => {
+												const nextText = event.target.value;
+												setInlineTextBox((curr) => (curr === null ? null : { ...curr, text: nextText }));
+											}}
+											onKeyDown={(event) => {
+												if (event.nativeEvent.isComposing) return;
+												if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+													event.preventDefault();
+													event.stopPropagation();
+													void commitInlineTextBox();
+												} else if (event.key === "Escape") {
+													event.preventDefault();
+													event.stopPropagation();
+													setInlineTextBox(null);
+												}
+											}}
+										/>
+
+										{/* Right-edge width resize handle (Keynote/PPT style) */}
+										<div
+											role="presentation"
+											title={t("documentEditor.pdf.textBoxResize")}
+											className="absolute top-1/2 -right-5 size-10 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-accent shadow"
+											onPointerDown={(event) => {
+												if (event.button !== 0 || pageFrameRef.current === null) return;
+												event.stopPropagation();
+												const rect = pageFrameRef.current.getBoundingClientRect();
+												const fx = (event.clientX - rect.left) / Math.max(1, rect.width);
+												const fy = (event.clientY - rect.top) / Math.max(1, rect.height);
+												pageFrameRef.current.setPointerCapture(event.pointerId);
+												dragRef.current = {
+													mode: "textbox-resize",
+													startX: fx,
+													startY: fy,
+													initX: inlineTextBox.x,
+													initY: inlineTextBox.y,
+													initW: inlineTextBox.width,
+													initH: inlineTextBox.minHeight,
+												};
+											}}
+										/>
+									</div>
+								) : null}
 
 								{/* Draggable & resizable stamp overlay */}
 								{pendingStamp !== null && pendingStamp.pageIndex === activePage ? (
@@ -2186,11 +2581,11 @@ export function PdfDocumentEditor({
 								aria-label={t("documentEditor.pdf.prevPage")}
 								disabled={activePage <= 0}
 								className="grid size-24 place-items-center rounded-6 border-0 bg-transparent text-ql-ink hover:bg-ql-button disabled:opacity-35"
-								onClick={() => setActivePage((curr) => Math.max(0, curr - 1))}
+								onClick={() => goToPage(activePage - 1)}
 							>
 								<ChevronLeft size={13} />
 							</button>
-							<span className="px-4 font-medium text-ql-ink">
+							<span className="px-4 font-medium text-ql-ink" data-pdf-page-indicator="true">
 								{activePage + 1} / {numPages}
 							</span>
 							<button
@@ -2198,7 +2593,7 @@ export function PdfDocumentEditor({
 								aria-label={t("documentEditor.pdf.nextPage")}
 								disabled={activePage >= numPages - 1}
 								className="grid size-24 place-items-center rounded-6 border-0 bg-transparent text-ql-ink hover:bg-ql-button disabled:opacity-35"
-								onClick={() => setActivePage((curr) => Math.min(numPages - 1, curr + 1))}
+								onClick={() => goToPage(activePage + 1)}
 							>
 								<ChevronRight size={13} />
 							</button>
@@ -2290,7 +2685,7 @@ export function PdfDocumentEditor({
 							</div>
 
 							{/* Scrollable aspect-ratio-fitted thumbnail list */}
-							<div className="flex min-h-0 flex-1 flex-col items-center gap-14 overflow-y-auto px-12 py-12">
+							<div ref={railScrollRef} className="flex min-h-0 flex-1 flex-col items-center gap-14 overflow-y-auto px-12 py-12">
 								{Array.from({ length: pdf.numPages }, (_unused, idx) => {
 									const isActive = idx === activePage;
 									const isChecked = selectedPages.has(idx);
@@ -2301,11 +2696,7 @@ export function PdfDocumentEditor({
 											data-pdf-thumb={idx + 1}
 											data-active={isActive ? "true" : undefined}
 											className="group flex w-full cursor-default flex-col items-center gap-6"
-											onClick={() => {
-												setActivePage(idx);
-												setPendingStamp((curr) => (curr === null ? null : { ...curr, pageIndex: idx }));
-												setCropDraft((curr) => (curr === null ? null : { ...curr, pageIndex: idx }));
-											}}
+											onClick={() => goToPage(idx)}
 										>
 											<div
 												className={cn(

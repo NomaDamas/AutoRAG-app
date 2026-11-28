@@ -239,7 +239,7 @@ function DazziFilePickerInner({
 			if (enrichedRef.current.has(key)) return;
 			enrichedRef.current.add(key);
 			void fsApi
-				.enrichEntries([{ path: entry.path, mtimeMs: entry.mtimeMs, ext: entry.ext }], true)
+				.enrichEntries([{ path: entry.path, kind: entry.kind, mtimeMs: entry.mtimeMs, ext: entry.ext }], true)
 				.then((result) => {
 					if (result.length > 0) sidecar.applyEnrichment(result);
 				})
@@ -345,6 +345,7 @@ function DazziFilePickerInner({
 					child: false,
 					relation: null,
 					depth: 0,
+					parent: null,
 					disclosure: "none",
 				})),
 			},
@@ -660,11 +661,11 @@ function DazziFilePickerInner({
 						selectedPath={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.path : null}
 						onNavigate={navigate}
 						onCopyPath={() => undefined}
-						onGoToPath={(target) => {
-							const dir = target.endsWith("/") ? target : target;
-							navigate(dir);
+						onGoToPath={async (target) => {
+							navigate(target);
+							return true;
 						}}
-						completePath={async () => ({ items: [], dir: dirname(currentDir) })}
+						completePath={async () => []}
 						openEditor={0}
 						onEditorClosed={() => undefined}
 					/>

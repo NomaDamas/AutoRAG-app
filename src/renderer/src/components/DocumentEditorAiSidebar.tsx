@@ -1,31 +1,36 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, FileText, Highlighter, Loader2, PenLine, RotateCcw, Square, Trash2, X } from "lucide-react";
+import { Check, Highlighter, RotateCcw, X } from "lucide-react";
 import { MAX_INSTRUCTION } from "../../../preview/shared/annotation";
 import { cn } from "../lib/cn";
 import { useDocumentEditorSidebar } from "./DocumentEditorSidebarContext";
+import {
+	SidebarChatComposer,
+	SidebarChatEmpty,
+	SidebarChatProgress,
+	SidebarChatShell,
+	SidebarReplyBody,
+} from "./SidebarChat";
+
+/** Dock chip styling matching Finder's InspectorChatDock pills. */
+const EDITOR_DOCK_CHIP =
+	"inline-flex max-w-full items-center gap-6 rounded-full border border-divider bg-window py-6 pl-9 pr-10 text-meta leading-[16px] text-ink shadow-[0_2px_5px_rgba(20,20,41,0.07)] cursor-pointer transition-colors hover:bg-hover";
 
 /**
  * Right-sidebar AI Editing Chat for the active Document Editor tab.
- * Receives live marks (pen/box/underline) and text selections drawn on the
- * document editor stage, runs the `document-edit` agent, streams progress and
- * replies, and lets the user undo any AI edit turn in place.
+ * Reuses the exact same right-sidebar chat shell, empty state, user bubbles,
+ * borderless prose replies, SeedLoader shimmer progress, and floating composer
+ * used in Settings and Finder Inspector chats.
  */
 export function DocumentEditorAiSidebar({ filePath }: { readonly filePath: string }): ReactElement {
 	const { t } = useTranslation();
 	const sidebar = useDocumentEditorSidebar();
 	const [draft, setDraft] = useState("");
-	const endRef = useRef<HTMLDivElement | null>(null);
 
 	const reg = sidebar?.getTab(filePath) ?? null;
 	const turns = sidebar?.turnsFor(filePath) ?? [];
 	const running = sidebar?.isRunning(filePath) ?? false;
 
-	useEffect(() => {
-		endRef.current?.scrollIntoView({ block: "end" });
-	}, [turns.length, running]);
-
-	const fileName = reg?.fileName ?? filePath.split(/[\\/]/).at(-1) ?? filePath;
 	const isPdf = reg?.surface === "pdf";
 
 	const handleSend = (): void => {
@@ -35,226 +40,156 @@ export function DocumentEditorAiSidebar({ filePath }: { readonly filePath: strin
 		void sidebar.sendInstruction(filePath, trimmed);
 	};
 
-	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-		if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-			event.preventDefault();
-			handleSend();
-		}
-	};
+	const placeholder = isPdf
+		? t("documentEditor.pdf.aiPlaceholder")
+		: reg?.surface === "package"
+			? t("documentEditor.package.hint")
+			: t("documentEditor.ai.placeholder");
 
-	return (
-		<aside
-			className="doc-editor-sidebar flex min-h-0 flex-1 flex-col bg-window text-ink"
-			data-document-editor-sidebar={filePath}
-			aria-label={t("documentEditor.ai.title")}
-		>
-			{/* Sidebar Header */}
-			<div className="flex flex-none items-center justify-between gap-8 border-b border-divider px-14 py-10">
-				<div className="flex min-w-0 items-center gap-6">
-					<div className="min-w-0">
-						<div className="truncate text-body font-semibold text-ink">{t("documentEditor.ai.title")}</div>
-						<div className="truncate text-badge text-ink-muted" title={filePath}>
-							{fileName}
-						</div>
-					</div>
-				</div>
-				{turns.length > 0 && sidebar !== null ? (
-					<button
-						type="button"
-						disabled={running}
-						title={t("quickLook.markup.clear")}
-						aria-label={t("quickLook.markup.clear")}
-						className="flex size-24 flex-none items-center justify-center rounded-6 border-0 bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink disabled:opacity-40"
-						onClick={() => sidebar.clearTurns(filePath)}
-					>
-						<Trash2 size={13} />
-					</button>
+	const latestTurn = turns.at(-1);
+	const followKey = `${turns.length}:${latestTurn?.status ?? ""}:${latestTurn?.progress ?? ""}:${latestTurn?.draft.length ?? 0}:${latestTurn?.reply.length ?? 0}`;
+
+	const aboveComposer =
+		reg === null ? null : (
+			<div className="flex flex-wrap items-center gap-6">
+				<button
+					type="button"
+					aria-pressed={reg.markupActive}
+					className={cn(
+						EDITOR_DOCK_CHIP,
+						reg.markupActive && "border-accent bg-accent-soft text-accent hover:bg-accent-soft",
+					)}
+					onClick={() => reg.setMarkupActive(!reg.markupActive)}
+				>
+					<Highlighter size={13} className={reg.markupActive ? "text-accent" : "text-ink-muted"} />
+					<span>{t("documentEditor.toolbar.markupToggle")}</span>
+				</button>
+				{reg.marks.length > 0 ? (
+					<span className="inline-flex items-center gap-5 rounded-full bg-accent-soft px-8 py-4 text-badge font-medium text-accent">
+						<Highlighter size={11} />
+						{t("documentEditor.ai.marksBadge", { count: reg.marks.length })}
+						<button
+							type="button"
+							aria-label={t("quickLook.markup.clear")}
+							className="flex size-14 items-center justify-center rounded-full border-0 bg-transparent p-0 text-accent hover:bg-accent/15"
+							onClick={() => reg.clearMarks()}
+						>
+							<X size={10} />
+						</button>
+					</span>
+				) : null}
+				{reg.marks.length === 0 && reg.selectedText !== "" ? (
+					<span className="inline-flex items-center gap-4 rounded-full bg-accent-soft px-8 py-4 text-badge font-medium text-accent">
+						{t("documentEditor.ai.selectionBadge", { chars: reg.selectedText.length })}
+					</span>
 				) : null}
 			</div>
+		);
 
-			{/* Body */}
-			{/* Chat transcript */}
-			<div className="flex min-h-0 flex-1 flex-col gap-10 overflow-y-auto px-14 py-12">
-				{turns.length === 0 ? (
-					<div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 text-center">
-						<div className="flex size-36 items-center justify-center rounded-full bg-accent-soft text-accent">
-							{isPdf ? <PenLine size={18} /> : <FileText size={18} />}
-						</div>
-						<div className="text-body font-semibold text-ink">
-							{isPdf ? t("documentEditor.pdf.aiEmptyTitle") : t("documentEditor.ai.emptyTitle")}
-						</div>
-						<p className="m-0 text-meta leading-[1.5] text-ink-muted">
-							{isPdf ? t("documentEditor.pdf.aiEmptyDesc") : t("documentEditor.ai.emptyDesc")}
-						</p>
-						{reg !== null && !reg.markupActive ? (
-							<button
-								type="button"
-								className="mt-4 inline-flex h-28 items-center gap-6 rounded-7 border border-border bg-subtle px-12 text-meta font-medium text-ink hover:bg-hover-row"
-								onClick={() => reg.setMarkupActive(true)}
-							>
-								<Highlighter size={13} className="text-accent" />
-								{t("documentEditor.toolbar.markupToggle")}
-							</button>
-						) : null}
-					</div>
-				) : (
-					turns.map((turn) => (
-						<div key={turn.id} className="flex flex-col gap-6">
-							{/* User turn */}
-							<div className="ml-auto max-w-[92%] rounded-10 bg-chip-sent px-10 py-8 text-body text-ink">
-								{turn.marksCount > 0 ? (
-									<div className="mb-4 inline-flex items-center gap-4 rounded-full bg-accent-soft px-7 py-1 text-badge font-medium text-accent">
-										<Highlighter size={10} />
-										{t("documentEditor.ai.marksBadge", { count: turn.marksCount })}
-									</div>
-								) : turn.selectionChars > 0 ? (
-									<div className="mb-4 inline-flex items-center gap-4 rounded-full bg-accent-soft px-7 py-1 text-badge font-medium text-accent">
-										{t("documentEditor.ai.selectionBadge", { chars: turn.selectionChars })}
-									</div>
-								) : null}
-								<div className="whitespace-pre-wrap break-words">{turn.instruction}</div>
+	return (
+		<SidebarChatShell
+			className="doc-editor-sidebar"
+			data-document-editor-sidebar={filePath}
+			aria-label={t("documentEditor.ai.title")}
+			running={running}
+			followKey={followKey}
+			footer={
+				<SidebarChatComposer
+					value={draft}
+					onChange={setDraft}
+					onSend={handleSend}
+					onStop={() => void sidebar?.cancelRun(filePath)}
+					onReset={sidebar !== null ? () => sidebar.clearTurns(filePath) : undefined}
+					showReset={turns.length > 0 && sidebar !== null}
+					running={running}
+					disabled={reg === null}
+					placeholder={placeholder}
+					inputAriaLabel={t("documentEditor.ai.title")}
+					sendLabel={t("documentEditor.ai.send")}
+					stopLabel={t("common.cancel")}
+					resetLabel={t("quickLook.markup.clear")}
+					maxLength={MAX_INSTRUCTION}
+					above={aboveComposer}
+				/>
+			}
+		>
+			{turns.length === 0 ? (
+				<SidebarChatEmpty
+					title={isPdf ? t("documentEditor.pdf.aiEmptyTitle") : t("documentEditor.ai.emptyTitle")}
+					description={isPdf ? t("documentEditor.pdf.aiEmptyDesc") : t("documentEditor.ai.emptyDesc")}
+				/>
+			) : (
+				<div className="customizer-panel__turns">
+					{turns.map((turn) => (
+						<div key={turn.id} className="customizer-turn">
+							{/* User bubble — identical dark 16px pill to Finder & Settings right sidebar */}
+							<div className="customizer-turn__user-row">
+								<div className="flex max-w-[82%] flex-col items-end gap-4">
+									{turn.marksCount > 0 ? (
+										<span className="inline-flex items-center gap-4 rounded-full bg-accent-soft px-7 py-2 text-badge font-medium text-accent">
+											<Highlighter size={10} />
+											{t("documentEditor.ai.marksBadge", { count: turn.marksCount })}
+										</span>
+									) : turn.selectionChars > 0 ? (
+										<span className="inline-flex items-center gap-4 rounded-full bg-accent-soft px-7 py-2 text-badge font-medium text-accent">
+											{t("documentEditor.ai.selectionBadge", { chars: turn.selectionChars })}
+										</span>
+									) : null}
+									<div className="customizer-turn__user-bubble max-w-full">{turn.instruction}</div>
+								</div>
 							</div>
 
-							{/* Assistant turn */}
+							{/* Assistant reply — borderless prose + change pill + SeedLoader progress */}
 							<div
-								className="flex flex-col gap-6 rounded-12 border border-divider bg-subtle px-10 py-8 text-meta"
+								className="customizer-turn__assistant-row"
 								data-edit-state={turn.status === "done" ? (turn.changed ? "changed" : "unchanged") : turn.status}
 								role="status"
 							>
 								{turn.status === "running" ? (
 									<>
-										<div className="flex items-center gap-6 font-medium text-ink">
-											<Loader2 size={13} className="flex-none animate-spin text-accent" />
-											<span>{t("documentEditor.ai.working")}</span>
-										</div>
-										{turn.progress !== "" ? <div className="text-ink-muted">{turn.progress}</div> : null}
-										{turn.draft !== "" ? (
-											<div className="max-h-140 overflow-auto whitespace-pre-wrap text-ink-body">{turn.draft}</div>
-										) : null}
+										{turn.draft !== "" ? <SidebarReplyBody text={turn.draft} /> : null}
+										<SidebarChatProgress text={turn.progress !== "" ? turn.progress : t("documentEditor.ai.working")} />
 									</>
 								) : turn.status === "done" ? (
 									<>
-										<div className="flex items-center justify-between gap-6">
-											<span className="font-semibold text-ink">
-												{turn.changed ? t("documentEditor.ai.changed") : t("documentEditor.ai.unchanged")}
-											</span>
-											{turn.changed && sidebar !== null ? (
-												<button
-													type="button"
-													className="inline-flex h-22 items-center gap-4 rounded-5 border border-border bg-window px-8 text-badge font-medium text-ink hover:bg-hover-row"
-													onClick={() => void sidebar.undoTurn(filePath, turn.id)}
-												>
-													<RotateCcw size={11} />
-													{t("documentEditor.ai.undo")}
-												</button>
-											) : null}
-										</div>
-										{turn.reply !== "" ? (
-											<div className="whitespace-pre-wrap break-words leading-[1.5] text-ink-body">{turn.reply}</div>
+										{turn.changed ? (
+											<div className="flex w-full flex-wrap items-center justify-between gap-8">
+												<span className="customizer-change-pill">
+													<Check size={14} strokeWidth={1.8} aria-hidden="true" />
+													<span>{t("documentEditor.ai.changed")}</span>
+												</span>
+												{sidebar !== null ? (
+													<button
+														type="button"
+														className="inline-flex h-22 items-center gap-4 rounded-6 border border-divider bg-window px-8 text-badge font-medium text-ink-body transition-colors hover:bg-hover hover:text-ink"
+														onClick={() => void sidebar.undoTurn(filePath, turn.id)}
+													>
+														<RotateCcw size={11} />
+														{t("documentEditor.ai.undo")}
+													</button>
+												) : null}
+											</div>
+										) : turn.reply === "" ? (
+											<p className="m-0 text-meta text-ink-muted">{t("documentEditor.ai.unchanged")}</p>
 										) : null}
+										{turn.reply !== "" ? <SidebarReplyBody text={turn.reply} /> : null}
 									</>
 								) : turn.status === "error" ? (
-									<div className="break-words text-error [overflow-wrap:anywhere]" role="alert">
-										{t("documentEditor.ai.failed", { message: turn.error ?? "" })}
+									<div className="customizer-turn__error w-full" role="alert">
+										<p className="customizer-turn__error-text break-words [overflow-wrap:anywhere]">
+											{t("documentEditor.ai.failed", { message: turn.error ?? "" })}
+										</p>
 									</div>
 								) : turn.status === "cancelled" ? (
-									<div className="text-ink-muted">{t("documentEditor.ai.cancelled")}</div>
+									<p className="m-0 text-meta text-ink-muted">{t("documentEditor.ai.cancelled")}</p>
 								) : (
-									<div className="text-ink-muted">{t("documentEditor.ai.undone")}</div>
+									<p className="m-0 text-meta text-ink-muted">{t("documentEditor.ai.undone")}</p>
 								)}
 							</div>
 						</div>
-					))
-				)}
-				<div ref={endRef} />
-			</div>
-
-			{/* Attached annotations / selection context bar + Composer */}
-			<div className="flex flex-none flex-col gap-6 border-t border-divider bg-window p-10">
-				{reg !== null && (reg.marks.length > 0 || reg.selectedText !== "") ? (
-					<div className="flex flex-wrap items-center gap-4">
-						{reg.marks.length > 0 ? (
-							<span className="inline-flex items-center gap-5 rounded-full bg-accent-soft px-8 py-2 text-badge font-medium text-accent">
-								<Highlighter size={11} />
-								{t("documentEditor.ai.marksBadge", { count: reg.marks.length })}
-								<button
-									type="button"
-									aria-label={t("quickLook.markup.clear")}
-									className="flex size-14 items-center justify-center rounded-full border-0 bg-transparent p-0 text-accent hover:bg-accent/15"
-									onClick={() => reg.clearMarks()}
-								>
-									<X size={10} />
-								</button>
-							</span>
-						) : null}
-						{reg.marks.length === 0 && reg.selectedText !== "" ? (
-							<span className="inline-flex items-center gap-4 rounded-full bg-accent-soft px-8 py-2 text-badge font-medium text-accent">
-								{t("documentEditor.ai.selectionBadge", { chars: reg.selectedText.length })}
-							</span>
-						) : null}
-					</div>
-				) : null}
-
-				<div className="flex flex-col gap-6 rounded-12 border border-border bg-input p-8 focus-within:border-accent">
-					<textarea
-						rows={2}
-						value={draft}
-						maxLength={MAX_INSTRUCTION}
-						disabled={running || reg === null}
-						aria-label={t("documentEditor.ai.title")}
-						placeholder={
-							isPdf
-								? t("documentEditor.pdf.aiPlaceholder")
-								: reg?.surface === "package"
-									? t("documentEditor.package.hint")
-									: t("documentEditor.ai.placeholder")
-						}
-						className="w-full resize-none border-0 bg-transparent text-body leading-[1.45] text-ink outline-none placeholder:text-ink-faint"
-						onChange={(event) => setDraft(event.target.value)}
-						onKeyDown={onKeyDown}
-					/>
-					<div className="flex items-center justify-between gap-6">
-						{reg !== null ? (
-							<button
-								type="button"
-								aria-pressed={reg.markupActive}
-								className={cn(
-									"inline-flex h-24 items-center gap-4 rounded-6 border-0 px-8 text-badge font-medium transition-colors",
-									reg.markupActive
-										? "bg-accent-soft text-accent"
-										: "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
-								)}
-								onClick={() => reg.setMarkupActive(!reg.markupActive)}
-							>
-								<Highlighter size={12} />
-								{t("documentEditor.toolbar.markupToggle")}
-							</button>
-						) : (
-							<span />
-						)}
-						{running ? (
-							<button
-								type="button"
-								aria-label={t("common.cancel")}
-								className="flex size-26 items-center justify-center rounded-full border-0 bg-ink text-window hover:opacity-85"
-								onClick={() => void sidebar?.cancelRun(filePath)}
-							>
-								<Square size={10} fill="currentColor" />
-							</button>
-						) : (
-							<button
-								type="button"
-								aria-label={t("documentEditor.ai.send")}
-								disabled={draft.trim() === "" || reg === null}
-								className="flex size-26 items-center justify-center rounded-full border-0 bg-accent text-on-accent hover:opacity-90 disabled:opacity-35"
-								onClick={handleSend}
-							>
-								<ArrowUp size={14} strokeWidth={2.4} />
-							</button>
-						)}
-					</div>
+					))}
 				</div>
-			</div>
-		</aside>
+			)}
+		</SidebarChatShell>
 	);
 }

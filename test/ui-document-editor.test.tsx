@@ -338,12 +338,15 @@ describe("DocumentEditorTab UI", () => {
 			await Promise.resolve();
 		});
 
-		// PDF tab omits the redundant DocumentEditorTab header bar and puts AI chat & markup cleanly in the right sidebar
+		// PDF tab omits the redundant DocumentEditorTab header bar and reuses the exact shared right-sidebar chat UI (.customizer-panel)
 		expect(el.querySelector(".doc-editor__header")).toBeNull();
 		const sidebarEl = el.querySelector<HTMLElement>("[data-document-editor-sidebar]");
 		expect(sidebarEl).not.toBeNull();
+		expect(sidebarEl!.classList.contains("customizer-panel")).toBe(true);
+		expect(sidebarEl!.querySelector(".customizer-panel__empty-logo")).not.toBeNull();
+		expect(sidebarEl!.querySelector(".customizer-composer")).not.toBeNull();
 		expect(sidebarEl!.textContent).toContain("Mark up for AI");
-		const aiInput = sidebarEl!.querySelector<HTMLTextAreaElement>("textarea");
+		const aiInput = sidebarEl!.querySelector<HTMLTextAreaElement>("textarea.customizer-composer__input");
 		expect(aiInput).not.toBeNull();
 
 		const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
@@ -361,5 +364,6 @@ describe("DocumentEditorTab UI", () => {
 
 		expect(host.aiStarts).toHaveLength(1);
 		expect(host.aiStarts[0]!.instruction).toBe("Add CONFIDENTIAL watermark and rotate page 2");
+		expect(sidebarEl!.querySelector(".customizer-turn__user-bubble")?.textContent).toBe("Add CONFIDENTIAL watermark and rotate page 2");
 	});
 });

@@ -43,6 +43,70 @@ export function renderTextStampPng(
 	return { dataUrl: canvas.toDataURL("image/png"), aspect: logicalW / logicalH };
 }
 
+/**
+ * Renders a Keynote / PowerPoint-style on-canvas text box into a crisp 3x-DPI
+ * transparent PNG whose logical width matches `boxWidthPt` (PDF points) and whose
+ * line wrapping matches the on-canvas textarea 1:1 (supports Korean/CJK/emoji).
+ */
+export function renderTextBoxPng(
+	text: string,
+	boxWidthPt: number,
+	fontSizePt = 16,
+	color = "#1D1D1F",
+): { readonly dataUrl: string; readonly widthPt: number; readonly heightPt: number } {
+	const dpr = 3;
+	const padX = 4;
+	const padY = 3;
+	const logicalW = Math.max(40, Math.round(boxWidthPt));
+	const lineHeight = fontSizePt * 1.32;
+	const font = `500 ${fontSizePt}px "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+
+	const measureCanvas = document.createElement("canvas");
+	const mctx = measureCanvas.getContext("2d");
+	const maxLineW = Math.max(20, logicalW - padX * 2);
+	const wrapped: string[] = [];
+
+	if (mctx !== null) {
+		mctx.font = font;
+		for (const rawLine of text.split("\n")) {
+			if (rawLine === "") {
+				wrapped.push("");
+				continue;
+			}
+			let curr = "";
+			for (const ch of rawLine) {
+				if (mctx.measureText(curr + ch).width > maxLineW && curr.length > 0) {
+					wrapped.push(curr);
+					curr = ch;
+				} else {
+					curr += ch;
+				}
+			}
+			if (curr.length > 0) wrapped.push(curr);
+		}
+	} else {
+		wrapped.push(...text.split("\n"));
+	}
+
+	const lineCount = Math.max(1, wrapped.length);
+	const logicalH = Math.max(Math.ceil(lineHeight + padY * 2), Math.ceil(lineCount * lineHeight + padY * 2));
+
+	const canvas = document.createElement("canvas");
+	canvas.width = Math.max(1, Math.round(logicalW * dpr));
+	canvas.height = Math.max(1, Math.round(logicalH * dpr));
+	const ctx = canvas.getContext("2d");
+	if (ctx !== null) {
+		ctx.scale(dpr, dpr);
+		ctx.font = font;
+		ctx.fillStyle = color;
+		ctx.textBaseline = "top";
+		wrapped.forEach((line, idx) => {
+			ctx.fillText(line, padX, padY + idx * lineHeight);
+		});
+	}
+	return { dataUrl: canvas.toDataURL("image/png"), widthPt: logicalW, heightPt: logicalH };
+}
+
 /** Renders a rubber-stamp badge (e.g. APPROVED / CONFIDENTIAL) with double border into a crisp PNG. */
 export function renderPresetStampPng(
 	label: string,
