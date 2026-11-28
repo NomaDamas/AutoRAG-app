@@ -89,7 +89,7 @@ export function SteerBubble({
 			<div className={cn("group/bubble flex flex-col items-end gap-2", compact ? "max-w-[90%]" : "max-w-bubble-max")}>
 				<div
 					className={cn(
-						"bubble steer-bubble rounded-[16px] bg-ink-body text-window break-words whitespace-pre-wrap transition-opacity duration-(--dur-color) ease-out",
+						"bubble steer-bubble max-w-full min-w-0 rounded-[16px] bg-ink-body text-window [overflow-wrap:anywhere] whitespace-pre-wrap transition-opacity duration-(--dur-color) ease-out",
 						compact ? "px-12 py-8 text-sm leading-[1.5]" : "px-16 py-10 text-body leading-[21px]",
 						waiting && "opacity-50",
 						steer.status === "dropped" && "line-through opacity-50",
@@ -138,7 +138,7 @@ export function QueuedBubble({
 		<div className={cn("queued-question group/bubble flex flex-col items-end gap-2 self-end animate-rise", compact ? "max-w-[90%]" : "max-w-bubble-max")}>
 			<div
 				className={cn(
-					"queued-bubble rounded-[16px] border border-dashed border-border-strong bg-window text-ink-body break-words whitespace-pre-wrap",
+					"queued-bubble max-w-full min-w-0 rounded-[16px] border border-dashed border-border-strong bg-window text-ink-body [overflow-wrap:anywhere] whitespace-pre-wrap",
 					compact ? "px-11 py-7 text-sm leading-[1.5]" : "px-15 py-9 text-body leading-[21px]",
 				)}
 			>
