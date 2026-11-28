@@ -3961,6 +3961,7 @@
       },
       "watermarkTitle": "워터마크 추가",
       "watermarkText": "워터마크 텍스트",
+      "originalCopyLabel": "원본",
       "watermarkPresets": "자주 쓰는 문구",
       "watermarkPresetCopy": "사본",
       "watermarkPresetSample": "샘플",

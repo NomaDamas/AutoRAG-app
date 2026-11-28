@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildSubagentsPrompt, createSubagentTool, normalizeSubagents, type SubagentDefinition } from "@autorag/librarian";
@@ -7,6 +7,7 @@ import { PDFDocument } from "pdf-lib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDocumentEditService, type DocumentEditIo } from "../src/main/document-edit-service";
 import { createPdfEditorIo } from "../src/main/pdf-editor-io";
+import { createOriginalCopier, originalCopyName } from "../src/main/pdf-original-copy";
 import {
 	createPdfEditorSubagent,
 	PDF_EDITOR_SUBAGENT_DESCRIPTION,
@@ -31,6 +32,9 @@ async function delegate(definition: SubagentDefinition, params: Record<string, u
 	const tool = createSubagentTool(normalizeSubagents([definition]));
 	return (await tool.execute("call-1", params as never, signal)) as unknown as ToolText;
 }
+
+/** A copier stand-in: names the copy without touching disk. */
+const fakeCopy = async (path: string): Promise<string> => `${path}.original-copy`;
 
 /** A DocumentEditService stand-in that replays `events` for each run and reports `changed`. */
 function fakeService(script: (runId: string, request: DocumentEditRequest, io: DocumentEditIo) => Promise<{ changed: boolean }>) {
@@ -61,8 +65,8 @@ describe("pdf-editor subagent definition", () => {
 	});
 
 	it("is a static, file-changing definition so the main agent's prompt stays cache-stable", () => {
-		const a = createPdfEditorSubagent({ service: fakeService(async () => ({ changed: false })).service });
-		const b = createPdfEditorSubagent({ service: fakeService(async () => ({ changed: true })).service });
+		const a = createPdfEditorSubagent({ saveOriginalCopy: fakeCopy, service: fakeService(async () => ({ changed: false })).service });
+		const b = createPdfEditorSubagent({ saveOriginalCopy: fakeCopy, service: fakeService(async () => ({ changed: true })).service });
 		expect(a.name).toBe(PDF_EDITOR_SUBAGENT_NAME);
 		expect(a.mutatesFiles).toBe(true);
 		expect(a.description).toBe(PDF_EDITOR_SUBAGENT_DESCRIPTION);
@@ -80,25 +84,29 @@ describe("pdf-editor subagent definition", () => {
 			io.send({ type: "done", runId, path: request.path, changed: true, reply: "Stamped page 1 and verified it visually." });
 			return { changed: true };
 		});
-		const definition = createPdfEditorSubagent({ service: fake.service });
+		const definition = createPdfEditorSubagent({ saveOriginalCopy: fakeCopy, service: fake.service });
 		const result = await definition.run({ task: "stamp page 1", files: ["/tmp/a.pdf"] }, { onUpdate: (text) => updates.push(text) });
 		expect(fake.starts).toEqual([{ path: "/tmp/a.pdf", instruction: "stamp page 1", marks: [] }]);
-		expect(updates).toEqual(["Finding the text"]);
+		expect(updates).toEqual(["Original saved as /tmp/a.pdf.original-copy", "Finding the text"]);
 		expect(result).toMatchObject({ isError: false, changedFiles: ["/tmp/a.pdf"] });
-		expect(result.output).toContain("/tmp/a.pdf: edited.\nStamped page 1 and verified it visually.");
+		expect(result.output).toBe("/tmp/a.pdf: edited.\nOriginal (before this edit) saved as: /tmp/a.pdf.original-copy\nStamped page 1 and verified it visually.");
 	});
 
 	it("reports a missing PDF and a failed edit as errors, and cancels the edit run when the main agent aborts", async () => {
-		const none = createPdfEditorSubagent({ service: fakeService(async () => ({ changed: false })).service });
+		const none = createPdfEditorSubagent({ saveOriginalCopy: fakeCopy, service: fakeService(async () => ({ changed: false })).service });
 		expect(await none.run({ task: "stamp it", files: [] }, {})).toMatchObject({ isError: true, output: expect.stringMatching(/absolute path/) });
 
 		const failing = createPdfEditorSubagent({
+			saveOriginalCopy: fakeCopy,
 			service: fakeService(async (runId, _request, io) => {
 				io.send({ type: "error", runId, message: "quota exceeded" });
 				return { changed: false };
 			}).service,
 		});
-		expect(await failing.run({ task: "x", files: ["/tmp/a.pdf"] }, {})).toMatchObject({ isError: true, output: "/tmp/a.pdf: failed — quota exceeded" });
+		expect(await failing.run({ task: "x", files: ["/tmp/a.pdf"] }, {})).toMatchObject({
+			isError: true,
+			output: "/tmp/a.pdf: failed — quota exceeded\nOriginal (before this edit) saved as: /tmp/a.pdf.original-copy",
+		});
 
 		const controller = new AbortController();
 		const slow = fakeService(async (runId, _request, io) => {
@@ -106,7 +114,7 @@ describe("pdf-editor subagent definition", () => {
 			io.send({ type: "cancelled", runId });
 			return { changed: false };
 		});
-		const cancelled = await createPdfEditorSubagent({ service: slow.service }).run({ task: "x", files: ["/tmp/a.pdf"] }, { signal: controller.signal });
+		const cancelled = await createPdfEditorSubagent({ saveOriginalCopy: fakeCopy, service: slow.service }).run({ task: "x", files: ["/tmp/a.pdf"] }, { signal: controller.signal });
 		expect(slow.cancels).toHaveLength(1);
 		expect(cancelled.output).toMatch(/cancelled/);
 	});
@@ -118,8 +126,96 @@ describe("pdf-editor subagent definition", () => {
 			io.send({ type: "done", runId, path: "/tmp/a.pdf", changed: true, reply: "ok" });
 			return { changed: true };
 		});
-		await createPdfEditorSubagent({ service: fake.service, renderAsset, makeRunId: () => "subagent-pdf-1" }).run({ task: "x", files: ["/tmp/a.pdf"] }, {});
+		await createPdfEditorSubagent({ saveOriginalCopy: fakeCopy, service: fake.service, renderAsset, makeRunId: () => "subagent-pdf-1" }).run({ task: "x", files: ["/tmp/a.pdf"] }, {});
 		expect(renderAsset).toHaveBeenCalledWith({ kind: "stamp", preset: "approved", withDate: true }, "subagent-pdf-1");
+	});
+});
+
+describe("original copy before a main-agent edit", () => {
+	it("names copies by language and time, copies byte for byte under the PDF's lock, and never overwrites", async () => {
+		const at = new Date(2026, 10, 28, 9, 5, 7);
+		expect(originalCopyName("/d/계약서.pdf", "원본", at)).toBe("계약서 (원본 2026-11-28 09.05.07).pdf");
+		expect(originalCopyName("/d/report.pdf", "original", at, 2)).toBe("report (original 2026-11-28 09.05.07 2).pdf");
+		expect(originalCopyName("/d/a.pdf", "a/b:c", at)).toBe("a (abc 2026-11-28 09.05.07).pdf");
+
+		const pdf = join(root, "견적서.pdf");
+		await writeFile(pdf, Buffer.from("%PDF-1.7 original bytes"));
+		const locked: string[] = [];
+		const copier = createOriginalCopier({
+			withLock: async (path, fn) => {
+				locked.push(path);
+				return fn();
+			},
+			label: () => "オリジナル",
+			now: () => at,
+		});
+		const first = await copier(pdf);
+		const second = await copier(pdf);
+		expect(first).toBe(join(root, "견적서 (オリジナル 2026-11-28 09.05.07).pdf"));
+		expect(second).toBe(join(root, "견적서 (オリジナル 2026-11-28 09.05.07 2).pdf"));
+		expect(await readFile(first, "utf8")).toBe("%PDF-1.7 original bytes");
+		expect(locked).toEqual([pdf, pdf]);
+	});
+
+	it("saves the copy before the edit starts, keeps it when the PDF changed, and reports where it is", async () => {
+		const order: string[] = [];
+		const fake = fakeService(async (runId, request, io) => {
+			order.push("edit");
+			io.send({ type: "done", runId, path: request.path, changed: true, reply: "Stamped." });
+			return { changed: true };
+		});
+		const definition = createPdfEditorSubagent({
+			service: fake.service,
+			saveOriginalCopy: async (path) => {
+				order.push("copy");
+				return `${path}.original-copy`;
+			},
+		});
+		const updates: string[] = [];
+		const result = await definition.run({ task: "stamp", files: ["/tmp/a.pdf"] }, { onUpdate: (text) => updates.push(text) });
+		expect(order).toEqual(["copy", "edit"]);
+		expect(updates[0]).toBe("Original saved as /tmp/a.pdf.original-copy");
+		expect(result.output).toBe("/tmp/a.pdf: edited.\nOriginal (before this edit) saved as: /tmp/a.pdf.original-copy\nStamped.");
+	});
+
+	it("does not edit at all when the copy cannot be saved", async () => {
+		const fake = fakeService(async () => ({ changed: true }));
+		const result = await createPdfEditorSubagent({
+			service: fake.service,
+			saveOriginalCopy: async () => {
+				throw new Error("EACCES: permission denied");
+			},
+		}).run({ task: "stamp", files: ["/tmp/a.pdf"] }, {});
+		expect(fake.starts).toHaveLength(0);
+		expect(result).toMatchObject({ isError: true, output: "/tmp/a.pdf: not edited — the original copy could not be saved first (EACCES: permission denied)." });
+	});
+
+	it("removes a copy that is byte-identical to an unchanged PDF, but keeps it after a failed or partial edit", async () => {
+		const pdf = join(root, "same.pdf");
+		await writeFile(pdf, Buffer.from("%PDF same"));
+		const copier = createOriginalCopier({ withLock: (_p, fn) => fn(), label: () => "원본" });
+		const unchanged = await createPdfEditorSubagent({
+			service: fakeService(async (runId, request, io) => {
+				io.send({ type: "done", runId, path: request.path, changed: false, reply: "Nothing to change." });
+				return { changed: false };
+			}).service,
+			saveOriginalCopy: copier,
+		}).run({ task: "x", files: [pdf] }, {});
+		expect(unchanged.output).toBe(`${pdf}: not changed.\nNothing to change.`);
+		expect((await readdir(root)).filter((name) => name.includes("원본"))).toEqual([]);
+
+		const failing = await createPdfEditorSubagent({
+			service: fakeService(async (runId, request, io) => {
+				await writeFile(request.path, Buffer.from("%PDF half written"));
+				io.send({ type: "error", runId, message: "model quota" });
+				return { changed: false };
+			}).service,
+			saveOriginalCopy: copier,
+		}).run({ task: "x", files: [pdf] }, {});
+		const kept = (await readdir(root)).filter((name) => name.includes("원본"));
+		expect(kept).toHaveLength(1);
+		expect(await readFile(join(root, kept[0]!), "utf8")).toBe("%PDF same");
+		expect(failing.output).toContain(`Original (before this edit) saved as: ${join(root, kept[0]!)}`);
 	});
 });
 
@@ -159,15 +255,23 @@ describe("main agent delegating to the real PDF edit agent", () => {
 		]);
 
 		const events: DocumentEditEvent[] = [];
-		const result = await delegate(createPdfEditorSubagent({ service: { start: (id, req, io) => service.start(id, req, { ...io, send: (e) => (events.push(e), io.send(e)) }), cancel: service.cancel } }), {
+		const originalBytes = await readFile(pdfPath);
+		const saveOriginalCopy = createOriginalCopier({ withLock: pdfIo.withLock, label: () => "원본", now: () => new Date(2026, 10, 28, 15, 4, 12) });
+		const result = await delegate(createPdfEditorSubagent({ saveOriginalCopy, service: { start: (id, req, io) => service.start(id, req, { ...io, send: (e) => (events.push(e), io.send(e)) }), cancel: service.cancel } }), {
 			agent: "pdf-editor",
 			task: "Rotate page 2 clockwise",
 			files: [pdfPath],
 		});
-		expect(result.content[0]!.text).toContain(`${pdfPath}: edited.\nRotated page 2 and checked it visually.`);
+		expect(result.content[0]!.text).toContain(`${pdfPath}: edited.`);
+		expect(result.content[0]!.text).toContain("Rotated page 2 and checked it visually.");
 		expect(result.content[0]!.text).toContain(`Changed files:\n- ${pdfPath}`);
 		expect(result.details.results[0]).toMatchObject({ agent: "pdf-editor", isError: false, changedFiles: [pdfPath] });
 		expect((await PDFDocument.load(await readFile(pdfPath))).getPage(1).getRotation().angle).toBe(90);
+		// The untouched original sits next to the edited PDF, byte for byte, and the main agent is told where.
+		const copyPath = join(docs, "contract (원본 2026-11-28 15.04.12).pdf");
+		expect((await readFile(copyPath)).equals(originalBytes)).toBe(true);
+		expect((await PDFDocument.load(await readFile(copyPath))).getPage(1).getRotation().angle).toBe(0);
+		expect(result.content[0]!.text).toContain(`Original (before this edit) saved as: ${copyPath}`);
 		expect(events.some((event) => event.type === "done")).toBe(true);
 	});
 });

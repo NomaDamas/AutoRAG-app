@@ -3961,6 +3961,7 @@
       },
       "watermarkTitle": "Add watermark",
       "watermarkText": "Watermark text",
+      "originalCopyLabel": "original",
       "watermarkPresets": "Presets",
       "watermarkPresetCopy": "COPY",
       "watermarkPresetSample": "SAMPLE",

@@ -6,7 +6,8 @@
  * visually, and reports back; the main agent relays the result. Verified by:
  *   - the main-process trace: a `[document-edit] subagent-pdf-…` run (only the subagent path uses that id)
  *     with the stamp / watermark / page-number tools and `pdf_render_page` after the last edit,
- *   - the PDF on disk (stamp, watermark and Korean header images), and the reopened page,
+ *   - the PDF on disk (stamp, watermark and Korean header images), an untouched `review (원본 …).pdf` copy
+ *     saved next to it before the edit (and named in the answer), and the reopened page,
  *   - the main agent's answer in the chat.
  *
  *   bun run qa script --host --skip-build scripts/manual-qa/run-qa-live-main-agent-pdf-subagent.mjs
@@ -327,6 +328,13 @@ try {
 	const imagesAfter = await countImages(after);
 	check("review.pdf was edited on disk", !after.equals(before));
 	check("Stamp, watermark and Korean header embedded (>= 3 new images incl. masks)", imagesAfter - imagesBefore >= 3, `images ${imagesBefore} -> ${imagesAfter}`);
+
+	// 2b. The untouched original was saved next to it before the edit, and the user is told where.
+	const copies = readdirSync(DOCS_DIR).filter((name) => /^review \(원본 \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.\d{2}( \d+)?\)\.pdf$/u.test(name));
+	console.log(`original copies: ${JSON.stringify(copies)}`);
+	check("An original copy was saved next to the PDF before the edit", copies.length === 1, JSON.stringify(readdirSync(DOCS_DIR)));
+	check("The original copy is byte-identical to the PDF before the edit", copies.length === 1 && readFileSync(join(DOCS_DIR, copies[0])).equals(before));
+	check("The main agent tells the user where the original copy is", copies.length === 1 && answer.includes("원본") && (answer.includes(copies[0]) || answer.includes(copies[0].replace(/\.pdf$/u, ""))), answer.slice(0, 400));
 
 	// 3. The main agent relayed the result.
 	check("The main agent's answer reports the edit", answer.length > 0 && /(도장|승인|워터마크|대외비|페이지 번호)/.test(answer), answer.slice(0, 200));

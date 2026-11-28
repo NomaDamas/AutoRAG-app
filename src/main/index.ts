@@ -143,6 +143,7 @@ import { createDocumentEditService } from "./document-edit-service";
 import { createPdfEditorIo } from "./pdf-editor-io";
 import { createPdfAssetBridge } from "./pdf-asset-bridge";
 import { createPdfEditorSubagent } from "./pdf-editor-subagent";
+import { createOriginalCopier } from "./pdf-original-copy";
 import type { SubagentDefinition } from "@autorag/librarian";
 import { createWriteJudge } from "./agents/write-judge";
 import { resolveDecisionBackendsForConfig } from "./decision-model";
@@ -1352,6 +1353,8 @@ app.whenReady().then(async () => {
 	// The main AI agent delegates PDF edits to the same agent the editor's sidebar runs (librarian host subagent).
 	pdfEditorSubagent = createPdfEditorSubagent({
 		service: documentEditService,
+		// Always keep the untouched original next to a PDF the main agent edits (원본 / original / オリジナル / 原件).
+		saveOriginalCopy: createOriginalCopier({ withLock: pdfEditorIo.withLock, label: () => t("documentEditor.pdf.originalCopyLabel") }),
 		renderAsset: (request, tag) => pdfAssets.request(mainWindow?.webContents, request, tag),
 	});
 	registerDocumentEditorIpcHandlers(

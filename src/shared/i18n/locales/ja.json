@@ -3961,6 +3961,7 @@
       },
       "watermarkTitle": "透かしを追加",
       "watermarkText": "透かしテキスト",
+      "originalCopyLabel": "オリジナル",
       "watermarkPresets": "定型文",
       "watermarkPresetCopy": "コピー",
       "watermarkPresetSample": "サンプル",

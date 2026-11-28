@@ -1,3 +1,4 @@
+import { readFile, rm } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import type { SubagentDefinition, SubagentResult } from "@autorag/librarian";
 import type { DocumentEditEvent } from "../preview/shared/annotation";
@@ -18,6 +19,7 @@ export const PDF_EDITOR_SUBAGENT_GUIDANCE = [
 	"- Put the PDF's absolute path in `files` (find it first if the user only named it) and write `task` as the user's request plus anything you already know (page numbers, exact wording to mark, which image file to insert). One PDF per task; use `tasks` for several PDFs.",
 	"- Stamps and watermark presets follow the app language automatically; pass custom text only when the user asked for specific wording.",
 	"- Read-only questions about a PDF (what it says, where something is) do not need `pdf-editor`: search or read the document instead.",
+	"- Before every edit the subagent saves an untouched copy of the original PDF next to it and reports that copy's path: tell the user where the original copy is.",
 	"- Relay the subagent's summary in the user's language and say which file changed. If it reports a failure, explain it; do not retry the same edit another way.",
 ].join("\n");
 
@@ -36,6 +38,11 @@ export function pdfTargets(task: string, files: readonly string[]): readonly str
 
 export interface PdfEditorSubagentDeps {
 	readonly service: Pick<DocumentEditService, "start" | "cancel">;
+	/**
+	 * Saves an untouched copy of the PDF before the edit and returns its path (see `createOriginalCopier`). Required:
+	 * an edit the main agent asks for never runs without one, and if the copy cannot be saved the PDF is left alone.
+	 */
+	readonly saveOriginalCopy: (path: string) => Promise<string>;
 	/** Renders content / finds text through the Dazzi window (see `PdfAssetBridge`); undefined while it is closed. */
 	readonly renderAsset?: (request: PdfAssetRequest, tag: string) => Promise<PdfAssetResult>;
 	readonly makeRunId?: () => string;
@@ -67,6 +74,16 @@ export function createPdfEditorSubagent(deps: PdfEditorSubagentDeps): SubagentDe
 					failed = true;
 					break;
 				}
+				let originalCopy: string;
+				try {
+					originalCopy = await deps.saveOriginalCopy(path);
+				} catch (copyError) {
+					failed = true;
+					const reason = copyError instanceof Error ? copyError.message : String(copyError);
+					reports.push(`${path}: not edited — the original copy could not be saved first (${reason}).`);
+					continue;
+				}
+				onUpdate?.(`Original saved as ${originalCopy}`);
 				const runId = makeRunId();
 				let reply = "";
 				let error: string | null = null;
@@ -91,14 +108,18 @@ export function createPdfEditorSubagent(deps: PdfEditorSubagentDeps): SubagentDe
 						},
 					);
 					if (outcome.changed) changedFiles.push(path);
+					// Nothing changed and the file is byte-identical to the copy: the copy would only be clutter.
+					const keptCopy = outcome.changed || !(await sameBytes(path, originalCopy)) ? originalCopy : null;
+					if (keptCopy === null) await rm(originalCopy, { force: true }).catch(() => undefined);
+					const copyNote = keptCopy === null ? "" : `\nOriginal (before this edit) saved as: ${keptCopy}`;
 					if (cancelled) {
 						failed = true;
-						reports.push(`${path}: cancelled${outcome.changed ? " (some edits were already saved)" : ""}.`);
+						reports.push(`${path}: cancelled${outcome.changed ? " (some edits were already saved)" : ""}.${copyNote}`);
 					} else if (error !== null) {
 						failed = true;
-						reports.push(`${path}: failed — ${error}`);
+						reports.push(`${path}: failed — ${error}${copyNote}`);
 					} else {
-						reports.push(`${path}: ${outcome.changed ? "edited" : "not changed"}.${reply.trim() === "" ? "" : `\n${reply.trim()}`}`);
+						reports.push(`${path}: ${outcome.changed ? "edited" : "not changed"}.${copyNote}${reply.trim() === "" ? "" : `\n${reply.trim()}`}`);
 					}
 				} finally {
 					signal?.removeEventListener("abort", onAbort);
@@ -107,4 +128,13 @@ export function createPdfEditorSubagent(deps: PdfEditorSubagentDeps): SubagentDe
 			return { output: reports.join("\n\n"), isError: failed && changedFiles.length === 0, changedFiles };
 		},
 	};
+}
+
+async function sameBytes(a: string, b: string): Promise<boolean> {
+	try {
+		const [left, right] = await Promise.all([readFile(a), readFile(b)]);
+		return left.equals(right);
+	} catch {
+		return false;
+	}
 }
